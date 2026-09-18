@@ -4,6 +4,7 @@
 
 ### Added
 
+- Workspace readiness overview with client availability, localized uptime, and preserved readings after a failed refresh.
 - First-run administrator creation, login/logout, persisted 12-hour sessions, and default-protected management routes.
 - Argon2id password hashing, bounded login/hash work, origin checks, and bilingual authentication pages.
 

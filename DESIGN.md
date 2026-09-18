@@ -113,7 +113,7 @@ The desktop shell follows the user-selected Shadcn Admin layout: a compact two-l
 
 Below 768px, navigation becomes a 288px modal sheet opened by the header trigger. Main content takes the full width. Lists of details and toolbars wrap or stack; the service details become a single column below 640px.
 
-Use spacing to group related information. The overview has one service-status surface and a separate Codex connection section. Do not add dashboard metrics without real data. Language, theme, and a settings shortcut appear as icons at the top right on authenticated pages, including mobile. The sidebar lists business pages only. Give icons accessible names and hover descriptions, and reflect the selected theme with a sun, moon, or monitor. Setup and login share the same language and theme icon controls in a quiet 64px header. The Preferences form uses triggers with visible text.
+Use spacing to group related information. The overview leads with gateway setup readiness and planned client access, alongside a compact instance-health panel. Show readable uptime and the last successful check time. A failed refresh keeps the previous readings visible, adds an explicit warning, and marks current service health as unknown. Do not add dashboard metrics without real data. Language, theme, and a settings shortcut appear as icons at the top right on authenticated pages, including mobile. The sidebar lists business pages only. Give icons accessible names and hover descriptions, and reflect the selected theme with a sun, moon, or monitor. Setup and login share the same language and theme icon controls in a quiet 64px header. The Preferences form uses triggers with visible text.
 
 ## Elevation & Depth
 
