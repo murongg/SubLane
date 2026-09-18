@@ -1,0 +1,13 @@
+.git
+.impeccable
+bin
+dist
+data
+web/node_modules
+tools/brand/node_modules
+brand
+web/dist
+docs/plans
+docs/specs
+.env*
+*.db*

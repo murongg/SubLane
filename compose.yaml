@@ -1,0 +1,14 @@
+services:
+  sublane:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - sublane-data:/data
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  sublane-data:

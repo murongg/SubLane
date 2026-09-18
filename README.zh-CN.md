@@ -1,0 +1,64 @@
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/logos/lockup-white.svg">
+    <img src="brand/logos/lockup-black.svg" alt="SubLane" width="420">
+  </picture>
+</h1>
+
+<p align="center">
+  面向内部团队的极简、自托管订阅网关，优先支持 Codex。
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-171717?style=flat-square&amp;labelColor=555555" alt="License: AGPL-3.0-only" height="20"></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26%2B-171717?style=flat-square&amp;logo=go&amp;logoColor=white&amp;labelColor=555555" alt="Go 1.26+" height="20"></a>
+  <a href="web/package.json"><img src="https://img.shields.io/badge/React-19-171717?style=flat-square&amp;logo=react&amp;logoColor=white&amp;labelColor=555555" alt="React 19" height="20"></a>
+  <a href="internal/storage/storage.go"><img src="https://img.shields.io/badge/SQLite-embedded-171717?style=flat-square&amp;logo=sqlite&amp;logoColor=white&amp;labelColor=555555" alt="SQLite embedded" height="20"></a>
+  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/stage-foundation-92400E?style=flat-square&amp;labelColor=555555" alt="Stage: foundation" height="20"></a>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> · <a href="https://github.com/murongg/SubLane">项目仓库</a> · <a href="brand/README.zh-CN.md">品牌物料</a>
+</p>
+
+**当前是基础框架。** 已提供 Go HTTP 服务、SQLite 迁移、内嵌前端、真实服务状态、页面导航、中英文切换和明暗主题。账号授权、模型转发、成员认证和用量统计尚未实现，当前版本用于本地开发。
+
+## 开始开发
+
+需要 Go 1.26+、Node.js 24、pnpm 9.12.2。
+
+```sh
+git clone git@github.com:murongg/SubLane.git
+cd SubLane
+make setup
+make dev
+```
+
+打开 http://127.0.0.1:5173，后端位于 http://127.0.0.1:8080。前端通过 Vite 代理调用后端。Ctrl+C 同时停止两个进程；修改 Go 代码后需重新启动。
+
+如果 5173 端口已被占用，可使用 `make dev WEB_PORT=5174`。
+
+## 构建运行
+
+```sh
+make build
+./bin/sublane
+```
+
+打开 http://127.0.0.1:8080。构建后为包含前端的单个二进制文件，运行时不需要 Node.js。数据库默认保存在 `./data/sublane.db`。
+
+Docker：`docker compose up --build -d`。容器使用命名卷保存数据库，宿主端口仅绑定本机。
+
+## 检查
+
+运行 `make check`，执行后端检查与竞态测试、前端类型与格式检查、单元测试及生产构建。CI 还会构建 Docker 镜像。
+
+界面默认英文，在顶部或偏好设置中切换中英文、明暗主题，偏好保存在当前浏览器。`PRODUCT.md` 和主开发文档使用英文。
+
+仓库仅保留必要的品牌资源。运行 `make brand` 可将完整物料导出到 Git 忽略的 `dist/brand/`，详见[品牌指南](brand/README.zh-CN.md)。
+
+配置变量、目录结构、接口和当前边界见 [英文 README](README.md)。配置通过进程环境变量传入，服务不会自动读取 `.env`。
+
+## 协议
+
+使用 [AGPL-3.0-only](LICENSE)，保留 [Shadcn Admin 等第三方的许可声明](THIRD_PARTY_NOTICES.md)。

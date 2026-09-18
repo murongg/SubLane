@@ -1,0 +1,26 @@
+package config
+
+import "testing"
+
+func TestDefaultsAndOverrides(t *testing.T) {
+	cfg, err := Load(func(string) string { return "" })
+	if err != nil || cfg.Addr != "127.0.0.1:8080" || cfg.DataDir != "./data" || cfg.LogLevel.String() != "INFO" {
+		t.Fatalf("unexpected defaults: %+v, %v", cfg, err)
+	}
+	env := map[string]string{"SUBLANE_ADDR": "[::1]:9000", "SUBLANE_DATA_DIR": "/tmp/synthetic-data", "SUBLANE_LOG_LEVEL": "debug"}
+	cfg, err = Load(func(k string) string { return env[k] })
+	if err != nil || cfg.Addr != "[::1]:9000" || cfg.LogLevel.String() != "DEBUG" || cfg.DataDir != env["SUBLANE_DATA_DIR"] {
+		t.Fatalf("overrides not applied: %+v, %v", cfg, err)
+	}
+}
+
+func TestRejectsInvalidConfig(t *testing.T) {
+	for _, env := range []map[string]string{
+		{"SUBLANE_ADDR": "localhost"}, {"SUBLANE_ADDR": "127.0.0.1:0"},
+		{"SUBLANE_ADDR": "127.0.0.1:70000"}, {"SUBLANE_LOG_LEVEL": "quiet"},
+	} {
+		if _, err := Load(func(k string) string { return env[k] }); err == nil {
+			t.Fatalf("accepted invalid config: %v", env)
+		}
+	}
+}

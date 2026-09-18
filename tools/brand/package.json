@@ -1,0 +1,16 @@
+{
+  "name": "@sublane/brand",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@9.12.2",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node check.mjs",
+    "test": "node --test build.test.mjs"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "fontkit": "2.0.4"
+  }
+}
