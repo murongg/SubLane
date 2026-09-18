@@ -11,3 +11,6 @@ docs/plans
 docs/specs
 .env*
 *.db*
+# Ignore leftover bootstrap files from earlier development builds.
+**/setup.key
+**/.setup-*

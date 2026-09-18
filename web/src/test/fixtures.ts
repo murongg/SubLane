@@ -6,3 +6,10 @@ export const system = {
   storage: { engine: 'sqlite', status: 'ready' },
   gateway: { provider: 'codex', status: 'not_configured' },
 }
+
+export const authenticated = {
+  initialized: true,
+  user: { username: 'admin-test' },
+}
+
+export const anonymous = { initialized: true, user: null }

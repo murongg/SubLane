@@ -37,9 +37,11 @@ SUBLANE_ADDR=127.0.0.1:9090 ./bin/sublane
 
 Vite's development proxy expects port 8080 by default. Change its target alongside `SUBLANE_ADDR` if you move the development backend.
 
+The API proxy must preserve Host (`changeOrigin: false`) for same-origin authentication. Start with an empty test data directory to exercise setup and create an administrator through the form using synthetic credentials. Never reset a working instance by deleting its database.
+
 ## Tests
 
-Backend tests cover environment validation, SQLite initialization/reopening, migration tracking, readiness failure, and API/static asset boundaries. Frontend tests cover response validation, request cancellation propagation, error recovery, navigation, and persistent theme/language selection. Use synthetic fixtures and temporary databases only.
+Backend tests cover environment validation, SQLite upgrades, one-time setup/races/rollback, password/session persistence, expiry/revocation, origin/body checks, rate limits, readiness failure, and API/static asset boundaries. Frontend tests cover auth routing, setup validation, login errors, logout/cache clearing, expiry, response validation, navigation, and persistent theme/language selection. Use synthetic fixtures and temporary databases only.
 
 Run focused tests during development:
 

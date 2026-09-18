@@ -10,7 +10,8 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': 'http://127.0.0.1:8080',
+      // Keep the browser Host so authentication Origin checks work through the dev proxy.
+      '/api': { target: 'http://127.0.0.1:8080', changeOrigin: false },
       '/healthz': 'http://127.0.0.1:8080',
       '/readyz': 'http://127.0.0.1:8080',
     },

@@ -13,7 +13,7 @@ This is product direction, not a release-date commitment. The foundation milesto
 
 ## First usable release
 
-1. Administrator bootstrap/login and protected management routes.
+1. **Implemented:** administrator bootstrap/login, logout, sessions, and protected management routes.
 2. A pinned CLIProxyAPI adapter with credential encryption, OAuth callback state validation, and one refresh owner.
 3. Add and reauthorize Codex subscription accounts; validate both CLI and desktop flows.
 4. Invite members, issue individual gateway keys, and reliably revoke access.

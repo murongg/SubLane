@@ -8,6 +8,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/murongg/SubLane/internal/auth"
 )
 
 type Options struct {
@@ -15,10 +17,16 @@ type Options struct {
 	Version   string
 	StartedAt time.Time
 	Ping      func(context.Context) error
+	Auth      *auth.Service
+	PublicURL string
 }
 
 func New(o Options) http.Handler {
 	mux := http.NewServeMux()
+	management := http.NewServeMux()
+	login := &authHTTP{service: o.Auth, publicURL: o.PublicURL, limiter: newLoginLimiter()}
+	login.register(mux)
+	mux.Handle("/api/", login.require(management))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		if !ready(r.Context(), o.Ping) {
@@ -27,7 +35,7 @@ func New(o Options) http.Handler {
 		}
 		writeJSON(w, 200, map[string]string{"status": "ready"})
 	})
-	mux.HandleFunc("GET /api/system", func(w http.ResponseWriter, r *http.Request) {
+	management.HandleFunc("GET /api/system", func(w http.ResponseWriter, r *http.Request) {
 		if !ready(r.Context(), o.Ping) {
 			writeJSON(w, 503, map[string]string{"error": "storage_unavailable"})
 			return
@@ -39,7 +47,10 @@ func New(o Options) http.Handler {
 		})
 	})
 	// Unknown API endpoints must never fall through to the SPA with a misleading 200.
-	for _, prefix := range []string{"/api", "/api/", "/v1", "/v1/", "/v0", "/v0/"} {
+	management.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 404, map[string]string{"error": "not_found"})
+	})
+	for _, prefix := range []string{"/api", "/v1", "/v1/", "/v0", "/v0/"} {
 		mux.HandleFunc(prefix, func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 404, map[string]string{"error": "not_found"})
 		})

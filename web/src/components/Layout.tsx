@@ -1,13 +1,11 @@
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
-import {
-  CircleHelp,
-  LayoutDashboard,
-  Network,
-  Settings2,
-  Workflow,
-} from 'lucide-react'
+import { LayoutDashboard, Settings, Workflow } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { LanguageSelect, ThemeSelect } from './Preferences'
+import { Logo } from './Logo'
+import { Session } from './Session'
+import { Button } from './ui/Button'
+import { Separator } from './ui/Separator'
 import {
   Sidebar,
   SidebarContent,
@@ -28,7 +26,6 @@ import {
 const navigation = [
   { to: '/', label: 'overview', icon: LayoutDashboard },
   { to: '/accounts', label: 'accounts', icon: Workflow },
-  { to: '/preferences', label: 'preferences', icon: Settings2 },
 ] as const
 
 function Navigation() {
@@ -37,21 +34,23 @@ function Navigation() {
   const { setOpenMobile } = useSidebar()
   return (
     <Sidebar className="border-r border-border">
-      <SidebarHeader className="px-5 py-6">
+      <SidebarHeader className="px-4 py-5">
         <Link
           to="/"
           className="flex items-center gap-2.5 rounded-md focus-visible:outline-2 focus-visible:outline-ring"
           aria-label="SubLane"
           onClick={() => setOpenMobile(false)}
         >
-          <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <Network className="size-4" aria-hidden="true" />
-          </span>
-          <span className="text-lg font-semibold tracking-tight">SubLane</span>
+          <Logo />
+          <div>
+            <span className="text-base font-semibold tracking-tight">
+              SubLane
+            </span>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t('internalGateway')}
+            </p>
+          </div>
         </Link>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {t('internalGateway')}
-        </p>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup className="px-3">
@@ -80,12 +79,8 @@ function Navigation() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="gap-2 border-t border-border px-5 py-4">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <CircleHelp className="size-3.5" aria-hidden="true" />
-          {t('foundation')}
-        </div>
-        <span className="text-xs text-muted-foreground">AGPL-3.0</span>
+      <SidebarFooter className="p-3">
+        <Session />
       </SidebarFooter>
     </Sidebar>
   )
@@ -93,9 +88,6 @@ function Navigation() {
 
 export function Layout() {
   const { t } = useTranslation()
-  const isPreferences = useRouterState({
-    select: (s) => s.location.pathname === '/preferences',
-  })
   return (
     <SidebarProvider>
       <a
@@ -106,23 +98,36 @@ export function Layout() {
       </a>
       <Navigation />
       <SidebarInset className="min-w-0 bg-background">
-        <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-border px-4 md:px-8">
+        <header className="flex min-h-16 items-center justify-between gap-3 px-4 md:px-6">
           <div className="flex items-center gap-3">
-            <SidebarTrigger className="size-9" />
+            <SidebarTrigger className="size-7 text-muted-foreground [@media(pointer:coarse)]:size-11" />
+            <Separator orientation="vertical" className="h-6" />
             <span className="hidden text-sm text-muted-foreground sm:inline">
               {t('workspace')}
             </span>
           </div>
-          {!isPreferences && (
-            <div className="flex items-center gap-2">
-              <LanguageSelect />
-              <ThemeSelect />
-            </div>
-          )}
+          <div className="flex items-center gap-1">
+            <LanguageSelect compact />
+            <ThemeSelect compact />
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground [@media(pointer:coarse)]:size-11"
+            >
+              <Link
+                to="/preferences"
+                aria-label={t('preferences')}
+                title={t('preferences')}
+              >
+                <Settings aria-hidden="true" />
+              </Link>
+            </Button>
+          </div>
         </header>
         <main
           id="main-content"
-          className="mx-auto w-full max-w-6xl px-5 py-8 md:px-10 md:py-10"
+          className="mx-auto w-full max-w-6xl px-5 py-6 md:px-6"
         >
           <Outlet />
         </main>
