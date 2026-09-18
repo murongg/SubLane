@@ -18,7 +18,7 @@ const steps = [
   {
     title: 'teamAccess',
     description: 'teamAccessDescription',
-    status: 'planned',
+    status: 'ready',
   },
 ] as const
 

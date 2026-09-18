@@ -24,7 +24,7 @@ export function Overview() {
         </div>
         <Button
           variant="outline"
-          onClick={() => void query.refetch()}
+          onClick={() => query.refetch()}
           disabled={query.isFetching}
         >
           <RefreshCw
@@ -68,7 +68,7 @@ export function Overview() {
             <Button
               className="mt-4"
               variant="outline"
-              onClick={() => void query.refetch()}
+              onClick={() => query.refetch()}
               disabled={query.isFetching}
             >
               {t('reconnect')}

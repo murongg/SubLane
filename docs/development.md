@@ -18,6 +18,8 @@ Run all Make targets from the repository root.
 | `make dev-api` | Run only the Go backend |
 | `make dev-web` | Run only Vite |
 | `make build` | Build frontend and embed it into `bin/sublane` |
+| `make generate` | Regenerate typed database access using pinned sqlc |
+| `make generate-check` | Verify generated Go matches the SQL and sqlc configuration |
 | `make test` | Run Go race tests and frontend tests |
 | `make lint` | Vet, formatting, typecheck, and lint |
 | `make check` | Run all checks and the production build |
@@ -41,7 +43,7 @@ The API proxy must preserve Host (`changeOrigin: false`) for same-origin authent
 
 ## Tests
 
-Backend tests cover environment validation, SQLite upgrades, one-time setup/races/rollback, password/session persistence, expiry/revocation, origin/body checks, rate limits, readiness failure, and API/static asset boundaries. Frontend tests cover auth routing, setup validation, login errors, logout/cache clearing, expiry, response validation, navigation, and persistent theme/language selection. Use synthetic fixtures and temporary databases only.
+Backend tests cover environment validation, SQLite upgrades preserving administrator sessions, one-time setup/races/rollback, member lifecycle, per-user session limits, disable-time revocation, role-based API access, origin/body checks, rate limits, readiness failure, and API/static asset boundaries. Frontend tests cover role-aware routing and menus, member creation/status changes, setup validation, login errors, logout and cross-identity cache clearing, expiry, response validation, navigation, and persistent theme/language selection. Use synthetic fixtures and temporary databases only.
 
 Run focused tests during development:
 
@@ -61,9 +63,19 @@ Browser verification should cover desktop and narrow layouts, mobile navigation,
 
 UI preferences are local to the browser. They are not team settings and are not written to SQLite.
 
+## HTTP routes and database queries
+
+HTTP routes use chi with standard `net/http` handlers. Resources register their own `Get`, `Head`, `Post`, and `Patch` handlers inside `Route` groups. Add management routes to the administrator-protected router in `internal/server/server.go`. Public authentication and personal-key routes are explicit exceptions. Session, role, and gateway bearer authentication run through router-level `Use`, protecting method errors and unknown paths as well as matching endpoints. Public login/setup use `With` for origin validation and throttling. Do not reintroduce method or path dispatch switches in handlers.
+
+Each subrouter installs JSON `NotFound` and `MethodNotAllowed` handlers. The 405 handler derives `Allow` from chi's registered routes through `Match`, without running application handlers. Health checks, system status, and static assets explicitly register HEAD; other APIs retain their declared methods. The SPA is registered only for GET/HEAD at the root and cannot handle reserved API fallbacks.
+
+Write named SQL queries in `internal/storage/queries/`, grouped by domain. `sqlc.yaml` uses the existing migration directory as its schema and generates `internal/storage/db/`. Run `make generate` after changing queries, migrations, or generator configuration. Commit SQL and generated Go together; never edit generated files manually. Domain services own validation and transactions, bind queries with `WithTx(tx)`, and convert rows to public response types.
+
+The Makefile pins sqlc to v1.31.1 and runs it through `go run`; the first invocation downloads and builds the tool. Go may download a compatible toolchain for the generator. No global sqlc installation, cloud service, or database connection is needed for generation. Generator dependencies stay outside the application's module dependency graph. Generated files are versioned, so ordinary Go builds and production containers do not need sqlc. `make check`, including CI, runs `make generate-check` to reject stale generated code without rewriting it.
+
 ## Adding migrations
 
-Create the next numbered `.sql` file in `internal/storage/migrations/`. Never alter a released migration. Keep migration changes transactional and include an upgrade/persistence test. Go embeds the migration files automatically.
+Create the next numbered `.sql` file in `internal/storage/migrations/`. Never alter a released migration. Keep migration changes transactional and include an upgrade/persistence test. Go embeds the migration files automatically. Run `make generate` so sqlc checks queries against the resulting schema; sqlc does not apply database migrations.
 
 ## Troubleshooting
 

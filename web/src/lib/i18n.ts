@@ -13,13 +13,18 @@ function savedLanguage(): Language {
   }
 }
 
-void i18n.use(initReactI18next).init({
-  resources: { en: { translation: en }, zh: { translation: zh } },
-  lng: savedLanguage(),
-  fallbackLng: 'en',
-  supportedLngs: ['en', 'zh'],
-  interpolation: { escapeValue: false },
-})
+i18n
+  .use(initReactI18next)
+  .init({
+    resources: { en: { translation: en }, zh: { translation: zh } },
+    lng: savedLanguage(),
+    fallbackLng: 'en',
+    supportedLngs: ['en', 'zh'],
+    interpolation: { escapeValue: false },
+  })
+  .catch((error: unknown) => {
+    console.error('Could not initialize translations', error)
+  })
 
 function updateDocument(language: string) {
   document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'
@@ -28,7 +33,9 @@ updateDocument(i18n.language)
 i18n.on('languageChanged', updateDocument)
 
 export function setLanguage(language: Language) {
-  void i18n.changeLanguage(language)
+  i18n.changeLanguage(language).catch((error: unknown) => {
+    console.error('Could not change language', error)
+  })
   try {
     localStorage.setItem('sublane-language', language)
   } catch {

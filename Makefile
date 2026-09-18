@@ -1,9 +1,10 @@
-.PHONY: setup dev dev-api dev-web build test lint check clean brand
+.PHONY: setup dev dev-api dev-web build generate generate-check test lint check clean brand
 
 GO ?= go
 PNPM ?= pnpm
 VERSION ?= 0.1.0-dev
 WEB_PORT ?= 5173
+SQLC = $(GO) run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 
 setup:
 	$(GO) mod download
@@ -22,6 +23,12 @@ build:
 	$(PNPM) --dir web build
 	CGO_ENABLED=0 $(GO) build -tags production -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o bin/sublane ./cmd/sublane
 
+generate:
+	$(SQLC) generate
+
+generate-check:
+	$(SQLC) diff
+
 test:
 	$(GO) test -race ./...
 	$(PNPM) --dir web test
@@ -33,7 +40,7 @@ lint:
 	$(PNPM) --dir web lint
 	$(PNPM) --dir web format:check
 
-check: lint test build
+check: generate-check lint test build
 
 clean:
 	rm -rf bin web/dist dist

@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/config"
 	"github.com/murongg/SubLane/internal/server"
@@ -52,7 +53,7 @@ func run() error {
 	}
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(server.Options{Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, PublicURL: cfg.PublicURL}),
+		Handler:           server.New(server.Options{Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: apikey.New(db), PublicURL: cfg.PublicURL}),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,

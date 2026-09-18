@@ -2,7 +2,7 @@
 
 ## Context
 
-Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. Local administrator authentication is implemented; upstream subscription forwarding is not.
+Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. Local administrator/member authentication and role-based access are implemented; upstream subscription forwarding is not.
 
 Use English for code comments, `PRODUCT.md`, and primary developer documentation. Keep the English and Simplified Chinese UI dictionaries complete. English is the default interface language.
 
@@ -18,9 +18,10 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 
 - `cmd/sublane` owns startup, process lifecycle, and dependency wiring.
 - `internal/config` owns environment parsing and validation.
-- `internal/auth` owns administrator credentials, first-run initialization, and persisted sessions.
-- `internal/storage` owns SQLite initialization and migrations.
-- `internal/server` owns HTTP handling; it must not silently serve HTML for API errors.
+- `internal/auth` owns local user credentials, roles, member lifecycle, first-run initialization, and persisted sessions.
+- `internal/apikey` owns personal gateway key generation, hashed storage, ownership, revocation, and bearer authentication. API keys must never authenticate browser management sessions.
+- `internal/storage` owns SQLite initialization, migrations, query SQL, and sqlc-generated database access under `internal/storage/db`.
+- `internal/server` owns chi routing and HTTP handling; it must not silently serve HTML for API errors.
 - `web` is a client-rendered React app and an embedded Go asset package. It must not require a Node.js server in production.
 - Future provider integration belongs behind a narrow adapter under `internal/`. Membership, policy, and storage code must not depend on CLIProxyAPI-specific types.
 - Avoid adding packages solely for hypothetical reuse. Keep related code together and move it only when ownership or reuse justifies a boundary.
@@ -28,14 +29,19 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 ## Backend
 
 - Use standard Go conventions and explicit dependency injection at test seams.
+- Register management routes on the administrator-protected chi router. Keep handlers compatible with `net/http`; domain services must not depend on chi.
+- Use chi `Route` and method-specific registrations for HTTP resources; do not dispatch methods or gateway paths manually inside handlers. Apply session, role, and gateway authentication with router-level `Use` so 404/405 responses remain protected. Reserve `With` for endpoint-specific checks such as login origin validation and throttling.
+- Write application queries in `internal/storage/queries/` and run `make generate`. Never hand-edit `internal/storage/db/`; keep generated code with its SQL changes. Migration bootstrap SQL remains in storage.
+- Keep transaction ownership in domain services and use `queries.WithTx(tx)` for every query inside a transaction. Keep database row types separate from public API responses.
 - SQLite migrations are additive, ordered SQL files. Never edit an already released migration; add a new one.
 - Do not hold a database transaction open during network IO or model generation.
 - Preserve cancellation and graceful shutdown. Future model streaming routes need explicit timeout and resource policies rather than blanket response buffering.
 - Do not add authentication bypasses or expose management endpoints as member APIs.
-- Default to loopback listening. Keep management routes under the default-authenticated API subtree. First-run setup uses a username and password; preserve its atomic single-administrator guard and disable it after initialization. See `docs/authentication.md` for the current authentication contract.
+- Default to loopback listening. Keep management routes under the default administrator-only API subtree. Members must never inherit administrator API access; enforce roles on both direct routes and backend requests. First-run setup uses a username and password; preserve its atomic single-administrator guard and disable it after initialization. See `docs/authentication.md` for the current authentication contract.
 
 ## Frontend
 
+- Do not use the JavaScript `void` operator, including to discard promises. Return or await promises where appropriate and handle failures explicitly. TypeScript `void` return types are allowed.
 - Use PascalCase component filenames and lowercase domain folders. Follow TanStack Router conventions for routes.
 - Reuse the adapted Shadcn Admin components under `web/src/components/ui/`.
 - Use TanStack Query for remote state and validate API responses at the boundary.

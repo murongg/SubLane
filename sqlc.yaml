@@ -1,0 +1,16 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    schema: "internal/storage/migrations"
+    queries: "internal/storage/queries"
+    gen:
+      go:
+        package: "db"
+        out: "internal/storage/db"
+        sql_package: "database/sql"
+        emit_empty_slices: true
+        emit_pointers_for_null_types: true
+        omit_unused_structs: true
+        overrides:
+          - column: "users.enabled"
+            go_type: "bool"

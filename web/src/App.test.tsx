@@ -124,3 +124,52 @@ it('keeps keyboard focus in the account menu opened inside the mobile sidebar', 
     await screen.findByRole('menuitemradio', { name: 'English' }),
   ).toBeTruthy()
 })
+
+it('releases pointer access after signing out while the mobile menu is closing', async ({
+  onTestFinished,
+}) => {
+  // JSDOM does not run the real exit animation; keep the closing menu present until its parent unmounts.
+  const style = document.createElement('style')
+  style.textContent =
+    '[data-slot="dropdown-menu-content"][data-state="open"] { animation-name: synthetic-in; } [data-slot="dropdown-menu-content"][data-state="closed"] { animation-name: synthetic-out; animation-duration: 200ms; }'
+  document.head.append(style)
+  onTestFinished(() => style.remove())
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query === '(max-width: 767px)',
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }))
+  let state = authenticated as typeof authenticated | typeof anonymous
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/logout') state = anonymous
+      return Promise.resolve(
+        new Response(
+          JSON.stringify(url.startsWith('/api/auth/') ? state : system),
+        ),
+      )
+    }),
+  )
+  const user = userEvent.setup()
+  render(
+    <App
+      router={createAppRouter(createMemoryHistory({ initialEntries: ['/'] }))}
+    />,
+  )
+  await screen.findByRole('heading', { name: 'Workspace overview' })
+  await user.click(screen.getByRole('button', { name: 'Toggle navigation' }))
+  await user.click(await screen.findByRole('button', { name: 'Account menu' }))
+  await user.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
+  await screen.findByRole('heading', { name: 'Sign in to SubLane' })
+  expect(document.body.style.pointerEvents).not.toBe('none')
+  await user.click(screen.getByRole('button', { name: 'Language' }))
+  expect(
+    await screen.findByRole('menuitemradio', { name: 'English' }),
+  ).toBeTruthy()
+})

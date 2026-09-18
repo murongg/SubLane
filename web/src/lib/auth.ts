@@ -1,21 +1,57 @@
-import { queryOptions } from '@tanstack/react-query'
+import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { request } from './request'
 
 const authSchema = z
   .object({
     initialized: z.boolean(),
-    user: z.object({ username: z.string().min(1).max(32) }).nullable(),
+    user: z
+      .object({
+        id: z.number().int().positive(),
+        username: z.string().min(1).max(32),
+        role: z.enum(['admin', 'member']),
+      })
+      .nullable(),
   })
   .refine((value) => value.initialized || value.user === null)
 
 export type AuthState = z.infer<typeof authSchema>
+export type User = NonNullable<AuthState['user']>
+export type Role = User['role']
 export const authKey = ['auth'] as const
+
+function commitAuthState(client: QueryClient, state: AuthState) {
+  // Update identity first so old administrator observers cannot refetch as a member.
+  client.setQueryData(authKey, state)
+  client.removeQueries({
+    predicate: (query) => query.queryKey[0] !== authKey[0],
+  })
+}
+
+export async function replaceAuthState(client: QueryClient, state: AuthState) {
+  await client.cancelQueries()
+  commitAuthState(client, state)
+}
 
 export const authOptions = () =>
   queryOptions({
     queryKey: authKey,
-    queryFn: ({ signal }) => request('/api/auth/state', authSchema, { signal }),
+    queryFn: async ({ signal, client }) => {
+      const state = await request('/api/auth/state', authSchema, { signal })
+      const previous = client.getQueryData<AuthState>(authKey)
+      if (
+        previous &&
+        (previous.user?.id !== state.user?.id ||
+          previous.user?.role !== state.user?.role)
+      ) {
+        // A session change in another tab must clear private data without cancelling this auth read.
+        await client.cancelQueries({
+          predicate: (query) => query.queryKey[0] !== authKey[0],
+        })
+        commitAuthState(client, state)
+      }
+      return state
+    },
     staleTime: 60_000,
     refetchOnWindowFocus: true,
     refetchInterval: 60_000,

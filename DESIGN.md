@@ -109,7 +109,7 @@ Keep all visible UI copy and accessibility labels in the translation dictionarie
 
 ## Layout
 
-The desktop shell follows the user-selected Shadcn Admin layout: a compact two-line brand block, a 256px sidebar, a 64px minimum-height header, and a fluid main area capped at 1152px. Main content uses 24px padding on larger screens and 20px horizontal padding on small screens. The sidebar ends with a compact account trigger containing initials, username, and administrator role. Keep SubLane's neutral palette and real instance data.
+The desktop shell follows the user-selected Shadcn Admin layout: a compact two-line brand block, a 256px sidebar, a 64px minimum-height header, and a fluid main area capped at 1152px. Main content uses 24px padding on larger screens and 20px horizontal padding on small screens. The sidebar ends with a compact account trigger containing initials, username, and actual account role. Keep SubLane's neutral palette and real instance data.
 
 Below 768px, navigation becomes a 288px modal sheet opened by the header trigger. Main content takes the full width. Lists of details and toolbars wrap or stack; the service details become a single column below 640px.
 
@@ -143,13 +143,15 @@ Desktop controls are compact. Coarse-pointer targets expand to at least 44px tal
 
 ### Navigation
 
-Reuse `SidebarProvider`, `Sidebar`, `SidebarMenuButton`, and `SidebarTrigger`. Active routes have a neutral selection surface and `aria-current`. Close the mobile sheet after navigation and retain keyboard focus handling from Radix. The account trigger opens a Shadcn Admin-style menu beside the desktop sidebar or above the trigger on mobile. Show the real username, administrator role, and a sign-out action; keep pending and failed sign-out feedback visible in the sidebar.
+Navigation follows persisted roles. The upper **General** group contains the shared overview and personal API key entries; the lower **Administration** group contains subscription accounts and member management and is hidden entirely for members. The overview itself shows instance information for administrators and a personal workspace for members. API key management is common to both roles and shows only the current user’s records; creation displays the full secret in a one-time dialog, and revocation requires confirmation. Both roles retain personal preferences in the header. Direct access to an administrator route shows a localized access-denied page before management content mounts. Member management uses a paginated table and a focused creation sheet; status changes show clear pending and error feedback.
+
+Reuse `SidebarProvider`, `Sidebar`, `SidebarMenuButton`, and `SidebarTrigger`. Active routes have a neutral selection surface and `aria-current`. Close the mobile sheet after navigation and retain keyboard focus handling from Radix. The account trigger opens a Shadcn Admin-style menu beside the desktop sidebar or above the trigger on mobile. Show the real username, account role, and a sign-out action; keep pending and failed sign-out feedback visible in the sidebar.
 
 ### Authentication
 
 First-time setup starts with a centered welcome surface, the approved mark, a brief introduction, and a two-step outline of administrator creation and workspace entry. **Start setup** opens the administrator form on its own route; the form offers a return action until submission is in progress. Move focus to the page heading when moving between setup screens, and sign in automatically after successful creation. Initialized instances skip the welcome flow.
 
-Setup and login share the workspace's compact icon controls, custom dropdown menus, typography, and neutral palette. Keep the header transparent and borderless, and the centered content surface focused on the current step. Forms retain visible field labels and localized inline errors. Dark inputs use the canvas background to retain contrast against the input-border token. The private navigation is rendered only after authentication; the sidebar shows the current administrator and a sign-out action.
+Setup and login share the workspace's compact icon controls, custom dropdown menus, typography, and neutral palette. Keep the header transparent and borderless, and the centered content surface focused on the current step. Forms retain visible field labels and localized inline errors. Dark inputs use the canvas background to retain contrast against the input-border token. The private navigation is rendered only after authentication; the sidebar shows the current user and a sign-out action.
 
 ### Status
 

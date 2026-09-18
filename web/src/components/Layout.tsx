@@ -1,6 +1,16 @@
+import type { ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
-import { LayoutDashboard, Settings, Workflow } from 'lucide-react'
+import {
+  KeyRound,
+  LayoutDashboard,
+  Settings,
+  Users,
+  Workflow,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { authOptions } from '@/lib/auth'
+import { canAccess } from '@/lib/access'
 import { LanguageSelect, ThemeSelect } from './Preferences'
 import { Logo } from './Logo'
 import { Session } from './Session'
@@ -24,14 +34,27 @@ import {
 } from './ui/Sidebar'
 
 const navigation = [
-  { to: '/', label: 'overview', icon: LayoutDashboard },
-  { to: '/accounts', label: 'accounts', icon: Workflow },
+  {
+    label: 'general',
+    items: [
+      { to: '/', label: 'overview', icon: LayoutDashboard },
+      { to: '/keys', label: 'apiKeys', icon: KeyRound },
+    ],
+  },
+  {
+    label: 'administration',
+    items: [
+      { to: '/accounts', label: 'accounts', icon: Workflow },
+      { to: '/members', label: 'members', icon: Users },
+    ],
+  },
 ] as const
 
 function Navigation() {
   const { t } = useTranslation()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const { setOpenMobile } = useSidebar()
+  const { data } = useQuery(authOptions())
   return (
     <Sidebar className="border-r border-border">
       <SidebarHeader className="px-4 py-5">
@@ -52,32 +75,45 @@ function Navigation() {
           </div>
         </Link>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup className="px-3">
-          <SidebarGroupLabel>{t('workspace')}</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navigation.map(({ to, label, icon: Icon }) => (
-                <SidebarMenuItem key={to}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === to}
-                    className="h-10"
-                  >
-                    <Link
-                      to={to}
-                      onClick={() => setOpenMobile(false)}
-                      aria-current={pathname === to ? 'page' : undefined}
-                    >
-                      <Icon aria-hidden="true" />
-                      <span>{t(label)}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+      <SidebarContent className="gap-5">
+        {navigation.map((group) => {
+          const items = group.items.filter(({ to }) =>
+            canAccess(to, data?.user?.role),
+          )
+          if (!items.length) return null
+          return (
+            <SidebarGroup
+              key={group.label}
+              role="group"
+              aria-label={t(group.label)}
+              className="px-3"
+            >
+              <SidebarGroupLabel>{t(group.label)}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {items.map(({ to, label, icon: Icon }) => (
+                    <SidebarMenuItem key={to}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname === to}
+                        className="h-10"
+                      >
+                        <Link
+                          to={to}
+                          onClick={() => setOpenMobile(false)}
+                          aria-current={pathname === to ? 'page' : undefined}
+                        >
+                          <Icon aria-hidden="true" />
+                          <span>{t(label)}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )
+        })}
       </SidebarContent>
       <SidebarFooter className="p-3">
         <Session />
@@ -86,7 +122,7 @@ function Navigation() {
   )
 }
 
-export function Layout() {
+export function Layout({ children }: { children?: ReactNode }) {
   const { t } = useTranslation()
   return (
     <SidebarProvider>
@@ -129,7 +165,7 @@ export function Layout() {
           id="main-content"
           className="mx-auto w-full max-w-6xl px-5 py-6 md:px-6"
         >
-          <Outlet />
+          {children ?? <Outlet />}
         </main>
       </SidebarInset>
     </SidebarProvider>

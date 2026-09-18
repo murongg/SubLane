@@ -40,7 +40,7 @@ export function Session() {
       <span className="grid min-w-0 flex-1 gap-0.5 text-left text-sm leading-tight">
         <span className="truncate font-semibold">{username}</span>
         <span className="truncate text-xs text-muted-foreground">
-          {t('administrator')}
+          {t(data?.user?.role === 'admin' ? 'administrator' : 'member')}
         </span>
       </span>
     </>
@@ -49,8 +49,8 @@ export function Session() {
     <>
       <SidebarMenu>
         <SidebarMenuItem>
-          {/* Menu and Sheet must share Radix focus-scope versions for nested mobile focus. */}
-          <DropdownMenu>
+          {/* The mobile sheet owns the modal lock; a second lock can outlive sign-out navigation. */}
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size="lg"
