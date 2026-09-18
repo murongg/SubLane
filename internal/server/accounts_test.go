@@ -1,0 +1,73 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/storage"
+	"github.com/murongg/SubLane/internal/vault"
+)
+
+func TestAccountManagementIsAdministratorOnlyAndNeverReturnsTokens(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	db, err := storage.Open(ctx, filepath.Join(dir, "accounts.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	identity, err := auth.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := New(Options{Auth: identity, Accounts: accounts.New(db, cipher), Ping: db.PingContext})
+	origin := "http://example.test"
+	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "owner-test", "password": "owner pass 42"}, nil)
+	owner := setup.Result().Cookies()[0]
+	input := map[string]string{"username": "member-test", "password": "member pass 42"}
+	if result := request(h, "POST", "/api/members", origin, input, owner); result.Code != 201 {
+		t.Fatal(result.Code)
+	}
+	login := request(h, "POST", "/api/auth/login", origin, input, nil)
+	member := login.Result().Cookies()[0]
+	imported := map[string]string{"name": "Synthetic subscription", "auth_json": `{"access_token":"synthetic-secret-access","refresh_token":"synthetic-secret-refresh","account_id":"upstream-test"}`}
+	if result := request(h, "POST", "/api/accounts/import", origin, imported, member); result.Code != 403 {
+		t.Fatal("member imported account")
+	}
+	if result := request(h, "GET", "/api/accounts", "", nil, nil); result.Code != 401 {
+		t.Fatal("anonymous accounts listing")
+	}
+	created := request(h, "POST", "/api/accounts/import", origin, imported, owner)
+	if created.Code != 201 {
+		t.Fatalf("create: %d", created.Code)
+	}
+	var account accounts.Account
+	if json.Unmarshal(created.Body.Bytes(), &account) != nil || account.ID == "" {
+		t.Fatal("invalid metadata")
+	}
+	listed := request(h, "GET", "/api/accounts", "", nil, owner)
+	if listed.Code != 200 || strings.Contains(listed.Body.String(), "synthetic-secret") || strings.Contains(listed.Body.String(), "refresh_token") {
+		t.Fatal("account metadata leaked credentials")
+	}
+	if result := request(h, "PATCH", "/api/accounts/"+account.ID, origin, map[string]bool{"enabled": false}, owner); result.Code != 200 {
+		t.Fatal("cannot disable")
+	}
+	if result := request(h, "DELETE", "/api/accounts/"+account.ID, origin, map[string]string{}, member); result.Code != 403 {
+		t.Fatal("member deleted account")
+	}
+	if result := request(h, "DELETE", "/api/accounts/"+account.ID, origin, map[string]string{}, owner); result.Code != 204 {
+		t.Fatalf("delete: %d", result.Code)
+	}
+	if result := request(h, "POST", "/api/accounts/import", "https://other.example.test", imported, owner); result.Code != 403 {
+		t.Fatal("origin protection lost")
+	}
+}

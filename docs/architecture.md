@@ -6,13 +6,18 @@ SubLane is one Go process with chi routing and a client-rendered React frontend.
 
 ```mermaid
 flowchart LR
-  Browser[Browser] --> HTTP[Go HTTP server]
+  Browser[Browser] --> HTTP[chi HTTP server]
+  Clients[Codex clients] --> HTTP
   HTTP --> SPA[Embedded React application]
-  HTTP --> System[System and health endpoints]
-  System --> DB[(SQLite)]
+  HTTP --> Accounts[Accounts and encrypted credentials]
+  Accounts --> DB[(SQLite)]
+  HTTP --> Gateway[Gateway key authentication and affinity]
+  Gateway --> Accounts
+  Gateway --> Adapter[Codex adapter and SDK translators]
+  Adapter --> OpenAI[OpenAI]
 ```
 
-In development, Vite serves the React app and proxies `/api`, `/healthz`, and `/readyz` to the Go backend. In production, the browser and API use the same origin and one port. There is no separate Node.js service, Redis, or PostgreSQL requirement.
+In development, Vite serves the React app and proxies `/api`, `/v1` including WebSocket upgrades, `/healthz`, and `/readyz` to the Go backend. In production, the browser and API use the same origin and one port. There is no separate Node.js service, Redis, or PostgreSQL requirement.
 
 ## Ownership
 
@@ -22,6 +27,11 @@ In development, Vite serves the React app and proxies `/api`, `/healthz`, and `/
 | `internal/config` | Validated process environment | Persistent team preferences |
 | `internal/auth` | Local users, roles, member lifecycle, and sessions | Member keys or upstream credentials |
 | `internal/apikey` | Personal gateway key metadata, hashes, revocation, and lookup | Browser sessions or upstream credentials |
+| `internal/accounts` | Subscription metadata, credential lifecycle, and refresh serialization | HTTP dispatch or client keys |
+| `internal/vault` | AES-GCM encryption and private local key loading | OAuth or account policy |
+| `internal/oauth` | Session-bound, single-use PKCE authorization attempts | Browser login or model forwarding |
+| `internal/codex` | Public SDK translation, token exchange, and Codex HTTP protocol | Team roles or database ownership |
+| `internal/gateway` | Bounded admission, account affinity, and per-request orchestration | Public management authorization |
 | `internal/storage` | SQLite lifecycle, migrations, and query SQL | Provider authentication |
 | `internal/storage/db` | Generated query methods and database row types | Domain policy or public JSON contracts |
 | `internal/server` | chi routes, response boundaries, SPA serving | Future routing/account policy |
@@ -30,7 +40,7 @@ In development, Vite serves the React app and proxies `/api`, `/healthz`, and `/
 
 ## Persistence
 
-The database runs in WAL mode with foreign keys enabled, a bounded busy timeout, and one open connection. Startup applies ordered embedded SQL migrations and records each migration in the same transaction as its schema change. The settings and administrator/session migrations are followed by `003_members.sql`, which transactionally moves the existing administrator and session metadata into unified `users` and `sessions` tables. The first administrator remains ID 1 and cannot be disabled. No upstream account schema exists yet.
+The database runs in WAL mode with foreign keys enabled, a bounded busy timeout, and one open connection. Startup applies ordered embedded SQL migrations and records each migration in the same transaction as its schema change. The settings and administrator/session migrations are followed by `003_members.sql`, which transactionally moves the existing administrator and session metadata into unified `users` and `sessions` tables. The first administrator remains ID 1 and cannot be disabled. `004_api_keys.sql` adds personal keys, and `005_accounts.sql` adds encrypted subscription credentials and bounded account-affinity records.
 
 New database files use mode `0600`; newly created data directories use `0700`. Existing directory permissions are not rewritten. Database configuration uses a properly escaped file URL so special characters in the path are supported.
 
@@ -43,12 +53,12 @@ Named queries live under `internal/storage/queries/`. `sqlc.yaml` reads the same
 - chi `Route` groups and method-specific registrations own HTTP dispatch; handlers do not switch on request methods or gateway paths. Router-scoped `Use` applies session, role, and bearer checks before 404/405 handling. Public auth uses `Group` and `With` for availability, origin, and login throttling. Domain services remain independent of HTTP.
 - Management routes and unknown management paths retain administrator authentication. Public auth and personal key endpoints are explicit exceptions; their unknown paths fall back to administrator protection. JSON 405 responses derive the Allow header from chi's route table. Static assets are registered only for GET/HEAD outside the API routers.
 - Liveness does not depend on SQLite; readiness does.
-- Management routes under `/api/` require an enabled administrator session by default. Only the four explicit auth endpoints are public; state-changing browser requests enforce exact origin checks. Personal `/api/keys` routes accept either enabled role and derive ownership from the session. `/v1` uses separate bearer-key authentication and returns 501 on known model routes until forwarding is available.
+- Management routes under `/api/` require an enabled administrator session by default. Only the four explicit auth endpoints are public; state-changing browser requests enforce exact origin checks. Personal `/api/keys` routes accept either enabled role and derive ownership from the session. `/v1` uses separate bearer-key authentication for model discovery, Responses HTTP/SSE/WebSocket, compaction, and Chat Completions translation. WebSocket turns recheck key validity and member enablement.
 - System and health JSON responses use `Cache-Control: no-store`.
 - The SPA document revalidates; hashed `/assets/` files may be cached immutably.
 - Unknown API routes return JSON errors (401 before authentication in the protected subtree, otherwise 404), and missing static files return 404. They never become a successful HTML response.
 - Headers prevent MIME sniffing and framing, and limit referrer disclosure to the same origin.
-- Startup sets a header-read timeout and an idle timeout. Future streaming routes need their own resource and cancellation design.
+- Startup sets header/body-read and idle timeouts. There is no blanket write timeout for streaming; gateway operations have ten-minute contexts, bounded bodies/events/history, and cancellation propagation.
 - SIGINT/SIGTERM stops accepting new work and allows up to ten seconds for HTTP shutdown.
 
 ## Frontend
@@ -59,18 +69,12 @@ The Shadcn Admin subset provides the sidebar and shared primitives. Application 
 
 The root auth gate waits for server state before mounting protected pages. Management queries are enabled only for administrators, including during redirect transitions. One frontend access policy controls navigation and direct-route guards. Members get a personal homepage and shared appearance/language settings, without querying system or member-management data. Personal key queries include the owner ID in their cache key and opt into member access only while that identity remains current. Logout cancels outstanding requests, updates auth state, and removes private query data. Sessions use HttpOnly cookies rather than browser-storage tokens. The complete server contract is documented in [authentication.md](authentication.md).
 
-## Planned gateway boundary
+## Codex adapter boundary
 
-CLIProxyAPI SDK is not linked or initialized in this scaffold. The next integration should use a single embedded SDK service behind a narrow adapter. Keep member identities, admission policy, persisted usage, and HTTP management APIs owned by SubLane.
+The user-selected lightweight integration imports only CLIProxyAPI's public translation packages. It does not start the SDK HTTP service, file watcher, management API, or refresh scheduler. SubLane owns the OAuth state, credential lifecycle, account selection, HTTP transport, cancellation, and downstream WebSocket turn boundary. See [Codex gateway](codex.md) for limits, client setup, security behavior, and the verification boundary.
 
-Before connecting real accounts, validate these behaviors with synthetic upstreams and explicit client checks:
+The vault key is generated as a 0600 file beside SQLite. Startup verifies existing encrypted records and fails closed if the key is missing or mismatched. Backups must preserve the key alongside the database. Refresh and administrator credential changes have one serialized owner; network IO never runs inside a database transaction.
 
-1. Public SDK packages work from an external Go module; do not import upstream `internal` packages.
-2. There is one credential refresh owner and an encrypted persistence path.
-3. Authentication and revocation apply to each HTTP request and each WebSocket model turn.
-4. Account continuation ownership survives retries; a request cannot switch accounts when its conversation or files require the original account.
-5. Streaming cancellation releases connections, reservations, and concurrency slots.
-6. Usage callbacks, queues, caches, and request bodies have bounded resource policies.
-7. Codex CLI and desktop compatibility is tested separately; an OpenAI-compatible HTTP endpoint alone does not prove both clients work.
+Affinity is scoped to the member and client session, persists across normal process restarts, and expires after 24 hours of inactivity. Disabled/deleted accounts fail existing conversations instead of triggering unsafe account switching. WebSocket transcript state stays connection-local and bounded. HTTP previous_response_id is rejected because the upstream HTTP backend is stateless; callers must supply full input.
 
-No performance or memory budget is guaranteed by this scaffold. Measure the combined service under realistic concurrency after the SDK is connected.
+Automated protocol tests use synthetic credentials and fake upstreams. An opt-in test has verified Codex CLI 0.152.1 through HTTP/SSE and WebSocket modes. Real subscription and desktop verification are still separate acceptance steps. No universal memory or throughput budget is claimed; measure the intended workload and deployment platform.

@@ -2,7 +2,7 @@
 
 ## Context
 
-Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. Local administrator/member authentication and role-based access are implemented; upstream subscription forwarding is not.
+Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. Local account access, Codex OAuth/import, encrypted credentials, and gateway forwarding are implemented. Live subscription and desktop compatibility require separate evidence; see `docs/codex.md`.
 
 Use English for code comments, `PRODUCT.md`, and primary developer documentation. Keep the English and Simplified Chinese UI dictionaries complete. English is the default interface language.
 
@@ -23,7 +23,8 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - `internal/storage` owns SQLite initialization, migrations, query SQL, and sqlc-generated database access under `internal/storage/db`.
 - `internal/server` owns chi routing and HTTP handling; it must not silently serve HTML for API errors.
 - `web` is a client-rendered React app and an embedded Go asset package. It must not require a Node.js server in production.
-- Future provider integration belongs behind a narrow adapter under `internal/`. Membership, policy, and storage code must not depend on CLIProxyAPI-specific types.
+- `internal/codex` owns the pinned public CLIProxyAPI translation SDK and Codex HTTP protocol. Use the lightweight adapter selected for this project; do not start the SDK service or import upstream `internal` packages.
+- `internal/accounts` owns subscription metadata and serialized credential changes, `internal/vault` owns encryption, `internal/oauth` owns session-bound PKCE attempts, and `internal/gateway` owns account affinity and request admission. Membership, policy, and storage code must not depend on SDK types.
 - Avoid adding packages solely for hypothetical reuse. Keep related code together and move it only when ownership or reuse justifies a boundary.
 
 ## Backend
@@ -34,7 +35,9 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - Write application queries in `internal/storage/queries/` and run `make generate`. Never hand-edit `internal/storage/db/`; keep generated code with its SQL changes. Migration bootstrap SQL remains in storage.
 - Keep transaction ownership in domain services and use `queries.WithTx(tx)` for every query inside a transaction. Keep database row types separate from public API responses.
 - SQLite migrations are additive, ordered SQL files. Never edit an already released migration; add a new one.
-- Do not hold a database transaction open during network IO or model generation.
+- Do not hold a database transaction open during network IO or model generation. Persist rotated credentials before returning them to callers.
+- Reauthorization must preserve upstream identity. Recheck gateway keys on every WebSocket turn, and never move an existing conversation to another account after disablement or deletion.
+- Keep OAuth states, request bodies, stream events, WebSocket history, and concurrent operations bounded. Never read local Codex credentials automatically or use real credentials in tests.
 - Preserve cancellation and graceful shutdown. Future model streaming routes need explicit timeout and resource policies rather than blanket response buffering.
 - Do not add authentication bypasses or expose management endpoints as member APIs.
 - Default to loopback listening. Keep management routes under the default administrator-only API subtree. Members must never inherit administrator API access; enforce roles on both direct routes and backend requests. First-run setup uses a username and password; preserve its atomic single-administrator guard and disable it after initialization. See `docs/authentication.md` for the current authentication contract.

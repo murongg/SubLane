@@ -104,6 +104,10 @@ func (h *authHTTP) sameOrigin(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, into any) bool {
+	return decodeJSONLimit(w, r, into, 4096)
+}
+
+func decodeJSONLimit(w http.ResponseWriter, r *http.Request, into any, limitBytes int64) bool {
 	// Authentication bodies are small; a slow sender must not hold a handler indefinitely.
 	controller := http.NewResponseController(w)
 	_ = controller.SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -113,7 +117,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, into any) bool {
 		writeJSON(w, 415, map[string]string{"error": "json_required"})
 		return false
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	r.Body = http.MaxBytesReader(w, r.Body, limitBytes)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	err = decoder.Decode(into)

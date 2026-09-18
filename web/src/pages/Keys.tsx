@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { authOptions } from '@/lib/auth'
 import { keyOptions } from '@/lib/keys'
 import { CreateKey } from '@/components/CreateKey'
+import { ClientGuide } from '@/components/ClientGuide'
 import { RevokeKey } from '@/components/RevokeKey'
 import { Status } from '@/components/Status'
 import { Button } from '@/components/ui/Button'
@@ -158,6 +159,7 @@ function KeyManager({ userID }: { userID: number }) {
           </Button>
         </div>
       )}
+      <ClientGuide userID={userID} />
     </div>
   )
 }

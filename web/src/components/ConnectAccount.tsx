@@ -1,0 +1,402 @@
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { ArrowUpRight, Copy, LoaderCircle, Upload } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import {
+  accountErrorKey,
+  beginAuthorization,
+  cancelAuthorization,
+  completeAuthorization,
+  importAccount,
+  type Account,
+} from '@/lib/accounts'
+import { Button } from './ui/Button'
+import { Input } from './ui/Input'
+import { Textarea } from './ui/Textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/Dialog'
+
+type Props = {
+  account?: Account
+  onClose: () => void
+  onCreated: () => Promise<void>
+  restoreFocus: () => void
+}
+
+export function ConnectAccount({
+  account,
+  onClose,
+  onCreated,
+  restoreFocus,
+}: Props) {
+  const { t } = useTranslation()
+  const [method, setMethod] = useState<'oauth' | 'import'>('oauth')
+  const [name, setName] = useState(account?.name ?? '')
+  const [authJSON, setAuthJSON] = useState('')
+  const [callback, setCallback] = useState('')
+  const [error, setError] = useState<
+    'name' | 'json' | 'file' | 'size' | 'copy' | null
+  >(null)
+  const [copied, setCopied] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const authorizationLink = useRef<HTMLAnchorElement>(null)
+  const pendingState = useRef<string | undefined>(undefined)
+  const begin = useMutation({
+    mutationFn: beginAuthorization,
+    gcTime: 0,
+    onSuccess: (value) => {
+      pendingState.current = value.state
+    },
+  })
+  const imported = useMutation({
+    mutationFn: importAccount,
+    gcTime: 0,
+    onSuccess: async () => {
+      setAuthJSON('')
+      await onCreated()
+      onClose()
+    },
+  })
+  const finish = useMutation({
+    mutationFn: completeAuthorization,
+    gcTime: 0,
+    onSuccess: async () => {
+      pendingState.current = undefined
+      setCallback('')
+      await onCreated()
+      onClose()
+    },
+  })
+  const busy = begin.isPending || imported.isPending || finish.isPending
+  useEffect(() => {
+    if (begin.data) authorizationLink.current?.focus()
+  }, [begin.data])
+  useEffect(
+    () => () => {
+      // Closing the form releases credentials. Server expiry remains the fallback if cancellation cannot reach it.
+      if (pendingState.current)
+        cancelAuthorization(pendingState.current).catch(() => undefined)
+    },
+    [],
+  )
+  const close = () => {
+    if (!busy) onClose()
+  }
+  const start = () => {
+    setError(null)
+    const value = name.trim()
+    const characters = Array.from(value)
+    if (
+      characters.length < 1 ||
+      characters.length > 64 ||
+      characters.some(
+        (character) =>
+          character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+      )
+    ) {
+      setError('name')
+      return
+    }
+    finish.reset()
+    setCallback('')
+    setCopied(false)
+    begin.mutate({ name: value, replace_id: account?.id })
+  }
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (busy) return
+    setError(null)
+    if (method === 'oauth') {
+      if (begin.data)
+        finish.mutate({
+          state: begin.data.state,
+          callback_url: callback.trim(),
+        })
+      else start()
+      return
+    }
+    const length = Array.from(name.trim()).length
+    if (length < 1 || length > 64) {
+      setError('name')
+      return
+    }
+    try {
+      const data: unknown = JSON.parse(authJSON)
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        setError('json')
+        return
+      }
+    } catch {
+      setError('json')
+      return
+    }
+    if (new TextEncoder().encode(authJSON).length > 65536) {
+      setError('size')
+      return
+    }
+    imported.mutate({
+      name: name.trim(),
+      auth_json: authJSON,
+      replace_id: account?.id,
+    })
+  }
+  const readFile = async (file?: File) => {
+    if (!file) return
+    setError(null)
+    setAuthJSON('')
+    if (file.size > 65536) {
+      setError('size')
+      return
+    }
+    try {
+      setAuthJSON(await file.text())
+    } catch {
+      setError('file')
+    }
+    if (fileInput.current) fileInput.current.value = ''
+  }
+  const copy = async () => {
+    if (!begin.data) return
+    try {
+      await navigator.clipboard.writeText(begin.data.url)
+      setCopied(true)
+    } catch {
+      setError('copy')
+    }
+  }
+  const failure = finish.error ?? imported.error ?? begin.error
+  const fieldErrors = {
+    name: 'accountNameInvalid',
+    json: 'accountJSONInvalid',
+    file: 'fileReadFailed',
+    size: 'fileTooLarge',
+    copy: 'copyKeyFailed',
+  } as const
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) close()
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_a]:min-h-11"
+        onInteractOutside={(event) => {
+          if (busy) event.preventDefault()
+        }}
+        onEscapeKeyDown={(event) => {
+          if (busy) event.preventDefault()
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          restoreFocus()
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>
+            {t(account ? 'reauthorizeAccount' : 'connectAccountTitle')}
+          </DialogTitle>
+          <DialogDescription>
+            {t(
+              method === 'oauth'
+                ? 'authorizationInstructions'
+                : 'accountImportDescription',
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} noValidate className="space-y-5">
+          <div className="space-y-2">
+            <label htmlFor="account-name" className="text-sm font-medium">
+              {t('accountName')}
+            </label>
+            <Input
+              id="account-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              readOnly={Boolean(account) || Boolean(begin.data)}
+              maxLength={128}
+              disabled={busy}
+              aria-invalid={error === 'name'}
+            />
+          </div>
+          {!begin.data && (
+            <div
+              role="group"
+              aria-label={t('connectionMethod')}
+              className="flex flex-wrap gap-2"
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant={method === 'oauth' ? 'secondary' : 'ghost'}
+                aria-pressed={method === 'oauth'}
+                onClick={() => {
+                  setMethod('oauth')
+                  setError(null)
+                  imported.reset()
+                }}
+                disabled={busy}
+              >
+                {t('accountOAuth')}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={method === 'import' ? 'secondary' : 'ghost'}
+                aria-pressed={method === 'import'}
+                onClick={() => {
+                  setMethod('import')
+                  setError(null)
+                  begin.reset()
+                }}
+                disabled={busy}
+              >
+                {t('accountImport')}
+              </Button>
+            </div>
+          )}
+          {method === 'import' ? (
+            <div className="space-y-3">
+              <input
+                ref={fileInput}
+                type="file"
+                accept=".json,application/json"
+                aria-label={t('authJSONFile')}
+                className="hidden"
+                onChange={(event) => readFile(event.target.files?.[0])}
+                disabled={busy}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInput.current?.click()}
+                disabled={busy}
+              >
+                <Upload aria-hidden="true" />
+                {t('chooseAuthFile')}
+              </Button>
+              <div className="space-y-2">
+                <label htmlFor="auth-json" className="text-sm font-medium">
+                  {t('authJSONContents')}
+                </label>
+                <Textarea
+                  id="auth-json"
+                  rows={6}
+                  value={authJSON}
+                  onChange={(event) => setAuthJSON(event.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={busy}
+                  aria-invalid={error === 'json'}
+                  className="resize-y font-mono"
+                />
+              </div>
+            </div>
+          ) : begin.data ? (
+            <div className="space-y-5">
+              <div className="flex flex-wrap gap-2">
+                <Button asChild>
+                  <a
+                    ref={authorizationLink}
+                    href={begin.data.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t('openAuthorization')}
+                    <ArrowUpRight aria-hidden="true" />
+                  </a>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label={t(copied ? 'copied' : 'copyAuthorization')}
+                  title={t(copied ? 'copied' : 'copyAuthorization')}
+                  onClick={copy}
+                >
+                  <Copy aria-hidden="true" />
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="oauth-callback" className="text-sm font-medium">
+                  {t('callbackURL')}
+                </label>
+                <Textarea
+                  id="oauth-callback"
+                  rows={3}
+                  value={callback}
+                  onChange={(event) => setCallback(event.target.value)}
+                  maxLength={8192}
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={busy}
+                  aria-describedby="callback-hint"
+                />
+                <p
+                  id="callback-hint"
+                  className="text-sm leading-6 text-muted-foreground"
+                >
+                  {t('callbackHint')}
+                </p>
+              </div>
+            </div>
+          ) : null}
+          {(error || failure) && (
+            <p role="alert" className="text-sm leading-6 text-error">
+              {t(error ? fieldErrors[error] : accountErrorKey(failure))}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={close}
+              disabled={busy}
+            >
+              {t('cancel')}
+            </Button>
+            {finish.isError && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={start}
+                disabled={busy}
+              >
+                {t('startAgain')}
+              </Button>
+            )}
+            <Button
+              type="submit"
+              disabled={
+                busy ||
+                (method === 'oauth' && Boolean(begin.data) && !callback.trim())
+              }
+            >
+              {busy && (
+                <LoaderCircle
+                  className="motion-safe:animate-spin"
+                  aria-hidden="true"
+                />
+              )}
+              {t(
+                method === 'import'
+                  ? 'importAccount'
+                  : begin.data
+                    ? 'completeAuthorization'
+                    : 'startAuthorization',
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}

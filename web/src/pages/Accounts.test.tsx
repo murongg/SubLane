@@ -1,0 +1,131 @@
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { createMemoryHistory } from '@tanstack/react-router'
+import { expect, it, vi } from 'vitest'
+import { App } from '@/App'
+import { createAppRouter } from '@/router'
+import * as queries from '@/lib/query'
+import { authenticated } from '@/test/fixtures'
+
+const account = {
+  id: 'synthetic-account',
+  name: 'Test subscription',
+  email: 'member@example.test',
+  plan: 'plus',
+  enabled: true,
+  status: 'unverified',
+  expires_at: 0,
+  created_at: 1,
+  updated_at: 1,
+}
+const response = (value: unknown, status = 200) =>
+  new Response(JSON.stringify(value), { status })
+function open() {
+  const client = queries.createQueryClient()
+  vi.spyOn(queries, 'createQueryClient').mockReturnValue(client)
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/accounts'] }),
+      )}
+    />,
+  )
+  return client
+}
+
+it('imports a subscription and clears credential input after success', async () => {
+  let accounts: (typeof account)[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/accounts/import' && init?.method === 'POST') {
+        accounts = [account]
+        return Promise.resolve(response(account, 201))
+      }
+      return Promise.resolve(response({ accounts }))
+    }),
+  )
+  const user = userEvent.setup()
+  const client = open()
+  await screen.findByText('No subscription accounts')
+  await user.click(screen.getByRole('button', { name: 'Add account' }))
+  const dialog = await screen.findByRole('dialog')
+  await user.type(
+    within(dialog).getByLabelText('Account name'),
+    'Test subscription',
+  )
+  await user.click(
+    within(dialog).getByRole('button', {
+      name: 'Import auth.json',
+    }),
+  )
+  await user.click(within(dialog).getByLabelText('auth.json contents'))
+  await user.paste(
+    '{"tokens":{"access_token":"synthetic-access","refresh_token":"synthetic-refresh","account_id":"upstream-test"}}',
+  )
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Import account' }),
+  )
+  await screen.findByText('Test subscription')
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(screen.queryByDisplayValue(/synthetic-access/)).toBeNull()
+  await waitFor(() =>
+    expect(client.getMutationCache().getAll()).toHaveLength(0),
+  )
+})
+
+it('starts browser authorization and submits only the callback for the matching attempt', async () => {
+  const calls: string[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      calls.push(url)
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/accounts/oauth')
+        return Promise.resolve(
+          response(
+            {
+              url: 'https://auth.openai.com/oauth/authorize?state=synthetic-state',
+              state: 'synthetic-state',
+              expires_at: 9999999999,
+            },
+            201,
+          ),
+        )
+      if (url === '/api/accounts/oauth/complete') {
+        expect(JSON.parse(String(init?.body))).toEqual({
+          state: 'synthetic-state',
+          callback_url:
+            'http://localhost:1455/auth/callback?state=synthetic-state&code=synthetic-code',
+        })
+        return Promise.resolve(response({ ...account, status: 'ready' }, 201))
+      }
+      return Promise.resolve(response({ accounts: [] }))
+    }),
+  )
+  const user = userEvent.setup()
+  open()
+  await screen.findByText('No subscription accounts')
+  await user.click(screen.getByRole('button', { name: 'Add account' }))
+  const dialog = await screen.findByRole('dialog')
+  await user.type(
+    within(dialog).getByLabelText('Account name'),
+    'Test subscription',
+  )
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Start authorization' }),
+  )
+  await within(dialog).findByRole('link', { name: 'Open OpenAI authorization' })
+  await user.type(
+    within(dialog).getByLabelText('Callback URL'),
+    'http://localhost:1455/auth/callback?state=synthetic-state&code=synthetic-code',
+  )
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Complete authorization' }),
+  )
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(calls).toContain('/api/accounts/oauth/complete')
+})

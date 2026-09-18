@@ -3,27 +3,46 @@ import { ArrowUpRight, CircleCheck, Monitor, Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './ui/Button'
 import { Status } from './Status'
+import type { GatewayStatus } from '@/lib/connection'
 
-const steps = [
-  {
-    title: 'administrator',
-    description: 'adminReadyDescription',
-    status: 'ready',
-  },
-  {
-    title: 'codexTitle',
-    description: 'codexSetupDescription',
-    status: 'comingNext',
-  },
-  {
-    title: 'teamAccess',
-    description: 'teamAccessDescription',
-    status: 'ready',
-  },
-] as const
-
-export function GatewaySetup() {
+export function GatewaySetup({
+  status,
+}: {
+  status: GatewayStatus | 'unknown'
+}) {
   const { t } = useTranslation()
+  const configured = status === 'ready'
+  const statusKey =
+    status === 'unknown'
+      ? 'gatewayStatusUnknown'
+      : configured
+        ? 'ready'
+        : status === 'needs_attention'
+          ? 'gatewayNeedsAttention'
+          : 'notConfigured'
+  const steps = [
+    {
+      title: 'administrator',
+      description: 'adminReadyDescription',
+      status: 'ready',
+    },
+    {
+      title: 'codexTitle',
+      description: configured
+        ? 'accountReadyDescription'
+        : 'codexSetupDescription',
+      status: configured
+        ? 'ready'
+        : status === 'needs_attention'
+          ? 'gatewayNeedsAttention'
+          : 'needsConnection',
+    },
+    {
+      title: 'teamAccess',
+      description: 'teamAccessDescription',
+      status: 'ready',
+    },
+  ] as const
   return (
     <div className="space-y-6">
       <section
@@ -35,10 +54,26 @@ export function GatewaySetup() {
             <h2 id="gateway-title" className="font-semibold">
               {t('gatewaySetup')}
             </h2>
-            <Status kind="neutral">{t('notConfigured')}</Status>
+            <Status
+              kind={
+                configured
+                  ? 'success'
+                  : status === 'needs_attention'
+                    ? 'warning'
+                    : 'neutral'
+              }
+            >
+              {t(statusKey)}
+            </Status>
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
-            {t('gatewaySetupDescription')}
+            {t(
+              configured
+                ? 'gatewayReadyDescription'
+                : status === 'needs_attention'
+                  ? 'gatewayAttentionDescription'
+                  : 'gatewaySetupDescription',
+            )}
           </p>
         </div>
         <ol className="mx-6 my-3 divide-y divide-border">

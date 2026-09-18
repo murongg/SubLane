@@ -3,3 +3,17 @@
 //   sqlc v1.31.1
 
 package db
+
+type Account struct {
+	ID         string
+	Name       string
+	AccountID  string
+	Email      string
+	Plan       string
+	Enabled    bool
+	Status     string
+	Credential []byte
+	ExpiresAt  int64
+	CreatedAt  int64
+	UpdatedAt  int64
+}

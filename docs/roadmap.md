@@ -14,10 +14,10 @@ This is product direction, not a release-date commitment. The foundation milesto
 ## First usable release
 
 1. **Implemented:** administrator bootstrap, local member creation and enable/disable controls, shared login/logout, per-user sessions, and role-protected management routes.
-2. A pinned CLIProxyAPI adapter with credential encryption, OAuth callback state validation, and one refresh owner.
-3. Add and reauthorize Codex subscription accounts; validate both CLI and desktop flows.
+2. **M2 implemented:** a pinned public CLIProxyAPI translation adapter, encrypted credentials, session-bound OAuth PKCE/state, and one refresh owner.
+3. **M3 implementation ready; live acceptance pending:** add/import, verify, enable/disable, remove, and reauthorize Codex accounts; forward HTTP/SSE, compaction, and WebSocket requests. Codex CLI protocol tests pass with synthetic upstreams; real subscription and desktop flows still require explicit validation.
 4. **Implemented:** local member accounts, personal gateway keys, ownership isolation, and revocation. Invitation links remain a later addition.
-5. Basic concurrency controls, per-member usage, and actionable error records.
+5. Per-member quotas/usage and actionable error records. A global concurrency bound already protects the gateway; advanced scheduling and accounting remain planned.
 6. Deployment, migrations, backup/restore, and a measured resource baseline.
 
 Ship and use this scope with a real internal team before expanding it. Build account and policy behavior with synthetic tests; real compatibility checks require explicitly supplied test accounts and separate evidence.

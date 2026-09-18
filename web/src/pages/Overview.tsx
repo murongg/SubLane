@@ -78,7 +78,9 @@ export function Overview() {
       )}
       {data && (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,1fr)]">
-          <GatewaySetup />
+          <GatewaySetup
+            status={query.isError ? 'unknown' : data.gateway.status}
+          />
           <section
             aria-labelledby="service-title"
             className="rounded-xl border border-border bg-card"

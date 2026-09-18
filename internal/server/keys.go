@@ -7,9 +7,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/murongg/SubLane/internal/apikey"
+	"github.com/murongg/SubLane/internal/gateway"
 )
 
-type keyHTTP struct{ service *apikey.Service }
+type keyHTTP struct {
+	service   *apikey.Service
+	gateway   *gateway.Service
+	publicURL string
+	sockets   chan struct{}
+}
 
 func (h *keyHTTP) available(w http.ResponseWriter) bool {
 	if h.service != nil {

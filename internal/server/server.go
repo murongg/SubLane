@@ -11,8 +11,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/oauth"
 )
 
 type Options struct {
@@ -22,6 +25,9 @@ type Options struct {
 	Ping      func(context.Context) error
 	Auth      *auth.Service
 	Keys      *apikey.Service
+	Accounts  *accounts.Service
+	OAuth     *oauth.Flow
+	Gateway   *gateway.Service
 	PublicURL string
 }
 
@@ -34,7 +40,8 @@ func New(o Options) http.Handler {
 	)
 	routeErrors(router)
 	login := &authHTTP{service: o.Auth, publicURL: o.PublicURL, limiter: newLoginLimiter()}
-	keys := &keyHTTP{service: o.Keys}
+	keys := &keyHTTP{service: o.Keys, gateway: o.Gateway, publicURL: o.PublicURL, sockets: make(chan struct{}, 8)}
+	accountManagement := &accountHTTP{service: o.Accounts, oauth: o.OAuth, gateway: o.Gateway}
 
 	health := func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]string{"status": "ok"})
@@ -51,10 +58,15 @@ func New(o Options) http.Handler {
 			writeJSON(w, 503, map[string]string{"error": "storage_unavailable"})
 			return
 		}
+		summary, err := accountSummary(r.Context(), o.Accounts)
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": "storage_unavailable"})
+			return
+		}
 		writeJSON(w, 200, map[string]any{
 			"name": "SubLane", "version": o.Version, "status": "ok", "uptime_seconds": max(0, int64(time.Since(o.StartedAt).Seconds())),
 			"storage": map[string]string{"engine": "sqlite", "status": "ready"},
-			"gateway": map[string]string{"provider": "codex", "status": "not_configured"},
+			"gateway": summary,
 		})
 	}
 	router.Get("/healthz", health)
@@ -65,6 +77,19 @@ func New(o Options) http.Handler {
 	router.Route("/api", func(api chi.Router) {
 		routeErrors(api)
 		api.Route("/auth", login.register)
+		api.Route("/connection", func(common chi.Router) {
+			routeErrors(common)
+			common.Use(login.requireUser)
+			common.NotFound(requireAdminRole(http.HandlerFunc(notFound)).ServeHTTP)
+			common.Get("/", func(w http.ResponseWriter, r *http.Request) {
+				summary, err := accountSummary(r.Context(), o.Accounts)
+				if err != nil {
+					writeJSON(w, 503, map[string]string{"error": "unavailable"})
+					return
+				}
+				writeJSON(w, 200, map[string]any{"status": summary["status"]})
+			})
+		})
 		api.Route("/keys", func(personal chi.Router) {
 			routeErrors(personal)
 			personal.Use(login.requireUser)
@@ -79,6 +104,7 @@ func New(o Options) http.Handler {
 		management.Get("/system", system)
 		management.Head("/system", system)
 		management.Route("/members", login.registerMembers)
+		management.Route("/accounts", accountManagement.register)
 		api.Mount("/", management)
 	})
 	router.HandleFunc("/api", notFound)
@@ -131,4 +157,31 @@ func assets(files fs.FS) http.Handler {
 		}
 		http.ServeFileFS(w, r, files, name)
 	})
+}
+
+func accountSummary(ctx context.Context, service *accounts.Service) (map[string]any, error) {
+	summary := map[string]any{"provider": "codex", "status": "not_configured", "accounts_total": 0, "accounts_enabled": 0}
+	if service == nil {
+		return summary, nil
+	}
+	list, err := service.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	enabled, ready := 0, 0
+	for _, account := range list {
+		if account.Enabled {
+			enabled++
+			if account.Status == "ready" {
+				ready++
+			}
+		}
+	}
+	summary["accounts_total"], summary["accounts_enabled"] = len(list), enabled
+	if ready > 0 {
+		summary["status"] = "ready"
+	} else if enabled > 0 {
+		summary["status"] = "needs_attention"
+	}
+	return summary, nil
 }

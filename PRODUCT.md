@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-A modular Go monolith with chi, sqlc-generated database queries, SQLite, and an embedded static frontend. The frontend uses the user-selected Shadcn Admin, React, TypeScript, Vite, TanStack Router, and TanStack Query. A dedicated adapter will integrate the CLIProxyAPI SDK in a subsequent milestone.
+A modular Go monolith with chi, sqlc-generated database queries, SQLite, and an embedded static frontend. The frontend uses the user-selected Shadcn Admin, React, TypeScript, Vite, TanStack Router, and TanStack Query. A dedicated Codex adapter reuses the pinned CLIProxyAPI translation SDK while SubLane owns OAuth, encrypted storage, refresh, and forwarding.
 
 ## Users
 
@@ -20,7 +20,7 @@ Build a minimal, resource-efficient, self-hosted subscription gateway for intern
 
 ## Capabilities and Constraints
 
-The foundation and local account access are implemented: one-time administrator setup, member creation and enable/disable controls, shared login/logout, per-user sessions, personal API key management and gateway authentication, administrator-only management APIs, role-aware navigation and homepages, startup configuration, SQLite migrations, health checks, themes, localization, and build tooling. Upstream account authorization, model forwarding, and usage reporting are not implemented yet. Do not populate the product with fabricated accounts, usage, or performance claims.
+The foundation and local account access are implemented: one-time administrator setup, member creation and enable/disable controls, shared login/logout, per-user sessions, personal API key management and gateway authentication, administrator-only management APIs, role-aware navigation and homepages, startup configuration, SQLite migrations, health checks, themes, localization, and build tooling. Codex browser OAuth and auth.json import, encrypted subscription credentials, and HTTP/SSE/WebSocket forwarding are implemented with synthetic upstream tests. Actual subscription authorization and desktop acceptance remain unverified; usage reporting is not implemented. Do not populate the product with fabricated accounts, usage, or performance claims.
 
 English is the default interface language. Support English and Simplified Chinese and persist the user's language preference. PRODUCT.md and the primary project documentation are written in English.
 

@@ -4,6 +4,9 @@
 
 ### Added
 
+- Codex OAuth and auth.json import, encrypted subscription credentials, serialized refresh, account management, and member-key HTTP/SSE/WebSocket forwarding with pinned account affinity.
+- A lightweight public CLIProxyAPI translation adapter and opt-in synthetic Codex CLI protocol tests.
+
 - chi routing and sqlc-generated database queries, with pinned generation tooling and CI drift checks.
 - Personal API key creation, one-time secret display, owner-scoped metadata, revocation, and a separate gateway authentication boundary.
 - Administrator-created member accounts, per-user sessions, immediate account revocation, and role-based menu, route, and API access.
@@ -19,4 +22,4 @@
 - Unit tests, race checks, build commands, container configuration, and CI.
 - AGPL-3.0-only license, third-party attribution, and contributor documentation.
 
-Upstream account authorization and model forwarding are not part of this milestone.
+Live subscription and desktop acceptance remain pending; usage accounting and advanced quotas remain planned.

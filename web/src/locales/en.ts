@@ -1,4 +1,101 @@
 export const en = {
+  gatewayAttentionDescription:
+    'Verify or reauthorize a subscription account to make the gateway available.',
+  gatewayChecking: 'Checking gateway…',
+  needsConnection: 'Not connected',
+  gatewayStatusUnknown: 'Connection status unknown',
+  clientConfigLocation:
+    'Set these values in your user-level ~/.codex/config.toml, replacing existing values with the same names.',
+  connectionStatusError: 'Could not check gateway availability.',
+  addAccount: 'Add account',
+  accountName: 'Account name',
+  connectAccountTitle: 'Connect Codex',
+  connectionMethod: 'Connection method',
+  accountOAuth: 'Browser authorization',
+  accountImport: 'Import auth.json',
+  startAuthorization: 'Start authorization',
+  openAuthorization: 'Open OpenAI authorization',
+  copyAuthorization: 'Copy authorization link',
+  callbackURL: 'Callback URL',
+  callbackHint:
+    'After signing in, the localhost page may not load. Copy its complete address from the browser address bar and paste it here.',
+  completeAuthorization: 'Complete authorization',
+  authorizationInstructions:
+    'Open the authorization page, sign in to your ChatGPT subscription, then return here with the callback URL.',
+  startAgain: 'Start again',
+  accountImportDescription:
+    'Choose an existing Codex auth.json file or paste its contents. Stored credentials are encrypted on this instance.',
+  authJSONContents: 'auth.json contents',
+  authJSONFile: 'auth.json file',
+  chooseAuthFile: 'Choose auth.json',
+  fileTooLarge: 'The file must be 64 KiB or smaller.',
+  fileReadFailed:
+    'Could not read this file. Choose it again or paste its contents.',
+  importAccount: 'Import account',
+  loadingAccounts: 'Loading subscription accounts…',
+  accountsLoadFailed: 'Could not load subscription accounts.',
+  accountActions: 'Actions for {{name}}',
+  checkAccount: 'Verify connection',
+  checkingAccount: 'Verifying…',
+  reauthorizeAccount: 'Reauthorize',
+  disableAccount: 'Disable account',
+  enableAccount: 'Enable account',
+  deleteAccount: 'Remove account',
+  deleteAccountTitle: 'Remove subscription account',
+  deleteAccountDescription:
+    'Remove “{{name}}” and its stored credentials? Conversations using this account will need a new session. This does not sign you out of ChatGPT.',
+  accountVerified: 'Verified',
+  accountUnverified: 'Not verified',
+  accountNeedsAuth: 'Reauthorization needed',
+  accountExpires: 'Token expiry',
+  accountUnknownExpiry: 'Checked on first use',
+  accountNameInvalid: 'Use 1–64 characters without control characters.',
+  accountJSONInvalid:
+    'Paste valid Codex auth.json content. Official API keys are not supported here.',
+  accountInvalidInput:
+    'Check the account name and Codex subscription credentials.',
+  accountExists:
+    'This subscription is already added. Use Reauthorize on the existing account.',
+  accountIdentityMismatch:
+    'Sign in to the same ChatGPT account to reauthorize it. Add a separate account for a different subscription.',
+  accountLimitReached:
+    'This instance supports up to 100 subscription accounts.',
+  accountDisabledHint: 'Enable this account before verifying or using it.',
+  accountReauthorizeHint: 'This account needs to be authorized again.',
+  accountRefreshFailed:
+    'Could not refresh this account. Check network access or reauthorize it.',
+  oauthStateInvalid:
+    'This authorization expired or was already used. Start a new authorization.',
+  oauthCallbackInvalid:
+    'Paste the full localhost callback URL from this authorization attempt.',
+  oauthAccessDenied:
+    'Authorization was declined. Start again when you are ready.',
+  accountBusy: 'The gateway is busy. Wait a moment and try again.',
+  accountUpstreamUnavailable:
+    'Could not reach OpenAI. Check network access and try again.',
+  accountCheckFailed:
+    'OpenAI could not complete the request. Try again or reauthorize this account.',
+  accountRateLimited: 'OpenAI is rate limiting this account. Try again later.',
+  accountActionFailed: 'Could not complete this action. Please try again.',
+  accountVerificationResult:
+    '“{{name}}” is connected. {{count}} models available.',
+  accountReadyDescription:
+    'A verified subscription account is available for gateway requests.',
+  gatewayNeedsAttention: 'Needs attention',
+  gatewayReadyDescription:
+    'Your gateway is ready. Connect a client using a personal API key.',
+  clientGuideTitle: 'Connect your client',
+  clientGuideDescription:
+    'Use your SubLane API key with this endpoint. Codex CLI and desktop use the same user-level provider configuration.',
+  clientEndpoint: 'API base URL',
+  clientConfig: 'Codex configuration',
+  clientGuideNote:
+    'Set SUBLANE_API_KEY in the client process environment, and choose a model available to your connected subscriptions. The desktop app must inherit the same environment variable.',
+  copyClientConfig: 'Copy configuration',
+  clientModel: 'Model ID',
+  clientModelHint: 'Use an ID returned by GET /v1/models.',
+  connectionNotConfigured:
+    'Ask an administrator to connect and verify a subscription account first.',
   checkingSession: 'Checking your session…',
   setupWelcome: 'Welcome to SubLane',
   setupWelcomeDescription:
@@ -36,7 +133,7 @@ export const en = {
   apiKey: 'API key',
   apiKeysDescription: 'Manage the gateway keys owned by your account.',
   gatewayKeysNotice:
-    'Keys authenticate gateway requests. Model forwarding will be available after Codex integration is complete.',
+    'Use these personal keys for model requests. Subscription credentials are managed separately by an administrator.',
   createKey: 'Create key',
   createKeyTitle: 'Create API key',
   createKeyDescription:
@@ -102,7 +199,7 @@ export const en = {
   memberOverviewTitle: 'Your workspace',
   memberOverviewDescription: 'Your account and gateway access.',
   memberAccessDescription:
-    'Create a personal API key for your client. Model requests will be available after your administrator connects Codex.',
+    'Create a personal API key and configure your client to use this gateway.',
   accessDenied: 'Access denied',
   adminAccessRequired:
     'This page is available to administrators only. Return to your workspace to continue.',
@@ -132,7 +229,7 @@ export const en = {
   adminReadyDescription:
     'Sign-in and management access are set up for this instance.',
   codexSetupDescription:
-    'Subscription account authorization is coming next. Connected accounts and their health will appear here.',
+    'Add a Codex subscription, then verify its connection before inviting your team to use it.',
   teamAccess: 'Gateway keys',
   teamAccessDescription:
     'Administrators and members can create and revoke their own API keys.',
@@ -142,7 +239,7 @@ export const en = {
   codexCLI: 'Codex CLI',
   codexDesktop: 'Codex desktop',
   clientAccessDescription:
-    'Personal API keys are available. Codex account authorization and model forwarding are the next steps before clients can make model requests.',
+    'Use a personal API key and the client configuration on the API keys page.',
   lastChecked: 'Last checked',
   statusUnknown: 'Status unknown',
   refreshFailed:
@@ -167,9 +264,9 @@ export const en = {
   viewAccounts: 'View accounts',
   accountsTitle: 'Subscription accounts',
   accountsDescription: 'Manage the subscription accounts used by your team.',
-  accountEmptyTitle: 'Account connections are coming next',
+  accountEmptyTitle: 'No subscription accounts',
   accountEmptyDescription:
-    'Codex authorization and request forwarding are not available in this foundation build. No subscription credentials are collected yet.',
+    'Add your first Codex subscription using browser authorization or an existing auth.json file.',
   backToOverview: 'Back to overview',
   preferencesDescription: 'Make this workspace feel familiar.',
   appearance: 'Appearance',
