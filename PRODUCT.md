@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-A modular Go monolith with SQLite and an embedded static frontend. The frontend uses the user-selected Shadcn Admin, React, TypeScript, Vite, TanStack Router, and TanStack Query. A dedicated adapter will integrate the CLIProxyAPI SDK in a subsequent milestone.
+A modular Go monolith with chi, sqlc-generated database queries, SQLite, and an embedded static frontend. The frontend uses the user-selected Shadcn Admin, React, TypeScript, Vite, TanStack Router, and TanStack Query. A dedicated adapter will integrate the CLIProxyAPI SDK in a subsequent milestone.
 
 ## Users
 
@@ -20,7 +20,7 @@ Build a minimal, resource-efficient, self-hosted subscription gateway for intern
 
 ## Capabilities and Constraints
 
-The foundation and local administrator authentication are implemented: one-time setup, login/logout, persisted sessions, protected management APIs, startup configuration, SQLite migrations, health checks, the frontend shell, themes, localization, and build tooling. Upstream account authorization, model forwarding, member permissions, and usage reporting are not implemented yet. Do not populate the product with fabricated accounts, usage, or performance claims.
+The foundation and local account access are implemented: one-time administrator setup, member creation and enable/disable controls, shared login/logout, per-user sessions, personal API key management and gateway authentication, administrator-only management APIs, role-aware navigation and homepages, startup configuration, SQLite migrations, health checks, themes, localization, and build tooling. Upstream account authorization, model forwarding, and usage reporting are not implemented yet. Do not populate the product with fabricated accounts, usage, or performance claims.
 
 English is the default interface language. Support English and Simplified Chinese and persist the user's language preference. PRODUCT.md and the primary project documentation are written in English.
 

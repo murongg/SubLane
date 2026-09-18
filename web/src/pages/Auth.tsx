@@ -6,18 +6,11 @@ import { ArrowLeft, LoaderCircle } from 'lucide-react'
 import { authKey, setup, signIn } from '@/lib/auth'
 import { ApiError } from '@/lib/request'
 import { replaceAuthState } from '@/lib/query'
+import { validateCredentials, type CredentialError } from '@/lib/credentials'
 import { AuthShell } from '@/components/AuthShell'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
-type FieldError = {
-  field: string
-  message:
-    | 'usernameHint'
-    | 'passwordHint'
-    | 'passwordMismatch'
-    | 'passwordRequired'
-}
 const messages = {
   invalid_credentials: 'invalidCredentials',
   rate_limited: 'authRateLimited',
@@ -33,7 +26,7 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
   const client = useQueryClient()
   const navigate = useNavigate()
   const heading = useRef<HTMLHeadingElement>(null)
-  const [fieldError, setFieldError] = useState<FieldError | null>(null)
+  const [fieldError, setFieldError] = useState<CredentialError | null>(null)
   useEffect(() => {
     if (creating) heading.current?.focus()
   }, [creating])
@@ -44,18 +37,9 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
     onSuccess: (state) => replaceAuthState(client, state),
     onError: (error) => {
       if (error instanceof ApiError && error.code === 'already_initialized')
-        void client.invalidateQueries({ queryKey: authKey })
+        return client.invalidateQueries({ queryKey: authKey })
     },
   })
-  const validate = (
-    field: string,
-    message: FieldError['message'],
-    form: HTMLFormElement,
-  ) => {
-    setFieldError({ field, message })
-    const input = form.elements.namedItem(field)
-    if (input instanceof HTMLInputElement) input.focus()
-  }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (mutation.isPending) return
@@ -67,15 +51,16 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
     }
     setFieldError(null)
     mutation.reset()
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{2,31}$/.test(input.username))
-      return validate('username', 'usernameHint', form)
-    // Match the backend's Unicode character count instead of counting UTF-16 code units.
-    const length = Array.from(input.password).length
-    if (!length) return validate('password', 'passwordRequired', form)
-    if (creating && (length < 8 || length > 20))
-      return validate('password', 'passwordHint', form)
-    if (creating && input.password !== data.get('confirm'))
-      return validate('confirm', 'passwordMismatch', form)
+    const validation = validateCredentials(
+      input,
+      creating ? String(data.get('confirm') ?? '') : undefined,
+    )
+    if (validation) {
+      setFieldError(validation)
+      const field = form.elements.namedItem(validation.field)
+      if (field instanceof HTMLInputElement) field.focus()
+      return
+    }
     mutation.mutate(input)
   }
   const errorCode =
@@ -134,7 +119,7 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
           size="sm"
           className="-ml-2.5 mb-6 text-muted-foreground"
           disabled={mutation.isPending}
-          onClick={() => void navigate({ to: '/setup' })}
+          onClick={() => navigate({ to: '/setup' })}
         >
           <ArrowLeft aria-hidden="true" />
           {t('backToWelcome')}

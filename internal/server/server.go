@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
 )
 
@@ -18,24 +21,32 @@ type Options struct {
 	StartedAt time.Time
 	Ping      func(context.Context) error
 	Auth      *auth.Service
+	Keys      *apikey.Service
 	PublicURL string
 }
 
 func New(o Options) http.Handler {
-	mux := http.NewServeMux()
-	management := http.NewServeMux()
+	router := chi.NewRouter()
+	router.Use(
+		middleware.SetHeader("X-Content-Type-Options", "nosniff"),
+		middleware.SetHeader("Referrer-Policy", "same-origin"),
+		middleware.SetHeader("X-Frame-Options", "DENY"),
+	)
+	routeErrors(router)
 	login := &authHTTP{service: o.Auth, publicURL: o.PublicURL, limiter: newLoginLimiter()}
-	login.register(mux)
-	mux.Handle("/api/", login.require(management))
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+	keys := &keyHTTP{service: o.Keys}
+
+	health := func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]string{"status": "ok"})
+	}
+	readiness := func(w http.ResponseWriter, r *http.Request) {
 		if !ready(r.Context(), o.Ping) {
 			writeJSON(w, 503, map[string]string{"error": "storage_unavailable"})
 			return
 		}
 		writeJSON(w, 200, map[string]string{"status": "ready"})
-	})
-	management.HandleFunc("GET /api/system", func(w http.ResponseWriter, r *http.Request) {
+	}
+	system := func(w http.ResponseWriter, r *http.Request) {
 		if !ready(r.Context(), o.Ping) {
 			writeJSON(w, 503, map[string]string{"error": "storage_unavailable"})
 			return
@@ -45,23 +56,39 @@ func New(o Options) http.Handler {
 			"storage": map[string]string{"engine": "sqlite", "status": "ready"},
 			"gateway": map[string]string{"provider": "codex", "status": "not_configured"},
 		})
-	})
-	// Unknown API endpoints must never fall through to the SPA with a misleading 200.
-	management.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 404, map[string]string{"error": "not_found"})
-	})
-	for _, prefix := range []string{"/api", "/v1", "/v1/", "/v0", "/v0/"} {
-		mux.HandleFunc(prefix, func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, 404, map[string]string{"error": "not_found"})
-		})
 	}
-	mux.Handle("/", assets(o.Assets))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Referrer-Policy", "same-origin")
-		w.Header().Set("X-Frame-Options", "DENY")
-		mux.ServeHTTP(w, r)
+	router.Get("/healthz", health)
+	router.Head("/healthz", health)
+	router.Get("/readyz", readiness)
+	router.Head("/readyz", readiness)
+
+	router.Route("/api", func(api chi.Router) {
+		routeErrors(api)
+		api.Route("/auth", login.register)
+		api.Route("/keys", func(personal chi.Router) {
+			routeErrors(personal)
+			personal.Use(login.requireUser)
+			// Only the explicit personal endpoints are exceptions to the default administrator boundary.
+			personal.NotFound(requireAdminRole(http.HandlerFunc(notFound)).ServeHTTP)
+			keys.register(personal)
+		})
+		management := chi.NewRouter()
+		routeErrors(management)
+		// Router middleware also protects 404/405 responses; inline With would only protect matched methods.
+		management.Use(login.requireAdmin)
+		management.Get("/system", system)
+		management.Head("/system", system)
+		management.Route("/members", login.registerMembers)
+		api.Mount("/", management)
 	})
+	router.HandleFunc("/api", notFound)
+	router.Route("/v1", keys.registerGateway)
+	router.Route("/v0", func(legacy chi.Router) { routeErrors(legacy) })
+
+	spa := assets(o.Assets)
+	router.Get("/*", spa.ServeHTTP)
+	router.Head("/*", spa.ServeHTTP)
+	return router
 }
 
 func ready(parent context.Context, ping func(context.Context) error) bool {
@@ -82,11 +109,6 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func assets(files fs.FS) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			w.Header().Set("Allow", "GET, HEAD")
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
 		if files == nil {
 			writeJSON(w, 503, map[string]string{"error": "frontend_not_built", "message": "Use the Vite development server or make build."})
 			return

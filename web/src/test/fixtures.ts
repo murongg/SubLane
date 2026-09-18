@@ -9,7 +9,12 @@ export const system = {
 
 export const authenticated = {
   initialized: true,
-  user: { username: 'admin-test' },
+  user: { id: 1, username: 'admin-test', role: 'admin' as const },
+}
+
+export const memberAuthenticated = {
+  initialized: true,
+  user: { id: 2, username: 'member-test', role: 'member' as const },
 }
 
 export const anonymous = { initialized: true, user: null }

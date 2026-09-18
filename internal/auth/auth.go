@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/murongg/SubLane/internal/storage/db"
 )
 
 var (
@@ -22,10 +24,19 @@ var (
 
 const SessionTTL = 12 * time.Hour
 
+type Role string
+
+const (
+	RoleAdmin  Role = "admin"
+	RoleMember Role = "member"
+)
+
 var usernamePattern = regexp.MustCompile("^[a-z0-9][a-z0-9_-]{2,31}$")
 
 type User struct {
+	ID       int64  `json:"id"`
 	Username string `json:"username"`
+	Role     Role   `json:"role"`
 }
 type State struct {
 	Initialized bool  `json:"initialized"`
@@ -38,13 +49,14 @@ type Session struct {
 }
 type Service struct {
 	db        *sql.DB
+	queries   *db.Queries
 	now       func() time.Time
 	dummyHash string
 	hashSlots chan struct{}
 }
 
-func New(db *sql.DB) (*Service, error) {
-	s := &Service{db: db, now: time.Now, hashSlots: make(chan struct{}, 2)}
+func New(connection *sql.DB) (*Service, error) {
+	s := &Service{db: connection, queries: db.New(connection), now: time.Now, hashSlots: make(chan struct{}, 2)}
 	_, err := s.Initialized(context.Background())
 	if err != nil {
 		return nil, err
@@ -54,9 +66,7 @@ func New(db *sql.DB) (*Service, error) {
 }
 
 func (s *Service) Initialized(ctx context.Context) (bool, error) {
-	var exists bool
-	err := s.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM administrators)").Scan(&exists)
-	return exists, err
+	return s.queries.HasAdministrator(ctx)
 }
 
 func (s *Service) State(ctx context.Context, token string) (State, error) {
@@ -69,15 +79,14 @@ func (s *Service) State(ctx context.Context, token string) (State, error) {
 		return state, nil
 	}
 	digest := sha256.Sum256([]byte(token))
-	var user User
-	err = s.db.QueryRowContext(ctx, "SELECT a.username FROM admin_sessions s JOIN administrators a ON a.id = s.administrator_id WHERE s.token_hash = ? AND s.expires_at > ?", digest[:], s.now().Unix()).Scan(&user.Username)
+	user, err := s.queries.GetSessionUser(ctx, db.GetSessionUserParams{TokenHash: digest[:], Now: s.now().Unix()})
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, nil
 	}
 	if err != nil {
 		return State{}, err
 	}
-	state.User = &user
+	state.User = &User{ID: user.ID, Username: user.Username, Role: Role(user.Role)}
 	return state, nil
 }
 
@@ -104,18 +113,14 @@ func (s *Service) Setup(ctx context.Context, username, password string) (Session
 	}
 	defer tx.Rollback()
 	// The guarded insert and first session commit together; racing setup requests cannot replace the owner.
-	result, err := tx.ExecContext(ctx, "INSERT INTO administrators(id, username, password_hash, created_at) SELECT 1, ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM administrators)", username, hash, s.now().Unix())
-	if err != nil {
-		return Session{}, err
-	}
-	n, err := result.RowsAffected()
+	n, err := s.queries.WithTx(tx).CreateAdministrator(ctx, db.CreateAdministratorParams{Username: username, PasswordHash: hash, CreatedAt: s.now().Unix()})
 	if err != nil {
 		return Session{}, err
 	}
 	if n == 0 {
 		return Session{}, ErrInitialized
 	}
-	session, err := s.createSession(ctx, tx, username)
+	session, err := s.createSession(ctx, tx, User{ID: 1})
 	if err != nil {
 		return Session{}, err
 	}
@@ -135,12 +140,12 @@ func (s *Service) Login(ctx context.Context, username, password string) (Session
 		return Session{}, err
 	}
 	defer func() { <-s.hashSlots }()
-	var hash, storedName string
-	err := s.db.QueryRowContext(ctx, "SELECT username, password_hash FROM administrators WHERE username = ?", username).Scan(&storedName, &hash)
+	user, err := s.queries.GetLoginUser(ctx, username)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return Session{}, err
 	}
 	found := err == nil
+	hash := user.PasswordHash
 	if !found {
 		hash = s.dummyHash
 	}
@@ -154,7 +159,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (Session
 		return Session{}, err
 	}
 	defer tx.Rollback()
-	session, err := s.createSession(ctx, tx, storedName)
+	session, err := s.createSession(ctx, tx, User{ID: user.ID})
 	if err != nil {
 		return Session{}, err
 	}
@@ -164,18 +169,28 @@ func (s *Service) Login(ctx context.Context, username, password string) (Session
 	return session, nil
 }
 
-func (s *Service) createSession(ctx context.Context, tx *sql.Tx, username string) (Session, error) {
-	now := s.now()
-	session := Session{Token: newToken(), User: User{Username: username}, ExpiresAt: now.Add(SessionTTL)}
-	digest := sha256.Sum256([]byte(session.Token))
-	if _, err := tx.ExecContext(ctx, "DELETE FROM admin_sessions WHERE expires_at <= ?", now.Unix()); err != nil {
+func (s *Service) createSession(ctx context.Context, tx *sql.Tx, user User) (Session, error) {
+	queries := s.queries.WithTx(tx)
+	// Recheck inside the transaction: a member may be disabled while password hashing is in progress.
+	stored, err := queries.GetEnabledUser(ctx, user.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Session{}, ErrCredentials
+	}
+	if err != nil {
 		return Session{}, err
 	}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO admin_sessions(token_hash, administrator_id, created_at, expires_at) VALUES (?, 1, ?, ?)", digest[:], now.Unix(), session.ExpiresAt.Unix()); err != nil {
+	user = User{ID: stored.ID, Username: stored.Username, Role: Role(stored.Role)}
+	now := s.now()
+	session := Session{Token: newToken(), User: user, ExpiresAt: now.Add(SessionTTL)}
+	digest := sha256.Sum256([]byte(session.Token))
+	if err := queries.DeleteExpiredSessions(ctx, now.Unix()); err != nil {
+		return Session{}, err
+	}
+	if err := queries.CreateSession(ctx, db.CreateSessionParams{TokenHash: digest[:], UserID: user.ID, CreatedAt: now.Unix(), ExpiresAt: session.ExpiresAt.Unix()}); err != nil {
 		return Session{}, err
 	}
 	// Preserve the new token even when multiple sessions share the same timestamp.
-	if _, err := tx.ExecContext(ctx, "DELETE FROM admin_sessions WHERE token_hash IN (SELECT token_hash FROM admin_sessions WHERE token_hash != ? ORDER BY created_at DESC, rowid DESC LIMIT -1 OFFSET 4)", digest[:]); err != nil {
+	if err := queries.TrimSessions(ctx, db.TrimSessionsParams{UserID: user.ID, CurrentTokenHash: digest[:]}); err != nil {
 		return Session{}, err
 	}
 	return session, nil
@@ -183,8 +198,7 @@ func (s *Service) createSession(ctx context.Context, tx *sql.Tx, username string
 
 func (s *Service) Revoke(ctx context.Context, token string) error {
 	digest := sha256.Sum256([]byte(token))
-	_, err := s.db.ExecContext(ctx, "DELETE FROM admin_sessions WHERE token_hash = ?", digest[:])
-	return err
+	return s.queries.RevokeSession(ctx, digest[:])
 }
 
 func (s *Service) acquire(ctx context.Context) error {

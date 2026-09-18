@@ -71,7 +71,7 @@ func TestLoginPreservesLegacyPasswordLengths(t *testing.T) {
 	for _, length := range []int{21, 128} {
 		s, db := fixture(t)
 		password := strings.Repeat("x", length)
-		if _, err := db.Exec("INSERT INTO administrators(id, username, password_hash, created_at) VALUES(1, ?, ?, ?)", "admin-test", hashPassword(password), s.now().Unix()); err != nil {
+		if _, err := db.Exec("INSERT INTO users(id, username, role, password_hash, created_at) VALUES(1, ?, 'admin', ?, ?)", "admin-test", hashPassword(password), s.now().Unix()); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := s.Login(context.Background(), "admin-test", password); err != nil {
@@ -105,13 +105,13 @@ func TestSetupSessionAndRevocation(t *testing.T) {
 	}
 	var hash string
 	var digest []byte
-	if err := db.QueryRow("SELECT password_hash FROM administrators").Scan(&hash); err != nil {
+	if err := db.QueryRow("SELECT password_hash FROM users").Scan(&hash); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(hash, "$argon2id$") || strings.Contains(hash, syntheticPassword) {
 		t.Fatal("password is not hashed")
 	}
-	if err := db.QueryRow("SELECT token_hash FROM admin_sessions").Scan(&digest); err != nil {
+	if err := db.QueryRow("SELECT token_hash FROM sessions").Scan(&digest); err != nil {
 		t.Fatal(err)
 	}
 	if len(digest) != 32 || string(digest) == session.Token {
@@ -163,7 +163,7 @@ func TestConcurrentSetupCreatesExactlyOneAdministrator(t *testing.T) {
 		}
 	}
 	var count int
-	_ = db.QueryRow("SELECT count(*) FROM administrators").Scan(&count)
+	_ = db.QueryRow("SELECT count(*) FROM users").Scan(&count)
 	if success != 1 || closed != 1 || count != 1 {
 		t.Fatalf("setup race: success=%d closed=%d count=%d", success, closed, count)
 	}
@@ -195,7 +195,7 @@ func TestLoginExpiryAndSessionBound(t *testing.T) {
 		}
 	}
 	var count int
-	_ = db.QueryRow("SELECT count(*) FROM admin_sessions").Scan(&count)
+	_ = db.QueryRow("SELECT count(*) FROM sessions").Scan(&count)
 	if count != 5 {
 		t.Fatalf("unbounded sessions: %d", count)
 	}
@@ -235,10 +235,10 @@ func TestInputAndHashWorkAreBounded(t *testing.T) {
 func TestFailedSetupRollsBackAndCanRetry(t *testing.T) {
 	s, db := fixture(t)
 	var schema string
-	if err := db.QueryRow("SELECT sql FROM sqlite_master WHERE name = 'admin_sessions'").Scan(&schema); err != nil {
+	if err := db.QueryRow("SELECT sql FROM sqlite_master WHERE name = 'sessions'").Scan(&schema); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("DROP TABLE admin_sessions"); err != nil {
+	if _, err := db.Exec("DROP TABLE sessions"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Setup(context.Background(), "admin-test", syntheticPassword); err == nil {

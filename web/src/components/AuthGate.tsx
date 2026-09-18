@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { authOptions } from '@/lib/auth'
+import { canAccess } from '@/lib/access'
+import { Forbidden } from '@/pages/Forbidden'
 import { AuthShell } from './AuthShell'
 import { Layout } from './Layout'
 import { Button } from './ui/Button'
@@ -35,10 +37,7 @@ export function AuthGate() {
           <p className="my-4 text-sm leading-6 text-muted-foreground">
             {t('unavailable')}
           </p>
-          <Button
-            onClick={() => void query.refetch()}
-            disabled={query.isFetching}
-          >
+          <Button onClick={() => query.refetch()} disabled={query.isFetching}>
             {t('reconnect')}
           </Button>
         </div>
@@ -49,5 +48,11 @@ export function AuthGate() {
   if (!query.data.user)
     return path === '/login' ? <Outlet /> : <Navigate to="/login" replace />
   if (isSetup || path === '/login') return <Navigate to="/" replace />
+  if (!canAccess(path, query.data.user.role))
+    return (
+      <Layout>
+        <Forbidden />
+      </Layout>
+    )
   return <Layout />
 }

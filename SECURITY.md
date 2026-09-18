@@ -2,11 +2,13 @@
 
 ## Current scope
 
-SubLane provides one local administrator, first-run account creation, Argon2id password storage, persisted revocable sessions, same-origin JSON mutations, and bounded login attempts. See [the authentication contract](docs/authentication.md) for exact behavior and limits.
+SubLane provides one local administrator and administrator-created members, first-run account creation, persisted roles, Argon2id password storage, per-user revocable sessions, same-origin JSON mutations, and bounded login attempts. Management APIs default to administrator-only access. Disabling a member revokes all of that member’s sessions in the same transaction. See [the authentication contract](docs/authentication.md) for exact behavior and limits.
 
 Complete initialization before exposing the instance to other users. The setup page is open while no administrator exists, and closes after the first successful creation.
 
-Member keys, encrypted upstream credential storage, upstream OAuth, model forwarding, MFA, and password recovery are not implemented. The default service address and Compose host port bind to loopback. Use HTTPS and an explicit public origin for network deployments. This is still an early-development project, not a complete subscription gateway.
+Personal gateway keys use 256-bit random secrets and SHA-256 digests at rest. Keys are shown once, scoped to their owner, and cannot access session-based management endpoints. Suspended members cannot authenticate gateway requests; explicit key revocation is permanent.
+
+Encrypted upstream credential storage, upstream OAuth, model forwarding, MFA, and password recovery are not implemented. The default service address and Compose host port bind to loopback. Use HTTPS and an explicit public origin for network deployments. This is still an early-development project, not a complete subscription gateway.
 
 ## Reporting
 

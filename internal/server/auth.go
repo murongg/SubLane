@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/murongg/SubLane/internal/auth"
 )
 
@@ -26,20 +28,43 @@ type credentials struct {
 	Password string `json:"password"`
 }
 
-func (h *authHTTP) register(mux *http.ServeMux) {
-	mux.HandleFunc("/api/auth/state", h.state)
-	mux.HandleFunc("/api/auth/setup", func(w http.ResponseWriter, r *http.Request) { h.authenticate(w, r, true) })
-	mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) { h.authenticate(w, r, false) })
-	mux.HandleFunc("/api/auth/logout", h.logout)
+func (h *authHTTP) register(router chi.Router) {
+	routeErrors(router)
+	router.NotFound(h.requireAdmin(http.HandlerFunc(notFound)).ServeHTTP)
+	router.Group(func(public chi.Router) {
+		public.Use(h.requireAvailable)
+		public.Get("/state", h.state)
+		public.With(h.requireOrigin, h.throttleLogin).Post("/setup", func(w http.ResponseWriter, r *http.Request) { h.authenticate(w, r, true) })
+		public.With(h.requireOrigin, h.throttleLogin).Post("/login", func(w http.ResponseWriter, r *http.Request) { h.authenticate(w, r, false) })
+		public.With(h.requireOrigin).Post("/logout", h.logout)
+	})
 }
 
-func method(w http.ResponseWriter, r *http.Request, want string) bool {
-	if r.Method == want {
-		return true
-	}
-	w.Header().Set("Allow", want)
-	writeJSON(w, 405, map[string]string{"error": "method_not_allowed"})
-	return false
+func (h *authHTTP) requireAvailable(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.available(w) {
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
+func (h *authHTTP) requireOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.sameOrigin(w, r) {
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
+func (h *authHTTP) throttleLogin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if retry := h.limiter.allow(peerAddress(r.RemoteAddr)); retry > 0 {
+			w.Header().Set("Retry-After", strconv.Itoa(retry))
+			writeJSON(w, 429, map[string]string{"error": "rate_limited"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (h *authHTTP) available(w http.ResponseWriter) bool {
@@ -109,9 +134,6 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, into any) bool {
 }
 
 func (h *authHTTP) state(w http.ResponseWriter, r *http.Request) {
-	if !method(w, r, "GET") || !h.available(w) {
-		return
-	}
 	state, err := h.service.State(r.Context(), token(r))
 	if err != nil {
 		authError(w, err)
@@ -121,14 +143,6 @@ func (h *authHTTP) state(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *authHTTP) authenticate(w http.ResponseWriter, r *http.Request, setup bool) {
-	if !method(w, r, "POST") || !h.available(w) || !h.sameOrigin(w, r) {
-		return
-	}
-	if retry := h.limiter.allow(peerAddress(r.RemoteAddr)); retry > 0 {
-		w.Header().Set("Retry-After", strconv.Itoa(retry))
-		writeJSON(w, 429, map[string]string{"error": "rate_limited"})
-		return
-	}
 	var input credentials
 	if !decodeJSON(w, r, &input) {
 		return
@@ -151,9 +165,6 @@ func (h *authHTTP) authenticate(w http.ResponseWriter, r *http.Request, setup bo
 }
 
 func (h *authHTTP) logout(w http.ResponseWriter, r *http.Request) {
-	if !method(w, r, "POST") || !h.available(w) || !h.sameOrigin(w, r) {
-		return
-	}
 	var input struct{}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -167,7 +178,28 @@ func (h *authHTTP) logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, auth.State{Initialized: true})
 }
 
-func (h *authHTTP) require(next http.Handler) http.Handler {
+type sessionUserKey struct{}
+
+func sessionUser(r *http.Request) auth.User {
+	user, _ := r.Context().Value(sessionUserKey{}).(auth.User)
+	return user
+}
+
+func (h *authHTTP) requireAdmin(next http.Handler) http.Handler {
+	return h.requireUser(requireAdminRole(next))
+}
+
+func requireAdminRole(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if sessionUser(r).Role != auth.RoleAdmin {
+			writeJSON(w, 403, map[string]string{"error": "forbidden"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (h *authHTTP) requireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !h.available(w) {
 			return
@@ -184,7 +216,7 @@ func (h *authHTTP) require(next http.Handler) http.Handler {
 			writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), sessionUserKey{}, *state.User)))
 	})
 }
 
@@ -200,6 +232,10 @@ func authError(w http.ResponseWriter, err error) {
 	case errors.Is(err, auth.ErrBusy):
 		status, code = 429, "auth_busy"
 		w.Header().Set("Retry-After", "1")
+	case errors.Is(err, auth.ErrUsernameTaken):
+		status, code = 409, "username_taken"
+	case errors.Is(err, auth.ErrMemberNotFound):
+		status, code = 404, "member_not_found"
 	}
 	writeJSON(w, status, map[string]string{"error": code})
 }

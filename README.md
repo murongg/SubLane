@@ -21,11 +21,11 @@
   <a href="README.zh-CN.md">简体中文</a> · <a href="https://github.com/murongg/SubLane">Repository</a> · <a href="brand/README.md">Brand materials</a>
 </p>
 
-**Status: early development.** Administrator setup, login/logout, protected management routes, SQLite persistence, the embedded frontend, themes, and English/Chinese localization work. Subscription authorization, model forwarding, member authentication, and usage reporting are not implemented yet.
+**Status: early development.** Administrator setup, member accounts, role-based management access, personal API keys, login/logout, SQLite persistence, the embedded frontend, themes, and English/Chinese localization work. Subscription authorization, model forwarding, and usage reporting are not implemented yet.
 
 ## Stack
 
-- Go 1.26+, standard-library HTTP server, pure-Go SQLite in WAL mode.
+- Go 1.26+, chi routing over `net/http`, sqlc-generated queries, and pure-Go SQLite in WAL mode.
 - React, TypeScript, Vite, TanStack Router and Query.
 - Selected components from [Shadcn Admin](https://github.com/satnaing/shadcn-admin), with a neutral palette and semantic status colors.
 - One binary for production; Node.js is only needed to build the frontend.
@@ -83,9 +83,10 @@ SQLite migrations run at startup and are recorded transactionally. The connectio
 ```text
 cmd/sublane/           Process entrypoint and graceful shutdown
 internal/config/      Environment parsing and validation
-internal/auth/        Administrator setup, password hashing, and sessions
+internal/auth/        Local users, roles, member lifecycle, and sessions
+internal/apikey/      Personal gateway keys and bearer authentication
 internal/server/      HTTP routes and SPA asset handling
-internal/storage/     SQLite initialization and SQL migrations
+internal/storage/     SQLite initialization, migrations, SQL queries, generated access
 web/src/components/   Application shell and adapted UI components
 web/src/pages/        Overview, accounts, preferences, and 404
 web/src/lib/          API boundary, localization, and class names
@@ -102,7 +103,7 @@ Do not import provider SDK types into membership or storage code. Add CLIProxyAP
 - `GET /readyz`: SQLite readiness; returns 503 when unavailable.
 - `GET /api/auth/state`: public initialization and session state; setup/login/logout use explicit POST endpoints.
 - `GET /api/system`: authenticated instance version, uptime, storage, and gateway integration state.
-- The management `/api/` subtree requires a session by default. Unknown routes return JSON errors. `/v0` and `/v1` remain unimplemented. Missing static assets return 404 rather than the SPA document.
+- The management `/api/` subtree requires an administrator session by default. Unknown routes return JSON errors. `/v0` remains unimplemented. `/v1` requires a gateway API key; known model routes return 501 until Codex forwarding is connected. Missing static assets return 404 rather than the SPA document.
 
 ## Verification
 
@@ -110,7 +111,7 @@ Do not import provider SDK types into membership or storage code. Add CLIProxyAP
 make check
 ```
 
-This runs Go vet/format checks, TypeScript, ESLint, Prettier, Go race tests, frontend tests, and the production build. Tests use synthetic data and temporary SQLite databases. CI also builds the Docker image.
+This checks sqlc-generated code consistency and runs Go vet/format checks, TypeScript, ESLint, Prettier, Go race tests, frontend tests, and the production build. Run `make generate` after editing query SQL or migrations. Tests use synthetic data and temporary SQLite databases. CI also builds the Docker image.
 
 ## Interface conventions
 
@@ -128,6 +129,8 @@ The repository keeps a small set of maintained brand assets. Run `make brand` to
 - [Agent instructions](AGENTS.md)
 - [Architecture](docs/architecture.md)
 - [Administrator authentication](docs/authentication.md)
+- [Member accounts and permissions](docs/members.md)
+- [Personal API keys](docs/api-keys.md)
 - [Development guide](docs/development.md)
 - [Roadmap](docs/roadmap.md)
 - [Contributing](CONTRIBUTING.md)

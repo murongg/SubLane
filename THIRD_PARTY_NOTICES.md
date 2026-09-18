@@ -15,6 +15,11 @@ Go and JavaScript dependencies are pinned in `go.mod`, `go.sum`, `web/package.js
 
 The Radix dropdown menu is pinned to 2.1.16 alongside Dialog 1.1.15 so they share focus-scope and dismissable-layer dependencies. Keep those primitives aligned when upgrading and verify keyboard focus in the account menu inside the mobile navigation sheet.
 
+## chi and sqlc
+
+- chi: https://github.com/go-chi/chi, version `v5.3.2`, MIT; full text in `licenses/chi.txt`. Used for HTTP routing over `net/http`.
+- sqlc: https://github.com/sqlc-dev/sqlc, version `v1.31.1`, MIT. Used during development to generate Go from SQL; the generator itself is not shipped in the runtime binary.
+
 ## Inter
 
 - Project: https://github.com/rsms/inter
