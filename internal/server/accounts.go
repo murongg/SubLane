@@ -30,6 +30,7 @@ func (h *accountHTTP) register(router chi.Router) {
 		accounts.Patch("/{id}", h.setEnabled)
 		accounts.Delete("/{id}", h.remove)
 		accounts.Post("/{id}/check", h.check)
+		accounts.Get("/{id}/usage", h.usage)
 	})
 }
 
@@ -183,6 +184,25 @@ func (h *accountHTTP) check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"account": account, "models": models})
+}
+
+func (h *accountHTTP) usage(w http.ResponseWriter, r *http.Request) {
+	if h.gateway == nil {
+		writeJSON(w, 503, map[string]string{"error": "unavailable"})
+		return
+	}
+	release, err := h.gateway.Acquire()
+	if err != nil {
+		accountError(w, err)
+		return
+	}
+	defer release()
+	usage, err := h.gateway.Usage(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		accountError(w, err)
+		return
+	}
+	writeJSON(w, 200, usage)
 }
 
 func accountError(w http.ResponseWriter, err error) {

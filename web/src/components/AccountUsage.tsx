@@ -1,0 +1,202 @@
+import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { RefreshCw } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { usageOptions, type UsageWindow } from '@/lib/usage'
+import { cn } from '@/lib/cn'
+import { Button } from './ui/Button'
+
+export function AccountUsage({ id, name }: { id: string; name: string }) {
+  const { t, i18n } = useTranslation()
+  const query = useQuery(usageOptions(id))
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const locale = i18n.resolvedLanguage ?? 'en'
+  // Anchor to the server snapshot so clock skew and an old interval tick cannot extend a fresh reset countdown.
+  const snapshotNow = query.data
+    ? query.data.updated_at * 1000 + Math.max(0, now - query.dataUpdatedAt)
+    : now
+  return (
+    <section
+      aria-label={t('accountUsageLabel', { name })}
+      className="space-y-3"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span className="font-medium">{t('accountUsage')}</span>
+          {query.data && (
+            <span>
+              {t('usageUpdated', {
+                time: new Intl.DateTimeFormat(locale, {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                }).format(query.data.updated_at * 1000),
+              })}
+            </span>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs [@media(pointer:coarse)]:min-h-11"
+          disabled={query.isFetching}
+          aria-label={t('refreshAccountUsage', { name })}
+          onClick={() => query.refetch()}
+        >
+          <RefreshCw
+            aria-hidden="true"
+            className={cn(
+              'size-3.5',
+              query.isFetching && 'motion-safe:animate-spin',
+            )}
+          />
+          {t('refreshUsage')}
+        </Button>
+      </div>
+      {query.isPending && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {t('usageLoading')}
+        </p>
+      )}
+      {query.isError && (
+        <p role="status" className="text-xs text-warning">
+          {t(query.data ? 'usageStale' : 'usageLoadFailed')}
+        </p>
+      )}
+      {query.data && (
+        <div className="space-y-4">
+          {query.data.limits.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              {t('usageNotReported')}
+            </p>
+          )}
+          {query.data.limits.map((limit, index) => (
+            <div key={index} className="space-y-3">
+              {limit.name && (
+                <p className="break-words text-xs font-medium">{limit.name}</p>
+              )}
+              {(limit.allowed === false || limit.limit_reached === true) && (
+                <p className="text-xs text-warning">{t('usageLimited')}</p>
+              )}
+              {limit.windows.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {t('usageNotReported')}
+                </p>
+              )}
+              <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                {limit.windows.map((window) => (
+                  <QuotaWindow
+                    key={window.kind}
+                    window={window}
+                    now={snapshotNow}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function QuotaWindow({ window, now }: { window: UsageWindow; now: number }) {
+  const { t, i18n } = useTranslation()
+  const locale = i18n.resolvedLanguage ?? 'en'
+  const seconds = window.window_seconds
+  const label =
+    seconds === null
+      ? t(window.kind === 'primary' ? 'usagePrimary' : 'usageSecondary')
+      : seconds % 86400 === 0
+        ? t('usageDays', { count: seconds / 86400 })
+        : seconds % 3600 === 0
+          ? t('usageHours', { count: seconds / 3600 })
+          : seconds % 60 === 0
+            ? t('usageMinutes', { count: seconds / 60 })
+            : t('usageSeconds', { count: seconds })
+  const remaining =
+    window.used_percent === null
+      ? null
+      : Math.max(0, Math.min(100, 100 - window.used_percent))
+  const percentage =
+    remaining === null
+      ? t('usageUnknown')
+      : t('usageRemaining', {
+          percent: new Intl.NumberFormat(locale, {
+            maximumFractionDigits: 2,
+          }).format(remaining),
+        })
+  const elapsed = window.reset_at !== null && window.reset_at * 1000 <= now
+  const resetSeconds =
+    window.reset_at === null
+      ? null
+      : Math.max(0, window.reset_at - Math.floor(now / 1000))
+  const minutes = Math.ceil((resetSeconds ?? 0) / 60)
+  const resetText =
+    resetSeconds === null
+      ? t('usageResetUnknown')
+      : elapsed
+        ? t('usageResetPassed')
+        : minutes >= 1440
+          ? t('usageResetDays', {
+              days: Math.floor(minutes / 1440),
+              hours: Math.floor((minutes % 1440) / 60),
+            })
+          : minutes >= 60
+            ? t('usageResetHours', {
+                hours: Math.floor(minutes / 60),
+                minutes: minutes % 60,
+              })
+            : t('usageResetMinutes', { minutes })
+  return (
+    <div className="space-y-1.5 text-xs">
+      <div className="flex flex-wrap justify-between gap-x-3 gap-y-1">
+        <span className="text-muted-foreground">{label}</span>
+        <span
+          className={cn(
+            'tabular-nums',
+            remaining !== null && remaining <= 10 && 'text-warning',
+          )}
+        >
+          {percentage}
+        </span>
+      </div>
+      {remaining !== null && (
+        <div
+          role="progressbar"
+          aria-label={label}
+          aria-valuenow={remaining}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuetext={percentage}
+          className="h-1.5 overflow-hidden rounded-full bg-muted"
+        >
+          <div
+            className={cn(
+              'h-full rounded-full bg-foreground',
+              remaining <= 10 && 'bg-warning',
+            )}
+            style={{ width: `${remaining}%` }}
+          />
+        </div>
+      )}
+      {/* A passed reset timestamp is not evidence that the provider has replenished quota. */}
+      <p
+        className="text-muted-foreground"
+        title={
+          window.reset_at === null
+            ? undefined
+            : new Intl.DateTimeFormat(locale, {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              }).format(window.reset_at * 1000)
+        }
+      >
+        {resetText}
+      </p>
+    </div>
+  )
+}

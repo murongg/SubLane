@@ -13,6 +13,14 @@ Use **Verify connection** to fetch the account's model catalog. Imported credent
 
 OAuth attempts use PKCE, 256-bit random state, a ten-minute expiry, one active attempt per administrator browser session, and a maximum of eight pending attempts. The callback is bound to the session that started it and consumed before exchanging its code. Closing the form requests cancellation; expiry is the fallback after a lost connection. Pending OAuth state is held only in memory.
 
+## Subscription usage
+
+The accounts page loads each enabled account's upstream usage limits and offers **Refresh usage**. It shows the actual window duration, remaining percentage, reset countdown, and snapshot time, including additional model limits when reported. Missing limits or percentages remain unknown; failures are separate from quota exhaustion. A failed refresh retains the previous snapshot with an explicit warning. Reaching a reset timestamp does not fabricate replenished quota; refresh to retrieve the new state.
+
+The administrator-only `GET /api/accounts/{id}/usage` endpoint reads `https://chatgpt.com/backend-api/wham/usage`, matching the [official Codex backend client](https://github.com/openai/codex/blob/main/codex-rs/backend-client/src/client/rate_limit_resets.rs). It uses the selected account's credential, the existing refresh/retry owner, bounded gateway admission, a 20-second deadline, and a 128 KiB response bound. Only normalized quota fields are returned; raw upstream metadata and credentials are excluded. This backend contract may evolve independently of SubLane.
+
+Usage is fetched on page entry and manual refresh, with a one-minute browser query freshness period and no background polling or database migration. Disabled accounts are not queried. Upstream usage limits describe the subscription; they are not per-member usage accounting or SubLane-enforced quotas.
+
 ## Credential storage and refresh
 
 Migration `005_accounts.sql` adds subscription accounts and bounded account-affinity records. Access, refresh, and ID tokens are encrypted with AES-256-GCM and account-bound authenticated data. The instance creates a private 32-byte `credentials.key` file next to its database. The key is not a setup password and requires no manual entry.

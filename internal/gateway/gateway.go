@@ -126,28 +126,38 @@ func (s *Service) Models(ctx context.Context, userID int64) ([]codex.Model, erro
 }
 
 func (s *Service) Check(ctx context.Context, id string) ([]codex.Model, error) {
+	return readAccount(ctx, s, id, s.provider.Models)
+}
+
+func (s *Service) Usage(ctx context.Context, id string) (codex.Usage, error) {
+	return readAccount(ctx, s, id, s.provider.Usage)
+}
+
+// Account reads share the same refresh owner and stale-token rejection rules as forwarding.
+func readAccount[T any](ctx context.Context, s *Service, id string, read func(context.Context, accounts.Credential) (T, error)) (T, error) {
+	var empty T
 	credential, err := s.accounts.Prepare(ctx, id, s.provider.Refresh)
 	if err != nil {
-		return nil, err
+		return empty, err
 	}
-	models, err := s.provider.Models(ctx, credential)
+	result, err := read(ctx, credential)
 	var rejected *codex.UpstreamError
 	if errors.As(err, &rejected) && rejected.Status == 401 {
 		credential, err = s.accounts.RefreshAfterRejection(ctx, id, credential.AccessToken, s.provider.Refresh)
 		if err != nil {
-			return nil, err
+			return empty, err
 		}
-		models, err = s.provider.Models(ctx, credential)
+		result, err = read(ctx, credential)
 	}
 	if err == nil {
 		if err := s.accounts.RecordUse(ctx, id, credential.AccessToken, true); err != nil {
-			return nil, err
+			return empty, err
 		}
 	}
 	if errors.As(err, &rejected) && rejected.Status == 401 {
 		_ = s.accounts.RecordUse(ctx, id, credential.AccessToken, false)
 	}
-	return models, err
+	return result, err
 }
 
 func (s *Service) selectAccount(ctx context.Context, userID int64, session string) (string, [32]byte, error) {

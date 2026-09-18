@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
@@ -18,6 +18,7 @@ import {
   setAccountEnabled,
   type Account,
 } from '@/lib/accounts'
+import { AccountUsage } from '@/components/AccountUsage'
 import { ConnectAccount } from '@/components/ConnectAccount'
 import { DeleteAccount } from '@/components/DeleteAccount'
 import { Status } from '@/components/Status'
@@ -159,128 +160,137 @@ export function Accounts() {
             </thead>
             <tbody className="divide-y divide-border">
               {query.data.accounts.map((account) => (
-                <tr key={account.id}>
-                  <td className="min-w-40 max-w-72 px-5 py-4">
-                    <p className="break-words font-medium">{account.name}</p>
-                    {account.email && (
-                      <p className="mt-1 break-all text-xs text-muted-foreground">
-                        {account.email}
+                <Fragment key={account.id}>
+                  <tr>
+                    <td className="min-w-40 max-w-72 px-5 py-4">
+                      <p className="break-words font-medium">{account.name}</p>
+                      {account.email && (
+                        <p className="mt-1 break-all text-xs text-muted-foreground">
+                          {account.email}
+                        </p>
+                      )}
+                      {account.plan && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {account.plan}
+                        </p>
+                      )}
+                      <div className="mt-2 sm:hidden">
+                        <AccountStatus account={account} />
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground xl:hidden">
+                        {t('accountExpires')}:{' '}
+                        {account.expires_at
+                          ? dates.format(account.expires_at * 1000)
+                          : t('accountUnknownExpiry')}
                       </p>
-                    )}
-                    {account.plan && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {account.plan}
-                      </p>
-                    )}
-                    <div className="mt-2 sm:hidden">
+                    </td>
+                    <td className="hidden px-5 py-4 sm:table-cell">
                       <AccountStatus account={account} />
-                    </div>
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground xl:hidden">
-                      {t('accountExpires')}:{' '}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-5 py-4 text-muted-foreground xl:table-cell">
                       {account.expires_at
                         ? dates.format(account.expires_at * 1000)
                         : t('accountUnknownExpiry')}
-                    </p>
-                  </td>
-                  <td className="hidden px-5 py-4 sm:table-cell">
-                    <AccountStatus account={account} />
-                  </td>
-                  <td className="hidden whitespace-nowrap px-5 py-4 text-muted-foreground xl:table-cell">
-                    {account.expires_at
-                      ? dates.format(account.expires_at * 1000)
-                      : t('accountUnknownExpiry')}
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="hidden lg:inline-flex"
-                        disabled={pending || !account.enabled}
-                        onClick={() => {
-                          clear()
-                          check.mutate(account.id)
-                        }}
-                      >
-                        {check.isPending && check.variables === account.id ? (
-                          <LoaderCircle
-                            className="motion-safe:animate-spin"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <Check aria-hidden="true" />
-                        )}
-                        {t('checkAccount')}
-                      </Button>
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="[@media(pointer:coarse)]:size-11"
-                            aria-label={t('accountActions', {
-                              name: account.name,
-                            })}
-                            disabled={pending}
-                          >
-                            <MoreHorizontal aria-hidden="true" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="lg:hidden [@media(pointer:coarse)]:min-h-11"
-                            disabled={!account.enabled}
-                            onSelect={() => {
-                              clear()
-                              check.mutate(account.id)
-                            }}
-                          >
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="hidden lg:inline-flex"
+                          disabled={pending || !account.enabled}
+                          onClick={() => {
+                            clear()
+                            check.mutate(account.id)
+                          }}
+                        >
+                          {check.isPending && check.variables === account.id ? (
+                            <LoaderCircle
+                              className="motion-safe:animate-spin"
+                              aria-hidden="true"
+                            />
+                          ) : (
                             <Check aria-hidden="true" />
-                            {t('checkAccount')}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="[@media(pointer:coarse)]:min-h-11"
-                            onSelect={() => {
-                              clear()
-                              setConnecting(account)
-                            }}
-                          >
-                            <RefreshCw aria-hidden="true" />
-                            {t('reauthorizeAccount')}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="[@media(pointer:coarse)]:min-h-11"
-                            onSelect={() => {
-                              clear()
-                              update.mutate({
-                                id: account.id,
-                                enabled: !account.enabled,
-                              })
-                            }}
-                          >
-                            <Power aria-hidden="true" />
-                            {t(
-                              account.enabled
-                                ? 'disableAccount'
-                                : 'enableAccount',
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-error focus:bg-error-muted focus:text-error [@media(pointer:coarse)]:min-h-11"
-                            onSelect={() => {
-                              clear()
-                              setRemoving(account)
-                            }}
-                          >
-                            <Trash2 aria-hidden="true" />
-                            {t('deleteAccount')}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </td>
-                </tr>
+                          )}
+                          {t('checkAccount')}
+                        </Button>
+                        <DropdownMenu modal={false}>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="[@media(pointer:coarse)]:size-11"
+                              aria-label={t('accountActions', {
+                                name: account.name,
+                              })}
+                              disabled={pending}
+                            >
+                              <MoreHorizontal aria-hidden="true" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              className="lg:hidden [@media(pointer:coarse)]:min-h-11"
+                              disabled={!account.enabled}
+                              onSelect={() => {
+                                clear()
+                                check.mutate(account.id)
+                              }}
+                            >
+                              <Check aria-hidden="true" />
+                              {t('checkAccount')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="[@media(pointer:coarse)]:min-h-11"
+                              onSelect={() => {
+                                clear()
+                                setConnecting(account)
+                              }}
+                            >
+                              <RefreshCw aria-hidden="true" />
+                              {t('reauthorizeAccount')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="[@media(pointer:coarse)]:min-h-11"
+                              onSelect={() => {
+                                clear()
+                                update.mutate({
+                                  id: account.id,
+                                  enabled: !account.enabled,
+                                })
+                              }}
+                            >
+                              <Power aria-hidden="true" />
+                              {t(
+                                account.enabled
+                                  ? 'disableAccount'
+                                  : 'enableAccount',
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-error focus:bg-error-muted focus:text-error [@media(pointer:coarse)]:min-h-11"
+                              onSelect={() => {
+                                clear()
+                                setRemoving(account)
+                              }}
+                            >
+                              <Trash2 aria-hidden="true" />
+                              {t('deleteAccount')}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </td>
+                  </tr>
+                  {account.enabled && account.status !== 'reauth_required' && (
+                    <tr className="!border-t-0">
+                      <td colSpan={4} className="px-5 pb-5 pt-0">
+                        <AccountUsage id={account.id} name={account.name} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
