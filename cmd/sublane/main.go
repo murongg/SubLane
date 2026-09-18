@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/config"
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/storage"
@@ -45,9 +46,13 @@ func run() error {
 		return err
 	}
 	defer db.Close()
+	authentication, err := auth.New(db)
+	if err != nil {
+		return err
+	}
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(server.Options{Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext}),
+		Handler:           server.New(server.Options{Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, PublicURL: cfg.PublicURL}),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,

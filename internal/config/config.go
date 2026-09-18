@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/url"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
-	Addr     string
-	DataDir  string
-	LogLevel slog.Level
+	Addr      string
+	DataDir   string
+	LogLevel  slog.Level
+	PublicURL string
 }
 
 func Load(getenv func(string) string) (Config, error) {
@@ -25,6 +28,26 @@ func Load(getenv func(string) string) (Config, error) {
 		if err := c.LogLevel.UnmarshalText([]byte(v)); err != nil {
 			return c, fmt.Errorf("SUBLANE_LOG_LEVEL: %w", err)
 		}
+	}
+	if v := getenv("SUBLANE_PUBLIC_URL"); v != "" {
+		u, err := url.Parse(v)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+			return c, fmt.Errorf("SUBLANE_PUBLIC_URL must be an http(s) origin without credentials, path, query, or fragment")
+		}
+		host := strings.ToLower(u.Host)
+		if port := u.Port(); port != "" {
+			n, err := strconv.Atoi(port)
+			if err != nil || n < 1 || n > 65535 {
+				return c, fmt.Errorf("invalid SUBLANE_PUBLIC_URL port")
+			}
+			if (u.Scheme == "https" && port == "443") || (u.Scheme == "http" && port == "80") {
+				host = strings.ToLower(u.Hostname())
+				if strings.Contains(host, ":") {
+					host = "[" + host + "]"
+				}
+			}
+		}
+		c.PublicURL = u.Scheme + "://" + host
 	}
 	_, port, err := net.SplitHostPort(c.Addr)
 	if err != nil {

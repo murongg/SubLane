@@ -2,7 +2,7 @@
 
 ## Context
 
-Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. The current repository is a foundation scaffold, not a working subscription gateway.
+Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. Local administrator authentication is implemented; upstream subscription forwarding is not.
 
 Use English for code comments, `PRODUCT.md`, and primary developer documentation. Keep the English and Simplified Chinese UI dictionaries complete. English is the default interface language.
 
@@ -18,6 +18,7 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 
 - `cmd/sublane` owns startup, process lifecycle, and dependency wiring.
 - `internal/config` owns environment parsing and validation.
+- `internal/auth` owns administrator credentials, first-run initialization, and persisted sessions.
 - `internal/storage` owns SQLite initialization and migrations.
 - `internal/server` owns HTTP handling; it must not silently serve HTML for API errors.
 - `web` is a client-rendered React app and an embedded Go asset package. It must not require a Node.js server in production.
@@ -31,7 +32,7 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - Do not hold a database transaction open during network IO or model generation.
 - Preserve cancellation and graceful shutdown. Future model streaming routes need explicit timeout and resource policies rather than blanket response buffering.
 - Do not add authentication bypasses or expose management endpoints as member APIs.
-- Default to loopback listening. This scaffold has no administrator authentication yet.
+- Default to loopback listening. Keep management routes under the default-authenticated API subtree. First-run setup uses a username and password; preserve its atomic single-administrator guard and disable it after initialization. See `docs/authentication.md` for the current authentication contract.
 
 ## Frontend
 

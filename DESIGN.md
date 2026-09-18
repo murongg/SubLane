@@ -109,11 +109,11 @@ Keep all visible UI copy and accessibility labels in the translation dictionarie
 
 ## Layout
 
-The desktop shell uses a 256px sidebar, a 64px minimum-height header, and a fluid main area capped at 1152px. Main content uses 40px padding on larger screens and 20px horizontal padding on small screens.
+The desktop shell follows the user-selected Shadcn Admin layout: a compact two-line brand block, a 256px sidebar, a 64px minimum-height header, and a fluid main area capped at 1152px. Main content uses 24px padding on larger screens and 20px horizontal padding on small screens. The sidebar ends with a compact account trigger containing initials, username, and administrator role. Keep SubLane's neutral palette and real instance data.
 
 Below 768px, navigation becomes a 288px modal sheet opened by the header trigger. Main content takes the full width. Lists of details and toolbars wrap or stack; the service details become a single column below 640px.
 
-Use spacing to group related information. The overview has one service-status surface and a separate Codex connection section. Do not add dashboard metrics without real data. Preference controls are in the global header on working pages and in their corresponding sections on the Preferences page.
+Use spacing to group related information. The overview has one service-status surface and a separate Codex connection section. Do not add dashboard metrics without real data. Language, theme, and a settings shortcut appear as icons at the top right on authenticated pages, including mobile. The sidebar lists business pages only. Give icons accessible names and hover descriptions, and reflect the selected theme with a sun, moon, or monitor. Setup and login share the same language and theme icon controls in a quiet 64px header. The Preferences form uses triggers with visible text.
 
 ## Elevation & Depth
 
@@ -131,17 +131,25 @@ Use the approved original mark: two offset lane segments forming an S. The canon
 
 The repository keeps only the README lockups, the selected dark social preview, color values, and font sources in `brand/`. Run `make brand` to generate the complete asset set in Git-ignored `dist/brand/`. The README uses the transparent horizontal lockup pair in `brand/logos/` at 420px, followed by compact badges. Technology and license badges stay neutral; the foundation-stage badge uses the warning color. Follow `brand/README.md` for clear space and format selection.
 
+The web app ships the generated favicon SVG, multi-size ICO fallback, and Apple touch icon in `web/public/`. The SVG uses a dark mark in light browser chrome and a white mark in dark chrome; the fallback icons use the approved monochrome tile. Keep these assets synchronized with the canonical mark when branding changes.
+
 The graphic wordmark uses Inter 650 at optical size 32 with -0.025em tracking, exported as paths for portability. This branding font does not replace the application's platform sans-serif stack. Keep supporting graphics monochrome and use semantic colors only for status.
 
 ### Buttons and selectors
 
-Use `Button` for primary, outline, and ghost actions. Primary controls reverse from dark-on-light to light-on-dark with the theme. Native language and theme selectors keep visible labels through their accessible names and have clear focus outlines.
+Use `Button` for primary, outline, and ghost actions. Primary controls reverse from dark-on-light to light-on-dark with the theme. Language and theme choices use the adapted Shadcn Admin `DropdownMenu` with radio semantics, a checkmark on the selected item, neutral hover/focus backgrounds, and theme-aware popover surfaces. Do not use browser-native select popups. Text triggers retain a 16px Lucide chevron and a clear gap after the selected label; header triggers show only the language or current-theme icon. Preserve keyboard navigation, Escape dismissal, and return focus to the trigger.
 
 Desktop controls are compact. Coarse-pointer targets expand to at least 44px tall and editable controls use readable text. Preserve loading and disabled states, and never show an enabled action that cannot perform useful work.
 
 ### Navigation
 
-Reuse `SidebarProvider`, `Sidebar`, `SidebarMenuButton`, and `SidebarTrigger`. Active routes have a neutral selection surface and `aria-current`. Close the mobile sheet after navigation and retain keyboard focus handling from Radix.
+Reuse `SidebarProvider`, `Sidebar`, `SidebarMenuButton`, and `SidebarTrigger`. Active routes have a neutral selection surface and `aria-current`. Close the mobile sheet after navigation and retain keyboard focus handling from Radix. The account trigger opens a Shadcn Admin-style menu beside the desktop sidebar or above the trigger on mobile. Show the real username, administrator role, and a sign-out action; keep pending and failed sign-out feedback visible in the sidebar.
+
+### Authentication
+
+First-time setup starts with a centered welcome surface, the approved mark, a brief introduction, and a two-step outline of administrator creation and workspace entry. **Start setup** opens the administrator form on its own route; the form offers a return action until submission is in progress. Move focus to the page heading when moving between setup screens, and sign in automatically after successful creation. Initialized instances skip the welcome flow.
+
+Setup and login share the workspace's compact icon controls, custom dropdown menus, typography, and neutral palette. Keep the header transparent and borderless, and the centered content surface focused on the current step. Forms retain visible field labels and localized inline errors. Dark inputs use the canvas background to retain contrast against the input-border token. The private navigation is rendered only after authentication; the sidebar shows the current administrator and a sign-out action.
 
 ### Status
 

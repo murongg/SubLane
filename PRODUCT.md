@@ -20,7 +20,7 @@ Build a minimal, resource-efficient, self-hosted subscription gateway for intern
 
 ## Capabilities and Constraints
 
-The current milestone is the project foundation: startup configuration, SQLite migrations, health checks, the frontend shell, themes, localization, and build tooling. Account authorization, model forwarding, member permissions, and usage reporting are not implemented yet. Do not populate the product with fabricated accounts, usage, or performance claims.
+The foundation and local administrator authentication are implemented: one-time setup, login/logout, persisted sessions, protected management APIs, startup configuration, SQLite migrations, health checks, the frontend shell, themes, localization, and build tooling. Upstream account authorization, model forwarding, member permissions, and usage reporting are not implemented yet. Do not populate the product with fabricated accounts, usage, or performance claims.
 
 English is the default interface language. Support English and Simplified Chinese and persist the user's language preference. PRODUCT.md and the primary project documentation are written in English.
 

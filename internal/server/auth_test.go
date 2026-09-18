@@ -1,0 +1,219 @@
+package server
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/storage"
+)
+
+func authFixture(t *testing.T, publicURL string) http.Handler {
+	t.Helper()
+	dir := t.TempDir()
+	db, err := storage.Open(context.Background(), filepath.Join(dir, "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	a, err := auth.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return New(Options{Auth: a, PublicURL: publicURL, Ping: db.PingContext, StartedAt: time.Now(), Version: "test"})
+}
+
+func request(h http.Handler, method, path, origin string, body any, cookie *http.Cookie) *httptest.ResponseRecorder {
+	var reader io.Reader
+	if body != nil {
+		data, _ := json.Marshal(body)
+		reader = bytes.NewReader(data)
+	}
+	r := httptest.NewRequest(method, "http://example.test"+path, reader)
+	r.RemoteAddr = "192.0.2.1:1234"
+	if origin != "" {
+		r.Header.Set("Origin", origin)
+	}
+	if body != nil {
+		r.Header.Set("Content-Type", "application/json")
+	}
+	if cookie != nil {
+		r.AddCookie(cookie)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
+}
+
+func TestAuthenticationHTTPFlow(t *testing.T) {
+	h := authFixture(t, "")
+	state := request(h, "GET", "/api/auth/state", "", nil, nil)
+	if state.Code != 200 || !strings.Contains(state.Body.String(), `"initialized":false`) {
+		t.Fatal(state.Body.String())
+	}
+	if got := request(h, "GET", "/api/system", "", nil, nil).Code; got != 401 {
+		t.Fatalf("unprotected system: %d", got)
+	}
+	body := map[string]string{"username": "admin-test", "password": "fake password 42"}
+	setup := request(h, "POST", "/api/auth/setup", "http://example.test", body, nil)
+	if setup.Code != 201 {
+		t.Fatalf("setup: %d %s", setup.Code, setup.Body.String())
+	}
+	cookies := setup.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatal("missing session cookie")
+	}
+	cookie := cookies[0]
+	if !cookie.HttpOnly || cookie.Secure || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/" || cookie.MaxAge != 43200 {
+		t.Fatal("bad cookie flags")
+	}
+	if strings.Contains(setup.Body.String(), cookie.Value) {
+		t.Fatal("secret exposed in JSON")
+	}
+	if got := request(h, "POST", "/api/auth/setup", "http://example.test", body, nil).Code; got != 409 {
+		t.Fatalf("setup remains open: %d", got)
+	}
+	if got := request(h, "GET", "/api/system", "", nil, cookie).Code; got != 200 {
+		t.Fatalf("valid session denied: %d", got)
+	}
+	logout := request(h, "POST", "/api/auth/logout", "http://example.test", map[string]string{}, cookie)
+	if logout.Code != 200 || logout.Result().Cookies()[0].MaxAge != -1 {
+		t.Fatalf("logout failed: %d", logout.Code)
+	}
+	if got := request(h, "GET", "/api/system", "", nil, cookie).Code; got != 401 {
+		t.Fatalf("revoked token accepted: %d", got)
+	}
+	login := request(h, "POST", "/api/auth/login", "http://example.test", map[string]string{"username": "admin-test", "password": "fake password 42"}, nil)
+	if login.Code != 200 || login.Result().Cookies()[0].Value == cookie.Value {
+		t.Fatalf("login failed: %d", login.Code)
+	}
+	if got := request(h, "GET", "/api/future-management", "", nil, nil).Code; got != 401 {
+		t.Fatalf("management subtree is not default-protected: %d", got)
+	}
+	if got := request(h, "GET", "/healthz", "", nil, nil).Code; got != 200 {
+		t.Fatal("liveness requires auth")
+	}
+}
+
+func TestAuthOriginAndBodyProtection(t *testing.T) {
+	h := authFixture(t, "")
+	body := map[string]string{"username": "admin-test", "password": "fake password 42"}
+	for _, origin := range []string{"", "null", "https://evil.example.test", "http://example.test.evil.test"} {
+		if got := request(h, "POST", "/api/auth/setup", origin, body, nil).Code; got != 403 {
+			t.Fatalf("origin %q accepted: %d", origin, got)
+		}
+	}
+	for _, tc := range []struct {
+		content, body string
+		status        int
+	}{
+		{"text/plain", `{}`, 415},
+		{"application/json", `{"unknown":true}`, 400},
+		{"application/json", `{} {}`, 400},
+		{"application/json", `{"username":"` + strings.Repeat("x", 5000) + `"}`, 413},
+	} {
+		r := httptest.NewRequest("POST", "http://example.test/api/auth/login", strings.NewReader(tc.body))
+		r.Header.Set("Origin", "http://example.test")
+		r.Header.Set("Content-Type", tc.content)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != tc.status {
+			t.Fatalf("body guard: got %d want %d", w.Code, tc.status)
+		}
+	}
+	r := httptest.NewRequest("POST", "http://example.test/api/auth/setup", strings.NewReader(`{}`))
+	r.Header.Set("Origin", "http://example.test")
+	r.Header.Set("Sec-Fetch-Site", "cross-site")
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 403 {
+		t.Fatal("cross-site metadata accepted")
+	}
+}
+
+func TestConfiguredOriginUsesSecureCookie(t *testing.T) {
+	h := authFixture(t, "https://gateway.example.test")
+	body := map[string]string{"username": "admin-test", "password": "fake password 42"}
+	if got := request(h, "POST", "/api/auth/setup", "http://example.test", body, nil).Code; got != 403 {
+		t.Fatal("proxy backend origin trusted")
+	}
+	w := request(h, "POST", "/api/auth/setup", "https://gateway.example.test", body, nil)
+	if w.Code != 201 || !w.Result().Cookies()[0].Secure {
+		t.Fatal("external HTTPS did not produce a Secure cookie")
+	}
+}
+
+func TestLoginThrottleIgnoresForwardedPeerHeaders(t *testing.T) {
+	h := authFixture(t, "")
+	for i := 0; i < 6; i++ {
+		r := httptest.NewRequest("POST", "http://example.test/api/auth/login", strings.NewReader(`{"username":"unknown-test","password":"fake password 42"}`))
+		r.RemoteAddr = "192.0.2.1:1234"
+		r.Header.Set("Origin", "http://example.test")
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("X-Forwarded-For", strings.Repeat("1", i+1)+".example.test")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if i < 5 && w.Code != 401 {
+			t.Fatalf("attempt %d: %d", i, w.Code)
+		}
+		if i == 5 && (w.Code != 429 || w.Header().Get("Retry-After") == "") {
+			t.Fatal("throttle bypassed with forwarded headers")
+		}
+	}
+}
+
+func TestLimiterExpiresAndBoundsPeerState(t *testing.T) {
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	l := newLoginLimiter()
+	l.now = func() time.Time { return now }
+	for range 5 {
+		if l.allow("192.0.2.1") != 0 {
+			t.Fatal("early throttle")
+		}
+	}
+	if l.allow("192.0.2.1") <= 0 {
+		t.Fatal("missing peer limit")
+	}
+	now = now.Add(time.Minute)
+	if l.allow("192.0.2.1") != 0 {
+		t.Fatal("peer limit did not expire")
+	}
+	l.peers = make(map[string]attemptWindow)
+	for i := 0; i < maxLoginPeers; i++ {
+		l.peers[string(rune(i))] = attemptWindow{reset: now.Add(time.Minute)}
+	}
+	if l.allow("new-peer") == 0 || len(l.peers) > maxLoginPeers {
+		t.Fatal("unbounded peer state")
+	}
+}
+
+type deadlineRecorder struct {
+	*httptest.ResponseRecorder
+	deadlines []time.Time
+}
+
+func (d *deadlineRecorder) SetReadDeadline(value time.Time) error {
+	d.deadlines = append(d.deadlines, value)
+	return nil
+}
+
+func TestAuthBodyReadsHaveADeadline(t *testing.T) {
+	h := authFixture(t, "")
+	r := httptest.NewRequest("POST", "http://example.test/api/auth/login", strings.NewReader(`{"username":"unknown-test","password":"fake password 42"}`))
+	r.Header.Set("Origin", "http://example.test")
+	r.Header.Set("Content-Type", "application/json")
+	w := &deadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+	h.ServeHTTP(w, r)
+	if len(w.deadlines) != 2 || w.deadlines[0].IsZero() || !w.deadlines[1].IsZero() {
+		t.Fatal("authentication body reads need a bounded deadline that is cleared afterward")
+	}
+}

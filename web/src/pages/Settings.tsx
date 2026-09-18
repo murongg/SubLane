@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next'
-import { Status } from '@/components/Status'
 import { LanguageSelect, ThemeSelect } from '@/components/Preferences'
 
 export function Settings() {
@@ -26,19 +25,6 @@ export function Settings() {
             </p>
           </div>
           <LanguageSelect />
-        </section>
-        <section className="py-6">
-          <h2 className="font-medium">{t('preview')}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {t('previewDescription')}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Status kind="success">{t('success')}</Status>
-            <Status kind="warning">{t('warning')}</Status>
-            <Status kind="error">{t('error')}</Status>
-            <Status kind="info">{t('information')}</Status>
-            <Status kind="neutral">{t('paused')}</Status>
-          </div>
         </section>
       </div>
     </div>

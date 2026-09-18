@@ -24,3 +24,25 @@ func TestRejectsInvalidConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicOrigin(t *testing.T) {
+	for _, value := range []string{"ftp://example.test", "https://user@example.test", "https://example.test/path", "https://example.test?x=1", "https://example.test/#x", "not-a-url", "https://example.test:99999"} {
+		if _, err := Load(func(k string) string {
+			if k == "SUBLANE_PUBLIC_URL" {
+				return value
+			}
+			return ""
+		}); err == nil {
+			t.Fatalf("invalid origin accepted: %s", value)
+		}
+	}
+	cfg, err := Load(func(k string) string {
+		if k == "SUBLANE_PUBLIC_URL" {
+			return "https://GATEWAY.example.test:443/"
+		}
+		return ""
+	})
+	if err != nil || cfg.PublicURL != "https://gateway.example.test" {
+		t.Fatalf("origin normalization: %+v %v", cfg, err)
+	}
+}

@@ -21,11 +21,11 @@ func TestRoutesAndAssetBoundary(t *testing.T) {
 	}{
 		{"GET", "/healthz", 200, `"status":"ok"`},
 		{"GET", "/readyz", 200, `"status":"ready"`},
-		{"GET", "/api/system", 200, `"version":"test"`},
+		{"GET", "/api/system", 503, `"error":"unavailable"`},
 		{"GET", "/accounts", 200, "synthetic app"},
 		{"GET", "/assets/app.js", 200, "synthetic bundle"},
 		{"GET", "/assets/missing.js", 404, "not found"},
-		{"GET", "/api/missing", 404, `"error"`},
+		{"GET", "/api/missing", 503, `"error":"unavailable"`},
 		{"GET", "/api", 404, `"error"`},
 		{"GET", "/v1/responses", 404, `"error"`},
 		{"POST", "/accounts", 405, "Method Not Allowed"},

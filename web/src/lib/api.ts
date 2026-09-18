@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { request } from './request'
 
 const systemSchema = z.object({
   name: z.literal('SubLane'),
@@ -16,12 +17,5 @@ const systemSchema = z.object({
 })
 
 export async function getSystem(signal?: AbortSignal) {
-  const response = await fetch('/api/system', {
-    signal,
-    headers: { Accept: 'application/json' },
-  })
-  if (!response.ok) throw new Error('unavailable')
-  const result = systemSchema.safeParse(await response.json())
-  if (!result.success) throw new Error('invalid_response')
-  return result.data
+  return request('/api/system', systemSchema, { signal })
 }

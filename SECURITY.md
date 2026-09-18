@@ -2,7 +2,11 @@
 
 ## Current scope
 
-SubLane is a local-development scaffold. It does not yet implement administrator authentication, member keys, encrypted upstream credential storage, OAuth, or request forwarding. The default service address and Compose host port bind to loopback. Do not treat this version as a production access gateway.
+SubLane provides one local administrator, first-run account creation, Argon2id password storage, persisted revocable sessions, same-origin JSON mutations, and bounded login attempts. See [the authentication contract](docs/authentication.md) for exact behavior and limits.
+
+Complete initialization before exposing the instance to other users. The setup page is open while no administrator exists, and closes after the first successful creation.
+
+Member keys, encrypted upstream credential storage, upstream OAuth, model forwarding, MFA, and password recovery are not implemented. The default service address and Compose host port bind to loopback. Use HTTPS and an explicit public origin for network deployments. This is still an early-development project, not a complete subscription gateway.
 
 ## Reporting
 

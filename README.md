@@ -21,7 +21,7 @@
   <a href="README.zh-CN.md">简体中文</a> · <a href="https://github.com/murongg/SubLane">Repository</a> · <a href="brand/README.md">Brand materials</a>
 </p>
 
-**Status: foundation scaffold.** The HTTP server, SQLite migrations, embedded frontend, live system status, navigation, themes, and English/Chinese localization work. Subscription authorization, model forwarding, member authentication, and usage reporting are not implemented yet. This version is intended for local development.
+**Status: early development.** Administrator setup, login/logout, protected management routes, SQLite persistence, the embedded frontend, themes, and English/Chinese localization work. Subscription authorization, model forwarding, member authentication, and usage reporting are not implemented yet.
 
 ## Stack
 
@@ -48,6 +48,8 @@ Alternatively, run `make dev-api` and `make dev-web` in separate terminals.
 
 If port 5173 is occupied, use `make dev WEB_PORT=5174`.
 
+On first startup, open the UI and select **Start setup** on the welcome page. Create the administrator with a username and password to enter the workspace. Complete initialization locally before opening the instance to other users. See [administrator authentication](docs/authentication.md) for session behavior and HTTPS deployment.
+
 ## Build and run
 
 ```sh
@@ -61,7 +63,7 @@ Open http://127.0.0.1:8080. The binary includes the frontend and SQLite driver. 
 docker compose up --build -d
 ```
 
-The Compose service binds the host port to loopback and stores the database in a named volume. Authentication is not implemented in this milestone; keep the instance local while developing.
+The Compose service binds the host port to loopback and stores the database in a named volume. For network access, use an HTTPS reverse proxy and set the external `SUBLANE_PUBLIC_URL` in the container environment.
 
 ## Configuration
 
@@ -70,6 +72,7 @@ The Compose service binds the host port to loopback and stores the database in a
 | `SUBLANE_ADDR` | `127.0.0.1:8080` | HTTP listen address |
 | `SUBLANE_DATA_DIR` | `./data` | Directory containing `sublane.db` |
 | `SUBLANE_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error` |
+| `SUBLANE_PUBLIC_URL` | Unset | External origin for proxy deployments; HTTPS enables Secure cookies |
 
 The server reads process environment variables. It does not load `.env` automatically. `.env.example` documents the available settings. If you change the backend address during development, also update Vite's proxy target.
 
@@ -80,6 +83,7 @@ SQLite migrations run at startup and are recorded transactionally. The connectio
 ```text
 cmd/sublane/           Process entrypoint and graceful shutdown
 internal/config/      Environment parsing and validation
+internal/auth/        Administrator setup, password hashing, and sessions
 internal/server/      HTTP routes and SPA asset handling
 internal/storage/     SQLite initialization and SQL migrations
 web/src/components/   Application shell and adapted UI components
@@ -96,8 +100,9 @@ Do not import provider SDK types into membership or storage code. Add CLIProxyAP
 
 - `GET /healthz`: process liveness.
 - `GET /readyz`: SQLite readiness; returns 503 when unavailable.
-- `GET /api/system`: instance version, uptime, storage, and gateway integration state.
-- Other `/api`, `/v0`, and `/v1` routes return JSON 404 responses. Unknown static assets return 404 rather than the SPA document.
+- `GET /api/auth/state`: public initialization and session state; setup/login/logout use explicit POST endpoints.
+- `GET /api/system`: authenticated instance version, uptime, storage, and gateway integration state.
+- The management `/api/` subtree requires a session by default. Unknown routes return JSON errors. `/v0` and `/v1` remain unimplemented. Missing static assets return 404 rather than the SPA document.
 
 ## Verification
 
@@ -122,6 +127,7 @@ The repository keeps a small set of maintained brand assets. Run `make brand` to
 - [Brand materials and usage guide](brand/README.md)
 - [Agent instructions](AGENTS.md)
 - [Architecture](docs/architecture.md)
+- [Administrator authentication](docs/authentication.md)
 - [Development guide](docs/development.md)
 - [Roadmap](docs/roadmap.md)
 - [Contributing](CONTRIBUTING.md)

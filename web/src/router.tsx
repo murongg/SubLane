@@ -5,11 +5,31 @@ import {
   lazyRouteComponent,
   type RouterHistory,
 } from '@tanstack/react-router'
-import { Layout } from '@/components/Layout'
+import { AuthGate } from '@/components/AuthGate'
+import { Auth } from '@/pages/Auth'
+import { Setup } from '@/pages/Setup'
 import { NotFound } from '@/pages/NotFound'
 
-const root = createRootRoute({ component: Layout, notFoundComponent: NotFound })
+const root = createRootRoute({
+  component: AuthGate,
+  notFoundComponent: NotFound,
+})
 const routes = root.addChildren([
+  createRoute({
+    getParentRoute: () => root,
+    path: '/setup',
+    component: Setup,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/setup/admin',
+    component: () => <Auth mode="setup" />,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/login',
+    component: () => <Auth mode="login" />,
+  }),
   createRoute({
     getParentRoute: () => root,
     path: '/',

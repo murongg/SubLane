@@ -12,6 +12,9 @@ coverage/
 *.db
 *.db-shm
 *.db-wal
+# Ignore leftover bootstrap files from earlier development builds.
+setup.key
+.setup-*
 /.worktree/
 /docs/plans/
 /docs/specs/
