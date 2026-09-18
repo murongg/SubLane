@@ -46,15 +46,35 @@ export const en = {
   foundation: 'Foundation',
   internalGateway: 'Team subscription gateway',
   overviewTitle: 'Workspace overview',
-  overviewDescription: 'A clear view of your SubLane instance.',
+  overviewDescription:
+    'Instance health and progress toward your first request.',
+  gatewaySetup: 'Gateway setup',
+  gatewaySetupDescription:
+    'Your administrator account is ready. Next comes your team’s first Codex connection.',
+  adminReadyDescription:
+    'Sign-in and management access are set up for this instance.',
+  codexSetupDescription:
+    'Subscription account authorization is coming next. Connected accounts and their health will appear here.',
+  teamAccess: 'Team access',
+  teamAccessDescription:
+    'Member keys and request forwarding are still in development.',
+  comingNext: 'Coming next',
+  planned: 'Planned',
+  clientAccess: 'Client access',
+  codexCLI: 'Codex CLI',
+  codexDesktop: 'Codex desktop',
+  clientAccessDescription:
+    'Client setup will be available after subscription accounts and gateway keys are supported. This build cannot forward requests yet.',
+  lastChecked: 'Last checked',
+  statusUnknown: 'Status unknown',
+  refreshFailed:
+    'Showing the last successful check. Current service health could not be verified; refresh to try again.',
   service: 'Service',
-  serviceDescription: 'Live status from this instance.',
   running: 'Running',
   ready: 'Ready',
   notConfigured: 'Not connected',
   version: 'Version',
   uptime: 'Uptime',
-  uptimeValue: '{{seconds}} s',
   storage: 'Storage',
   refresh: 'Refresh',
   refreshing: 'Refreshing',
@@ -66,8 +86,6 @@ export const en = {
   invalidResponse:
     'The service returned an unexpected response. Check that the frontend and backend versions match.',
   codexTitle: 'Codex connection',
-  codexDescription:
-    'Your team’s subscription accounts will appear here once account authorization is available.',
   viewAccounts: 'View accounts',
   accountsTitle: 'Subscription accounts',
   accountsDescription: 'Manage the subscription accounts used by your team.',

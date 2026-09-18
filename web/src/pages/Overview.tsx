@@ -1,29 +1,40 @@
-import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import {
-  ArrowUpRight,
-  CircleAlert,
-  LoaderCircle,
-  RefreshCw,
-} from 'lucide-react'
+import { CircleAlert, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getSystem } from '@/lib/api'
+import { formatDuration } from '@/lib/duration'
 import { Button } from '@/components/ui/Button'
 import { Status } from '@/components/Status'
+import { GatewaySetup } from '@/components/GatewaySetup'
 
 export function Overview() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const query = useQuery({
     queryKey: ['system'],
     queryFn: ({ signal }) => getSystem(signal),
   })
+  const locale = i18n.resolvedLanguage ?? 'en'
+  const data = query.data
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="page-title">{t('overviewTitle')}</h1>
-        <p className="page-description">{t('overviewDescription')}</p>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="page-title">{t('overviewTitle')}</h1>
+          <p className="page-description">{t('overviewDescription')}</p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => void query.refetch()}
+          disabled={query.isFetching}
+        >
+          <RefreshCw
+            className={query.isFetching ? 'motion-safe:animate-spin' : ''}
+            aria-hidden="true"
+          />
+          {t(query.isFetching ? 'refreshing' : 'refresh')}
+        </Button>
       </div>
-      {query.isPending ? (
+      {query.isPending && (
         <div
           role="status"
           className="flex min-h-48 items-center justify-center gap-3 text-sm text-muted-foreground"
@@ -34,98 +45,88 @@ export function Overview() {
           />
           {t('loading')}
         </div>
-      ) : query.isError ? (
+      )}
+      {query.isError && (
         <div
           role="alert"
-          className="rounded-lg border border-border bg-card p-6"
+          className="rounded-xl border border-border bg-card p-6"
         >
           <div className="flex items-center gap-2 font-medium text-error">
             <CircleAlert className="size-4" aria-hidden="true" />
             {t('connectionError')}
           </div>
-          <p className="my-3 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {t(
-              query.error.message === 'invalid_response'
-                ? 'invalidResponse'
-                : 'unavailable',
+              data
+                ? 'refreshFailed'
+                : query.error.message === 'invalid_response'
+                  ? 'invalidResponse'
+                  : 'unavailable',
             )}
           </p>
-          <Button
-            variant="outline"
-            onClick={() => void query.refetch()}
-            disabled={query.isFetching}
-          >
-            {t('reconnect')}
-          </Button>
+          {!data && (
+            <Button
+              className="mt-4"
+              variant="outline"
+              onClick={() => void query.refetch()}
+              disabled={query.isFetching}
+            >
+              {t('reconnect')}
+            </Button>
+          )}
         </div>
-      ) : (
-        <section
-          aria-labelledby="service-title"
-          className="rounded-xl border border-border bg-card"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-5">
-            <div>
-              <h2 id="service-title" className="font-medium">
+      )}
+      {data && (
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,1fr)]">
+          <GatewaySetup />
+          <section
+            aria-labelledby="service-title"
+            className="rounded-xl border border-border bg-card"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-5">
+              <h2 id="service-title" className="font-semibold">
                 {t('service')}
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t('serviceDescription')}
-              </p>
+              {/* Cached readings stay visible after a failed refresh, but must not imply live health. */}
+              <Status kind={query.isError ? 'warning' : 'success'}>
+                {t(query.isError ? 'statusUnknown' : 'running')}
+              </Status>
             </div>
-            <div className="flex items-center gap-3">
-              <Status kind="success">{t('running')}</Status>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => void query.refetch()}
-                disabled={query.isFetching}
-                aria-label={t(query.isFetching ? 'refreshing' : 'refresh')}
+            <dl className="space-y-5 p-6 text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <dt className="text-muted-foreground">{t('version')}</dt>
+                <dd className="break-all font-medium">{data.version}</dd>
+              </div>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <dt className="text-muted-foreground">{t('uptime')}</dt>
+                <dd className="font-medium tabular-nums">
+                  {formatDuration(data.uptime_seconds, locale)}
+                </dd>
+              </div>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <dt className="text-muted-foreground">{t('storage')}</dt>
+                <dd className="font-medium">
+                  SQLite{' '}
+                  <span className="text-muted-foreground">/ {t('ready')}</span>
+                </dd>
+              </div>
+            </dl>
+            <p className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-6 py-4 text-xs text-muted-foreground">
+              {t('lastChecked')}
+              <time
+                dateTime={new Date(query.dataUpdatedAt).toISOString()}
+                className="tabular-nums"
               >
-                <RefreshCw
-                  className={query.isFetching ? 'motion-safe:animate-spin' : ''}
-                  aria-hidden="true"
-                />
-              </Button>
-            </div>
-          </div>
-          <dl className="grid gap-6 px-6 py-6 sm:grid-cols-3">
-            <div>
-              <dt className="text-sm text-muted-foreground">{t('version')}</dt>
-              <dd className="mt-2 text-sm font-medium">{query.data.version}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-muted-foreground">{t('uptime')}</dt>
-              <dd className="mt-2 text-sm font-medium tabular-nums">
-                {t('uptimeValue', { seconds: query.data.uptime_seconds })}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-muted-foreground">{t('storage')}</dt>
-              <dd className="mt-2 text-sm font-medium">
-                SQLite{' '}
-                <span className="text-muted-foreground">/ {t('ready')}</span>
-              </dd>
-            </div>
-          </dl>
-        </section>
-      )}
-      <section className="flex flex-col justify-between gap-5 border-y border-border py-6 sm:flex-row sm:items-center">
-        <div className="max-w-xl">
-          <div className="mb-2 flex flex-wrap items-center gap-3">
-            <h2 className="font-medium">{t('codexTitle')}</h2>
-            <Status kind="neutral">{t('notConfigured')}</Status>
-          </div>
-          <p className="text-sm leading-6 text-muted-foreground">
-            {t('codexDescription')}
-          </p>
+                {new Intl.DateTimeFormat(locale, {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                }).format(query.dataUpdatedAt)}
+              </time>
+            </p>
+          </section>
         </div>
-        <Button asChild variant="outline">
-          <Link to="/accounts">
-            {t('viewAccounts')}
-            <ArrowUpRight aria-hidden="true" />
-          </Link>
-        </Button>
-      </section>
+      )}
     </div>
   )
 }
