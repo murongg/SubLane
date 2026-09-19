@@ -164,3 +164,55 @@ func TestGatewayForwardsResponsesAndCancelsUpstream(t *testing.T) {
 		t.Fatal("upstream request was not canceled")
 	}
 }
+
+func TestGatewayTranslatesChatToolCalls(t *testing.T) {
+	fixture := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		var input struct {
+			Tools []struct {
+				Type string `json:"type"`
+				Name string `json:"name"`
+			} `json:"tools"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil || len(input.Tools) != 1 || input.Tools[0].Type != "function" || input.Tools[0].Name != "read_document" {
+			t.Error("tool definition was lost during request translation", err)
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_tool\",\"model\":\"synthetic-model\",\"status\":\"completed\",\"output\":[{\"type\":\"function_call\",\"id\":\"fc_synthetic\",\"call_id\":\"call_synthetic\",\"name\":\"read_document\",\"arguments\":\"{\\\"path\\\":\\\"synthetic.txt\\\"}\"}],\"usage\":{\"input_tokens\":1,\"output_tokens\":2,\"total_tokens\":3}}}\n\n")
+	})
+	raw := `{"model":"synthetic-model","messages":[{"role":"user","content":"Read the synthetic document"}],"tools":[{"type":"function","function":{"name":"read_document","parameters":{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}}}]}`
+	req, err := http.NewRequest("POST", fixture.server.URL+"/v1/chat/completions", strings.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fixture.secret)
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var result struct {
+		Choices []struct {
+			FinishReason string `json:"finish_reason"`
+			Message      struct {
+				ToolCalls []struct {
+					ID       string `json:"id"`
+					Function struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err = json.NewDecoder(response.Body).Decode(&result); err != nil || response.StatusCode != 200 || len(result.Choices) != 1 || len(result.Choices[0].Message.ToolCalls) != 1 {
+		t.Fatal("tool response missing", response.StatusCode, err)
+	}
+	choice := result.Choices[0]
+	tool := choice.Message.ToolCalls[0]
+	if choice.FinishReason != "tool_calls" || tool.ID != "call_synthetic" || tool.Function.Name != "read_document" || tool.Function.Arguments != `{"path":"synthetic.txt"}` {
+		t.Fatalf("tool call changed: %+v", choice)
+	}
+}

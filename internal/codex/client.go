@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
-	"github.com/router-for-me/CLIProxyAPI/v6/sdk/translator"
-	"github.com/router-for-me/CLIProxyAPI/v6/sdk/translator/builtin"
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/translator"
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/translator/builtin"
 )
 
-// Public OAuth and protocol constants match CLIProxyAPI v6.10.9's Codex adapter.
+// Public Codex OAuth identifiers. Protocol headers are owned by this adapter.
 const (
 	clientID      = "app_EMoamEEZ73f0CkXaXp7hrann"
 	redirectURI   = "http://localhost:1455/auth/callback"

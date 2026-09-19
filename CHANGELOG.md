@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Upgrade the public CLIProxyAPI translation SDK to v7.3.7 while retaining SubLane-owned authorization, credential storage, refresh, and forwarding.
+
 ### Added
 
 - Subscription quota windows, remaining percentages, reset times, and manual refresh on the accounts page, with durable SQLite snapshots, bounded memory caching, shared refreshes, and stale/failure feedback.

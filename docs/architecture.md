@@ -71,7 +71,7 @@ The root auth gate waits for server state before mounting protected pages. Manag
 
 ## Codex adapter boundary
 
-The user-selected lightweight integration imports only CLIProxyAPI's public translation packages. It does not start the SDK HTTP service, file watcher, management API, or refresh scheduler. SubLane owns the OAuth state, credential lifecycle, account selection, HTTP transport, cancellation, and downstream WebSocket turn boundary. See [Codex gateway](codex.md) for limits, client setup, security behavior, and the verification boundary.
+The user-selected lightweight integration imports only CLIProxyAPI v7.3.7's public translation packages. Its builtin registry indirectly links Gin and a Redis client through upstream shared packages; SubLane still serves requests through chi and does not initialize the SDK Service, Home mode, or a Redis connection. It does not start the SDK HTTP service, file watcher, management API, or refresh scheduler. SubLane owns the OAuth state, credential lifecycle, account selection, HTTP transport, cancellation, and downstream WebSocket turn boundary. See [Codex gateway](codex.md) for limits, client setup, security behavior, and the verification boundary.
 
 The vault key is generated as a 0600 file beside SQLite. Startup verifies existing encrypted records and fails closed if the key is missing or mismatched. Backups must preserve the key alongside the database. Refresh and administrator credential changes have one serialized owner; network IO never runs inside a database transaction.
 

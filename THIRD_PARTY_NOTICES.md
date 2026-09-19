@@ -32,7 +32,7 @@ The Radix dropdown menu is pinned to 2.1.16 alongside Dialog 1.1.15 so they shar
 ## CLIProxyAPI
 
 - Project: https://github.com/router-for-me/CLIProxyAPI
-- Version: `v6.10.9` (pinned in `go.mod` and `go.sum`).
+- Version: `v7.3.7` (pinned in `go.mod` and `go.sum`).
 - License: MIT; full text in `licenses/cliproxyapi.txt`.
 - Integration: public `sdk/translator` and `sdk/translator/builtin` only. SubLane owns OAuth, encrypted persistence, refresh, routing, and transport. Codex OAuth constants, request normalization assumptions, and WebSocket/SSE compatibility behavior were checked against this version's source.
 - The SDK server, CLI, management panel, and file watcher are not started by SubLane.

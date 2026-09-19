@@ -1,6 +1,6 @@
 # Codex subscriptions and gateway
 
-SubLane uses the public translation packages from CLIProxyAPI v6.10.9 behind `internal/codex`. It owns authorization, credential storage, refresh, account selection, and HTTP/WebSocket forwarding. It does not start the SDK's HTTP server, management panel, file watcher, or background refresh service, and imports no upstream `internal` packages.
+SubLane uses the public translation packages from CLIProxyAPI v7.3.7 behind `internal/codex`. It owns authorization, credential storage, refresh, account selection, and HTTP/WebSocket forwarding. It does not start the SDK's HTTP server, management panel, file watcher, or background refresh service, and imports no upstream `internal` packages.
 
 ## Add an account
 
@@ -90,4 +90,4 @@ SUBLANE_TEST_CODEX=1 go test ./internal/server -run TestCodexCLIProtocol -count=
 
 Codex CLI 0.152.1 passed both HTTP/SSE and WebSocket modes against the synthetic upstream. Actual subscription authorization and live model requests require an explicitly authorized test account. The real desktop application has not yet been validated; shared configuration and protocol tests alone do not establish live desktop compatibility.
 
-A local macOS arm64 preview (Go 1.26.0, production binary, one encrypted synthetic account) measured 23,376 KiB RSS, approximately 22.8 MiB, after about twelve minutes idle on 2026-09-19. This is an idle observation only; real models, concurrency, payload size, and platform change memory use. Docker Compose configuration validated locally, but the Docker daemon was unavailable for a local image build.
+Before the v7 upgrade, a local macOS arm64 preview (CLIProxyAPI v6.10.9, Go 1.26.0, production binary, one encrypted synthetic account) measured 23,376 KiB RSS, approximately 22.8 MiB, after about twelve minutes idle on 2026-09-19. This is an idle observation only; real models, concurrency, payload size, and platform change memory use. Docker Compose configuration validated locally, but the Docker daemon was unavailable for a local image build.
