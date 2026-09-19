@@ -21,7 +21,7 @@
   <a href="README.md">English</a> · <a href="https://github.com/murongg/SubLane">项目仓库</a> · <a href="brand/README.zh-CN.md">品牌物料</a>
 </p>
 
-**当前处于开发初期。** 已提供管理员初始化、成员账号创建与启停、角色权限控制、个人 API 密钥、登录退出、SQLite 持久化、内嵌前端、中英文切换和明暗主题。已实现 Codex OAuth／auth.json 导入、凭据加密和 HTTP/SSE/WebSocket 转发，并通过模拟上游测试。真实订阅和桌面端仍待验收，用量统计尚未实现。
+**当前处于开发初期。** 已提供管理员初始化、成员账号创建与启停、角色权限控制、个人 API 密钥、登录退出、SQLite 持久化、内嵌前端、中英文切换和明暗主题。已实现 Codex、Claude、Antigravity OAuth／凭据 JSON 导入、凭据加密和 HTTP/SSE/WebSocket 转发，并通过模拟上游测试。真实订阅和桌面端仍待验收，用量统计尚未实现。
 
 后端使用 Go、chi 路由、sqlc 生成的类型安全查询和纯 Go SQLite 驱动。sqlc 只用于开发时生成代码，生产部署仍是单个进程。
 
@@ -55,9 +55,9 @@ Docker：`docker compose up --build -d`。容器使用命名卷保存数据库�
 
 Docker 部署同样通过页面创建首个管理员。网络部署应使用 HTTPS 反向代理，并在容器环境中设置 `SUBLANE_PUBLIC_URL` 为外部访问地址。会话有效期为 12 小时；退出会撤销当前会话。详见[认证说明](docs/authentication.md)。
 
-## 接入 Codex
+## 接入订阅账号
 
-管理员在「订阅账号」中选择浏览器授权或导入 `auth.json`，验证连接后，成员即可使用个人 API 密钥接入客户端。OAuth 授权后需将浏览器地址栏的 localhost 回调地址粘贴回页面；此时 localhost 页面无法打开是预期行为。密钥页面提供客户端配置。详细边界见 [Codex 接入说明](docs/codex.md)。
+管理员在「订阅账号」中选择 Codex、Claude 或 Antigravity，再选择浏览器授权或导入凭据 JSON，验证连接后，成员即可使用个人 API 密钥接入客户端。OAuth 授权后需将浏览器地址栏的 localhost 回调地址粘贴回页面；此时 localhost 页面无法打开是预期行为。密钥页面提供客户端配置。模型使用 `codex/…`、`claude/…`、`antigravity/…` 前缀，无前缀名称仍转发到 Codex。订阅额度目前仅支持 Codex。详细边界见 [多服务商说明](docs/providers.md) 和 [Codex 接入说明](docs/codex.md)。
 
 ## 检查
 

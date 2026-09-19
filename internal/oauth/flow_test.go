@@ -81,3 +81,62 @@ func TestOAuthStateIsSessionBoundSingleUseAndPKCEProtected(t *testing.T) {
 		t.Fatal("expired state accepted", err)
 	}
 }
+
+type subscriptionProvider struct {
+	fakeProvider
+	kind string
+}
+
+func (p *subscriptionProvider) AuthorizationURLFor(provider, state, challenge string) (string, error) {
+	p.kind = provider
+	return p.AuthorizationURL(state, challenge), nil
+}
+func (p *subscriptionProvider) ExchangeFor(ctx context.Context, provider, code, state, verifier string) (accounts.Credential, error) {
+	c, err := p.Exchange(ctx, code, verifier)
+	c.Provider = provider
+	return c, err
+}
+
+func TestProviderAuthorizationBindsCallbackSessionAndReauthorization(t *testing.T) {
+	for _, kind := range []string{"claude", "antigravity"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx := context.Background()
+			dir := t.TempDir()
+			db, err := storage.Open(ctx, filepath.Join(dir, "test.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			cipher, err := vault.Open(filepath.Join(dir, "key"), true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			provider := &subscriptionProvider{}
+			flow := New(accounts.New(db, cipher), provider)
+			started, err := flow.BeginProvider(ctx, kind, "synthetic-owner", "Synthetic", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			callback := started.CallbackURL + "?state=" + started.State + "&code=synthetic-code"
+			if _, err := flow.Finish(ctx, "another-owner", started.State, callback); !errors.Is(err, ErrState) {
+				t.Fatal("foreign session accepted", err)
+			}
+			if _, err := flow.Finish(ctx, "synthetic-owner", started.State, "http://localhost:1455/auth/callback?state="+started.State+"&code=x"); !errors.Is(err, ErrCallback) {
+				t.Fatal("wrong provider callback accepted", err)
+			}
+			row, err := flow.Finish(ctx, "synthetic-owner", started.State, callback)
+			if err != nil || row.Provider != kind {
+				t.Fatal("provider lost", err)
+			}
+			if _, err := flow.Finish(ctx, "synthetic-owner", started.State, callback); !errors.Is(err, ErrState) {
+				t.Fatal("replay accepted", err)
+			}
+			if _, err := flow.BeginProvider(ctx, "codex", "synthetic-owner", "Replacement", row.ID); !errors.Is(err, accounts.ErrIdentity) {
+				t.Fatal("reauthorization crossed provider", err)
+			}
+			if provider.exchanges != 1 {
+				t.Fatal("unexpected exchanges", provider.exchanges)
+			}
+		})
+	}
+}

@@ -1,8 +1,7 @@
-// Package codex isolates the pinned CLIProxyAPI translation SDK and the Codex upstream protocol.
-package codex
+// Package upstream isolates CLIProxyAPI executors and provider-specific protocols.
+package upstream
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
@@ -33,6 +33,11 @@ var (
 )
 
 type Client struct {
+	engineOnce        sync.Once
+	lifecycleMu       sync.Mutex
+	closed            bool
+	engineErr         error
+	runtime           *sdkRuntime
 	http              *http.Client
 	tokenURL, baseURL string
 	registry          *translator.Registry
@@ -48,10 +53,11 @@ func New() *Client {
 
 // NewWithTransport provides an HTTP seam for synthetic upstream tests. Production endpoints remain fixed.
 func NewWithTransport(transport http.RoundTripper) *Client {
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
 	return &Client{http: &http.Client{Transport: transport, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}, tokenURL: "https://auth.openai.com/oauth/token", baseURL: "https://chatgpt.com/backend-api/codex", registry: builtin.Registry()}
 }
-
-func (c *Client) Close() { c.http.CloseIdleConnections() }
 
 func (c *Client) AuthorizationURL(state, challenge string) string {
 	query := url.Values{"client_id": {clientID}, "response_type": {"code"}, "redirect_uri": {redirectURI}, "scope": {"openid email profile offline_access"}, "state": {state}, "code_challenge": {challenge}, "code_challenge_method": {"S256"}, "prompt": {"login"}, "id_token_add_organizations": {"true"}, "codex_cli_simplified_flow": {"true"}}
@@ -63,6 +69,18 @@ func (c *Client) Exchange(ctx context.Context, code, verifier string) (accounts.
 }
 
 func (c *Client) Refresh(ctx context.Context, old accounts.Credential) (accounts.Credential, error) {
+	if old.Kind() != "codex" {
+		// Refresh is also called after a 401, even when the advertised expiry is still in the future.
+		next, err := c.providerTokens(ctx, old.Kind(), "", "", "", old)
+		if err != nil {
+			return accounts.Credential{}, err
+		}
+
+		if old.Kind() == "antigravity" {
+			return c.prepareProject(ctx, next)
+		}
+		return next, nil
+	}
 	return c.tokens(ctx, url.Values{"grant_type": {"refresh_token"}, "refresh_token": {old.RefreshToken}}, old)
 }
 
@@ -121,6 +139,9 @@ type Model struct {
 }
 
 func (c *Client) Models(ctx context.Context, credential accounts.Credential) ([]Model, error) {
+	if credential.Kind() != "codex" {
+		return c.providerModels(ctx, credential)
+	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/models?client_version="+clientVersion, nil)
@@ -214,9 +235,7 @@ func (c *Client) execute(ctx context.Context, credential accounts.Credential, ra
 	for _, key := range []string{"previous_response_id", "prompt_cache_retention", "safety_identifier", "stream_options"} {
 		delete(body, key)
 	}
-	path := "/responses"
 	if compact {
-		path += "/compact"
 		delete(body, "stream")
 		delete(body, "store")
 	}
@@ -224,14 +243,9 @@ func (c *Client) execute(ctx context.Context, credential accounts.Credential, ra
 	if err != nil || len(encoded) > MaxBody {
 		return nil, ErrInput
 	}
-	request, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+path, bytes.NewReader(encoded))
+	response, err := c.runSDK(ctx, credential, encoded, headers, compact)
 	if err != nil {
-		return nil, ErrInput
-	}
-	upstreamHeaders(request, credential, headers, !compact)
-	response, err := c.http.Do(request)
-	if err != nil {
-		return nil, ErrUpstream
+		return nil, err
 	}
 	return &Stream{Response: response, registry: c.registry, format: format, model: model, original: raw, request: encoded}, nil
 }

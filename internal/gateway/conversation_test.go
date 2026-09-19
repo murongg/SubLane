@@ -3,7 +3,7 @@ package gateway
 import (
 	"encoding/json"
 	"errors"
-	"github.com/murongg/SubLane/internal/codex"
+	"github.com/murongg/SubLane/internal/upstream"
 	"testing"
 )
 
@@ -28,7 +28,7 @@ func TestConversationReconstructsIncrementalInputAndCompaction(t *testing.T) {
 	if json.Unmarshal(next, &request) != nil || len(request.Input) != 3 || request.Previous != "" || request.Model != "synthetic-model" {
 		t.Fatal("incremental context lost")
 	}
-	if _, _, err := conversation.Normalize([]byte(`{"type":"response.create","previous_response_id":"resp_other","input":[]}`)); !errors.Is(err, codex.ErrContinuation) {
+	if _, _, err := conversation.Normalize([]byte(`{"type":"response.create","previous_response_id":"resp_other","input":[]}`)); !errors.Is(err, upstream.ErrContinuation) {
 		t.Fatal("unknown continuation accepted", err)
 	}
 	replaced, _, err := conversation.Normalize([]byte(`{"type":"response.create","model":"synthetic-model","input":[{"type":"compaction","encrypted_content":"synthetic-compaction"},{"role":"user","content":"after compaction"}]}`))

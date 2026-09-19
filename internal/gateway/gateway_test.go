@@ -14,8 +14,8 @@ import (
 
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/auth"
-	"github.com/murongg/SubLane/internal/codex"
 	"github.com/murongg/SubLane/internal/storage"
+	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/vault"
 )
 
@@ -53,7 +53,7 @@ func TestGatewayKeepsAccountAffinityAndBoundsActiveRequests(t *testing.T) {
 	}
 	var mu sync.Mutex
 	var used []string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fakeUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		used = append(used, r.Header.Get("Chatgpt-Account-Id"))
 		mu.Unlock()
@@ -63,9 +63,9 @@ func TestGatewayKeepsAccountAffinityAndBoundsActiveRequests(t *testing.T) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		io.WriteString(w, "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_test\",\"output\":[]}}\n\n")
 	}))
-	defer upstream.Close()
-	target, _ := url.Parse(upstream.URL)
-	client := codex.NewWithTransport(transportFunc(func(r *http.Request) (*http.Response, error) {
+	defer fakeUpstream.Close()
+	target, _ := url.Parse(fakeUpstream.URL)
+	client := upstream.NewWithTransport(transportFunc(func(r *http.Request) (*http.Response, error) {
 		copy := r.Clone(r.Context())
 		copy.URL.Scheme = target.Scheme
 		copy.URL.Host = target.Host

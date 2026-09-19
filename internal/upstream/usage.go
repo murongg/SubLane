@@ -1,13 +1,16 @@
-package codex
+package upstream
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
 )
+
+var ErrUsageUnsupported = errors.New("provider_usage_unsupported")
 
 type Usage struct {
 	Limits    []UsageLimit `json:"limits"`
@@ -43,6 +46,9 @@ type usageWindow struct {
 }
 
 func (c *Client) Usage(ctx context.Context, credential accounts.Credential) (Usage, error) {
+	if credential.Kind() != "codex" {
+		return Usage{}, ErrUsageUnsupported
+	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	// Match the ChatGPT backend path used by openai/codex's backend-client, independent of model forwarding.

@@ -17,6 +17,7 @@ import {
   checkAccount,
   setAccountEnabled,
   type Account,
+  providerLabels,
 } from '@/lib/accounts'
 import { cn } from '@/lib/cn'
 import { AccountUsage } from '@/components/AccountUsage'
@@ -178,20 +179,28 @@ export function Accounts() {
                         </span>
                       )}
                     </div>
-                    {account.email && (
-                      <p className="mt-1.5 break-all text-xs leading-5 text-muted-foreground">
-                        {account.email}
-                      </p>
-                    )}
+                    <p className="mt-1.5 break-all text-xs leading-5 text-muted-foreground">
+                      <span>{providerLabels[account.provider]}</span>
+                      {account.email && (
+                        <>
+                          {' '}
+                          · <span>{account.email}</span>
+                        </>
+                      )}
+                    </p>
                   </div>
                   <div className="col-span-2 min-w-0 @3xl:col-span-1">
-                    {account.enabled && account.status !== 'reauth_required' ? (
+                    {account.enabled &&
+                    account.status !== 'reauth_required' &&
+                    account.provider === 'codex' ? (
                       <AccountUsage id={account.id} name={account.name} />
                     ) : (
                       <p className="text-xs leading-5 text-muted-foreground">
                         {t(
                           account.enabled
-                            ? 'accountReauthorizeHint'
+                            ? account.status === 'reauth_required'
+                              ? 'accountReauthorizeHint'
+                              : 'providerQuotaUnsupported'
                             : 'accountDisabledHint',
                         )}
                       </p>

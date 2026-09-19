@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/murongg/SubLane/internal/accounts"
-	"github.com/murongg/SubLane/internal/codex"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/oauth"
+	"github.com/murongg/SubLane/internal/upstream"
 )
 
 type accountHTTP struct {
@@ -57,13 +57,14 @@ func (h *accountHTTP) list(w http.ResponseWriter, r *http.Request) {
 func (h *accountHTTP) importCredential(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Name      string `json:"name"`
+		Provider  string `json:"provider"`
 		AuthJSON  string `json:"auth_json"`
 		ReplaceID string `json:"replace_id"`
 	}
 	if !decodeJSONLimit(w, r, &input, 128<<10) {
 		return
 	}
-	account, err := h.service.Import(r.Context(), input.Name, []byte(input.AuthJSON), input.ReplaceID)
+	account, err := h.service.ImportProvider(r.Context(), input.Provider, input.Name, []byte(input.AuthJSON), input.ReplaceID)
 	if err != nil {
 		accountError(w, err)
 		return
@@ -78,12 +79,13 @@ func (h *accountHTTP) beginOAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	var input struct {
 		Name      string `json:"name"`
+		Provider  string `json:"provider"`
 		ReplaceID string `json:"replace_id"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	pending, err := h.oauth.Begin(r.Context(), token(r), input.Name, input.ReplaceID)
+	pending, err := h.oauth.BeginProvider(r.Context(), input.Provider, token(r), input.Name, input.ReplaceID)
 	if err != nil {
 		accountError(w, err)
 		return
@@ -220,8 +222,10 @@ func (h *accountHTTP) readUsage(w http.ResponseWriter, r *http.Request, force bo
 
 func accountError(w http.ResponseWriter, err error) {
 	status, code := 503, "unavailable"
-	var upstream *codex.UpstreamError
+	var rejected *upstream.UpstreamError
 	switch {
+	case errors.Is(err, upstream.ErrUsageUnsupported):
+		status, code = 400, "provider_usage_unsupported"
 	case errors.Is(err, accounts.ErrInput):
 		status, code = 400, "invalid_account_input"
 	case errors.Is(err, accounts.ErrIdentity):
@@ -246,18 +250,18 @@ func accountError(w http.ResponseWriter, err error) {
 		status, code = 400, "oauth_access_denied"
 	case errors.Is(err, oauth.ErrBusy), errors.Is(err, gateway.ErrBusy):
 		status, code = 429, "gateway_busy"
-	case errors.Is(err, codex.ErrUpstream):
+	case errors.Is(err, upstream.ErrUpstream):
 		status, code = 502, "upstream_unavailable"
-	case errors.Is(err, codex.ErrResponse):
+	case errors.Is(err, upstream.ErrResponse):
 		status, code = 502, "invalid_upstream_response"
-	case errors.As(err, &upstream):
+	case errors.As(err, &rejected):
 		status, code = 502, "upstream_rejected_request"
-		if upstream.Status == 401 || upstream.Status == 403 {
+		if rejected.Status == 401 || rejected.Status == 403 {
 			status, code = 409, "account_reauthorization_required"
 		}
-		if upstream.Status == 429 {
+		if rejected.Status == 429 {
 			status, code = 429, "upstream_rate_limited"
-			retryAfter(w, upstream.RetryAfter)
+			retryAfter(w, rejected.RetryAfter)
 		}
 	}
 	writeJSON(w, status, map[string]string{"error": code})

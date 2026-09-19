@@ -21,12 +21,13 @@ func (q *Queries) CountAccountAffinity(ctx context.Context) (int64, error) {
 }
 
 const createAccountAffinity = `-- name: CreateAccountAffinity :exec
-INSERT INTO account_affinity(user_id, session_hash, account_id, expires_at) VALUES (?1, ?2, ?3, ?4)
+INSERT INTO account_affinity(user_id, session_hash, provider, account_id, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)
 `
 
 type CreateAccountAffinityParams struct {
 	UserID      int64
 	SessionHash []byte
+	Provider    string
 	AccountID   string
 	ExpiresAt   int64
 }
@@ -35,6 +36,7 @@ func (q *Queries) CreateAccountAffinity(ctx context.Context, arg CreateAccountAf
 	_, err := q.db.ExecContext(ctx, createAccountAffinity,
 		arg.UserID,
 		arg.SessionHash,
+		arg.Provider,
 		arg.AccountID,
 		arg.ExpiresAt,
 	)
@@ -42,12 +44,13 @@ func (q *Queries) CreateAccountAffinity(ctx context.Context, arg CreateAccountAf
 }
 
 const getAccountAffinity = `-- name: GetAccountAffinity :one
-SELECT account_id, expires_at FROM account_affinity WHERE user_id = ?1 AND session_hash = ?2
+SELECT account_id, expires_at FROM account_affinity WHERE user_id = ?1 AND session_hash = ?2 AND provider = ?3
 `
 
 type GetAccountAffinityParams struct {
 	UserID      int64
 	SessionHash []byte
+	Provider    string
 }
 
 type GetAccountAffinityRow struct {
@@ -56,7 +59,7 @@ type GetAccountAffinityRow struct {
 }
 
 func (q *Queries) GetAccountAffinity(ctx context.Context, arg GetAccountAffinityParams) (GetAccountAffinityRow, error) {
-	row := q.db.QueryRowContext(ctx, getAccountAffinity, arg.UserID, arg.SessionHash)
+	row := q.db.QueryRowContext(ctx, getAccountAffinity, arg.UserID, arg.SessionHash, arg.Provider)
 	var i GetAccountAffinityRow
 	err := row.Scan(&i.AccountID, &i.ExpiresAt)
 	return i, err
@@ -72,13 +75,14 @@ func (q *Queries) PruneAccountAffinity(ctx context.Context, now int64) error {
 }
 
 const touchAccountAffinity = `-- name: TouchAccountAffinity :exec
-UPDATE account_affinity SET expires_at = ?1 WHERE user_id = ?2 AND session_hash = ?3 AND expires_at < ?4
+UPDATE account_affinity SET expires_at = ?1 WHERE user_id = ?2 AND session_hash = ?3 AND provider = ?4 AND expires_at < ?5
 `
 
 type TouchAccountAffinityParams struct {
 	ExpiresAt   int64
 	UserID      int64
 	SessionHash []byte
+	Provider    string
 	Threshold   int64
 }
 
@@ -87,6 +91,7 @@ func (q *Queries) TouchAccountAffinity(ctx context.Context, arg TouchAccountAffi
 		arg.ExpiresAt,
 		arg.UserID,
 		arg.SessionHash,
+		arg.Provider,
 		arg.Threshold,
 	)
 	return err

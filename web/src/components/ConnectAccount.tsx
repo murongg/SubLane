@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { ArrowUpRight, Copy, LoaderCircle, Upload } from 'lucide-react'
+import { ArrowUpRight, Check, Copy, LoaderCircle, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   accountErrorKey,
@@ -9,7 +9,12 @@ import {
   completeAuthorization,
   importAccount,
   type Account,
+  type Provider,
+  providers,
+  providerLabels,
+  callbackURLs,
 } from '@/lib/accounts'
+import { ProviderLogo } from './ProviderLogo'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Textarea } from './ui/Textarea'
@@ -36,6 +41,9 @@ export function ConnectAccount({
   restoreFocus,
 }: Props) {
   const { t } = useTranslation()
+  const [provider, setProvider] = useState<Provider>(
+    account?.provider ?? 'codex',
+  )
   const [method, setMethod] = useState<'oauth' | 'import'>('oauth')
   const [name, setName] = useState(account?.name ?? '')
   const [authJSON, setAuthJSON] = useState('')
@@ -106,7 +114,7 @@ export function ConnectAccount({
     finish.reset()
     setCallback('')
     setCopied(false)
-    begin.mutate({ name: value, replace_id: account?.id })
+    begin.mutate({ provider, name: value, replace_id: account?.id })
   }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -141,6 +149,7 @@ export function ConnectAccount({
       return
     }
     imported.mutate({
+      provider,
       name: name.trim(),
       auth_json: authJSON,
       replace_id: account?.id,
@@ -207,11 +216,55 @@ export function ConnectAccount({
             {t(
               method === 'oauth'
                 ? 'authorizationInstructions'
-                : 'accountImportDescription',
+                : provider === 'codex'
+                  ? 'accountImportDescription'
+                  : 'providerImportDescription',
             )}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} noValidate className="space-y-5">
+          <div className="space-y-2">
+            <p id="provider-label" className="text-sm font-medium">
+              {t('serviceProvider')}
+            </p>
+            <div
+              role="group"
+              aria-labelledby="provider-label"
+              className="grid grid-cols-3 gap-2"
+            >
+              {providers.map((id) => (
+                <Button
+                  key={id}
+                  type="button"
+                  variant="ghost"
+                  aria-label={providerLabels[id]}
+                  aria-pressed={provider === id}
+                  disabled={busy || Boolean(account) || Boolean(begin.data)}
+                  className="relative h-auto min-w-0 flex-col gap-2 rounded-lg border border-border bg-card px-2 py-3 shadow-none hover:bg-muted aria-pressed:border-foreground aria-pressed:bg-muted dark:hover:bg-muted"
+                  onClick={() => {
+                    if (provider === id) return
+                    setProvider(id)
+                    setAuthJSON('')
+                    setCallback('')
+                    setError(null)
+                    begin.reset()
+                    imported.reset()
+                  }}
+                >
+                  <ProviderLogo provider={id} />
+                  <span className="text-xs leading-5">
+                    {id === 'antigravity' ? 'Antigravity' : providerLabels[id]}
+                  </span>
+                  {provider === id && (
+                    <Check
+                      className="absolute top-1.5 right-1.5 size-3"
+                      aria-hidden="true"
+                    />
+                  )}
+                </Button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-2">
             <label htmlFor="account-name" className="text-sm font-medium">
               {t('accountName')}
@@ -331,6 +384,7 @@ export function ConnectAccount({
                 </label>
                 <Textarea
                   id="oauth-callback"
+                  placeholder={`${begin.data.callback_url ?? callbackURLs[provider]}?...`}
                   rows={3}
                   value={callback}
                   onChange={(event) => setCallback(event.target.value)}

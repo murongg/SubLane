@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
-	"github.com/murongg/SubLane/internal/codex"
 	"github.com/murongg/SubLane/internal/storage"
+	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/vault"
 )
 
@@ -55,7 +55,7 @@ func (f *quotaFixture) open(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.accounts = accounts.New(f.connection, cipher)
-	client := codex.NewWithTransport(transportFunc(func(r *http.Request) (*http.Response, error) {
+	client := upstream.NewWithTransport(transportFunc(func(r *http.Request) (*http.Response, error) {
 		f.calls.Add(1)
 		if f.started != nil {
 			select {

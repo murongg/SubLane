@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"github.com/murongg/SubLane/internal/upstream"
 	"net/url"
 	"sync"
 	"time"
@@ -25,16 +26,22 @@ type Provider interface {
 	Exchange(ctx context.Context, code, verifier string) (accounts.Credential, error)
 }
 
+type namedProvider interface {
+	AuthorizationURLFor(string, string, string) (string, error)
+	ExchangeFor(context.Context, string, string, string, string) (accounts.Credential, error)
+}
+
 type Authorization struct {
-	URL       string `json:"url"`
-	State     string `json:"state"`
-	ExpiresAt int64  `json:"expires_at"`
+	CallbackURL string `json:"callback_url"`
+	URL         string `json:"url"`
+	State       string `json:"state"`
+	ExpiresAt   int64  `json:"expires_at"`
 }
 
 type pending struct {
-	owner                     [32]byte
-	verifier, name, replaceID string
-	expires                   time.Time
+	owner                               [32]byte
+	verifier, name, replaceID, provider string
+	expires                             time.Time
 }
 
 type Flow struct {
@@ -50,6 +57,15 @@ func New(service *accounts.Service, provider Provider) *Flow {
 }
 
 func (f *Flow) Begin(ctx context.Context, session, name, replaceID string) (Authorization, error) {
+	return f.BeginProvider(ctx, "codex", session, name, replaceID)
+}
+func (f *Flow) BeginProvider(ctx context.Context, provider, session, name, replaceID string) (Authorization, error) {
+	if provider == "" {
+		provider = "codex"
+	}
+	if !accounts.ValidProvider(provider) {
+		return Authorization{}, accounts.ErrInput
+	}
 	if session == "" {
 		return Authorization{}, ErrState
 	}
@@ -58,8 +74,12 @@ func (f *Flow) Begin(ctx context.Context, session, name, replaceID string) (Auth
 		return Authorization{}, err
 	}
 	if replaceID != "" {
-		if _, err := f.accounts.Get(ctx, replaceID); err != nil {
+		account, err := f.accounts.Get(ctx, replaceID)
+		if err != nil {
 			return Authorization{}, err
+		}
+		if account.Provider != provider {
+			return Authorization{}, accounts.ErrIdentity
 		}
 	}
 	owner := sha256.Sum256([]byte(session))
@@ -75,9 +95,23 @@ func (f *Flow) Begin(ctx context.Context, session, name, replaceID string) (Auth
 	if len(f.pending) >= 8 {
 		return Authorization{}, ErrBusy
 	}
-	f.pending[state] = pending{owner: owner, verifier: verifier, name: name, replaceID: replaceID, expires: expires}
+	f.pending[state] = pending{provider: provider, owner: owner, verifier: verifier, name: name, replaceID: replaceID, expires: expires}
 	challenge := sha256.Sum256([]byte(verifier))
-	return Authorization{URL: f.provider.AuthorizationURL(state, base64.RawURLEncoding.EncodeToString(challenge[:])), State: state, ExpiresAt: expires.Unix()}, nil
+	url := f.provider.AuthorizationURL(state, base64.RawURLEncoding.EncodeToString(challenge[:]))
+	if provider != "codex" {
+		named, ok := f.provider.(namedProvider)
+		if !ok {
+			delete(f.pending, state)
+			return Authorization{}, accounts.ErrInput
+		}
+		var err error
+		url, err = named.AuthorizationURLFor(provider, state, base64.RawURLEncoding.EncodeToString(challenge[:]))
+		if err != nil {
+			delete(f.pending, state)
+			return Authorization{}, err
+		}
+	}
+	return Authorization{CallbackURL: upstream.RedirectURI(provider), URL: url, State: state, ExpiresAt: expires.Unix()}, nil
 }
 
 func (f *Flow) Finish(ctx context.Context, session, state, callback string) (accounts.Account, error) {
@@ -91,7 +125,7 @@ func (f *Flow) Finish(ctx context.Context, session, state, callback string) (acc
 		f.mu.Unlock()
 		return accounts.Account{}, ErrState
 	}
-	code, err := callbackCode(callback, state)
+	code, err := callbackCodeFor(entry.provider, callback, state)
 	if errors.Is(err, ErrCallback) {
 		f.mu.Unlock()
 		return accounts.Account{}, err
@@ -102,7 +136,12 @@ func (f *Flow) Finish(ctx context.Context, session, state, callback string) (acc
 	if err != nil {
 		return accounts.Account{}, err
 	}
-	credential, err := f.provider.Exchange(ctx, code, entry.verifier)
+	var credential accounts.Credential
+	if entry.provider == "codex" {
+		credential, err = f.provider.Exchange(ctx, code, entry.verifier)
+	} else {
+		credential, err = f.provider.(namedProvider).ExchangeFor(ctx, entry.provider, code, state, entry.verifier)
+	}
 	if err != nil {
 		return accounts.Account{}, err
 	}
@@ -125,11 +164,15 @@ func (f *Flow) Cancel(session, state string) error {
 }
 
 func callbackCode(callback, state string) (string, error) {
+	return callbackCodeFor("codex", callback, state)
+}
+func callbackCodeFor(provider, callback, state string) (string, error) {
 	if len(callback) > 8192 {
 		return "", ErrCallback
 	}
+	target, _ := url.Parse(upstream.RedirectURI(provider))
 	parsed, err := url.Parse(callback)
-	if err != nil || parsed.Scheme != "http" || parsed.Host != "localhost:1455" || parsed.Path != "/auth/callback" || parsed.User != nil || parsed.Fragment != "" {
+	if err != nil || parsed.Scheme != "http" || parsed.Host != target.Host || parsed.Path != target.Path || parsed.User != nil || parsed.Fragment != "" {
 		return "", ErrCallback
 	}
 	query, err := url.ParseQuery(parsed.RawQuery)

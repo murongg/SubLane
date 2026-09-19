@@ -9,12 +9,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
-	"github.com/murongg/SubLane/internal/codex"
 	"github.com/murongg/SubLane/internal/storage/db"
+	"github.com/murongg/SubLane/internal/upstream"
 )
 
 var (
@@ -35,14 +37,14 @@ type Service struct {
 	db       *sql.DB
 	queries  *db.Queries
 	accounts *accounts.Service
-	provider *codex.Client
+	provider *upstream.Client
 	slots    chan struct{}
 	mu       sync.Mutex
 	next     int
 	usage    *usageCache
 }
 
-func New(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *codex.Client) *Service {
+func New(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *upstream.Client) *Service {
 	return &Service{db: connection, queries: db.New(connection), accounts: accounts, provider: provider, slots: make(chan struct{}, 8), usage: newUsageCache(ctx)}
 }
 
@@ -55,21 +57,33 @@ func (s *Service) Acquire() (func(), error) {
 	}
 }
 
-func (s *Service) Open(ctx context.Context, userID int64, raw []byte, headers http.Header, kind Kind) (*codex.Stream, error) {
+func (s *Service) Open(ctx context.Context, userID int64, raw []byte, headers http.Header, kind Kind) (*upstream.Stream, error) {
 	var input map[string]json.RawMessage
 	if json.Unmarshal(raw, &input) != nil || input == nil {
-		return nil, codex.ErrInput
+		return nil, upstream.ErrInput
+	}
+	var model string
+	if json.Unmarshal(input["model"], &model) != nil {
+		return nil, upstream.ErrInput
+	}
+	provider := "codex"
+	if p, actual, found := strings.Cut(model, "/"); found && accounts.ValidProvider(p) {
+		provider, model = p, actual
+	}
+	input["model"], _ = json.Marshal(model)
+	if kind == Compact && provider != "codex" {
+		return nil, upstream.ErrInput
 	}
 	session := headers.Get("Session_id")
 	if session == "" && len(input["prompt_cache_key"]) > 0 {
 		if json.Unmarshal(input["prompt_cache_key"], &session) != nil {
-			return nil, codex.ErrInput
+			return nil, upstream.ErrInput
 		}
 	}
 	if len(session) > 1024 {
-		return nil, codex.ErrInput
+		return nil, upstream.ErrInput
 	}
-	id, digest, err := s.selectAccount(ctx, userID, session)
+	id, digest, err := s.selectAccount(ctx, userID, session, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -82,13 +96,13 @@ func (s *Service) Open(ctx context.Context, userID int64, raw []byte, headers ht
 	input["prompt_cache_key"], _ = json.Marshal(hex.EncodeToString(digest[:]))
 	raw, err = json.Marshal(input)
 	if err != nil {
-		return nil, codex.ErrInput
+		return nil, upstream.ErrInput
 	}
 	credential, err := s.accounts.Prepare(ctx, id, s.provider.Refresh)
 	if err != nil {
 		return nil, err
 	}
-	execute := func(c accounts.Credential) (*codex.Stream, error) {
+	execute := func(c accounts.Credential) (*upstream.Stream, error) {
 		if kind == Chat {
 			return s.provider.Chat(ctx, c, raw, outgoing)
 		}
@@ -118,15 +132,59 @@ func (s *Service) Open(ctx context.Context, userID int64, raw []byte, headers ht
 	return result, nil
 }
 
-func (s *Service) Models(ctx context.Context, userID int64) ([]codex.Model, error) {
-	id, _, err := s.selectAccount(ctx, userID, "")
+func (s *Service) Models(ctx context.Context, userID int64) ([]upstream.Model, error) {
+	rows, err := s.accounts.List(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return s.Check(ctx, id)
+	providers := map[string]bool{}
+	for _, row := range rows {
+		if row.Enabled && row.Status != "reauth_required" {
+			providers[row.Provider] = true
+		}
+	}
+	if len(providers) == 0 {
+		return nil, ErrNoAccount
+	}
+	result := []upstream.Model{}
+	var firstError error
+	successful := 0
+	for _, provider := range []string{"codex", "claude", "antigravity"} {
+		if !providers[provider] {
+			continue
+		}
+		id, _, err := s.selectAccount(ctx, userID, "", provider)
+		var models []upstream.Model
+		if err == nil {
+			models, err = s.Check(ctx, id)
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if firstError == nil {
+				firstError = err
+			}
+			continue
+		}
+		successful++
+		for _, model := range models {
+			if provider == "codex" {
+				result = append(result, model)
+			}
+			model.ID = provider + "/" + model.ID
+			result = append(result, model)
+		}
+	}
+	// A temporarily unavailable provider must not hide the healthy providers from clients.
+	if successful == 0 && firstError != nil {
+		return nil, firstError
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result, nil
 }
 
-func (s *Service) Check(ctx context.Context, id string) ([]codex.Model, error) {
+func (s *Service) Check(ctx context.Context, id string) ([]upstream.Model, error) {
 	return readAccount(ctx, s, id, s.provider.Models)
 }
 
@@ -138,7 +196,7 @@ func readAccount[T any](ctx context.Context, s *Service, id string, read func(co
 		return empty, err
 	}
 	result, err := read(ctx, credential)
-	var rejected *codex.UpstreamError
+	var rejected *upstream.UpstreamError
 	if errors.As(err, &rejected) && rejected.Status == 401 {
 		credential, err = s.accounts.RefreshAfterRejection(ctx, id, credential.AccessToken, s.provider.Refresh)
 		if err != nil {
@@ -157,10 +215,10 @@ func readAccount[T any](ctx context.Context, s *Service, id string, read func(co
 	return result, err
 }
 
-func (s *Service) selectAccount(ctx context.Context, userID int64, session string) (string, [32]byte, error) {
+func (s *Service) selectAccount(ctx context.Context, userID int64, session, provider string) (string, [32]byte, error) {
 	digest := sha256.Sum256([]byte(fmt.Sprintf("%d:%s", userID, session)))
 	if userID <= 0 {
-		return "", digest, codex.ErrInput
+		return "", digest, upstream.ErrInput
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -175,10 +233,10 @@ func (s *Service) selectAccount(ctx context.Context, userID int64, session strin
 	defer tx.Rollback()
 	queries := s.queries.WithTx(tx)
 	now := time.Now().Unix()
-	existing, err := queries.GetAccountAffinity(ctx, db.GetAccountAffinityParams{UserID: userID, SessionHash: digest[:]})
+	existing, err := queries.GetAccountAffinity(ctx, db.GetAccountAffinityParams{UserID: userID, SessionHash: digest[:], Provider: provider})
 	expires := now + 24*3600
 	if err == nil && existing.ExpiresAt > now {
-		if err := queries.TouchAccountAffinity(ctx, db.TouchAccountAffinityParams{UserID: userID, SessionHash: digest[:], ExpiresAt: expires, Threshold: expires - 1800}); err != nil {
+		if err := queries.TouchAccountAffinity(ctx, db.TouchAccountAffinityParams{Provider: provider, UserID: userID, SessionHash: digest[:], ExpiresAt: expires, Threshold: expires - 1800}); err != nil {
 			return "", digest, err
 		}
 		if err := tx.Commit(); err != nil {
@@ -202,7 +260,7 @@ func (s *Service) selectAccount(ctx context.Context, userID int64, session strin
 	}
 	candidates := make([]string, 0, len(available))
 	for _, account := range available {
-		if account.Enabled && account.Status != "reauth_required" {
+		if account.Provider == provider && account.Enabled && account.Status != "reauth_required" {
 			candidates = append(candidates, account.ID)
 		}
 	}
@@ -211,7 +269,7 @@ func (s *Service) selectAccount(ctx context.Context, userID int64, session strin
 	}
 	id := candidates[s.next%len(candidates)]
 	s.next = (s.next + 1) % len(candidates)
-	if err := queries.CreateAccountAffinity(ctx, db.CreateAccountAffinityParams{UserID: userID, SessionHash: digest[:], AccountID: id, ExpiresAt: expires}); err != nil {
+	if err := queries.CreateAccountAffinity(ctx, db.CreateAccountAffinityParams{Provider: provider, UserID: userID, SessionHash: digest[:], AccountID: id, ExpiresAt: expires}); err != nil {
 		return "", digest, err
 	}
 	if err := tx.Commit(); err != nil {

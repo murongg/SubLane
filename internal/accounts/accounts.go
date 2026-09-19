@@ -30,6 +30,7 @@ var (
 
 type Account struct {
 	ID        string `json:"id"`
+	Provider  string `json:"provider"`
 	Name      string `json:"name"`
 	Email     string `json:"email"`
 	Plan      string `json:"plan"`
@@ -66,7 +67,10 @@ func (s *Service) List(ctx context.Context) ([]Account, error) {
 }
 
 func (s *Service) Import(ctx context.Context, name string, raw []byte, replaceID string) (Account, error) {
-	credential, err := ParseCredential(raw)
+	return s.ImportProvider(ctx, "codex", name, raw, replaceID)
+}
+func (s *Service) ImportProvider(ctx context.Context, provider, name string, raw []byte, replaceID string) (Account, error) {
+	credential, err := ParseFor(provider, raw)
 	if err != nil {
 		return Account{}, err
 	}
@@ -95,7 +99,7 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 			return Account{}, err
 		}
 		// Existing continuations must never be rebound to a different upstream identity.
-		if row.AccountID != credential.AccountID {
+		if row.AccountID != credential.AccountID || row.Provider != credential.Kind() {
 			return Account{}, ErrIdentity
 		}
 		if err := s.persist(ctx, replaceID, credential, status); err != nil {
@@ -128,7 +132,7 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	if count >= 100 {
 		return Account{}, ErrLimit
 	}
-	n, err := queries.CreateAccount(ctx, db.CreateAccountParams{ID: id, Name: name, AccountID: credential.AccountID, Email: credential.Email, Plan: credential.Plan, Status: status, Credential: encrypted, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now})
+	n, err := queries.CreateAccount(ctx, db.CreateAccountParams{ID: id, Provider: credential.Kind(), Name: name, AccountID: credential.AccountID, Email: credential.Email, Plan: credential.Plan, Status: status, Credential: encrypted, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		return Account{}, err
 	}
@@ -138,7 +142,7 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	if err := tx.Commit(); err != nil {
 		return Account{}, err
 	}
-	return Account{ID: id, Name: name, Email: credential.Email, Plan: credential.Plan, Enabled: true, Status: status, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now}, nil
+	return Account{ID: id, Provider: credential.Kind(), Name: name, Email: credential.Email, Plan: credential.Plan, Enabled: true, Status: status, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now}, nil
 }
 
 func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) (Account, error) {
@@ -198,7 +202,18 @@ func (s *Service) prepare(ctx context.Context, id, rejectedToken string, refresh
 		return Credential{}, err
 	}
 	// Another request may already have rotated the rejected token while this one was waiting.
-	if credential.ExpiresAt > s.now().Add(2*time.Minute).Unix() && (rejectedToken == "" || credential.AccessToken != rejectedToken) {
+	minimumValidity := 2 * time.Minute
+	// Antigravity may refresh internally within five minutes of expiry. Reserve the full ten-minute request budget too.
+	if credential.Kind() == "antigravity" {
+		minimumValidity = 16 * time.Minute
+	}
+	needsProject := false
+	if credential.Kind() == "antigravity" {
+		var project string
+		_ = json.Unmarshal(credential.Metadata["project_id"], &project)
+		needsProject = project == ""
+	}
+	if !needsProject && credential.ExpiresAt > s.now().Add(minimumValidity).Unix() && (rejectedToken == "" || credential.AccessToken != rejectedToken) {
 		return credential, nil
 	}
 	if refresh == nil {
@@ -218,13 +233,13 @@ func (s *Service) prepare(ctx context.Context, id, rejectedToken string, refresh
 		}
 		return Credential{}, ErrRefresh
 	}
-	if updated.AccountID != row.AccountID {
+	if updated.AccountID != row.AccountID || updated.Kind() != row.Provider {
 		return Credential{}, ErrIdentity
 	}
 	if err := updated.validate(); err != nil {
 		return Credential{}, err
 	}
-	if updated.ExpiresAt <= s.now().Add(2*time.Minute).Unix() {
+	if updated.ExpiresAt <= s.now().Add(minimumValidity).Unix() {
 		return Credential{}, ErrRefresh
 	}
 	if err := s.persist(ctx, id, updated, "ready"); err != nil {
@@ -254,7 +269,7 @@ func (s *Service) get(ctx context.Context, id string) (db.Account, error) {
 }
 
 func metadata(row db.Account) Account {
-	return Account{ID: row.ID, Name: row.Name, Email: row.Email, Plan: row.Plan, Enabled: row.Enabled, Status: row.Status, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	return Account{ID: row.ID, Provider: row.Provider, Name: row.Name, Email: row.Email, Plan: row.Plan, Enabled: row.Enabled, Status: row.Status, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
 }
 
 func NormalizeName(name string) (string, error) {
@@ -276,7 +291,7 @@ func (s *Service) decrypt(row db.Account) (Credential, error) {
 		return Credential{}, err
 	}
 	var credential Credential
-	if json.Unmarshal(plaintext, &credential) != nil || credential.AccountID != row.AccountID {
+	if json.Unmarshal(plaintext, &credential) != nil || credential.AccountID != row.AccountID || credential.Kind() != row.Provider {
 		return Credential{}, vault.ErrDecrypt
 	}
 	return credential, nil

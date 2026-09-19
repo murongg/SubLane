@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/murongg/SubLane/internal/codex"
+	"github.com/murongg/SubLane/internal/upstream"
 )
 
 var ErrContextLimit = errors.New("conversation_context_limit")
@@ -18,23 +18,23 @@ type Conversation struct {
 }
 
 func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
-	if len(raw) > codex.MaxBody {
+	if len(raw) > upstream.MaxBody {
 		return nil, false, ErrContextLimit
 	}
 	var input map[string]json.RawMessage
 	if json.Unmarshal(raw, &input) != nil || input == nil {
-		return nil, false, codex.ErrInput
+		return nil, false, upstream.ErrInput
 	}
 	var kind, previous string
 	if json.Unmarshal(input["type"], &kind) != nil || kind != "response.create" && kind != "response.append" {
-		return nil, false, codex.ErrInput
+		return nil, false, upstream.ErrInput
 	}
 	if kind == "response.append" && c.request == nil {
-		return nil, false, codex.ErrContinuation
+		return nil, false, upstream.ErrContinuation
 	}
 	if value := input["previous_response_id"]; len(value) > 0 && string(value) != "null" {
 		if json.Unmarshal(value, &previous) != nil {
-			return nil, false, codex.ErrInput
+			return nil, false, upstream.ErrInput
 		}
 	}
 	items, err := conversationInput(input["input"])
@@ -43,7 +43,7 @@ func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
 	}
 	full := fullTranscript(items)
 	if previous != "" && previous != c.responseID && !full {
-		return nil, false, codex.ErrContinuation
+		return nil, false, upstream.ErrContinuation
 	}
 	appendHistory := c.request != nil && !full
 	if c.overflow && appendHistory {
@@ -69,13 +69,13 @@ func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
 	}
 	var model string
 	if json.Unmarshal(input["model"], &model) != nil || model == "" {
-		return nil, false, codex.ErrInput
+		return nil, false, upstream.ErrInput
 	}
 	prewarm := false
 	if flag, ok := input["generate"]; ok {
 		var generate bool
 		if json.Unmarshal(flag, &generate) != nil {
-			return nil, false, codex.ErrInput
+			return nil, false, upstream.ErrInput
 		}
 		prewarm = !generate
 	}
@@ -86,9 +86,9 @@ func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
 	input["input"], _ = json.Marshal(items)
 	normalized, err := json.Marshal(input)
 	if err != nil {
-		return nil, false, codex.ErrInput
+		return nil, false, upstream.ErrInput
 	}
-	if len(normalized) > codex.MaxBody {
+	if len(normalized) > upstream.MaxBody {
 		return nil, false, ErrContextLimit
 	}
 	return normalized, prewarm, nil
@@ -102,18 +102,18 @@ func (c *Conversation) Accept(request, event []byte) error {
 		} `json:"response"`
 	}
 	if json.Unmarshal(event, &response) != nil || response.Response.ID == "" {
-		return codex.ErrResponse
+		return upstream.ErrResponse
 	}
 	var input map[string]json.RawMessage
 	if json.Unmarshal(request, &input) != nil {
-		return codex.ErrInput
+		return upstream.ErrInput
 	}
 	size := len(request)
 	for _, item := range response.Response.Output {
 		size += len(item)
 	}
 	c.responseID = response.Response.ID
-	c.overflow = size > codex.MaxBody
+	c.overflow = size > upstream.MaxBody
 	if c.overflow {
 		delete(input, "input")
 		c.output = nil
@@ -134,7 +134,7 @@ func conversationInput(raw []byte) ([]json.RawMessage, error) {
 	}
 	var text string
 	if json.Unmarshal(raw, &text) != nil {
-		return nil, codex.ErrInput
+		return nil, upstream.ErrInput
 	}
 	message, _ := json.Marshal(map[string]any{"type": "message", "role": "user", "content": []map[string]string{{"type": "input_text", "text": text}}})
 	return []json.RawMessage{message}, nil

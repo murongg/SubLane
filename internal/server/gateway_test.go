@@ -17,9 +17,9 @@ import (
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
-	"github.com/murongg/SubLane/internal/codex"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/storage"
+	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/vault"
 )
 
@@ -37,6 +37,9 @@ type forwardFixture struct {
 }
 
 func newForwardFixture(t *testing.T, handler http.HandlerFunc) forwardFixture {
+	return newProviderFixture(t, "codex", handler)
+}
+func newProviderFixture(t *testing.T, provider string, handler http.HandlerFunc) forwardFixture {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -61,13 +64,13 @@ func newForwardFixture(t *testing.T, handler http.HandlerFunc) forwardFixture {
 		t.Fatal(err)
 	}
 	service := accounts.New(db, key)
-	if _, err := service.Authorize(ctx, "Synthetic subscription", accounts.Credential{AccessToken: "synthetic-upstream-access", RefreshToken: "synthetic-upstream-refresh", AccountID: "synthetic-upstream-account", ExpiresAt: time.Now().Add(time.Hour).Unix()}, ""); err != nil {
+	if _, err := service.Authorize(ctx, "Synthetic subscription", accounts.Credential{Provider: provider, Metadata: map[string]json.RawMessage{"project_id": json.RawMessage(`"synthetic-project"`)}, AccessToken: "synthetic-upstream-access", RefreshToken: "synthetic-upstream-refresh", AccountID: "synthetic-upstream-account", ExpiresAt: time.Now().Add(time.Hour).Unix()}, ""); err != nil {
 		t.Fatal(err)
 	}
-	upstream := httptest.NewServer(handler)
-	t.Cleanup(upstream.Close)
-	target, _ := url.Parse(upstream.URL)
-	client := codex.NewWithTransport(gatewayTransport(func(r *http.Request) (*http.Response, error) {
+	fakeUpstream := httptest.NewServer(handler)
+	t.Cleanup(fakeUpstream.Close)
+	target, _ := url.Parse(fakeUpstream.URL)
+	client := upstream.NewWithTransport(gatewayTransport(func(r *http.Request) (*http.Response, error) {
 		copy := r.Clone(r.Context())
 		copy.URL.Scheme = target.Scheme
 		copy.URL.Host = target.Host
@@ -174,7 +177,7 @@ func TestGatewayTranslatesChatToolCalls(t *testing.T) {
 			} `json:"tools"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil || len(input.Tools) != 1 || input.Tools[0].Type != "function" || input.Tools[0].Name != "read_document" {
-			t.Error("tool definition was lost during request translation", err)
+			t.Errorf("tool definition was lost during request translation: %+v, %v", input, err)
 			w.WriteHeader(400)
 			return
 		}

@@ -10,16 +10,40 @@ import (
 
 // Credential is internal secret material. HTTP responses must use Account instead.
 type Credential struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	IDToken      string `json:"id_token,omitempty"`
-	AccountID    string `json:"account_id"`
-	Email        string `json:"email,omitempty"`
-	Plan         string `json:"plan,omitempty"`
-	ExpiresAt    int64  `json:"expires_at"`
+	Provider     string                     `json:"provider,omitempty"`
+	Metadata     map[string]json.RawMessage `json:"metadata,omitempty"`
+	AccessToken  string                     `json:"access_token"`
+	RefreshToken string                     `json:"refresh_token"`
+	IDToken      string                     `json:"id_token,omitempty"`
+	AccountID    string                     `json:"account_id"`
+	Email        string                     `json:"email,omitempty"`
+	Plan         string                     `json:"plan,omitempty"`
+	ExpiresAt    int64                      `json:"expires_at"`
 }
 
-func ParseCredential(raw []byte) (Credential, error) {
+func (c Credential) Kind() string {
+	if c.Provider == "" {
+		return "codex"
+	}
+	return c.Provider
+}
+
+func ValidProvider(provider string) bool {
+	return provider == "codex" || provider == "claude" || provider == "antigravity"
+}
+
+func ParseCredential(raw []byte) (Credential, error) { return ParseFor("codex", raw) }
+
+func ParseFor(provider string, raw []byte) (Credential, error) {
+	if provider == "" {
+		provider = "codex"
+	}
+	if !ValidProvider(provider) {
+		return Credential{}, ErrInput
+	}
+	if provider != "codex" {
+		return parseSubscription(provider, raw)
+	}
 	if len(raw) == 0 || len(raw) > 65536 {
 		return Credential{}, ErrInput
 	}
@@ -37,9 +61,16 @@ func ParseCredential(raw []byte) (Credential, error) {
 	if input.APIKey != "" || input.Type != "" && input.Type != "codex" || input.Mode != "" && input.Mode != "chatgpt" {
 		return Credential{}, ErrInput
 	}
+	if input.Provider != "" && input.Provider != "codex" {
+		return Credential{}, ErrInput
+	}
 	credential := input.Credential
+	credential.Provider = ""
+	credential.Metadata = nil
 	if input.Tokens != nil {
 		credential = *input.Tokens
+		credential.Provider = ""
+		credential.Metadata = nil
 	}
 	// Token claims are used only as display/routing metadata, never as SubLane authentication or roles.
 	claims := tokenClaims(credential.IDToken)
@@ -72,7 +103,7 @@ func ParseCredential(raw []byte) (Credential, error) {
 }
 
 func (c Credential) validate() error {
-	if !validToken(c.AccessToken) || !validToken(c.RefreshToken) || len(c.IDToken) > 16384 || c.AccountID == "" || len(c.AccountID) > 256 || len(c.Email) > 320 || len(c.Plan) > 64 || c.ExpiresAt < 0 {
+	if !ValidProvider(c.Kind()) || !validToken(c.AccessToken) || !validToken(c.RefreshToken) || len(c.IDToken) > 16384 || c.AccountID == "" || len(c.AccountID) > 256 || len(c.Email) > 320 || len(c.Plan) > 64 || c.ExpiresAt < 0 {
 		return ErrInput
 	}
 	for _, value := range []string{c.AccountID, c.Email, c.Plan} {
@@ -113,4 +144,73 @@ func tokenClaims(token string) claims {
 		return claims{}
 	}
 	return claims{AccountID: payload.Auth.AccountID, Email: payload.Email, Plan: payload.Auth.Plan, Expiry: payload.Expiry}
+}
+
+// parseSubscription accepts the flat credential format exported by CLIProxyAPI. Only credential fields survive import.
+func parseSubscription(provider string, raw []byte) (Credential, error) {
+	if len(raw) == 0 || len(raw) > 65536 {
+		return Credential{}, ErrInput
+	}
+	var input struct {
+		Credential
+		Type             string `json:"type"`
+		Expired          string `json:"expired"`
+		APIKey           string `json:"api_key"`
+		OpenAIKey        string `json:"OPENAI_API_KEY"`
+		AccountUUID      string `json:"account_uuid"`
+		OrganizationUUID string `json:"organization_uuid"`
+	}
+	if json.Unmarshal(raw, &input) != nil || input.Type != "" && input.Type != provider || input.Provider != "" && input.Provider != provider || input.APIKey != "" || input.OpenAIKey != "" {
+		return Credential{}, ErrInput
+	}
+	c := input.Credential
+	c.Provider = provider
+	c.Metadata = make(map[string]json.RawMessage)
+	var values map[string]json.RawMessage
+	if json.Unmarshal(raw, &values) != nil {
+		return Credential{}, ErrInput
+	}
+	for _, key := range []string{"account_uuid", "organization_uuid", "organization_name", "claude_device_ids", "project_id", "token_type"} {
+		if value, ok := values[key]; ok {
+			if key == "claude_device_ids" {
+				var ids []string
+				if json.Unmarshal(value, &ids) != nil || len(ids) > 16 {
+					return Credential{}, ErrInput
+				}
+				for _, id := range ids {
+					if !validMetadata(id) {
+						return Credential{}, ErrInput
+					}
+				}
+			} else {
+				var text string
+				if json.Unmarshal(value, &text) != nil || !validMetadata(text) {
+					return Credential{}, ErrInput
+				}
+			}
+			c.Metadata[key] = value
+		}
+	}
+	c.AccountID = strings.ToLower(strings.TrimSpace(c.Email))
+	if provider == "claude" && input.AccountUUID != "" {
+		c.AccountID = input.AccountUUID
+		if input.OrganizationUUID != "" {
+			c.AccountID += ":" + input.OrganizationUUID
+		}
+	}
+	if input.Expired != "" {
+		expiry, err := time.Parse(time.RFC3339, input.Expired)
+		if err != nil {
+			return Credential{}, ErrInput
+		}
+		c.ExpiresAt = expiry.Unix()
+	}
+	if err := c.validate(); err != nil {
+		return Credential{}, err
+	}
+	return c, nil
+}
+
+func validMetadata(value string) bool {
+	return len(value) <= 1024 && strings.IndexFunc(value, unicode.IsControl) < 0
 }

@@ -9,19 +9,19 @@ export const en = {
   connectionStatusError: 'Could not check gateway availability.',
   addAccount: 'Add account',
   accountName: 'Account name',
-  connectAccountTitle: 'Connect Codex',
+  connectAccountTitle: 'Connect subscription',
   connectionMethod: 'Connection method',
   accountOAuth: 'Browser authorization',
   accountImport: 'Import auth.json',
   startAuthorization: 'Start authorization',
-  openAuthorization: 'Open OpenAI authorization',
+  openAuthorization: 'Open provider authorization',
   copyAuthorization: 'Copy authorization link',
   callbackURL: 'Callback URL',
   callbackHint:
     'After signing in, the localhost page may not load. Copy its complete address from the browser address bar and paste it here.',
   completeAuthorization: 'Complete authorization',
   authorizationInstructions:
-    'Open the authorization page, sign in to your ChatGPT subscription, then return here with the callback URL.',
+    'Open the provider authorization page, sign in, then return here with the complete callback URL.',
   startAgain: 'Start again',
   accountImportDescription:
     'Choose an existing Codex auth.json file or paste its contents. Stored credentials are encrypted on this instance.',
@@ -43,7 +43,7 @@ export const en = {
   deleteAccount: 'Remove account',
   deleteAccountTitle: 'Remove subscription account',
   deleteAccountDescription:
-    'Remove “{{name}}” and its stored credentials? Conversations using this account will need a new session. This does not sign you out of ChatGPT.',
+    'Remove “{{name}}” and its stored credentials? Conversations using this account will need a new session. This does not revoke your provider login.',
   accountVerified: 'Verified',
   accountUnverified: 'Not verified',
   accountNeedsAuth: 'Reauthorization needed',
@@ -51,13 +51,13 @@ export const en = {
   accountUnknownExpiry: 'Checked on first use',
   accountNameInvalid: 'Use 1–64 characters without control characters.',
   accountJSONInvalid:
-    'Paste valid Codex auth.json content. Official API keys are not supported here.',
+    'Paste valid credential JSON for the selected provider. Official API keys are not supported here.',
   accountInvalidInput:
-    'Check the account name and Codex subscription credentials.',
+    'Check the account name, provider, and subscription credentials.',
   accountExists:
     'This subscription is already added. Use Reauthorize on the existing account.',
   accountIdentityMismatch:
-    'Sign in to the same ChatGPT account to reauthorize it. Add a separate account for a different subscription.',
+    'Reauthorize with the same provider and account. Add a separate account for a different subscription.',
   accountLimitReached:
     'This instance supports up to 100 subscription accounts.',
   accountDisabledHint: 'Enable this account before verifying or using it.',
@@ -72,10 +72,11 @@ export const en = {
     'Authorization was declined. Start again when you are ready.',
   accountBusy: 'The gateway is busy. Wait a moment and try again.',
   accountUpstreamUnavailable:
-    'Could not reach OpenAI. Check network access and try again.',
+    'Could not reach the provider. Check network access and try again.',
   accountCheckFailed:
-    'OpenAI could not complete the request. Try again or reauthorize this account.',
-  accountRateLimited: 'OpenAI is rate limiting this account. Try again later.',
+    'The provider could not complete the request. Try again or reauthorize this account.',
+  accountRateLimited:
+    'The provider is rate limiting this account. Try again later.',
   accountActionFailed: 'Could not complete this action. Please try again.',
   accountVerificationResult:
     '“{{name}}” is connected. {{count}} models available.',
@@ -93,7 +94,8 @@ export const en = {
     'Set SUBLANE_API_KEY in the client process environment, and choose a model available to your connected subscriptions. The desktop app must inherit the same environment variable.',
   copyClientConfig: 'Copy configuration',
   clientModel: 'Model ID',
-  clientModelHint: 'Use an ID returned by GET /v1/models.',
+  clientModelHint:
+    'Use an ID from GET /v1/models, including its codex/, claude/, or antigravity/ prefix. Unqualified IDs use Codex.',
   connectionNotConfigured:
     'Ask an administrator to connect and verify a subscription account first.',
   checkingSession: 'Checking your session…',
@@ -225,11 +227,11 @@ export const en = {
     'Instance health and progress toward your first request.',
   gatewaySetup: 'Gateway setup',
   gatewaySetupDescription:
-    'Your administrator account is ready. Next comes your team’s first Codex connection.',
+    'Your administrator account is ready. Next, connect your team’s first subscription.',
   adminReadyDescription:
     'Sign-in and management access are set up for this instance.',
   codexSetupDescription:
-    'Add a Codex subscription, then verify its connection before inviting your team to use it.',
+    'Add a subscription, then verify its connection before inviting your team to use it.',
   teamAccess: 'Gateway keys',
   teamAccessDescription:
     'Administrators and members can create and revoke their own API keys.',
@@ -260,13 +262,13 @@ export const en = {
     'The service is unavailable. Check that the backend is running, then try again.',
   invalidResponse:
     'The service returned an unexpected response. Check that the frontend and backend versions match.',
-  codexTitle: 'Codex connection',
+  codexTitle: 'Subscription access',
   viewAccounts: 'View accounts',
   accountsTitle: 'Subscription accounts',
   accountsDescription: 'Manage the subscription accounts used by your team.',
   accountEmptyTitle: 'No subscription accounts',
   accountEmptyDescription:
-    'Add your first Codex subscription using browser authorization or an existing auth.json file.',
+    'Connect Codex, Claude, or Antigravity using browser authorization or a credential JSON file.',
   backToOverview: 'Back to overview',
   preferencesDescription: 'Make this workspace feel familiar.',
   appearance: 'Appearance',
@@ -319,4 +321,9 @@ export const en = {
   usageRefreshingCached: 'Cached usage is outdated. Refreshing…',
   usageExpired: 'Cached usage is outdated. Refresh to update.',
   verifyAccountConnection: 'Verify connection for {{name}}',
+  serviceProvider: 'Service provider',
+  providerImportDescription:
+    'Import credential JSON exported by CLIProxyAPI for the selected provider. Credentials are encrypted on this instance.',
+  providerQuotaUnsupported:
+    'Quota reporting is not available for this provider yet.',
 } satisfies Record<string, string>

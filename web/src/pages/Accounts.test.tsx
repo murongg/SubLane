@@ -118,7 +118,9 @@ it('starts browser authorization and submits only the callback for the matching 
   await user.click(
     within(dialog).getByRole('button', { name: 'Start authorization' }),
   )
-  await within(dialog).findByRole('link', { name: 'Open OpenAI authorization' })
+  await within(dialog).findByRole('link', {
+    name: 'Open provider authorization',
+  })
   await user.type(
     within(dialog).getByLabelText('Callback URL'),
     'http://localhost:1455/auth/callback?state=synthetic-state&code=synthetic-code',
@@ -191,4 +193,55 @@ it('keeps quota, identity and accessible actions together for each account', asy
   expect(
     within(row).getByRole('button', { name: 'Actions for Test subscription' }),
   ).toBeTruthy()
+})
+
+it('chooses a provider and starts its authorization without reusing Codex URLs', async () => {
+  const fetch = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/accounts/oauth') {
+        expect(JSON.parse(String(init?.body)).provider).toBe('claude')
+        return Promise.resolve(
+          response(
+            {
+              url: 'https://claude.ai/oauth/authorize?state=synthetic-state',
+              state: 'synthetic-state',
+              expires_at: 9999999999,
+              callback_url: 'http://localhost:54545/callback',
+            },
+            201,
+          ),
+        )
+      }
+      return Promise.resolve(response({ accounts: [] }))
+    })
+  vi.stubGlobal('fetch', fetch)
+  open()
+  await screen.findByText('No subscription accounts')
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Add account' }))
+  const choices = screen.getByRole('group', { name: 'Service provider' })
+  expect(within(choices).getAllByRole('button')).toHaveLength(3)
+  expect(
+    within(choices).getByRole('button', { name: 'Codex', pressed: true }),
+  ).toBeTruthy()
+  await user.click(within(choices).getByRole('button', { name: 'Claude' }))
+  expect(
+    within(choices).getByRole('button', { name: 'Claude', pressed: true }),
+  ).toBeTruthy()
+  await user.type(screen.getByLabelText('Account name'), 'Synthetic Claude')
+  await user.click(screen.getByRole('button', { name: 'Start authorization' }))
+  expect(
+    (
+      await screen.findByRole('link', { name: 'Open provider authorization' })
+    ).getAttribute('href'),
+  ).toContain('claude.ai/oauth/authorize')
+  expect(
+    screen.getByPlaceholderText('http://localhost:54545/callback?...'),
+  ).toBeTruthy()
+  for (const button of within(choices).getAllByRole('button')) {
+    expect((button as HTMLButtonElement).disabled).toBe(true)
+  }
 })

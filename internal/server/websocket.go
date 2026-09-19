@@ -12,8 +12,8 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/murongg/SubLane/internal/apikey"
-	"github.com/murongg/SubLane/internal/codex"
 	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/upstream"
 )
 
 func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +61,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	conn.SetReadLimit(codex.MaxBody)
+	conn.SetReadLimit(upstream.MaxBody)
 	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
 	conn.SetPongHandler(func(string) error { return conn.SetReadDeadline(time.Now().Add(5 * time.Minute)) })
 	messages := make(chan []byte, 1)
@@ -172,7 +172,7 @@ func (h *keyHTTP) websocketTurn(ctx context.Context, userID int64, request []byt
 	}
 	defer result.Body.Close()
 	if result.StatusCode < 200 || result.StatusCode >= 300 {
-		return &codex.UpstreamError{Status: result.StatusCode, RetryAfter: result.Header.Get("Retry-After")}
+		return &upstream.UpstreamError{Status: result.StatusCode, RetryAfter: result.Header.Get("Retry-After")}
 	}
 	return result.Events(func(event []byte) error {
 		if ctx.Err() != nil {
@@ -182,7 +182,7 @@ func (h *keyHTTP) websocketTurn(ctx context.Context, userID int64, request []byt
 			Type string `json:"type"`
 		}
 		if json.Unmarshal(event, &metadata) != nil {
-			return codex.ErrResponse
+			return upstream.ErrResponse
 		}
 		if metadata.Type == "response.completed" || metadata.Type == "response.incomplete" {
 			if err := conversation.Accept(request, event); err != nil {

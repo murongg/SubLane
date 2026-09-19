@@ -6,6 +6,7 @@ package db
 
 type Account struct {
 	ID         string
+	Provider   string
 	Name       string
 	AccountID  string
 	Email      string

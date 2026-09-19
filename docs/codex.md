@@ -1,6 +1,6 @@
 # Codex subscriptions and gateway
 
-SubLane uses the public translation packages from CLIProxyAPI v7.3.7 behind `internal/codex`. It owns authorization, credential storage, refresh, account selection, and HTTP/WebSocket forwarding. It does not start the SDK's HTTP server, management panel, file watcher, or background refresh service, and imports no upstream `internal` packages.
+SubLane uses CLIProxyAPI v7.3.7’s public executors and translators behind `internal/upstream`. SubLane owns authorization, encrypted credential storage, refresh, account selection, and the public gateway. The SDK runs as a private executor registry with no live credentials, a no-op watcher, blocked loopback routes, and automatic refresh disabled. See [architecture](architecture.md) for the execution boundary and [provider setup](providers.md) for Claude and Antigravity. This guide’s authorization and quota details describe Codex.
 
 ## Add an account
 
@@ -64,17 +64,17 @@ All gateway routes require a SubLane bearer key, independently of browser cookie
 
 | Route | Behavior |
 | --- | --- |
-| `GET /v1/models` | Fetch the selected subscription's available model IDs |
+| `GET /v1/models` | Aggregate configured providers with qualified IDs; retain unqualified Codex aliases |
 | `POST /v1/responses` | Responses JSON or SSE using the requested `stream` setting |
 | `POST /v1/responses/compact` | Non-streaming Codex compaction |
 | `GET /v1/responses` with WebSocket upgrade | Responses turns, local prewarm, incremental input reconstruction, and compact transcript replacement |
-| `POST /v1/chat/completions` | SDK translation to/from the Codex Responses protocol |
+| `POST /v1/chat/completions` | SDK translation to/from the selected provider protocol |
 
 HTTP requests must include complete input. HTTP `previous_response_id` is rejected instead of silently losing context because the Codex HTTP backend is stateless. WebSocket continuations use bounded, connection-local history; unknown continuation IDs require full transcript input. Every WebSocket turn rechecks the key and member enablement. A revoked key cannot start a new turn on an existing connection.
 
-Account affinity is scoped to the member and client session/prompt-cache key, retained for 24 hours of activity, and capped at 4,096 bindings. New sessions distribute across enabled accounts. Existing sessions fail when their account is disabled or removed instead of switching upstream identity. Restart the conversation after an intentional account change. Retrying a request never moves it to another account automatically.
+Account affinity is scoped to the member, provider, and client session/prompt-cache key, retained for 24 hours of activity, and capped at 4,096 bindings. New sessions distribute across enabled accounts. Existing sessions fail when their account is disabled or removed instead of switching upstream identity. Restart the conversation after an intentional account change. Retrying a request never moves it to another account automatically.
 
-The initial resource limits are 100 accounts, eight concurrent upstream operations, eight WebSocket connections, 8 MiB request/event/history bounds, 30-second request-body reads, 20-second upstream response-header/token/model-catalog deadlines, and ten-minute generation deadlines. WebSocket pings maintain a five-minute read deadline. These are safety bounds, not measured throughput or memory guarantees. Per-member quotas, usage accounting, and advanced failover remain later work.
+The initial resource limits are 100 accounts, eight concurrent upstream operations, eight WebSocket connections, 8 MiB request/event/history bounds, 30-second request-body reads, 20-second upstream response-header/model-catalog deadlines, bounded 20–30-second token exchange deadlines, and ten-minute generation deadlines. WebSocket pings maintain a five-minute read deadline. These are safety bounds, not measured throughput or memory guarantees. Per-member quotas, usage accounting, and advanced failover remain later work.
 
 Provider credentials, browser cookies, arbitrary client headers, and raw provider error bodies are not forwarded to members. Client bearer keys are replaced by the selected upstream credential. The application does not log prompts, responses, access tokens, refresh tokens, or OAuth callback URLs.
 

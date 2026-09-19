@@ -7,14 +7,14 @@ SubLane is one Go process with chi routing and a client-rendered React frontend.
 ```mermaid
 flowchart LR
   Browser[Browser] --> HTTP[chi HTTP server]
-  Clients[Codex clients] --> HTTP
+  Clients[Responses and Chat clients] --> HTTP
   HTTP --> SPA[Embedded React application]
   HTTP --> Accounts[Accounts and encrypted credentials]
   Accounts --> DB[(SQLite)]
   HTTP --> Gateway[Gateway key authentication and affinity]
   Gateway --> Accounts
-  Gateway --> Adapter[Codex adapter and SDK translators]
-  Adapter --> OpenAI[OpenAI]
+  Gateway --> Adapter[Provider adapters and SDK executors]
+  Adapter --> Providers[Codex / Claude / Antigravity]
 ```
 
 In development, Vite serves the React app and proxies `/api`, `/v1` including WebSocket upgrades, `/healthz`, and `/readyz` to the Go backend. In production, the browser and API use the same origin and one port. There is no separate Node.js service, Redis, or PostgreSQL requirement.
@@ -29,8 +29,8 @@ In development, Vite serves the React app and proxies `/api`, `/v1` including We
 | `internal/apikey` | Personal gateway key metadata, hashes, revocation, and lookup | Browser sessions or upstream credentials |
 | `internal/accounts` | Subscription metadata, credential lifecycle, and refresh serialization | HTTP dispatch or client keys |
 | `internal/vault` | AES-GCM encryption and private local key loading | OAuth or account policy |
-| `internal/oauth` | Session-bound, single-use PKCE authorization attempts | Browser login or model forwarding |
-| `internal/codex` | Public SDK translation, token exchange, and Codex HTTP protocol | Team roles or database ownership |
+| `internal/oauth` | Session-bound, single-use OAuth attempts | Browser login or model forwarding |
+| `internal/upstream` | Public SDK executors, translation, token exchange, and provider protocols | Team roles or database ownership |
 | `internal/gateway` | Bounded admission, account affinity, persisted quota snapshots, and per-request orchestration | Public management authorization |
 | `internal/storage` | SQLite lifecycle, migrations, and query SQL | Provider authentication |
 | `internal/storage/db` | Generated query methods and database row types | Domain policy or public JSON contracts |
@@ -40,7 +40,7 @@ In development, Vite serves the React app and proxies `/api`, `/v1` including We
 
 ## Persistence
 
-The database runs in WAL mode with foreign keys enabled, a bounded busy timeout, and one open connection. Startup applies ordered embedded SQL migrations and records each migration in the same transaction as its schema change. The settings and administrator/session migrations are followed by `003_members.sql`, which transactionally moves the existing administrator and session metadata into unified `users` and `sessions` tables. The first administrator remains ID 1 and cannot be disabled. `004_api_keys.sql` adds personal keys, and `005_accounts.sql` adds encrypted subscription credentials and bounded account-affinity records. `006_usage.sql` stores the latest normalized quota snapshot per account with cascading deletion.
+The database runs in WAL mode with foreign keys enabled, a bounded busy timeout, and one open connection. Startup applies ordered embedded SQL migrations and records each migration in the same transaction as its schema change. The settings and administrator/session migrations are followed by `003_members.sql`, which transactionally moves the existing administrator and session metadata into unified `users` and `sessions` tables. The first administrator remains ID 1 and cannot be disabled. `004_api_keys.sql` adds personal keys, and `005_accounts.sql` adds encrypted subscription credentials and bounded account-affinity records. `006_usage.sql` stores the latest normalized quota snapshot per account with cascading deletion. `007_providers.sql` preserves accounts and snapshots while adding provider-scoped identities and affinity; legacy credentials and bindings remain Codex.
 
 New database files use mode `0600`; newly created data directories use `0700`. Existing directory permissions are not rewritten. Database configuration uses a properly escaped file URL so special characters in the path are supported.
 
@@ -69,12 +69,16 @@ The Shadcn Admin subset provides the sidebar and shared primitives. Application 
 
 The root auth gate waits for server state before mounting protected pages. Management queries are enabled only for administrators, including during redirect transitions. One frontend access policy controls navigation and direct-route guards. Members get a personal homepage and shared appearance/language settings, without querying system or member-management data. Personal key queries include the owner ID in their cache key and opt into member access only while that identity remains current. Logout cancels outstanding requests, updates auth state, and removes private query data. Sessions use HttpOnly cookies rather than browser-storage tokens. The complete server contract is documented in [authentication.md](authentication.md).
 
-## Codex adapter boundary
+## Provider execution boundary
 
-The user-selected lightweight integration imports only CLIProxyAPI v7.3.7's public translation packages. Its builtin registry indirectly links Gin and a Redis client through upstream shared packages; SubLane still serves requests through chi and does not initialize the SDK Service, Home mode, or a Redis connection. It does not start the SDK HTTP service, file watcher, management API, or refresh scheduler. SubLane owns the OAuth state, credential lifecycle, account selection, HTTP transport, cancellation, and downstream WebSocket turn boundary. See [Codex gateway](codex.md) for limits, client setup, security behavior, and the verification boundary.
+`internal/upstream` initializes CLIProxyAPI v7.3.7 through its public SDK to obtain the built-in Codex, Claude, and Antigravity executors. No upstream `internal` packages are imported. The SDK manager has an empty, write-rejecting store and receives no live account registrations. A no-op watcher avoids file-based credential synchronization. The SDK lifecycle starts a loopback-only ephemeral HTTP listener: every route is blocked, it has a separate random API key, and management/panel access is disabled. Clients use SubLane’s chi server only. Home mode and Redis are not enabled.
+
+SubLane keeps the durable lifecycle owner. OAuth exchange and refresh use bounded, pinned provider endpoints; rotated credentials are encrypted and saved before model execution. SDK automatic refresh is stopped. Ephemeral model-request auth contains access tokens and allowed provider metadata, never refresh tokens, endpoint overrides, or client-supplied proxy settings. Antigravity uses public `sdk/auth` authorization-code helpers and an explicit executor refresh call within the durable owner. Only that refresh call receives the refresh token; its result is never registered in the SDK manager. The injected transport enforces the caller deadline, response bounds, redirect rejection, and sanitized errors even if the SDK detaches its refresh context. Project preparation also completes within this path. This boundary avoids the SDK manager’s publish-before-persist behavior; do not replace it with unguarded Manager.Register/Update calls.
+
+Model IDs are qualified by channel (`codex/…`, `claude/…`, `antigravity/…`). Unqualified IDs retain Codex compatibility. Model discovery includes healthy configured providers even if another provider fails. Compaction and quota snapshots remain Codex-only. See [provider setup](providers.md) and [gateway details](codex.md).
 
 The vault key is generated as a 0600 file beside SQLite. Startup verifies existing encrypted records and fails closed if the key is missing or mismatched. Backups must preserve the key alongside the database. Refresh and administrator credential changes have one serialized owner; network IO never runs inside a database transaction.
 
-Affinity is scoped to the member and client session, persists across normal process restarts, and expires after 24 hours of inactivity. Disabled/deleted accounts fail existing conversations instead of triggering unsafe account switching. WebSocket transcript state stays connection-local and bounded. HTTP previous_response_id is rejected because the upstream HTTP backend is stateless; callers must supply full input.
+Affinity is scoped to the member, provider, and client session, persists across normal process restarts, and expires after 24 hours of inactivity. Disabled/deleted accounts fail existing conversations instead of triggering unsafe account switching. WebSocket transcript state stays connection-local and bounded. HTTP previous_response_id is rejected because the upstream HTTP backend is stateless; callers must supply full input.
 
 Automated protocol tests use synthetic credentials and fake upstreams. An opt-in test has verified Codex CLI 0.152.1 through HTTP/SSE and WebSocket modes. Real subscription and desktop verification are still separate acceptance steps. No universal memory or throughput budget is claimed; measure the intended workload and deployment platform.

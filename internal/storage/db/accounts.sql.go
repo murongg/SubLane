@@ -21,13 +21,14 @@ func (q *Queries) CountAccounts(ctx context.Context) (int64, error) {
 }
 
 const createAccount = `-- name: CreateAccount :execrows
-INSERT INTO accounts(id, name, account_id, email, plan, enabled, status, credential, expires_at, created_at, updated_at)
-VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8, ?9, ?10)
-ON CONFLICT(account_id) DO NOTHING
+INSERT INTO accounts(id, provider, name, account_id, email, plan, enabled, status, credential, expires_at, created_at, updated_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8, ?9, ?10, ?11)
+ON CONFLICT(provider, account_id) DO NOTHING
 `
 
 type CreateAccountParams struct {
 	ID         string
+	Provider   string
 	Name       string
 	AccountID  string
 	Email      string
@@ -42,6 +43,7 @@ type CreateAccountParams struct {
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, createAccount,
 		arg.ID,
+		arg.Provider,
 		arg.Name,
 		arg.AccountID,
 		arg.Email,
@@ -71,7 +73,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, id string) (int64, error) {
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at FROM accounts WHERE id = ?1
+SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at FROM accounts WHERE id = ?1
 `
 
 func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
@@ -79,6 +81,7 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 	var i Account
 	err := row.Scan(
 		&i.ID,
+		&i.Provider,
 		&i.Name,
 		&i.AccountID,
 		&i.Email,
@@ -94,12 +97,13 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, name, email, plan, enabled, status, expires_at, created_at, updated_at
+SELECT id, provider, name, email, plan, enabled, status, expires_at, created_at, updated_at
 FROM accounts ORDER BY created_at DESC, id DESC LIMIT 100
 `
 
 type ListAccountsRow struct {
 	ID        string
+	Provider  string
 	Name      string
 	Email     string
 	Plan      string
@@ -121,6 +125,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]ListAccountsRow, error) {
 		var i ListAccountsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.Provider,
 			&i.Name,
 			&i.Email,
 			&i.Plan,

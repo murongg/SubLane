@@ -160,7 +160,7 @@ func assets(files fs.FS) http.Handler {
 }
 
 func accountSummary(ctx context.Context, service *accounts.Service) (map[string]any, error) {
-	summary := map[string]any{"provider": "codex", "status": "not_configured", "accounts_total": 0, "accounts_enabled": 0}
+	summary := map[string]any{"provider": "multi", "status": "not_configured", "accounts_total": 0, "accounts_enabled": 0}
 	if service == nil {
 		return summary, nil
 	}

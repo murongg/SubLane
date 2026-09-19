@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
-	"github.com/murongg/SubLane/internal/codex"
 	storedb "github.com/murongg/SubLane/internal/storage/db"
+	"github.com/murongg/SubLane/internal/upstream"
 )
 
 const usageTTL = 2 * time.Minute
@@ -20,7 +20,7 @@ const usageCooldown = 5 * time.Second
 
 // UsageSnapshot separates the observation time from the response clock and refresh state.
 type UsageSnapshot struct {
-	codex.Usage
+	upstream.Usage
 	ServerTime        int64 `json:"server_time"`
 	ExpiresAt         int64 `json:"expires_at"`
 	Stale             bool  `json:"stale"`
@@ -30,7 +30,7 @@ type UsageSnapshot struct {
 }
 
 type usageEntry struct {
-	snapshot *codex.Usage
+	snapshot *upstream.Usage
 	flight   chan struct{}
 	retryAt  time.Time
 	err      error
@@ -78,6 +78,9 @@ func (s *Service) usageAccount(ctx context.Context, id string) error {
 	if !account.Enabled {
 		return accounts.ErrDisabled
 	}
+	if account.Provider != "codex" {
+		return upstream.ErrUsageUnsupported
+	}
 	return nil
 }
 
@@ -124,7 +127,7 @@ func (s *Service) usageSnapshot(ctx context.Context, id string, force bool) (Usa
 		err = e.err
 		c.mu.Unlock()
 		if err == nil {
-			err = codex.ErrResponse
+			err = upstream.ErrResponse
 		}
 		return UsageSnapshot{}, err
 	}
@@ -171,7 +174,7 @@ func (s *Service) loadUsage(ctx context.Context, id string, now time.Time) (*usa
 		return nil, err
 	}
 	if err == nil {
-		var saved codex.Usage
+		var saved upstream.Usage
 		if len(row.Snapshot) <= 128<<10 && json.Unmarshal(row.Snapshot, &saved) == nil && saved.Limits != nil && saved.UpdatedAt == row.UpdatedAt && saved.UpdatedAt > 0 {
 			entry.snapshot = &saved
 			entry.retryAt = time.Unix(saved.UpdatedAt, 0).Add(usageCooldown)
@@ -210,7 +213,7 @@ func (s *Service) fetchUsage(id string, e *usageEntry, release func()) {
 		e.snapshot = &value
 	} else {
 		backoff := 30 * time.Second
-		var upstream *codex.UpstreamError
+		var upstream *upstream.UpstreamError
 		if errors.As(err, &upstream) {
 			if seconds, parseErr := strconv.Atoi(upstream.RetryAfter); parseErr == nil && seconds > 30 && seconds <= 3600 {
 				backoff = time.Duration(seconds) * time.Second

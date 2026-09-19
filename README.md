@@ -21,7 +21,7 @@
   <a href="README.zh-CN.md">简体中文</a> · <a href="https://github.com/murongg/SubLane">Repository</a> · <a href="brand/README.md">Brand materials</a>
 </p>
 
-**Status: early development.** Administrator setup, member accounts, role-based management access, personal API keys, login/logout, SQLite persistence, the embedded frontend, themes, and English/Chinese localization work. Codex OAuth/import, encrypted credentials, and HTTP/SSE/WebSocket forwarding are implemented and tested with synthetic upstreams. Live subscription and desktop validation are pending; usage reporting remains planned.
+**Status: early development.** Administrator setup, member accounts, role-based management access, personal API keys, login/logout, SQLite persistence, the embedded frontend, themes, and English/Chinese localization work. Codex, Claude, and Antigravity OAuth/import, encrypted credentials, and HTTP/SSE/WebSocket forwarding are implemented and tested with synthetic upstreams. Live subscription and desktop validation are pending; usage reporting remains planned.
 
 ## Stack
 
@@ -29,7 +29,7 @@
 - React, TypeScript, Vite, TanStack Router and Query.
 - Selected components from [Shadcn Admin](https://github.com/satnaing/shadcn-admin), with a neutral palette and semantic status colors.
 - One binary for production; Node.js is only needed to build the frontend.
-- A lightweight Codex adapter reuses public CLIProxyAPI translators; no SDK server, watcher, or management service runs alongside SubLane.
+- CLIProxyAPI v7 built-in executors behind SubLane’s encrypted credential lifecycle and chi gateway; no Redis or separate proxy process required.
 
 ## Quick start
 
@@ -65,9 +65,9 @@ docker compose up --build -d
 
 The Compose service binds the host port to loopback and stores the database in a named volume. For network access, use an HTTPS reverse proxy and set the external `SUBLANE_PUBLIC_URL` in the container environment.
 
-## Codex subscriptions
+## Subscription providers
 
-Open **Accounts** as the administrator to authorize a Codex subscription or import an existing `auth.json`. Verify the connection, then use a personal API key and the configuration guide on **API keys**. See [the complete Codex guide](docs/codex.md) for the manual OAuth callback, credential backups, client setup, and current limits.
+Open **Accounts** as the administrator, select **Codex**, **Claude**, or **Antigravity**, and authorize a subscription or import its credential JSON. Verify the connection, then use a personal API key and the configuration guide on **API keys**. See [provider setup and model selection](docs/providers.md) and [the complete Codex guide](docs/codex.md) for the manual OAuth callback, credential backups, client setup, and current limits.
 
 ## Configuration
 
@@ -99,7 +99,7 @@ web/embed.go          Production frontend embedding
 scripts/dev.mjs       Development process orchestration
 ```
 
-Do not import provider SDK types into membership or storage code. The public SDK translation packages are isolated in `internal/codex`. Account and gateway lifecycle behavior stays owned by SubLane.
+Do not import provider SDK types into membership or storage code. The public SDK execution and translation packages are isolated in `internal/upstream`. Account and gateway lifecycle behavior stays owned by SubLane.
 
 ## Endpoints
 
@@ -107,7 +107,7 @@ Do not import provider SDK types into membership or storage code. The public SDK
 - `GET /readyz`: SQLite readiness; returns 503 when unavailable.
 - `GET /api/auth/state`: public initialization and session state; setup/login/logout use explicit POST endpoints.
 - `GET /api/system`: authenticated instance version, uptime, storage, and gateway integration state.
-- The management `/api/` subtree requires an administrator session by default. Unknown routes return JSON errors. `/v0` remains unimplemented. `/v1` requires a gateway API key; configured subscriptions support Responses HTTP/SSE/WebSocket, compaction, and Chat Completions forwarding. See [Codex setup and verification](docs/codex.md). Missing static assets return 404 rather than the SPA document.
+- The management `/api/` subtree requires an administrator session by default. Unknown routes return JSON errors. `/v0` remains unimplemented. `/v1` requires a gateway API key; configured subscriptions support Responses HTTP/SSE/WebSocket, Codex compaction, and Chat Completions forwarding. See [Codex setup and verification](docs/codex.md). Missing static assets return 404 rather than the SPA document.
 
 ## Verification
 

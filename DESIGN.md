@@ -163,6 +163,8 @@ Use the shared `Status` component for success, warning, error, information, or n
 
 System data comes from the backend. Show a loading state while connecting, an actionable error with retry on failure, and an explicit empty state for unavailable account integration. Never fill these states with invented account counts or usage charts.
 
+The account connection form presents providers as three equal-width, horizontal choice buttons with their original full-color brand logos and short names. Preserve a neutral selected border/background, a checkmark, keyboard focus, and accessible pressed state. Keep all three options visible on narrow screens. Provider brand marks are an intentional exception to the monochrome supporting-graphics rule; do not recolor them with interface status tokens.
+
 Subscription accounts use a compact list: identity and plan, quota windows, account status with token expiry, and icon actions align in columns when the list has enough width. Narrow containers stack the same content in reading order. Keep each quota window within its column; a single window must not occupy a separate full-width panel. Snapshot time remains secondary, and icon actions retain accessible names and hover descriptions.
 
 ### Motion

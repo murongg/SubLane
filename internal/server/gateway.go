@@ -15,8 +15,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
-	"github.com/murongg/SubLane/internal/codex"
 	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/upstream"
 )
 
 type keyPrincipalKey struct{}
@@ -88,7 +88,7 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	}
 	controller := http.NewResponseController(w)
 	_ = controller.SetReadDeadline(time.Now().Add(30 * time.Second))
-	r.Body = http.MaxBytesReader(w, r.Body, codex.MaxBody)
+	r.Body = http.MaxBytesReader(w, r.Body, upstream.MaxBody)
 	raw, err := io.ReadAll(r.Body)
 	_ = controller.SetReadDeadline(time.Time{})
 	if err != nil {
@@ -96,7 +96,7 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 		if errors.As(err, &limit) {
 			writeGatewayError(w, 413, "request_too_large")
 		} else {
-			gatewayError(w, codex.ErrInput)
+			gatewayError(w, upstream.ErrInput)
 		}
 		return
 	}
@@ -104,7 +104,7 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 		Stream bool `json:"stream"`
 	}
 	if json.Unmarshal(raw, &flags) != nil || kind == gateway.Compact && flags.Stream {
-		gatewayError(w, codex.ErrInput)
+		gatewayError(w, upstream.ErrInput)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
@@ -117,13 +117,13 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	}
 	defer result.Body.Close()
 	if result.StatusCode < 200 || result.StatusCode >= 300 {
-		gatewayError(w, &codex.UpstreamError{Status: result.StatusCode, RetryAfter: result.Header.Get("Retry-After")})
+		gatewayError(w, &upstream.UpstreamError{Status: result.StatusCode, RetryAfter: result.Header.Get("Retry-After")})
 		return
 	}
 	if kind == gateway.Compact {
-		data, err := io.ReadAll(io.LimitReader(result.Body, codex.MaxBody+1))
-		if err != nil || len(data) > codex.MaxBody || !json.Valid(data) {
-			gatewayError(w, codex.ErrResponse)
+		data, err := io.ReadAll(io.LimitReader(result.Body, upstream.MaxBody+1))
+		if err != nil || len(data) > upstream.MaxBody || !json.Valid(data) {
+			gatewayError(w, upstream.ErrResponse)
 			return
 		}
 		writeRawJSON(w, data)
@@ -183,7 +183,7 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	}
 	output := result.Complete(ctx, completed)
 	if !json.Valid(output) {
-		gatewayError(w, codex.ErrResponse)
+		gatewayError(w, upstream.ErrResponse)
 		return
 	}
 	writeRawJSON(w, output)
@@ -212,15 +212,15 @@ func writeSSE(w io.Writer, data []byte, named bool) error {
 }
 
 func gatewayFailure(err error) (int, string) {
-	var upstream *codex.UpstreamError
+	var rejected *upstream.UpstreamError
 	switch {
 	case errors.Is(err, apikey.ErrInvalidKey):
 		return 401, "invalid_api_key"
 	case errors.Is(err, gateway.ErrContextLimit):
 		return 400, "conversation_context_limit"
-	case errors.Is(err, codex.ErrInput):
+	case errors.Is(err, upstream.ErrInput):
 		return 400, "invalid_model_request"
-	case errors.Is(err, codex.ErrContinuation):
+	case errors.Is(err, upstream.ErrContinuation):
 		return 400, "continuation_requires_full_input"
 	case errors.Is(err, gateway.ErrNoAccount):
 		return 503, "no_accounts_available"
@@ -232,10 +232,10 @@ func gatewayFailure(err error) (int, string) {
 		return 503, "account_reauthorization_required"
 	case errors.Is(err, context.DeadlineExceeded):
 		return 504, "gateway_timeout"
-	case errors.Is(err, codex.ErrInterrupted):
+	case errors.Is(err, upstream.ErrInterrupted):
 		return 502, "upstream_stream_interrupted"
-	case errors.As(err, &upstream):
-		switch upstream.Status {
+	case errors.As(err, &rejected):
+		switch rejected.Status {
 		case 400:
 			return 400, "upstream_invalid_request"
 		case 404:
@@ -259,9 +259,9 @@ func gatewayError(w http.ResponseWriter, err error) {
 	}
 	if status == 429 {
 		value := "1"
-		var upstream *codex.UpstreamError
-		if errors.As(err, &upstream) {
-			value = upstream.RetryAfter
+		var rejected *upstream.UpstreamError
+		if errors.As(err, &rejected) {
+			value = rejected.RetryAfter
 		}
 		retryAfter(w, value)
 	}

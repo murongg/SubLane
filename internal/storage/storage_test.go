@@ -63,7 +63,7 @@ func TestOpenMigratesAndPreservesData(t *testing.T) {
 		t.Fatalf("value=%q err=%v", value, err)
 	}
 	var migrations int
-	if err := db.QueryRow("SELECT count(*) FROM schema_migrations").Scan(&migrations); err != nil || migrations != 6 {
+	if err := db.QueryRow("SELECT count(*) FROM schema_migrations").Scan(&migrations); err != nil || migrations != 7 {
 		t.Fatalf("migrations=%d err=%v", migrations, err)
 	}
 }

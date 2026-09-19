@@ -12,7 +12,7 @@ const systemSchema = z.object({
     status: z.literal('ready'),
   }),
   gateway: z.object({
-    provider: z.literal('codex'),
+    provider: z.enum(['codex', 'multi']),
     status: gatewayStatusSchema,
   }),
 })

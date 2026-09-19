@@ -2,7 +2,7 @@
 
 ## Context
 
-Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. Local account access, Codex OAuth/import, encrypted credentials, and gateway forwarding are implemented. Live subscription and desktop compatibility require separate evidence; see `docs/codex.md`.
+Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. Local account access, Codex, Claude, and Antigravity OAuth/import, encrypted credentials, and gateway forwarding are implemented. Live subscription and desktop compatibility require separate evidence; see `docs/codex.md`.
 
 Use English for code comments, `PRODUCT.md`, and primary developer documentation. Keep the English and Simplified Chinese UI dictionaries complete. English is the default interface language.
 
@@ -23,8 +23,8 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - `internal/storage` owns SQLite initialization, migrations, query SQL, and sqlc-generated database access under `internal/storage/db`.
 - `internal/server` owns chi routing and HTTP handling; it must not silently serve HTML for API errors.
 - `web` is a client-rendered React app and an embedded Go asset package. It must not require a Node.js server in production.
-- `internal/codex` owns the pinned public CLIProxyAPI translation SDK and Codex HTTP protocol. Use the lightweight adapter selected for this project; do not start the SDK service or import upstream `internal` packages.
-- `internal/accounts` owns subscription metadata and serialized credential changes, `internal/vault` owns encryption, `internal/oauth` owns session-bound PKCE attempts, and `internal/gateway` owns account affinity, request admission, and quota snapshot caching. Membership, policy, and storage code must not depend on SDK types.
+- `internal/upstream` owns provider protocols and the pinned public CLIProxyAPI SDK executors. Its SDK service is a private executor registry with an empty credential store, no-op watcher, blocked loopback HTTP routes, and automatic refresh disabled. Never register live credentials in the SDK manager or pass refresh tokens to execution auth. Antigravity may receive a refresh token only during the explicit SDK refresh call owned by `accounts.Prepare`; persist the returned snapshot before model execution. Do not import upstream `internal` packages.
+- `internal/accounts` owns subscription metadata and serialized credential changes, `internal/vault` owns encryption, `internal/oauth` owns session-bound OAuth attempts (PKCE where supported), and `internal/gateway` owns account affinity, request admission, and quota snapshot caching. Membership, policy, and storage code must not depend on SDK types.
 - Avoid adding packages solely for hypothetical reuse. Keep related code together and move it only when ownership or reuse justifies a boundary.
 
 ## Backend
