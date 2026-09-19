@@ -44,42 +44,8 @@ export function AccountUsage({ id, name }: { id: string; name: string }) {
   return (
     <section
       aria-label={t('accountUsageLabel', { name })}
-      className="space-y-3"
+      className="min-w-0 space-y-2"
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span className="font-medium">{t('accountUsage')}</span>
-          {query.data && (
-            <span>
-              {t('usageUpdated', {
-                time: new Intl.DateTimeFormat(locale, {
-                  dateStyle: 'short',
-                  timeStyle: 'short',
-                }).format(query.data.updated_at * 1000),
-              })}
-            </span>
-          )}
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs [@media(pointer:coarse)]:min-h-11"
-          disabled={query.isFetching || refreshing || coolingDown}
-          aria-label={t('refreshAccountUsage', { name })}
-          onClick={() => refresh.mutate()}
-        >
-          <RefreshCw
-            aria-hidden="true"
-            className={cn(
-              'size-3.5',
-              (query.isFetching || refreshing) && 'motion-safe:animate-spin',
-            )}
-          />
-          {coolingDown && !refreshing
-            ? t('usageRetryIn', { seconds: cooldown })
-            : t('refreshUsage')}
-        </Button>
-      </div>
       {query.isPending && (
         <p role="status" className="text-xs text-muted-foreground">
           {t('usageLoading')}
@@ -114,7 +80,7 @@ export function AccountUsage({ id, name }: { id: string; name: string }) {
                   {t('usageNotReported')}
                 </p>
               )}
-              <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+              <div className="space-y-3">
                 {limit.windows.map((window) => (
                   <QuotaWindow
                     key={window.kind}
@@ -127,6 +93,47 @@ export function AccountUsage({ id, name }: { id: string; name: string }) {
           ))}
         </div>
       )}
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        {query.data ? (
+          <time
+            dateTime={new Date(query.data.updated_at * 1000).toISOString()}
+            className="min-w-0 leading-5"
+          >
+            {t('usageUpdated', {
+              time: new Intl.DateTimeFormat(locale, {
+                dateStyle: 'short',
+                timeStyle: 'short',
+              }).format(query.data.updated_at * 1000),
+            })}
+          </time>
+        ) : (
+          <span className="sr-only">{t('accountUsage')}</span>
+        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {coolingDown && !refreshing && (
+            <span className="tabular-nums">
+              {t('usageRetryIn', { seconds: cooldown })}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground [@media(pointer:coarse)]:size-11"
+            disabled={query.isFetching || refreshing || coolingDown}
+            title={t('refreshUsage')}
+            aria-label={t('refreshAccountUsage', { name })}
+            onClick={() => refresh.mutate()}
+          >
+            <RefreshCw
+              aria-hidden="true"
+              className={cn(
+                'size-3.5',
+                (query.isFetching || refreshing) && 'motion-safe:animate-spin',
+              )}
+            />
+          </Button>
+        </div>
+      </div>
     </section>
   )
 }
@@ -200,7 +207,7 @@ function QuotaWindow({ window, now }: { window: UsageWindow; now: number }) {
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuetext={percentage}
-          className="h-1.5 overflow-hidden rounded-full bg-muted"
+          className="h-1 overflow-hidden rounded-full bg-muted"
         >
           <div
             className={cn(

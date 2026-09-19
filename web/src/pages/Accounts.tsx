@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
@@ -18,6 +18,7 @@ import {
   setAccountEnabled,
   type Account,
 } from '@/lib/accounts'
+import { cn } from '@/lib/cn'
 import { AccountUsage } from '@/components/AccountUsage'
 import { ConnectAccount } from '@/components/ConnectAccount'
 import { DeleteAccount } from '@/components/DeleteAccount'
@@ -30,6 +31,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
+
+const accountColumns =
+  '@3xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(8.5rem,0.7fr)_6rem]'
 
 export function Accounts() {
   const { t, i18n } = useTranslation()
@@ -134,166 +138,170 @@ export function Accounts() {
           </p>
         </section>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-5 py-3 font-medium">
-                  {t('accountName')}
-                </th>
-                <th
-                  scope="col"
-                  className="hidden px-5 py-3 font-medium sm:table-cell"
+        <div className="@container overflow-hidden rounded-xl border border-border bg-card">
+          <div
+            aria-hidden="true"
+            className={cn(
+              'hidden gap-x-6 border-b border-border px-5 py-3 text-xs text-muted-foreground @3xl:grid',
+              accountColumns,
+            )}
+          >
+            <span>{t('accountName')}</span>
+            <span>{t('accountUsage')}</span>
+            <span>{t('memberStatus')}</span>
+            <span className="text-right">{t('actions')}</span>
+          </div>
+          <ul
+            className="divide-y divide-border"
+            aria-label={t('accountsTitle')}
+          >
+            {query.data.accounts.map((account) => (
+              <li key={account.id}>
+                <article
+                  aria-labelledby={`account-${account.id}`}
+                  className={cn(
+                    'grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-6 gap-y-5 p-5',
+                    accountColumns,
+                  )}
                 >
-                  {t('memberStatus')}
-                </th>
-                <th
-                  scope="col"
-                  className="hidden px-5 py-3 font-medium xl:table-cell"
-                >
-                  {t('accountExpires')}
-                </th>
-                <th scope="col" className="px-5 py-3 text-right font-medium">
-                  {t('actions')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {query.data.accounts.map((account) => (
-                <Fragment key={account.id}>
-                  <tr>
-                    <td className="min-w-40 max-w-72 px-5 py-4">
-                      <p className="break-words font-medium">{account.name}</p>
-                      {account.email && (
-                        <p className="mt-1 break-all text-xs text-muted-foreground">
-                          {account.email}
-                        </p>
-                      )}
+                  <div className="col-span-2 min-w-0 @3xl:col-span-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                      <h2
+                        id={`account-${account.id}`}
+                        className="break-words text-sm font-medium"
+                      >
+                        {account.name}
+                      </h2>
                       {account.plan && (
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <span className="rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
                           {account.plan}
-                        </p>
+                        </span>
                       )}
-                      <div className="mt-2 sm:hidden">
-                        <AccountStatus account={account} />
-                      </div>
-                      <p className="mt-2 text-xs leading-5 text-muted-foreground xl:hidden">
-                        {t('accountExpires')}:{' '}
-                        {account.expires_at
-                          ? dates.format(account.expires_at * 1000)
-                          : t('accountUnknownExpiry')}
+                    </div>
+                    {account.email && (
+                      <p className="mt-1.5 break-all text-xs leading-5 text-muted-foreground">
+                        {account.email}
                       </p>
-                    </td>
-                    <td className="hidden px-5 py-4 sm:table-cell">
-                      <AccountStatus account={account} />
-                    </td>
-                    <td className="hidden whitespace-nowrap px-5 py-4 text-muted-foreground xl:table-cell">
-                      {account.expires_at
-                        ? dates.format(account.expires_at * 1000)
-                        : t('accountUnknownExpiry')}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex justify-end gap-1">
+                    )}
+                  </div>
+                  <div className="col-span-2 min-w-0 @3xl:col-span-1">
+                    {account.enabled && account.status !== 'reauth_required' ? (
+                      <AccountUsage id={account.id} name={account.name} />
+                    ) : (
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {t(
+                          account.enabled
+                            ? 'accountReauthorizeHint'
+                            : 'accountDisabledHint',
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  <div className="min-w-0 space-y-2.5">
+                    <AccountStatus account={account} />
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      <span className="block">{t('accountExpires')}</span>
+                      {account.expires_at ? (
+                        <time
+                          dateTime={new Date(
+                            account.expires_at * 1000,
+                          ).toISOString()}
+                        >
+                          {dates.format(account.expires_at * 1000)}
+                        </time>
+                      ) : (
+                        t('accountUnknownExpiry')
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground [@media(pointer:coarse)]:size-11"
+                      title={t('checkAccount')}
+                      aria-label={t('verifyAccountConnection', {
+                        name: account.name,
+                      })}
+                      disabled={pending || !account.enabled}
+                      onClick={() => {
+                        clear()
+                        check.mutate(account.id)
+                      }}
+                    >
+                      {check.isPending && check.variables === account.id ? (
+                        <LoaderCircle
+                          className="size-4 motion-safe:animate-spin"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <Check className="size-4" aria-hidden="true" />
+                      )}
+                    </Button>
+                    <DropdownMenu modal={false}>
+                      <DropdownMenuTrigger asChild>
                         <Button
-                          variant="outline"
-                          size="sm"
-                          className="hidden lg:inline-flex"
-                          disabled={pending || !account.enabled}
-                          onClick={() => {
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground [@media(pointer:coarse)]:size-11"
+                          title={t('accountActions', { name: account.name })}
+                          aria-label={t('accountActions', {
+                            name: account.name,
+                          })}
+                          disabled={pending}
+                        >
+                          <MoreHorizontal
+                            className="size-4"
+                            aria-hidden="true"
+                          />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="[@media(pointer:coarse)]:min-h-11"
+                          onSelect={() => {
                             clear()
-                            check.mutate(account.id)
+                            setConnecting(account)
                           }}
                         >
-                          {check.isPending && check.variables === account.id ? (
-                            <LoaderCircle
-                              className="motion-safe:animate-spin"
-                              aria-hidden="true"
-                            />
-                          ) : (
-                            <Check aria-hidden="true" />
+                          <RefreshCw aria-hidden="true" />
+                          {t('reauthorizeAccount')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="[@media(pointer:coarse)]:min-h-11"
+                          onSelect={() => {
+                            clear()
+                            update.mutate({
+                              id: account.id,
+                              enabled: !account.enabled,
+                            })
+                          }}
+                        >
+                          <Power aria-hidden="true" />
+                          {t(
+                            account.enabled
+                              ? 'disableAccount'
+                              : 'enableAccount',
                           )}
-                          {t('checkAccount')}
-                        </Button>
-                        <DropdownMenu modal={false}>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="[@media(pointer:coarse)]:size-11"
-                              aria-label={t('accountActions', {
-                                name: account.name,
-                              })}
-                              disabled={pending}
-                            >
-                              <MoreHorizontal aria-hidden="true" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              className="lg:hidden [@media(pointer:coarse)]:min-h-11"
-                              disabled={!account.enabled}
-                              onSelect={() => {
-                                clear()
-                                check.mutate(account.id)
-                              }}
-                            >
-                              <Check aria-hidden="true" />
-                              {t('checkAccount')}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="[@media(pointer:coarse)]:min-h-11"
-                              onSelect={() => {
-                                clear()
-                                setConnecting(account)
-                              }}
-                            >
-                              <RefreshCw aria-hidden="true" />
-                              {t('reauthorizeAccount')}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="[@media(pointer:coarse)]:min-h-11"
-                              onSelect={() => {
-                                clear()
-                                update.mutate({
-                                  id: account.id,
-                                  enabled: !account.enabled,
-                                })
-                              }}
-                            >
-                              <Power aria-hidden="true" />
-                              {t(
-                                account.enabled
-                                  ? 'disableAccount'
-                                  : 'enableAccount',
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-error focus:bg-error-muted focus:text-error [@media(pointer:coarse)]:min-h-11"
-                              onSelect={() => {
-                                clear()
-                                setRemoving(account)
-                              }}
-                            >
-                              <Trash2 aria-hidden="true" />
-                              {t('deleteAccount')}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </td>
-                  </tr>
-                  {account.enabled && account.status !== 'reauth_required' && (
-                    <tr className="!border-t-0">
-                      <td colSpan={4} className="px-5 pb-5 pt-0">
-                        <AccountUsage id={account.id} name={account.name} />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-error focus:bg-error-muted focus:text-error [@media(pointer:coarse)]:min-h-11"
+                          onSelect={() => {
+                            clear()
+                            setRemoving(account)
+                          }}
+                        >
+                          <Trash2 aria-hidden="true" />
+                          {t('deleteAccount')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {connecting && (

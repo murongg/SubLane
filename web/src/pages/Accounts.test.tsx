@@ -129,3 +129,66 @@ it('starts browser authorization and submits only the callback for the matching 
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(calls).toContain('/api/accounts/oauth/complete')
 })
+
+it('keeps quota, identity and accessible actions together for each account', async () => {
+  const calls: string[] = []
+  const now = Math.floor(Date.now() / 1000)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      calls.push(url)
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url.endsWith('/check'))
+        return Promise.resolve(response({ account, models: [] }))
+      if (url.endsWith('/usage'))
+        return Promise.resolve(
+          response({
+            updated_at: now,
+            server_time: now,
+            expires_at: now + 120,
+            stale: false,
+            refreshing: false,
+            refresh_failed: false,
+            retry_after_seconds: 0,
+            limits: [
+              {
+                name: '',
+                allowed: true,
+                limit_reached: false,
+                windows: [
+                  {
+                    kind: 'secondary',
+                    used_percent: 21,
+                    window_seconds: 604800,
+                    reset_at: now + 3600,
+                  },
+                ],
+              },
+            ],
+          }),
+        )
+      return Promise.resolve(response({ accounts: [account] }))
+    }),
+  )
+  open()
+  const row = await screen.findByRole('article', { name: 'Test subscription' })
+  expect(within(row).getByText('member@example.test')).toBeTruthy()
+  await within(row).findByText('79% remaining')
+  expect(
+    within(row).getByRole('button', {
+      name: 'Refresh usage for Test subscription',
+    }),
+  ).toBeTruthy()
+  await userEvent.setup().click(
+    within(row).getByRole('button', {
+      name: 'Verify connection for Test subscription',
+    }),
+  )
+  await waitFor(() =>
+    expect(calls).toContain('/api/accounts/synthetic-account/check'),
+  )
+  expect(
+    within(row).getByRole('button', { name: 'Actions for Test subscription' }),
+  ).toBeTruthy()
+})

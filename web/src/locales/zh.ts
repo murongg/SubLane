@@ -281,4 +281,5 @@ export const zh: Record<keyof typeof en, string> = {
   usageRetryIn: '{{seconds}} 秒后可刷新',
   usageRefreshingCached: '缓存额度已过期，正在刷新…',
   usageExpired: '缓存额度已过期，请刷新获取最新数据。',
+  verifyAccountConnection: '验证 {{name}} 的连接',
 }

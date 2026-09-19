@@ -318,4 +318,5 @@ export const en = {
   usageRetryIn: 'Retry in {{seconds}}s',
   usageRefreshingCached: 'Cached usage is outdated. Refreshing…',
   usageExpired: 'Cached usage is outdated. Refresh to update.',
+  verifyAccountConnection: 'Verify connection for {{name}}',
 } satisfies Record<string, string>
