@@ -1,24 +1,46 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { usageOptions, type UsageWindow } from '@/lib/usage'
+import { refreshUsage, usageOptions, type UsageWindow } from '@/lib/usage'
 import { cn } from '@/lib/cn'
 import { Button } from './ui/Button'
 
 export function AccountUsage({ id, name }: { id: string; name: string }) {
   const { t, i18n } = useTranslation()
+  const client = useQueryClient()
   const query = useQuery(usageOptions(id))
+  const refresh = useMutation({
+    mutationFn: () => refreshUsage(id),
+    onSuccess: (data) => client.setQueryData(usageOptions(id).queryKey, data),
+  })
   const [now, setNow] = useState(() => Date.now())
+  const cooldown = Math.max(
+    0,
+    (query.data?.retry_after_seconds ?? 0) -
+      Math.floor(Math.max(0, now - query.dataUpdatedAt) / 1000),
+  )
+  const coolingDown = cooldown > 0
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
+    const timer = window.setInterval(
+      () => setNow(Date.now()),
+      coolingDown ? 1000 : 30_000,
+    )
     return () => window.clearInterval(timer)
-  }, [])
+  }, [coolingDown])
   const locale = i18n.resolvedLanguage ?? 'en'
-  // Anchor to the server snapshot so clock skew and an old interval tick cannot extend a fresh reset countdown.
+  // Use the response clock, not the observation time: persisted snapshots may be hours old after a restart.
   const snapshotNow = query.data
-    ? query.data.updated_at * 1000 + Math.max(0, now - query.dataUpdatedAt)
+    ? query.data.server_time * 1000 + Math.max(0, now - query.dataUpdatedAt)
     : now
+  const refreshing =
+    refresh.isPending ||
+    (!query.isError && !refresh.isError && query.data?.refreshing === true)
+  const failed =
+    query.isError || refresh.isError || query.data?.refresh_failed === true
+  const stale =
+    query.data &&
+    (query.data.stale || snapshotNow >= query.data.expires_at * 1000)
   return (
     <section
       aria-label={t('accountUsageLabel', { name })}
@@ -31,8 +53,8 @@ export function AccountUsage({ id, name }: { id: string; name: string }) {
             <span>
               {t('usageUpdated', {
                 time: new Intl.DateTimeFormat(locale, {
-                  hour: 'numeric',
-                  minute: '2-digit',
+                  dateStyle: 'short',
+                  timeStyle: 'short',
                 }).format(query.data.updated_at * 1000),
               })}
             </span>
@@ -42,18 +64,20 @@ export function AccountUsage({ id, name }: { id: string; name: string }) {
           variant="ghost"
           size="sm"
           className="h-7 text-xs [@media(pointer:coarse)]:min-h-11"
-          disabled={query.isFetching}
+          disabled={query.isFetching || refreshing || coolingDown}
           aria-label={t('refreshAccountUsage', { name })}
-          onClick={() => query.refetch()}
+          onClick={() => refresh.mutate()}
         >
           <RefreshCw
             aria-hidden="true"
             className={cn(
               'size-3.5',
-              query.isFetching && 'motion-safe:animate-spin',
+              (query.isFetching || refreshing) && 'motion-safe:animate-spin',
             )}
           />
-          {t('refreshUsage')}
+          {coolingDown && !refreshing
+            ? t('usageRetryIn', { seconds: cooldown })
+            : t('refreshUsage')}
         </Button>
       </div>
       {query.isPending && (
@@ -61,11 +85,15 @@ export function AccountUsage({ id, name }: { id: string; name: string }) {
           {t('usageLoading')}
         </p>
       )}
-      {query.isError && (
+      {failed ? (
         <p role="status" className="text-xs text-warning">
           {t(query.data ? 'usageStale' : 'usageLoadFailed')}
         </p>
-      )}
+      ) : stale ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          {t(refreshing ? 'usageRefreshingCached' : 'usageExpired')}
+        </p>
+      ) : null}
       {query.data && (
         <div className="space-y-4">
           {query.data.limits.length === 0 && (

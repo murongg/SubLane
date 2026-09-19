@@ -72,7 +72,8 @@ func TestGatewayKeepsAccountAffinityAndBoundsActiveRequests(t *testing.T) {
 		return http.DefaultTransport.RoundTrip(copy)
 	}))
 	defer client.Close()
-	gateway := New(connection, service, client)
+	gateway := New(ctx, connection, service, client)
+	defer gateway.Close()
 	headers := http.Header{"Session_id": {"synthetic-conversation"}}
 	raw := []byte(`{"model":"synthetic-model","input":"synthetic prompt"}`)
 	for range 2 {

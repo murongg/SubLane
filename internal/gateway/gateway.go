@@ -39,10 +39,11 @@ type Service struct {
 	slots    chan struct{}
 	mu       sync.Mutex
 	next     int
+	usage    *usageCache
 }
 
-func New(connection *sql.DB, accounts *accounts.Service, provider *codex.Client) *Service {
-	return &Service{db: connection, queries: db.New(connection), accounts: accounts, provider: provider, slots: make(chan struct{}, 8)}
+func New(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *codex.Client) *Service {
+	return &Service{db: connection, queries: db.New(connection), accounts: accounts, provider: provider, slots: make(chan struct{}, 8), usage: newUsageCache(ctx)}
 }
 
 func (s *Service) Acquire() (func(), error) {
@@ -127,10 +128,6 @@ func (s *Service) Models(ctx context.Context, userID int64) ([]codex.Model, erro
 
 func (s *Service) Check(ctx context.Context, id string) ([]codex.Model, error) {
 	return readAccount(ctx, s, id, s.provider.Models)
-}
-
-func (s *Service) Usage(ctx context.Context, id string) (codex.Usage, error) {
-	return readAccount(ctx, s, id, s.provider.Usage)
 }
 
 // Account reads share the same refresh owner and stale-token rejection rules as forwarding.

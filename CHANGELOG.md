@@ -4,7 +4,7 @@
 
 ### Added
 
-- Subscription quota windows, remaining percentages, reset times, and manual refresh on the accounts page.
+- Subscription quota windows, remaining percentages, reset times, and manual refresh on the accounts page, with durable SQLite snapshots, bounded memory caching, shared refreshes, and stale/failure feedback.
 - Codex OAuth and auth.json import, encrypted subscription credentials, serialized refresh, account management, and member-key HTTP/SSE/WebSocket forwarding with pinned account affinity.
 - A lightweight public CLIProxyAPI translation adapter and opt-in synthetic Codex CLI protocol tests.
 

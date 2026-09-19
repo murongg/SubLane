@@ -315,4 +315,7 @@ export const en = {
   usageResetDays: 'Resets in {{days}}d {{hours}}h',
   usageResetHours: 'Resets in {{hours}}h {{minutes}}m',
   usageResetMinutes: 'Resets in {{minutes}}m',
+  usageRetryIn: 'Retry in {{seconds}}s',
+  usageRefreshingCached: 'Cached usage is outdated. Refreshing…',
+  usageExpired: 'Cached usage is outdated. Refresh to update.',
 } satisfies Record<string, string>

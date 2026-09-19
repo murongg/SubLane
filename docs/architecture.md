@@ -31,7 +31,7 @@ In development, Vite serves the React app and proxies `/api`, `/v1` including We
 | `internal/vault` | AES-GCM encryption and private local key loading | OAuth or account policy |
 | `internal/oauth` | Session-bound, single-use PKCE authorization attempts | Browser login or model forwarding |
 | `internal/codex` | Public SDK translation, token exchange, and Codex HTTP protocol | Team roles or database ownership |
-| `internal/gateway` | Bounded admission, account affinity, and per-request orchestration | Public management authorization |
+| `internal/gateway` | Bounded admission, account affinity, persisted quota snapshots, and per-request orchestration | Public management authorization |
 | `internal/storage` | SQLite lifecycle, migrations, and query SQL | Provider authentication |
 | `internal/storage/db` | Generated query methods and database row types | Domain policy or public JSON contracts |
 | `internal/server` | chi routes, response boundaries, SPA serving | Future routing/account policy |
@@ -40,7 +40,7 @@ In development, Vite serves the React app and proxies `/api`, `/v1` including We
 
 ## Persistence
 
-The database runs in WAL mode with foreign keys enabled, a bounded busy timeout, and one open connection. Startup applies ordered embedded SQL migrations and records each migration in the same transaction as its schema change. The settings and administrator/session migrations are followed by `003_members.sql`, which transactionally moves the existing administrator and session metadata into unified `users` and `sessions` tables. The first administrator remains ID 1 and cannot be disabled. `004_api_keys.sql` adds personal keys, and `005_accounts.sql` adds encrypted subscription credentials and bounded account-affinity records.
+The database runs in WAL mode with foreign keys enabled, a bounded busy timeout, and one open connection. Startup applies ordered embedded SQL migrations and records each migration in the same transaction as its schema change. The settings and administrator/session migrations are followed by `003_members.sql`, which transactionally moves the existing administrator and session metadata into unified `users` and `sessions` tables. The first administrator remains ID 1 and cannot be disabled. `004_api_keys.sql` adds personal keys, and `005_accounts.sql` adds encrypted subscription credentials and bounded account-affinity records. `006_usage.sql` stores the latest normalized quota snapshot per account with cascading deletion.
 
 New database files use mode `0600`; newly created data directories use `0700`. Existing directory permissions are not rewritten. Database configuration uses a properly escaped file URL so special characters in the path are supported.
 

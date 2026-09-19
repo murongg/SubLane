@@ -79,7 +79,9 @@ func newForwardFixture(t *testing.T, handler http.HandlerFunc) forwardFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewUnstartedServer(New(Options{Auth: identity, Keys: keys, Accounts: service, Gateway: gateway.New(db, service, client), Ping: db.PingContext}))
+	forwarding := gateway.New(ctx, db, service, client)
+	t.Cleanup(forwarding.Close)
+	server := httptest.NewUnstartedServer(New(Options{Auth: identity, Keys: keys, Accounts: service, Gateway: forwarding, Ping: db.PingContext}))
 	upgrades := &atomic.Int32{}
 	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
 		if state == http.StateHijacked {

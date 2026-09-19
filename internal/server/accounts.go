@@ -31,6 +31,7 @@ func (h *accountHTTP) register(router chi.Router) {
 		accounts.Delete("/{id}", h.remove)
 		accounts.Post("/{id}/check", h.check)
 		accounts.Get("/{id}/usage", h.usage)
+		accounts.Post("/{id}/usage/refresh", h.refreshUsage)
 	})
 }
 
@@ -187,17 +188,29 @@ func (h *accountHTTP) check(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *accountHTTP) usage(w http.ResponseWriter, r *http.Request) {
+	h.readUsage(w, r, false)
+}
+
+func (h *accountHTTP) refreshUsage(w http.ResponseWriter, r *http.Request) {
+	var input struct{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	h.readUsage(w, r, true)
+}
+
+func (h *accountHTTP) readUsage(w http.ResponseWriter, r *http.Request, force bool) {
 	if h.gateway == nil {
 		writeJSON(w, 503, map[string]string{"error": "unavailable"})
 		return
 	}
-	release, err := h.gateway.Acquire()
-	if err != nil {
-		accountError(w, err)
-		return
+	var usage gateway.UsageSnapshot
+	var err error
+	if force {
+		usage, err = h.gateway.RefreshUsage(r.Context(), chi.URLParam(r, "id"))
+	} else {
+		usage, err = h.gateway.Usage(r.Context(), chi.URLParam(r, "id"))
 	}
-	defer release()
-	usage, err := h.gateway.Usage(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		accountError(w, err)
 		return

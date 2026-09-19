@@ -72,7 +72,8 @@ func run() error {
 	}
 	provider := codex.New()
 	defer provider.Close()
-	forwarding := gateway.New(db, subscriptions, provider)
+	forwarding := gateway.New(ctx, db, subscriptions, provider)
+	defer forwarding.Close()
 	authorization := oauth.New(subscriptions, provider)
 	srv := &http.Server{
 		Addr:              cfg.Addr,

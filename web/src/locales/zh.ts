@@ -278,4 +278,7 @@ export const zh: Record<keyof typeof en, string> = {
   usageResetDays: '{{days}} 天 {{hours}} 小时后重置',
   usageResetHours: '{{hours}} 小时 {{minutes}} 分钟后重置',
   usageResetMinutes: '{{minutes}} 分钟后重置',
+  usageRetryIn: '{{seconds}} 秒后可刷新',
+  usageRefreshingCached: '缓存额度已过期，正在刷新…',
+  usageExpired: '缓存额度已过期，请刷新获取最新数据。',
 }

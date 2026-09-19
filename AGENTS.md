@@ -24,7 +24,7 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - `internal/server` owns chi routing and HTTP handling; it must not silently serve HTML for API errors.
 - `web` is a client-rendered React app and an embedded Go asset package. It must not require a Node.js server in production.
 - `internal/codex` owns the pinned public CLIProxyAPI translation SDK and Codex HTTP protocol. Use the lightweight adapter selected for this project; do not start the SDK service or import upstream `internal` packages.
-- `internal/accounts` owns subscription metadata and serialized credential changes, `internal/vault` owns encryption, `internal/oauth` owns session-bound PKCE attempts, and `internal/gateway` owns account affinity and request admission. Membership, policy, and storage code must not depend on SDK types.
+- `internal/accounts` owns subscription metadata and serialized credential changes, `internal/vault` owns encryption, `internal/oauth` owns session-bound PKCE attempts, and `internal/gateway` owns account affinity, request admission, and quota snapshot caching. Membership, policy, and storage code must not depend on SDK types.
 - Avoid adding packages solely for hypothetical reuse. Keep related code together and move it only when ownership or reuse justifies a boundary.
 
 ## Backend
@@ -37,6 +37,7 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - SQLite migrations are additive, ordered SQL files. Never edit an already released migration; add a new one.
 - Do not hold a database transaction open during network IO or model generation. Persist rotated credentials before returning them to callers.
 - Reauthorization must preserve upstream identity. Recheck gateway keys on every WebSocket turn, and never move an existing conversation to another account after disablement or deletion.
+- Persist a successful quota snapshot before publishing it. Cached reads must check account enablement; stale values retain their original observation time. Shared background refreshes use the process context and must be joined before closing SQLite.
 - Keep OAuth states, request bodies, stream events, WebSocket history, and concurrent operations bounded. Never read local Codex credentials automatically or use real credentials in tests.
 - Preserve cancellation and graceful shutdown. Future model streaming routes need explicit timeout and resource policies rather than blanket response buffering.
 - Do not add authentication bypasses or expose management endpoints as member APIs.

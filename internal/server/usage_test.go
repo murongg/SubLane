@@ -49,6 +49,15 @@ func TestAccountUsageRequiresAdminAndRefreshesRejectedCredential(t *testing.T) {
 	if result.Code != 200 || calls.Load() != 2 || refreshes.Load() != 1 || !strings.Contains(result.Body.String(), `"used_percent":35`) || strings.Contains(result.Body.String(), "synthetic-private") || result.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("usage: status=%d calls=%d refresh=%d body=%s", result.Code, calls.Load(), refreshes.Load(), result.Body)
 	}
+	if result := request(h, "POST", path+"/refresh", origin, map[string]string{}, member); result.Code != 403 {
+		t.Fatal("member refreshed quota")
+	}
+	if result := request(h, "POST", path+"/refresh", "https://other.example.test", map[string]string{}, owner); result.Code != 403 {
+		t.Fatal("quota refresh lost origin protection")
+	}
+	if result := request(h, "POST", path+"/refresh", origin, map[string]string{}, owner); result.Code != 200 || calls.Load() != 2 || !strings.Contains(result.Body.String(), `"stale":false`) {
+		t.Fatal("manual refresh did not honor cached cooldown", result.Code, result.Body)
+	}
 	request(h, "PATCH", "/api/accounts/"+listed.Accounts[0].ID, origin, map[string]bool{"enabled": false}, owner)
 	if result := request(h, "GET", path, "", nil, owner); result.Code != 409 || calls.Load() != 2 {
 		t.Fatal("disabled account queried upstream")
