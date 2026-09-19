@@ -139,6 +139,9 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	if n == 0 {
 		return Account{}, ErrDuplicate
 	}
+	if err := queries.AddDefaultGroupAccount(ctx, id); err != nil {
+		return Account{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return Account{}, err
 	}

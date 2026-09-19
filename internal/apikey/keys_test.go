@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage"
 )
 
@@ -133,5 +134,67 @@ func TestKeyLimitAndInvalidInput(t *testing.T) {
 		if _, err := keys.Authenticate(ctx, token); !errors.Is(err, ErrInvalidKey) {
 			t.Fatal("invalid token accepted")
 		}
+	}
+}
+
+func TestKeysEnforceGroupGrantsOnCreationAndEveryAuthentication(t *testing.T) {
+	ctx := context.Background()
+	connection, err := storage.Open(ctx, filepath.Join(t.TempDir(), "groups.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+		t.Fatal(err)
+	}
+	member, err := identity.CreateMember(ctx, "synthetic-member", "synthetic-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pools := groups.New(connection)
+	pool, err := pools.Save(ctx, 0, groups.Input{Name: "Private pool", Enabled: true, AccountIDs: []string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := New(connection)
+	if _, err := keys.CreateInGroup(ctx, member.ID, pool.ID, "Denied"); !errors.Is(err, groups.ErrUnavailable) {
+		t.Fatal("unauthorized group accepted", err)
+	}
+	if err := pools.SetMemberGroups(ctx, member.ID, []int64{pool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := keys.Create(ctx, member.ID, "Default denied"); !errors.Is(err, groups.ErrUnavailable) {
+		t.Fatal("omitted group bypassed revoked default grant", err)
+	}
+	created, err := keys.CreateInGroup(ctx, member.ID, pool.ID, "Synthetic key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, err := keys.Authenticate(ctx, created.Secret)
+	if err != nil || principal.GroupID != pool.ID {
+		t.Fatal("key group not preserved", err)
+	}
+	if err := pools.SetMemberGroups(ctx, member.ID, []int64{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := keys.Authenticate(ctx, created.Secret); !errors.Is(err, ErrInvalidKey) {
+		t.Fatal("revoked group access remained usable", err)
+	}
+	page, err := keys.List(ctx, member.ID, 0)
+	if err != nil || page.Keys[0].GroupAccess != "blocked" {
+		t.Fatal("blocked group not reflected in metadata", err)
+	}
+	if err := pools.SetMemberGroups(ctx, member.ID, []int64{pool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pools.Save(ctx, pool.ID, groups.Input{Name: pool.Name, Enabled: false, AccountIDs: []string{}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := keys.Authenticate(ctx, created.Secret); !errors.Is(err, ErrInvalidKey) {
+		t.Fatal("disabled group key worked", err)
 	}
 }

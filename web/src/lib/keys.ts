@@ -5,6 +5,9 @@ import { request } from './request'
 
 const keySchema = z.object({
   id: z.number().int().positive(),
+  group_id: z.number().int().positive(),
+  group_name: z.string().min(1),
+  group_access: z.enum(['allowed', 'blocked']),
   name: z.string().min(1).max(256),
   prefix: z.string().min(1).max(20),
   created_at: z.number().int().nonnegative(),
@@ -36,10 +39,10 @@ export function keyOptions(
       client.getQueryData<AuthState>(authKey)?.user?.id === userID,
   })
 }
-export function createKey(name: string) {
+export function createKey(input: { name: string; group_id: number }) {
   return request('/api/keys', createdSchema, {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(input),
   })
 }
 export function revokeKey(id: number) {

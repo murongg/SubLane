@@ -77,7 +77,7 @@ func TestGatewayKeepsAccountAffinityAndBoundsActiveRequests(t *testing.T) {
 	headers := http.Header{"Session_id": {"synthetic-conversation"}}
 	raw := []byte(`{"model":"synthetic-model","input":"synthetic prompt"}`)
 	for range 2 {
-		stream, err := gateway.Open(ctx, 1, raw, headers, Responses)
+		stream, err := gateway.Open(ctx, 1, 1, raw, headers, Responses)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,11 +96,11 @@ func TestGatewayKeepsAccountAffinityAndBoundsActiveRequests(t *testing.T) {
 	if _, err := service.SetEnabled(ctx, mapping[selected], false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gateway.Open(ctx, 1, raw, headers, Responses); !errors.Is(err, accounts.ErrDisabled) {
+	if _, err := gateway.Open(ctx, 1, 1, raw, headers, Responses); !errors.Is(err, accounts.ErrDisabled) {
 		t.Fatal("disabled conversation silently switched accounts", err)
 	}
 	headers.Set("Session_id", "new-conversation")
-	stream, err := gateway.Open(ctx, 1, raw, headers, Responses)
+	stream, err := gateway.Open(ctx, 1, 1, raw, headers, Responses)
 	if err != nil {
 		t.Fatal(err)
 	}

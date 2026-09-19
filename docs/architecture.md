@@ -26,7 +26,8 @@ In development, Vite serves the React app and proxies `/api`, `/v1` including We
 | `cmd/sublane` | Process signals, startup, wiring, shutdown | Domain policy |
 | `internal/config` | Validated process environment | Persistent team preferences |
 | `internal/auth` | Local users, roles, member lifecycle, and sessions | Member keys or upstream credentials |
-| `internal/apikey` | Personal gateway key metadata, hashes, revocation, and lookup | Browser sessions or upstream credentials |
+| `internal/groups` | Account pools, member grants, personal group choices, and scoped readiness | Credentials or model protocols |
+| `internal/apikey` | Personal gateway key metadata, hashes, immutable group bindings, revocation, and lookup | Browser sessions or upstream credentials |
 | `internal/accounts` | Subscription metadata, credential lifecycle, and refresh serialization | HTTP dispatch or client keys |
 | `internal/vault` | AES-GCM encryption and private local key loading | OAuth or account policy |
 | `internal/oauth` | Session-bound, single-use OAuth attempts | Browser login or model forwarding |
@@ -40,7 +41,7 @@ In development, Vite serves the React app and proxies `/api`, `/v1` including We
 
 ## Persistence
 
-The database runs in WAL mode with foreign keys enabled, a bounded busy timeout, and one open connection. Startup applies ordered embedded SQL migrations and records each migration in the same transaction as its schema change. The settings and administrator/session migrations are followed by `003_members.sql`, which transactionally moves the existing administrator and session metadata into unified `users` and `sessions` tables. The first administrator remains ID 1 and cannot be disabled. `004_api_keys.sql` adds personal keys, and `005_accounts.sql` adds encrypted subscription credentials and bounded account-affinity records. `006_usage.sql` stores the latest normalized quota snapshot per account with cascading deletion. `007_providers.sql` preserves accounts and snapshots while adding provider-scoped identities and affinity; legacy credentials and bindings remain Codex.
+The database runs in WAL mode with foreign keys enabled, a bounded busy timeout, and one open connection. Startup applies ordered embedded SQL migrations and records each migration in the same transaction as its schema change. The settings and administrator/session migrations are followed by `003_members.sql`, which transactionally moves the existing administrator and session metadata into unified `users` and `sessions` tables. The first administrator remains ID 1 and cannot be disabled. `004_api_keys.sql` adds personal keys, and `005_accounts.sql` adds encrypted subscription credentials and bounded account-affinity records. `006_usage.sql` stores the latest normalized quota snapshot per account with cascading deletion. `007_providers.sql` preserves accounts and snapshots while adding provider-scoped identities and affinity; legacy credentials and bindings remain Codex. `008_groups.sql` seeds the default account pool, grants existing members access, and scopes keys/affinity without replacing key hashes or old session digests. See [account groups](groups.md).
 
 New database files use mode `0600`; newly created data directories use `0700`. Existing directory permissions are not rewritten. Database configuration uses a properly escaped file URL so special characters in the path are supported.
 
@@ -79,6 +80,6 @@ Model IDs are qualified by channel (`codex/…`, `claude/…`, `antigravity/…`
 
 The vault key is generated as a 0600 file beside SQLite. Startup verifies existing encrypted records and fails closed if the key is missing or mismatched. Backups must preserve the key alongside the database. Refresh and administrator credential changes have one serialized owner; network IO never runs inside a database transaction.
 
-Affinity is scoped to the member, provider, and client session, persists across normal process restarts, and expires after 24 hours of inactivity. Disabled/deleted accounts fail existing conversations instead of triggering unsafe account switching. WebSocket transcript state stays connection-local and bounded. HTTP previous_response_id is rejected because the upstream HTTP backend is stateless; callers must supply full input.
+Affinity is scoped to the member, group, provider, and client session, persists across normal process restarts, and expires after 24 hours of inactivity. Disabled/deleted accounts and accounts removed from a pool fail existing conversations instead of triggering unsafe account switching. WebSocket transcript state stays connection-local and bounded. HTTP previous_response_id is rejected because the upstream HTTP backend is stateless; callers must supply full input.
 
 Automated protocol tests use synthetic credentials and fake upstreams. An opt-in test has verified Codex CLI 0.152.1 through HTTP/SSE and WebSocket modes. Real subscription and desktop verification are still separate acceptance steps. No universal memory or throughput budget is claimed; measure the intended workload and deployment platform.

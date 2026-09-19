@@ -8,10 +8,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/groups"
 )
 
 type keyHTTP struct {
 	service   *apikey.Service
+	groups    *groups.Service
 	gateway   *gateway.Service
 	publicURL string
 	sockets   chan struct{}
@@ -29,6 +31,7 @@ func (h *keyHTTP) register(router chi.Router) {
 	router.Group(func(keys chi.Router) {
 		keys.Use(h.requireAvailable)
 		keys.Get("/", h.list)
+		keys.Get("/groups", h.groupChoices)
 		keys.Post("/", h.create)
 		keys.Post("/{id}/revoke", h.revoke)
 	})
@@ -62,12 +65,17 @@ func (h *keyHTTP) list(w http.ResponseWriter, r *http.Request) {
 
 func (h *keyHTTP) create(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Name string `json:"name"`
+		Name    string `json:"name"`
+		GroupID *int64 `json:"group_id"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	created, err := h.service.Create(r.Context(), sessionUser(r).ID, input.Name)
+	groupID := groups.DefaultID
+	if input.GroupID != nil {
+		groupID = *input.GroupID
+	}
+	created, err := h.service.CreateInGroup(r.Context(), sessionUser(r).ID, groupID, input.Name)
 	if err != nil {
 		keyError(w, err)
 		return
@@ -96,6 +104,8 @@ func (h *keyHTTP) revoke(w http.ResponseWriter, r *http.Request) {
 func keyError(w http.ResponseWriter, err error) {
 	status, code := 503, "unavailable"
 	switch {
+	case errors.Is(err, groups.ErrUnavailable):
+		status, code = 403, "group_unavailable"
 	case errors.Is(err, apikey.ErrInput):
 		status, code = 400, "invalid_input"
 	case errors.Is(err, apikey.ErrLimit):

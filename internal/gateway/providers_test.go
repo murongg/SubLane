@@ -62,7 +62,7 @@ func TestAffinityIsPartitionedByProviderAndPersists(t *testing.T) {
 	ctx := context.Background()
 	for range 2 {
 		for provider, id := range ids {
-			actual, _, err := gateway.selectAccount(ctx, 1, "same-session", provider)
+			actual, _, err := gateway.selectAccount(ctx, 1, 1, "same-session", provider)
 			if err != nil || actual != id {
 				t.Fatal("provider binding crossed", provider, actual, err)
 			}
@@ -73,11 +73,11 @@ func TestAffinityIsPartitionedByProviderAndPersists(t *testing.T) {
 	}
 	reopened := New(ctx, gateway.db, gateway.accounts, gateway.provider)
 	defer reopened.Close()
-	_, err := reopened.Open(ctx, 1, []byte(`{"model":"claude/synthetic-model","input":"synthetic"}`), http.Header{"Session_id": {"same-session"}}, Responses)
+	_, err := reopened.Open(ctx, 1, 1, []byte(`{"model":"claude/synthetic-model","input":"synthetic"}`), http.Header{"Session_id": {"same-session"}}, Responses)
 	if !errors.Is(err, accounts.ErrDisabled) {
 		t.Fatal("disabled provider binding moved", err)
 	}
-	id, _, err := reopened.selectAccount(ctx, 1, "same-session", "codex")
+	id, _, err := reopened.selectAccount(ctx, 1, 1, "same-session", "codex")
 	if err != nil || id != ids["codex"] {
 		t.Fatal("another provider affected", err)
 	}
@@ -96,7 +96,7 @@ func TestModelCatalogKeepsHealthyProvidersAndCodexAliases(t *testing.T) {
 		}
 		return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
 	}))
-	models, err := gateway.Models(context.Background(), 1)
+	models, err := gateway.Models(context.Background(), 1, 1)
 	if err != nil {
 		t.Fatal("one provider hid every model", err)
 	}

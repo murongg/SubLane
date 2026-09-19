@@ -122,7 +122,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 		case message := <-messages:
 			// A successful handshake does not authorize later turns after member suspension or key revocation.
 			principal, err := h.service.Authenticate(ctx, strings.TrimSpace(secret))
-			if err != nil || principal.UserID != initial.UserID || principal.KeyID != initial.KeyID {
+			if err != nil || principal.UserID != initial.UserID || principal.KeyID != initial.KeyID || principal.GroupID != initial.GroupID {
 				_ = writeError(apikey.ErrInvalidKey)
 				return
 			}
@@ -153,7 +153,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			turnCtx, turnCancel := context.WithTimeout(ctx, 10*time.Minute)
-			err = h.websocketTurn(turnCtx, principal.UserID, normalized, headers, &conversation, write)
+			err = h.websocketTurn(turnCtx, principal.UserID, principal.GroupID, normalized, headers, &conversation, write)
 			turnCancel()
 			release()
 			if err != nil && ctx.Err() == nil {
@@ -165,8 +165,8 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *keyHTTP) websocketTurn(ctx context.Context, userID int64, request []byte, headers http.Header, conversation *gateway.Conversation, write func([]byte) error) error {
-	result, err := h.gateway.Open(ctx, userID, request, headers, gateway.Responses)
+func (h *keyHTTP) websocketTurn(ctx context.Context, userID, groupID int64, request []byte, headers http.Header, conversation *gateway.Conversation, write func([]byte) error) error {
+	result, err := h.gateway.Open(ctx, userID, groupID, request, headers, gateway.Responses)
 	if err != nil {
 		return err
 	}

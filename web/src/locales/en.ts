@@ -326,4 +326,53 @@ export const en = {
     'Import credential JSON exported by CLIProxyAPI for the selected provider. Credentials are encrypted on this instance.',
   providerQuotaUnsupported:
     'Quota reporting is not available for this provider yet.',
+  accountGroups: 'Account groups',
+  groupsDescription:
+    'Organize subscription accounts into pools for members and projects.',
+  groupsDefaultHint:
+    'Existing accounts and keys use the default group. New accounts and members join it automatically; administrators can adjust access.',
+  defaultGroup: 'Default group',
+  createGroup: 'Create group',
+  editGroup: 'Edit group',
+  editGroupNamed: 'Edit {{name}}',
+  groupName: 'Group name',
+  groupEnabled: 'Group enabled',
+  groupCounts: 'Accounts: {{accounts}} · Members: {{members}}',
+  loadingGroups: 'Loading groups…',
+  groupsLoadFailed: 'Could not load groups. Try again.',
+  groupEditorDescription:
+    'Choose the accounts available to keys in this group.',
+  groupAccounts: 'Subscription accounts',
+  groupAccountsHint:
+    'Accounts keep their other group memberships. For exclusive access, remove them from the default and other pools. Removing an account stops its existing conversations in this group.',
+  groupNoAccounts:
+    'Add a subscription account first, or save an empty pool and configure it later.',
+  saveGroup: 'Save group',
+  groupNameTaken: 'A group with this name already exists.',
+  groupLimitReached: 'This instance supports up to 32 groups.',
+  defaultGroupProtected:
+    'The default group stays enabled and keeps its name. You can edit its accounts and member access.',
+  groupInputInvalid:
+    'Use a group name of 1–64 characters and select existing accounts.',
+  groupSaveFailed: 'Could not save group changes. Try again.',
+  groupAccess: 'Group access',
+  memberGroupsNamed: 'Manage groups for {{username}}',
+  memberGroupsDescription:
+    'Choose which groups {{username}} can use when creating API keys.',
+  groupGrantRevocationHint:
+    'Removing access blocks existing keys for that group on their next request, including new WebSocket turns.',
+  memberNoGroupsHint:
+    'This member will not be able to create or use gateway keys until a group is granted.',
+  saveGroupAccess: 'Save access',
+  keyGroup: 'Account group',
+  keyGroupHint:
+    'This key can only use accounts in the selected group. Revoke and create a new key to change its group.',
+  noAvailableGroups:
+    'No groups are available. Ask your administrator to grant access.',
+  groupAccessChanged:
+    'Group access has changed. Select an available group and try again.',
+  keyGroupUnavailable: 'Group unavailable',
+  keyGroupName: 'Group: {{name}}',
+  chooseGroup: 'Choose a group',
+  clientGuideAction: 'Setup guide',
 } satisfies Record<string, string>

@@ -1,6 +1,6 @@
 import type { Role } from './auth'
 
-const administratorPaths = ['/accounts', '/members']
+const administratorPaths = ['/accounts', '/members', '/groups']
 
 export function canAccess(pathname: string, role: Role | undefined) {
   if (role === 'admin') return true

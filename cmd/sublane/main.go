@@ -18,6 +18,7 @@ import (
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/config"
 	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/oauth"
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/storage"
@@ -80,7 +81,7 @@ func run() error {
 	authorization := oauth.New(subscriptions, provider)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(server.Options{Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: apikey.New(db), PublicURL: cfg.PublicURL, Accounts: subscriptions, OAuth: authorization, Gateway: forwarding}),
+		Handler:           server.New(server.Options{Groups: groups.New(db), Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: apikey.New(db), PublicURL: cfg.PublicURL, Accounts: subscriptions, OAuth: authorization, Gateway: forwarding}),
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,

@@ -120,6 +120,9 @@ func (s *Service) Setup(ctx context.Context, username, password string) (Session
 	if n == 0 {
 		return Session{}, ErrInitialized
 	}
+	if err := s.queries.WithTx(tx).AddDefaultGroupMember(ctx, 1); err != nil {
+		return Session{}, err
+	}
 	session, err := s.createSession(ctx, tx, User{ID: 1})
 	if err != nil {
 		return Session{}, err

@@ -18,3 +18,11 @@ type Account struct {
 	CreatedAt  int64
 	UpdatedAt  int64
 }
+
+type AccountGroup struct {
+	ID        int64
+	Name      string
+	Enabled   bool
+	CreatedAt int64
+	UpdatedAt int64
+}

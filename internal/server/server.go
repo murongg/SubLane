@@ -15,6 +15,7 @@ import (
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/oauth"
 )
 
@@ -28,6 +29,7 @@ type Options struct {
 	Accounts  *accounts.Service
 	OAuth     *oauth.Flow
 	Gateway   *gateway.Service
+	Groups    *groups.Service
 	PublicURL string
 }
 
@@ -40,7 +42,7 @@ func New(o Options) http.Handler {
 	)
 	routeErrors(router)
 	login := &authHTTP{service: o.Auth, publicURL: o.PublicURL, limiter: newLoginLimiter()}
-	keys := &keyHTTP{service: o.Keys, gateway: o.Gateway, publicURL: o.PublicURL, sockets: make(chan struct{}, 8)}
+	keys := &keyHTTP{groups: o.Groups, service: o.Keys, gateway: o.Gateway, publicURL: o.PublicURL, sockets: make(chan struct{}, 8)}
 	accountManagement := &accountHTTP{service: o.Accounts, oauth: o.OAuth, gateway: o.Gateway}
 
 	health := func(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +65,14 @@ func New(o Options) http.Handler {
 			writeJSON(w, 503, map[string]string{"error": "storage_unavailable"})
 			return
 		}
+		if o.Groups != nil {
+			status, err := o.Groups.Connection(r.Context(), sessionUser(r).ID)
+			if err != nil {
+				writeJSON(w, 503, map[string]string{"error": "storage_unavailable"})
+				return
+			}
+			summary["status"] = status
+		}
 		writeJSON(w, 200, map[string]any{
 			"name": "SubLane", "version": o.Version, "status": "ok", "uptime_seconds": max(0, int64(time.Since(o.StartedAt).Seconds())),
 			"storage": map[string]string{"engine": "sqlite", "status": "ready"},
@@ -82,12 +92,16 @@ func New(o Options) http.Handler {
 			common.Use(login.requireUser)
 			common.NotFound(requireAdminRole(http.HandlerFunc(notFound)).ServeHTTP)
 			common.Get("/", func(w http.ResponseWriter, r *http.Request) {
-				summary, err := accountSummary(r.Context(), o.Accounts)
+				if o.Groups == nil {
+					writeJSON(w, 503, map[string]string{"error": "unavailable"})
+					return
+				}
+				status, err := o.Groups.Connection(r.Context(), sessionUser(r).ID)
 				if err != nil {
 					writeJSON(w, 503, map[string]string{"error": "unavailable"})
 					return
 				}
-				writeJSON(w, 200, map[string]any{"status": summary["status"]})
+				writeJSON(w, 200, map[string]string{"status": status})
 			})
 		})
 		api.Route("/keys", func(personal chi.Router) {
@@ -105,6 +119,7 @@ func New(o Options) http.Handler {
 		management.Head("/system", system)
 		management.Route("/members", login.registerMembers)
 		management.Route("/accounts", accountManagement.register)
+		management.Route("/groups", (&groupHTTP{service: o.Groups}).register)
 		api.Mount("/", management)
 	})
 	router.HandleFunc("/api", notFound)

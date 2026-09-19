@@ -69,6 +69,10 @@ The Compose service binds the host port to loopback and stores the database in a
 
 Open **Accounts** as the administrator, select **Codex**, **Claude**, or **Antigravity**, and authorize a subscription or import its credential JSON. Verify the connection, then use a personal API key and the configuration guide on **API keys**. See [provider setup and model selection](docs/providers.md) and [the complete Codex guide](docs/codex.md) for the manual OAuth callback, credential backups, client setup, and current limits.
 
+## Account groups
+
+Administrators can organize accounts into pools and grant member access. Each personal key is bound to one group; only accounts in that pool can serve its requests. Existing accounts and keys migrate to the default group. See [account groups](docs/groups.md) for isolation, shared accounts, and permission changes.
+
 ## Configuration
 
 | Environment variable | Default | Purpose |

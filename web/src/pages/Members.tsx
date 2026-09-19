@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { getMembers, setMemberEnabled } from '@/lib/members'
 import { Button } from '@/components/ui/Button'
 import { Status } from '@/components/Status'
+import { GroupAccess } from '@/components/GroupAccess'
 import { CreateMember } from '@/components/CreateMember'
 
 export function Members() {
@@ -127,32 +128,35 @@ export function Members() {
                     </time>
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={update.isPending}
-                      aria-label={t(
-                        member.enabled
-                          ? 'disableMemberNamed'
-                          : 'enableMemberNamed',
-                        { username: member.username },
-                      )}
-                      onClick={() =>
-                        update.mutate({
-                          id: member.id,
-                          enabled: !member.enabled,
-                        })
-                      }
-                    >
-                      {update.isPending &&
-                        update.variables.id === member.id && (
-                          <LoaderCircle
-                            className="motion-safe:animate-spin"
-                            aria-hidden="true"
-                          />
+                    <div className="flex items-center justify-end gap-2">
+                      <GroupAccess member={member} />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={update.isPending}
+                        aria-label={t(
+                          member.enabled
+                            ? 'disableMemberNamed'
+                            : 'enableMemberNamed',
+                          { username: member.username },
                         )}
-                      {t(member.enabled ? 'disableMember' : 'enableMember')}
-                    </Button>
+                        onClick={() =>
+                          update.mutate({
+                            id: member.id,
+                            enabled: !member.enabled,
+                          })
+                        }
+                      >
+                        {update.isPending &&
+                          update.variables.id === member.id && (
+                            <LoaderCircle
+                              className="motion-safe:animate-spin"
+                              aria-hidden="true"
+                            />
+                          )}
+                        {t(member.enabled ? 'disableMember' : 'enableMember')}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

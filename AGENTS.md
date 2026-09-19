@@ -19,7 +19,8 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - `cmd/sublane` owns startup, process lifecycle, and dependency wiring.
 - `internal/config` owns environment parsing and validation.
 - `internal/auth` owns local user credentials, roles, member lifecycle, first-run initialization, and persisted sessions.
-- `internal/apikey` owns personal gateway key generation, hashed storage, ownership, revocation, and bearer authentication. API keys must never authenticate browser management sessions.
+- `internal/groups` owns account pools, member group grants, available-group discovery, and group-scoped readiness. The default group preserves existing access; default grants can still be revoked.
+- `internal/apikey` owns personal gateway key generation, immutable group binding, hashed storage, ownership, revocation, and bearer authentication. API keys must never authenticate browser management sessions.
 - `internal/storage` owns SQLite initialization, migrations, query SQL, and sqlc-generated database access under `internal/storage/db`.
 - `internal/server` owns chi routing and HTTP handling; it must not silently serve HTML for API errors.
 - `web` is a client-rendered React app and an embedded Go asset package. It must not require a Node.js server in production.
@@ -36,7 +37,7 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - Keep transaction ownership in domain services and use `queries.WithTx(tx)` for every query inside a transaction. Keep database row types separate from public API responses.
 - SQLite migrations are additive, ordered SQL files. Never edit an already released migration; add a new one.
 - Do not hold a database transaction open during network IO or model generation. Persist rotated credentials before returning them to callers.
-- Reauthorization must preserve upstream identity. Recheck gateway keys on every WebSocket turn, and never move an existing conversation to another account after disablement or deletion.
+- Reauthorization must preserve upstream identity. Recheck gateway keys on every WebSocket turn, and never move an existing conversation to another account after disablement, deletion, or removal from its pool. Gateway candidates and models must remain inside the key’s group, and every request/WS turn must recheck current group access.
 - Persist a successful quota snapshot before publishing it. Cached reads must check account enablement; stale values retain their original observation time. Shared background refreshes use the process context and must be joined before closing SQLite.
 - Keep OAuth states, request bodies, stream events, WebSocket history, and concurrent operations bounded. Never read local Codex credentials automatically or use real credentials in tests.
 - Preserve cancellation and graceful shutdown. Future model streaming routes need explicit timeout and resource policies rather than blanket response buffering.

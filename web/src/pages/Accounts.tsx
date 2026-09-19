@@ -24,6 +24,7 @@ import { AccountUsage } from '@/components/AccountUsage'
 import { ConnectAccount } from '@/components/ConnectAccount'
 import { DeleteAccount } from '@/components/DeleteAccount'
 import { Status } from '@/components/Status'
+import { ProviderLogo } from '@/components/ProviderLogo'
 import { Button } from '@/components/ui/Button'
 import {
   DropdownMenu,
@@ -179,15 +180,18 @@ export function Accounts() {
                         </span>
                       )}
                     </div>
-                    <p className="mt-1.5 break-all text-xs leading-5 text-muted-foreground">
-                      <span>{providerLabels[account.provider]}</span>
+                    <div className="mt-1.5 flex items-center gap-2 text-xs leading-5 text-muted-foreground">
+                      <ProviderLogo
+                        provider={account.provider}
+                        alt={providerLabels[account.provider]}
+                        className="size-5"
+                      />
                       {account.email && (
-                        <>
-                          {' '}
-                          · <span>{account.email}</span>
-                        </>
+                        <span className="min-w-0 break-all">
+                          {account.email}
+                        </span>
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="col-span-2 min-w-0 @3xl:col-span-1">
                     {account.enabled &&

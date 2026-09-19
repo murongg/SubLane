@@ -1,17 +1,65 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy } from 'lucide-react'
+import { BookOpen, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { connectionOptions } from '@/lib/connection'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Status } from './Status'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from './ui/Sheet'
 
 export function ClientGuide({ userID }: { userID: number }) {
   const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [model, setModel] = useState('')
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button variant="outline">
+          <BookOpen aria-hidden="true" />
+          {t('clientGuideAction')}
+        </Button>
+      </SheetTrigger>
+      {open && (
+        <SheetContent className="h-dvh w-full gap-0 sm:max-w-xl">
+          <SheetHeader className="shrink-0 border-b border-border px-6 py-5 pe-14">
+            <SheetTitle>{t('clientGuideTitle')}</SheetTitle>
+            <SheetDescription className="leading-6">
+              {t('clientGuideDescription')}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-6">
+            <GuideContent
+              userID={userID}
+              model={model}
+              onModelChange={setModel}
+            />
+          </div>
+        </SheetContent>
+      )}
+    </Sheet>
+  )
+}
+
+function GuideContent({
+  userID,
+  model,
+  onModelChange,
+}: {
+  userID: number
+  model: string
+  onModelChange: (value: string) => void
+}) {
+  const { t } = useTranslation()
   const client = useQueryClient()
   const query = useQuery(connectionOptions(client, userID))
-  const [model, setModel] = useState('')
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
   const endpoint = `${window.location.origin}/v1`
@@ -27,14 +75,8 @@ export function ClientGuide({ userID }: { userID: number }) {
     }
   }
   return (
-    <section
-      className="space-y-5 border-t border-border pt-6"
-      aria-labelledby="client-guide-title"
-    >
+    <div className="min-w-0 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="client-guide-title" className="font-semibold">
-          {t('clientGuideTitle')}
-        </h2>
         <Status
           kind={
             query.isError || query.isPending
@@ -57,9 +99,6 @@ export function ClientGuide({ userID }: { userID: number }) {
           )}
         </Status>
       </div>
-      <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-        {t('clientGuideDescription')}
-      </p>
       {query.isError ? (
         <p className="text-sm text-muted-foreground">
           {t('connectionStatusError')}
@@ -89,7 +128,7 @@ export function ClientGuide({ userID }: { userID: number }) {
             id="client-model"
             value={model}
             onChange={(event) => {
-              setModel(event.target.value)
+              onModelChange(event.target.value)
               setCopied(false)
             }}
             maxLength={128}
@@ -123,6 +162,6 @@ export function ClientGuide({ userID }: { userID: number }) {
       <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
         {t('clientGuideNote')}
       </p>
-    </section>
+    </div>
   )
 }

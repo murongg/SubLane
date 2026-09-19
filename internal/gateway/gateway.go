@@ -15,14 +15,16 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/upstream"
 )
 
 var (
-	ErrNoAccount     = errors.New("no_accounts_available")
-	ErrBusy          = errors.New("gateway_busy")
-	ErrAffinityLimit = errors.New("conversation_limit")
+	ErrAffinityUnavailable = errors.New("conversation_account_unavailable")
+	ErrNoAccount           = errors.New("no_accounts_available")
+	ErrBusy                = errors.New("gateway_busy")
+	ErrAffinityLimit       = errors.New("conversation_limit")
 )
 
 type Kind uint8
@@ -57,7 +59,7 @@ func (s *Service) Acquire() (func(), error) {
 	}
 }
 
-func (s *Service) Open(ctx context.Context, userID int64, raw []byte, headers http.Header, kind Kind) (*upstream.Stream, error) {
+func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, headers http.Header, kind Kind) (*upstream.Stream, error) {
 	var input map[string]json.RawMessage
 	if json.Unmarshal(raw, &input) != nil || input == nil {
 		return nil, upstream.ErrInput
@@ -83,7 +85,7 @@ func (s *Service) Open(ctx context.Context, userID int64, raw []byte, headers ht
 	if len(session) > 1024 {
 		return nil, upstream.ErrInput
 	}
-	id, digest, err := s.selectAccount(ctx, userID, session, provider)
+	id, digest, err := s.selectAccount(ctx, userID, groupID, session, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -132,15 +134,19 @@ func (s *Service) Open(ctx context.Context, userID int64, raw []byte, headers ht
 	return result, nil
 }
 
-func (s *Service) Models(ctx context.Context, userID int64) ([]upstream.Model, error) {
+func (s *Service) Models(ctx context.Context, userID, groupID int64) ([]upstream.Model, error) {
+	allowed, err := poolAccounts(ctx, s.queries, userID, groupID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.accounts.List(ctx)
 	if err != nil {
 		return nil, err
 	}
-	providers := map[string]bool{}
+	providers := map[string]string{}
 	for _, row := range rows {
-		if row.Enabled && row.Status != "reauth_required" {
-			providers[row.Provider] = true
+		if allowed[row.ID] && row.Enabled && row.Status != "reauth_required" && providers[row.Provider] == "" {
+			providers[row.Provider] = row.ID
 		}
 	}
 	if len(providers) == 0 {
@@ -150,14 +156,11 @@ func (s *Service) Models(ctx context.Context, userID int64) ([]upstream.Model, e
 	var firstError error
 	successful := 0
 	for _, provider := range []string{"codex", "claude", "antigravity"} {
-		if !providers[provider] {
+		if providers[provider] == "" {
 			continue
 		}
-		id, _, err := s.selectAccount(ctx, userID, "", provider)
-		var models []upstream.Model
-		if err == nil {
-			models, err = s.Check(ctx, id)
-		}
+		// Discovery has no conversation state and must not create or reuse an affinity binding.
+		models, err := s.Check(ctx, providers[provider])
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
@@ -215,9 +218,13 @@ func readAccount[T any](ctx context.Context, s *Service, id string, read func(co
 	return result, err
 }
 
-func (s *Service) selectAccount(ctx context.Context, userID int64, session, provider string) (string, [32]byte, error) {
+func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, session, provider string) (string, [32]byte, error) {
 	digest := sha256.Sum256([]byte(fmt.Sprintf("%d:%s", userID, session)))
-	if userID <= 0 {
+	// Preserve legacy upstream session/cache IDs for conversations migrated into the default group.
+	if groupID != groups.DefaultID {
+		digest = sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%s", userID, groupID, session)))
+	}
+	if userID <= 0 || groupID <= 0 {
 		return "", digest, upstream.ErrInput
 	}
 	s.mu.Lock()
@@ -232,11 +239,19 @@ func (s *Service) selectAccount(ctx context.Context, userID int64, session, prov
 	}
 	defer tx.Rollback()
 	queries := s.queries.WithTx(tx)
+	allowed, err := poolAccounts(ctx, queries, userID, groupID)
+	if err != nil {
+		return "", digest, err
+	}
 	now := time.Now().Unix()
-	existing, err := queries.GetAccountAffinity(ctx, db.GetAccountAffinityParams{UserID: userID, SessionHash: digest[:], Provider: provider})
+	existing, err := queries.GetAccountAffinity(ctx, db.GetAccountAffinityParams{GroupID: groupID, UserID: userID, SessionHash: digest[:], Provider: provider})
 	expires := now + 24*3600
 	if err == nil && existing.ExpiresAt > now {
-		if err := queries.TouchAccountAffinity(ctx, db.TouchAccountAffinityParams{Provider: provider, UserID: userID, SessionHash: digest[:], ExpiresAt: expires, Threshold: expires - 1800}); err != nil {
+		// A pool edit is an authorization change, not permission to silently move a conversation.
+		if !allowed[existing.AccountID] {
+			return "", digest, ErrAffinityUnavailable
+		}
+		if err := queries.TouchAccountAffinity(ctx, db.TouchAccountAffinityParams{GroupID: groupID, Provider: provider, UserID: userID, SessionHash: digest[:], ExpiresAt: expires, Threshold: expires - 1800}); err != nil {
 			return "", digest, err
 		}
 		if err := tx.Commit(); err != nil {
@@ -260,7 +275,7 @@ func (s *Service) selectAccount(ctx context.Context, userID int64, session, prov
 	}
 	candidates := make([]string, 0, len(available))
 	for _, account := range available {
-		if account.Provider == provider && account.Enabled && account.Status != "reauth_required" {
+		if allowed[account.ID] && account.Provider == provider && account.Enabled && account.Status != "reauth_required" {
 			candidates = append(candidates, account.ID)
 		}
 	}
@@ -269,11 +284,30 @@ func (s *Service) selectAccount(ctx context.Context, userID int64, session, prov
 	}
 	id := candidates[s.next%len(candidates)]
 	s.next = (s.next + 1) % len(candidates)
-	if err := queries.CreateAccountAffinity(ctx, db.CreateAccountAffinityParams{Provider: provider, UserID: userID, SessionHash: digest[:], AccountID: id, ExpiresAt: expires}); err != nil {
+	if err := queries.CreateAccountAffinity(ctx, db.CreateAccountAffinityParams{GroupID: groupID, Provider: provider, UserID: userID, SessionHash: digest[:], AccountID: id, ExpiresAt: expires}); err != nil {
 		return "", digest, err
 	}
 	if err := tx.Commit(); err != nil {
 		return "", digest, err
 	}
 	return id, digest, nil
+}
+
+func poolAccounts(ctx context.Context, queries *db.Queries, userID, groupID int64) (map[string]bool, error) {
+	allowed, err := queries.CanUseGroup(ctx, db.CanUseGroupParams{UserID: userID, GroupID: groupID})
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, groups.ErrUnavailable
+	}
+	ids, err := queries.ListGroupAccounts(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		result[id] = true
+	}
+	return result, nil
 }

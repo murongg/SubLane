@@ -30,3 +30,7 @@ Ship and use this scope with a real internal team before expanding it. Build acc
 - More detailed operational diagnostics.
 
 Direct LDAP integration, billing, reseller workflows, and mandatory external databases are outside the initial scope.
+
+## Account pool groups
+
+Implemented default-group migration, administrator-managed pools, member grants, immutable API-key group bindings, group-scoped model discovery and conversation affinity, and permission rechecks on every WebSocket turn. Groups retain the subscription-first internal-team scope; billing, per-group quotas, and model allowlists remain outside this iteration. See [account groups](groups.md).

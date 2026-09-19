@@ -16,6 +16,7 @@ import (
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/upstream"
 )
 
@@ -62,7 +63,7 @@ func (h *keyHTTP) models(w http.ResponseWriter, r *http.Request) {
 	}
 	defer release()
 	principal, _ := r.Context().Value(keyPrincipalKey{}).(apikey.Principal)
-	models, err := h.gateway.Models(r.Context(), principal.UserID)
+	models, err := h.gateway.Models(r.Context(), principal.UserID, principal.GroupID)
 	if err != nil {
 		gatewayError(w, err)
 		return
@@ -110,7 +111,7 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
 	principal, _ := r.Context().Value(keyPrincipalKey{}).(apikey.Principal)
-	result, err := h.gateway.Open(ctx, principal.UserID, raw, r.Header, kind)
+	result, err := h.gateway.Open(ctx, principal.UserID, principal.GroupID, raw, r.Header, kind)
 	if err != nil {
 		gatewayError(w, err)
 		return
@@ -222,6 +223,10 @@ func gatewayFailure(err error) (int, string) {
 		return 400, "invalid_model_request"
 	case errors.Is(err, upstream.ErrContinuation):
 		return 400, "continuation_requires_full_input"
+	case errors.Is(err, groups.ErrUnavailable):
+		return 403, "group_unavailable"
+	case errors.Is(err, gateway.ErrAffinityUnavailable):
+		return 409, "conversation_account_unavailable"
 	case errors.Is(err, gateway.ErrNoAccount):
 		return 503, "no_accounts_available"
 	case errors.Is(err, gateway.ErrBusy), errors.Is(err, gateway.ErrAffinityLimit):

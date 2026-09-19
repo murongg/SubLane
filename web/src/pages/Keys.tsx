@@ -40,12 +40,16 @@ function KeyManager({ userID }: { userID: number }) {
           </h1>
           <p className="page-description">{t('apiKeysDescription')}</p>
         </div>
-        <CreateKey
-          onCreated={() => {
-            setCursors([0])
-            return invalidate()
-          }}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <ClientGuide userID={userID} />
+          <CreateKey
+            userID={userID}
+            onCreated={() => {
+              setCursors([0])
+              return invalidate()
+            }}
+          />
+        </div>
       </div>
       <p className="text-sm leading-6 text-muted-foreground">
         {t('gatewayKeysNotice')}
@@ -110,15 +114,35 @@ function KeyManager({ userID }: { userID: number }) {
                 <tr key={key.id}>
                   <td className="max-w-64 px-5 py-4">
                     <p className="break-words font-medium">{key.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t('keyGroupName', {
+                        name:
+                          key.group_id === 1
+                            ? t('defaultGroup')
+                            : key.group_name,
+                      })}
+                    </p>
                     <code className="mt-1 block text-xs text-muted-foreground">
                       {key.prefix}…
                     </code>
                   </td>
                   <td className="px-5 py-4">
                     <Status
-                      kind={key.revoked_at === null ? 'success' : 'neutral'}
+                      kind={
+                        key.revoked_at !== null
+                          ? 'neutral'
+                          : key.group_access === 'allowed'
+                            ? 'success'
+                            : 'warning'
+                      }
                     >
-                      {t(key.revoked_at === null ? 'active' : 'revoked')}
+                      {t(
+                        key.revoked_at !== null
+                          ? 'revoked'
+                          : key.group_access === 'allowed'
+                            ? 'active'
+                            : 'keyGroupUnavailable',
+                      )}
                     </Status>
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-muted-foreground">
@@ -159,7 +183,6 @@ function KeyManager({ userID }: { userID: number }) {
           </Button>
         </div>
       )}
-      <ClientGuide userID={userID} />
     </div>
   )
 }

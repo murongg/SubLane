@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import {
+  FolderClosed,
   KeyRound,
   LayoutDashboard,
   Settings,
@@ -45,6 +46,7 @@ const navigation = [
     label: 'administration',
     items: [
       { to: '/accounts', label: 'accounts', icon: Workflow },
+      { to: '/groups', label: 'accountGroups', icon: FolderClosed },
       { to: '/members', label: 'members', icon: Users },
     ],
   },

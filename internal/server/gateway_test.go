@@ -18,6 +18,7 @@ import (
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/vault"
@@ -34,6 +35,8 @@ type forwardFixture struct {
 	keyID, userID int64
 	keys          *apikey.Service
 	identity      *auth.Service
+	groups        *groups.Service
+	accounts      *accounts.Service
 }
 
 func newForwardFixture(t *testing.T, handler http.HandlerFunc) forwardFixture {
@@ -84,7 +87,8 @@ func newProviderFixture(t *testing.T, provider string, handler http.HandlerFunc)
 	}
 	forwarding := gateway.New(ctx, db, service, client)
 	t.Cleanup(forwarding.Close)
-	server := httptest.NewUnstartedServer(New(Options{Auth: identity, Keys: keys, Accounts: service, Gateway: forwarding, Ping: db.PingContext}))
+	pools := groups.New(db)
+	server := httptest.NewUnstartedServer(New(Options{Groups: pools, Auth: identity, Keys: keys, Accounts: service, Gateway: forwarding, Ping: db.PingContext}))
 	upgrades := &atomic.Int32{}
 	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
 		if state == http.StateHijacked {
@@ -93,7 +97,7 @@ func newProviderFixture(t *testing.T, provider string, handler http.HandlerFunc)
 	}
 	server.Start()
 	t.Cleanup(server.Close)
-	return forwardFixture{server: server, upgrades: upgrades, secret: created.Secret, keyID: created.Key.ID, userID: member.ID, keys: keys, identity: identity}
+	return forwardFixture{groups: pools, accounts: service, server: server, upgrades: upgrades, secret: created.Secret, keyID: created.Key.ID, userID: member.ID, keys: keys, identity: identity}
 }
 
 func TestGatewayForwardsResponsesAndCancelsUpstream(t *testing.T) {

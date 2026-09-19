@@ -1,7 +1,15 @@
 import { useState, type FormEvent } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { Copy, LoaderCircle, Plus } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronDown, Copy, LoaderCircle, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { availableGroupOptions } from '@/lib/groups'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from './ui/DropdownMenu'
 import { createKey } from '@/lib/keys'
 import { ApiError } from '@/lib/request'
 import { Button } from './ui/Button'
@@ -16,7 +24,13 @@ import {
   DialogTrigger,
 } from './ui/Dialog'
 
-export function CreateKey({ onCreated }: { onCreated: () => Promise<void> }) {
+export function CreateKey({
+  userID,
+  onCreated,
+}: {
+  userID: number
+  onCreated: () => Promise<void>
+}) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   return (
@@ -27,19 +41,34 @@ export function CreateKey({ onCreated }: { onCreated: () => Promise<void> }) {
           {t('createKey')}
         </Button>
       </DialogTrigger>
-      {open && <KeyForm onClose={() => setOpen(false)} onCreated={onCreated} />}
+      {open && (
+        <KeyForm
+          userID={userID}
+          onClose={() => setOpen(false)}
+          onCreated={onCreated}
+        />
+      )}
     </Dialog>
   )
 }
 
 function KeyForm({
+  userID,
   onClose,
   onCreated,
 }: {
+  userID: number
   onClose: () => void
   onCreated: () => Promise<void>
 }) {
   const { t } = useTranslation()
+  const client = useQueryClient()
+  const groups = useQuery(availableGroupOptions(client, userID))
+  const [selectedID, setSelectedID] = useState<number | null>(null)
+  const groupID = selectedID ?? groups.data?.groups[0]?.id
+  const selectedGroup = groups.data?.groups.find(
+    (group) => group.id === groupID,
+  )
   const [nameError, setNameError] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
@@ -48,6 +77,10 @@ function KeyForm({
     mutationFn: createKey,
     gcTime: 0,
     onSuccess: onCreated,
+    onError: async (error) => {
+      if (error instanceof ApiError && error.code === 'group_unavailable')
+        await groups.refetch()
+    },
   })
   const close = () => {
     mutation.reset()
@@ -55,7 +88,7 @@ function KeyForm({
   }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (mutation.isPending) return
+    if (mutation.isPending || groups.isError || !selectedGroup) return
     const data = new FormData(event.currentTarget)
     const name = String(data.get('name') ?? '').trim()
     const characters = Array.from(name)
@@ -68,7 +101,8 @@ function KeyForm({
       })
     setNameError(invalid)
     if (invalid) return
-    mutation.mutate(name)
+    setSelectedID(selectedGroup.id)
+    mutation.mutate({ name, group_id: selectedGroup.id })
   }
   const copy = async () => {
     if (!mutation.data) return
@@ -147,13 +181,80 @@ function KeyForm({
               </p>
             )}
           </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium" id="key-group-label">
+              {t('keyGroup')}
+            </p>
+            {groups.isPending ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                {t('loadingGroups')}
+              </p>
+            ) : groups.isError ? (
+              <div role="alert" className="space-y-2">
+                <p className="text-sm text-error">{t('groupsLoadFailed')}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => groups.refetch()}
+                >
+                  {t('reconnect')}
+                </Button>
+              </div>
+            ) : groups.data.groups.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {t('noAvailableGroups')}
+              </p>
+            ) : (
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between"
+                    aria-label={t('keyGroup')}
+                    disabled={mutation.isPending}
+                  >
+                    <span className="truncate">
+                      {selectedGroup
+                        ? selectedGroup.id === 1
+                          ? t('defaultGroup')
+                          : selectedGroup.name
+                        : t('chooseGroup')}
+                    </span>
+                    <ChevronDown aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-(--radix-dropdown-menu-trigger-width)">
+                  <DropdownMenuRadioGroup
+                    value={selectedGroup ? String(selectedGroup.id) : ''}
+                    onValueChange={(value) => setSelectedID(Number(value))}
+                  >
+                    {groups.data.groups.map((group) => (
+                      <DropdownMenuRadioItem
+                        key={group.id}
+                        value={String(group.id)}
+                      >
+                        {group.id === 1 ? t('defaultGroup') : group.name}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <p className="text-xs leading-5 text-muted-foreground">
+              {t('keyGroupHint')}
+            </p>
+          </div>
           {mutation.isError && (
             <p role="alert" className="text-sm text-error">
               {t(
                 mutation.error instanceof ApiError &&
                   mutation.error.code === 'api_key_limit'
                   ? 'keyLimitReached'
-                  : 'keyCreateFailed',
+                  : mutation.error instanceof ApiError &&
+                      mutation.error.code === 'group_unavailable'
+                    ? 'groupAccessChanged'
+                    : 'keyCreateFailed',
               )}
             </p>
           )}
@@ -166,7 +267,10 @@ function KeyForm({
             >
               {t('cancel')}
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
+            <Button
+              type="submit"
+              disabled={mutation.isPending || groups.isError || !selectedGroup}
+            >
               {mutation.isPending && (
                 <LoaderCircle
                   className="motion-safe:animate-spin"
