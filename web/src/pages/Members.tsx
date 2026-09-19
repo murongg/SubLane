@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Status } from '@/components/Status'
 import { GroupAccess } from '@/components/GroupAccess'
 import { CreateMember } from '@/components/CreateMember'
+import { MemberActions } from '@/components/MemberActions'
 
 export function Members() {
   const { t, i18n } = useTranslation()
@@ -15,6 +16,7 @@ export function Members() {
   const cursor = cursors[cursors.length - 1]
   const [creating, setCreating] = useState(false)
   const [createdName, setCreatedName] = useState('')
+  const [resetName, setResetName] = useState('')
   const query = useQuery({
     queryKey: ['members', cursor],
     queryFn: ({ signal }) => getMembers(cursor, signal),
@@ -48,6 +50,11 @@ export function Members() {
       {update.isError && (
         <p role="alert" className="text-sm text-error">
           {t('memberUpdateFailed')}
+        </p>
+      )}
+      {resetName && (
+        <p role="status" className="text-sm text-success">
+          {t('memberPasswordReset', { username: resetName })}
         </p>
       )}
       {query.isPending ? (
@@ -156,6 +163,10 @@ export function Members() {
                           )}
                         {t(member.enabled ? 'disableMember' : 'enableMember')}
                       </Button>
+                      <MemberActions
+                        member={member}
+                        onPasswordReset={() => setResetName(member.username)}
+                      />
                     </div>
                   </td>
                 </tr>

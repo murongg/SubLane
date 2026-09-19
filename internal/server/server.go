@@ -44,6 +44,7 @@ func New(o Options) http.Handler {
 	login := &authHTTP{service: o.Auth, publicURL: o.PublicURL, limiter: newLoginLimiter()}
 	keys := &keyHTTP{groups: o.Groups, service: o.Keys, gateway: o.Gateway, publicURL: o.PublicURL, sockets: make(chan struct{}, 8)}
 	accountManagement := &accountHTTP{service: o.Accounts, oauth: o.OAuth, gateway: o.Gateway}
+	memberManagement := &memberHTTP{gateway: o.Gateway}
 
 	health := func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]string{"status": "ok"})
@@ -116,6 +117,9 @@ func New(o Options) http.Handler {
 			personal.Use(login.requireUser)
 			personal.NotFound(requireAdminRole(http.HandlerFunc(notFound)).ServeHTTP)
 			personal.Get("/requests", accountManagement.personalRequests)
+			personal.With(login.throttleLogin).Post("/password", login.changePassword)
+			personal.Get("/limits", memberManagement.ownLimits)
+			personal.Get("/usage", memberManagement.ownUsage)
 		})
 		management := chi.NewRouter()
 		routeErrors(management)
@@ -123,7 +127,12 @@ func New(o Options) http.Handler {
 		management.Use(login.requireAdmin)
 		management.Get("/system", system)
 		management.Head("/system", system)
-		management.Route("/members", login.registerMembers)
+		management.Route("/members", func(members chi.Router) {
+			login.registerMembers(members)
+			members.Get("/{id}/limits", memberManagement.limits)
+			members.Patch("/{id}/limits", memberManagement.updateLimits)
+		})
+		management.Get("/usage", memberManagement.usage)
 		management.Route("/accounts", accountManagement.register)
 		management.Get("/requests", accountManagement.requests)
 		management.Route("/groups", (&groupHTTP{service: o.Groups}).register)

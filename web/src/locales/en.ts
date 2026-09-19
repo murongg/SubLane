@@ -1,4 +1,98 @@
 export const en = {
+  activityTitle: 'Activity by time',
+  activityGrid: 'Weekday and hour activity',
+  activityNotCollected: 'Not collected',
+  activityCoverage:
+    'Hourly totals collected since {{time}} (UTC); earlier hours are not included.',
+  activityKeys:
+    'Use arrow keys to move between hours and weekdays. Home and End move within a row; Control plus Home or End moves to the first or last cell.',
+  activitySamples: 'Matching hourly windows: {{count}}',
+  activityHint: 'Hover, tap or use arrow keys to inspect a time slot.',
+  activityLess: 'Less',
+  activityMore: 'More',
+  activityUnknown: 'Unknown',
+  usageInputTokens: 'Input tokens',
+  usageOutputTokens: 'Output tokens',
+  usageMetric: 'Chart metric',
+  usageChart: 'Usage chart',
+  usageChartHint: 'Hover or tap to inspect a day.',
+  usageChartKeys:
+    'Use Left and Right arrow keys to inspect days. Home and End select the first and last day.',
+  usageChartGaps: 'Missing token reports appear as gaps.',
+  usageNoTokenReports:
+    'No values were reported for this metric in this period.',
+  usageTokenNotReported: 'Not reported',
+  usageRankHint: 'The 20 most active entries, ordered by request count.',
+  usageViewDetails: 'View details',
+  usageHideDetails: 'Hide details',
+  changePassword: 'Change password',
+  currentPassword: 'Current password',
+  newPassword: 'New password',
+  resetPassword: 'Reset password',
+  resetPasswordFor: 'Reset password for {{username}}',
+  savePassword: 'Save password',
+  passwordSessionNotice:
+    'Use 8–20 characters. Saving signs this user out of all browser sessions. Existing API keys remain valid.',
+  currentPasswordInvalid: 'The current password is incorrect.',
+  passwordChangedRetry:
+    'The password or account status changed. Sign in again and retry.',
+  passwordRateLimited:
+    'Too many password attempts. Wait a minute and try again.',
+  passwordSaveFailed: 'Could not save the password. Please try again.',
+  memberPasswordReset: 'Password reset for {{username}}.',
+  memberActionsFor: 'More actions for {{username}}',
+  memberLimits: 'Request limits',
+  memberLimitsFor: 'Request limits for {{username}}',
+  memberLimitsDescription:
+    'All API keys and groups used by this member share these limits. Changes apply to new model requests.',
+  memberLimitsHint:
+    '0 means unlimited. Requests per minute: 0–6,000; concurrency: 0–8. Active calls are allowed to finish.',
+  memberLimitsInvalid:
+    'Enter whole numbers: 0–6,000 requests per minute and 0–8 concurrent requests.',
+  memberLimitsFailed:
+    'Could not load or save request limits. Please try again.',
+  loadingMemberLimits: 'Loading request limits…',
+  requestsPerMinute: 'Requests per minute',
+  memberConcurrency: 'Concurrent requests',
+  saveChanges: 'Save changes',
+  unlimited: 'Unlimited',
+  yourRequestLimits: 'Your request limits',
+  personalLimitsNotice:
+    'Minute limits reset at each minute boundary (UTC) and count admitted model attempts. Shared gateway and account limits still apply.',
+  reasonMemberBusy: 'Member concurrency limit reached',
+  reasonMemberRate: 'Member request rate limit reached',
+  usageSummary: 'Usage',
+  yourUsage: 'Your usage',
+  teamUsage: 'Team usage',
+  personalUsageDescription: 'Review your model calls and reported token usage.',
+  teamUsageDescription:
+    'Review team activity by day, member, model and account group.',
+  usagePeriod: 'Usage period',
+  usageToday: 'Today',
+  usageLastDays: 'Last {{days}} days',
+  usageBreakdown: 'Breakdown',
+  usageDaily: 'Daily',
+  usageModels: 'Models',
+  usageMembers: 'Members',
+  loadingUsageSummary: 'Loading usage summary…',
+  usageSummaryFailed: 'Could not load usage summary. Please try again.',
+  usageTrackingSince:
+    'Collecting since {{time}} (UTC). Earlier calls are not included.',
+  usageRequests: 'Requests',
+  usageCompletionRate: 'Completion rate',
+  usageAverageDuration: 'Average duration',
+  usageOutcomes:
+    'Completed {{completed}} · Incomplete {{incomplete}} · Failed {{errors}} · Canceled {{canceled}} · Rejected {{rejected}}',
+  usagePartialTokens:
+    'Some calls did not report token usage; totals include reported values only.',
+  usageReportedOnly: 'Reported values only',
+  statisticsUnknown: 'Unavailable',
+  usageOtherModels: 'Other models',
+  noUsageSummary: 'No usage in this period',
+  noUsageSummaryHint:
+    'Completed model attempts will appear here after usage collection begins.',
+  usageRetentionNote:
+    'UTC daily summaries are retained for 90 days, independently of recent request records. Breakdowns show the top 20 entries. These are operational statistics, not billing totals.',
   gatewayAttentionDescription:
     'Verify or reauthorize a subscription account to make the gateway available.',
   gatewayChecking: 'Checking gateway…',

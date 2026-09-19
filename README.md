@@ -21,7 +21,7 @@
   <a href="README.zh-CN.md">简体中文</a> · <a href="https://github.com/murongg/SubLane">Repository</a> · <a href="brand/README.md">Brand materials</a>
 </p>
 
-**Status: early development.** Administrator setup, member accounts, role-based management access, personal API keys, login/logout, SQLite persistence, the embedded frontend, themes, and English/Chinese localization work. Codex, Claude, and Antigravity OAuth/import, encrypted credentials, and HTTP/SSE/WebSocket forwarding are implemented and tested with synthetic upstreams. Live subscription and desktop validation are pending; usage reporting remains planned.
+**Status: early development.** Administrator setup, member accounts, role-based management access, personal API keys, login/logout, SQLite persistence, the embedded frontend, themes, and English/Chinese localization work. Codex, Claude, and Antigravity OAuth/import, encrypted credentials, and HTTP/SSE/WebSocket forwarding are implemented and tested with synthetic upstreams. Live subscription and desktop validation are pending; personal/team usage summaries, member request limits and password management are implemented.
 
 ## Stack
 
@@ -75,7 +75,7 @@ Administrators can organize accounts into pools and grant member access. Each pe
 
 ## Pool operation
 
-Accounts expose current concurrency and durable cooldown state, with administrator-configurable limits. Each user can inspect their own model-call metadata under **Requests**; administrators can inspect **All requests**. Neither view records prompt or response bodies. See [pool runtime](docs/pool-runtime.md) for recovery behavior, history retention, and current limits.
+Accounts expose current concurrency and durable cooldown state, with administrator-configurable limits. Each user can inspect their own model-call metadata under **Requests**; administrators can inspect **All requests**. Neither view records prompt or response bodies. See [pool runtime](docs/pool-runtime.md) for recovery behavior and request history. [Team controls](docs/team-controls.md) cover password management, member request limits and independent usage summaries.
 
 ## Configuration
 

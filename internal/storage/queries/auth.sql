@@ -16,7 +16,14 @@ SELECT id, username, role, password_hash FROM users
 WHERE username = sqlc.arg(username) AND enabled = 1;
 
 -- name: GetEnabledUser :one
-SELECT id, username, role FROM users WHERE id = sqlc.arg(id) AND enabled = 1;
+SELECT id, username, role, password_hash FROM users WHERE id = sqlc.arg(id) AND enabled = 1;
+
+-- name: GetPasswordUser :one
+SELECT id, role, enabled, password_hash FROM users WHERE id = sqlc.arg(id);
+
+-- name: ReplacePassword :execrows
+UPDATE users SET password_hash=sqlc.arg(password_hash)
+WHERE id=sqlc.arg(id) AND password_hash=sqlc.arg(previous_hash) AND enabled=sqlc.arg(enabled);
 
 -- name: DeleteExpiredSessions :exec
 DELETE FROM sessions WHERE expires_at <= sqlc.arg(now);

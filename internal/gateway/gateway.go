@@ -37,26 +37,27 @@ const (
 )
 
 type Service struct {
-	db          *sql.DB
-	queries     *db.Queries
-	accounts    *accounts.Service
-	provider    *upstream.Client
-	slots       chan struct{}
-	mu          sync.Mutex
-	next        map[string]int
-	health      map[string]*Runtime
-	now         func() time.Time
-	runContext  context.Context
-	stopRuntime context.CancelFunc
-	workers     sync.WaitGroup
-	closed      bool
-	sequence    int64
-	usage       *usageCache
+	db           *sql.DB
+	queries      *db.Queries
+	accounts     *accounts.Service
+	provider     *upstream.Client
+	slots        chan struct{}
+	mu           sync.Mutex
+	next         map[string]int
+	health       map[string]*Runtime
+	memberActive map[int64]int64
+	now          func() time.Time
+	runContext   context.Context
+	stopRuntime  context.CancelFunc
+	workers      sync.WaitGroup
+	closed       bool
+	sequence     int64
+	usage        *usageCache
 }
 
 func New(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *upstream.Client) *Service {
 	runContext, stopRuntime := context.WithCancel(ctx)
-	return &Service{next: make(map[string]int), health: make(map[string]*Runtime), now: time.Now, runContext: runContext, stopRuntime: stopRuntime, db: connection, queries: db.New(connection), accounts: accounts, provider: provider, slots: make(chan struct{}, 8), usage: newUsageCache(ctx)}
+	return &Service{memberActive: make(map[int64]int64), next: make(map[string]int), health: make(map[string]*Runtime), now: time.Now, runContext: runContext, stopRuntime: stopRuntime, db: connection, queries: db.New(connection), accounts: accounts, provider: provider, slots: make(chan struct{}, 8), usage: newUsageCache(ctx)}
 }
 
 func (s *Service) Acquire() (func(), error) {
@@ -112,6 +113,11 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		return nil, upstream.ErrInput
 	}
 	s.mu.Lock()
+	if err := s.admitMember(ctx, userID); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	entry.memberLeased = true
 	id, digest, err := s.selectAccount(ctx, userID, groupID, session, provider)
 	entry.record.AccountID = id
 	if err == nil {

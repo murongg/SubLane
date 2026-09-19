@@ -106,6 +106,10 @@ func TestSessionCreationRechecksDisabledUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	verified, err := s.queries.GetLoginUser(ctx, member.Username)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.SetMemberEnabled(ctx, member.ID, false); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +118,7 @@ func TestSessionCreationRechecksDisabledUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
-	if _, err := s.createSession(ctx, tx, member.User); !errors.Is(err, ErrCredentials) {
+	if _, err := s.createSession(ctx, tx, member.User, verified.PasswordHash); !errors.Is(err, ErrCredentials) {
 		t.Fatalf("session issued after disable: %v", err)
 	}
 }

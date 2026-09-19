@@ -61,19 +61,25 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, now int64) error {
 }
 
 const getEnabledUser = `-- name: GetEnabledUser :one
-SELECT id, username, role FROM users WHERE id = ?1 AND enabled = 1
+SELECT id, username, role, password_hash FROM users WHERE id = ?1 AND enabled = 1
 `
 
 type GetEnabledUserRow struct {
-	ID       int64
-	Username string
-	Role     string
+	ID           int64
+	Username     string
+	Role         string
+	PasswordHash string
 }
 
 func (q *Queries) GetEnabledUser(ctx context.Context, id int64) (GetEnabledUserRow, error) {
 	row := q.db.QueryRowContext(ctx, getEnabledUser, id)
 	var i GetEnabledUserRow
-	err := row.Scan(&i.ID, &i.Username, &i.Role)
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Role,
+		&i.PasswordHash,
+	)
 	return i, err
 }
 
@@ -96,6 +102,29 @@ func (q *Queries) GetLoginUser(ctx context.Context, username string) (GetLoginUs
 		&i.ID,
 		&i.Username,
 		&i.Role,
+		&i.PasswordHash,
+	)
+	return i, err
+}
+
+const getPasswordUser = `-- name: GetPasswordUser :one
+SELECT id, role, enabled, password_hash FROM users WHERE id = ?1
+`
+
+type GetPasswordUserRow struct {
+	ID           int64
+	Role         string
+	Enabled      bool
+	PasswordHash string
+}
+
+func (q *Queries) GetPasswordUser(ctx context.Context, id int64) (GetPasswordUserRow, error) {
+	row := q.db.QueryRowContext(ctx, getPasswordUser, id)
+	var i GetPasswordUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Role,
+		&i.Enabled,
 		&i.PasswordHash,
 	)
 	return i, err
@@ -134,6 +163,31 @@ func (q *Queries) HasAdministrator(ctx context.Context) (bool, error) {
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const replacePassword = `-- name: ReplacePassword :execrows
+UPDATE users SET password_hash=?1
+WHERE id=?2 AND password_hash=?3 AND enabled=?4
+`
+
+type ReplacePasswordParams struct {
+	PasswordHash string
+	ID           int64
+	PreviousHash string
+	Enabled      bool
+}
+
+func (q *Queries) ReplacePassword(ctx context.Context, arg ReplacePasswordParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, replacePassword,
+		arg.PasswordHash,
+		arg.ID,
+		arg.PreviousHash,
+		arg.Enabled,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const revokeSession = `-- name: RevokeSession :exec

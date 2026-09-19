@@ -1,9 +1,15 @@
 import { expect, it, vi } from 'vitest'
 import { QueryObserver } from '@tanstack/react-query'
 import { requestOptions } from './requests'
+import { statisticsOptions } from './statistics'
 import { authKey, authOptions } from './auth'
 import { createQueryClient } from './query'
-import { authenticated, memberAuthenticated, system } from '@/test/fixtures'
+import {
+  authenticated,
+  memberAuthenticated,
+  system,
+  hourlyActivity,
+} from '@/test/fixtures'
 
 it.each(['personal', 'all'] as const)(
   'stops a mounted %s history observer when the active identity changes',
@@ -58,4 +64,49 @@ it('removes administrator data when session refresh detects another identity', a
   expect(client.getQueryData(['system'])).toBeUndefined()
   expect(client.getQueryData(['members', 0])).toBeUndefined()
   client.clear()
+})
+
+it('stops usage refetches under an obsolete identity', async () => {
+  const client = createQueryClient()
+  client.setQueryData(authKey, authenticated)
+  const options = statisticsOptions(client, authenticated.user.id, 'all', 7)
+  client.setQueryData(options.queryKey, {
+    activity: hourlyActivity,
+    from_day: 1900000000,
+    to_day: 1900086400,
+    tracking_since: 1900000000,
+    totals: {
+      requests: 1,
+      completed: 1,
+      incomplete: 0,
+      errors: 0,
+      canceled: 0,
+      rejected: 0,
+      duration_ms: 120,
+      input_tokens: 0,
+      output_tokens: 0,
+      cached_tokens: 0,
+      input_reported: 0,
+      output_reported: 0,
+      cached_reported: 0,
+    },
+    days: [],
+    members: [],
+    models: [],
+    groups: [],
+  })
+  const fetch = vi
+    .fn()
+    .mockRejectedValue(new Error('Unexpected old-identity fetch'))
+  vi.stubGlobal('fetch', fetch)
+  const observer = new QueryObserver(client, options)
+  const unsubscribe = observer.subscribe(() => {})
+  try {
+    client.setQueryData(authKey, memberAuthenticated)
+    await client.invalidateQueries({ queryKey: ['statistics'] })
+    expect(fetch).not.toHaveBeenCalled()
+  } finally {
+    unsubscribe()
+    client.clear()
+  }
 })

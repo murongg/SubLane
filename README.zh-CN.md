@@ -21,7 +21,7 @@
   <a href="README.md">English</a> · <a href="https://github.com/murongg/SubLane">项目仓库</a> · <a href="brand/README.zh-CN.md">品牌物料</a>
 </p>
 
-**当前处于开发初期。** 已提供管理员初始化、成员账号创建与启停、角色权限控制、个人 API 密钥、登录退出、SQLite 持久化、内嵌前端、中英文切换和明暗主题。已实现 Codex、Claude、Antigravity OAuth／凭据 JSON 导入、凭据加密和 HTTP/SSE/WebSocket 转发，并通过模拟上游测试。真实订阅和桌面端仍待验收，用量统计尚未实现。
+**当前处于开发初期。** 已提供管理员初始化、成员账号创建与启停、角色权限控制、个人 API 密钥、登录退出、SQLite 持久化、内嵌前端、中英文切换和明暗主题。已实现 Codex、Claude、Antigravity OAuth／凭据 JSON 导入、凭据加密和 HTTP/SSE/WebSocket 转发，并通过模拟上游测试。真实订阅和桌面端仍待验收。已提供密码管理、成员请求限制和个人／团队用量汇总。
 
 后端使用 Go、chi 路由、sqlc 生成的类型安全查询和纯 Go SQLite 驱动。sqlc 只用于开发时生成代码，生产部署仍是单个进程。
 
@@ -81,4 +81,4 @@ Docker 部署同样通过页面创建首个管理员。网络部署应使用 HTT
 
 ## 账号池运行状态
 
-账号支持单账号并发限制、持久化冷却和请求驱动的恢复。每位用户可查看自己的请求记录，管理员还可查看全站请求的结果、耗时和已报告的 Token 用量，不记录提示词、响应正文或凭据。详见 [账号池运行说明](docs/pool-runtime.md)。
+账号支持单账号并发限制、持久化冷却和请求驱动的恢复。每位用户可查看自己的请求记录，管理员还可查看全站请求的结果、耗时和已报告的 Token 用量，不记录提示词、响应正文或凭据。详见 [账号池运行说明](docs/pool-runtime.md) 与 [团队管理说明](docs/team-controls.md)。
