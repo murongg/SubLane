@@ -73,7 +73,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, id string) (int64, error) {
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at FROM accounts WHERE id = ?1
+SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at, max_concurrency FROM accounts WHERE id = ?1
 `
 
 func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
@@ -92,26 +92,28 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MaxConcurrency,
 	)
 	return i, err
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, provider, name, email, plan, enabled, status, expires_at, created_at, updated_at
+SELECT id, provider, name, email, plan, enabled, status, expires_at, created_at, updated_at, max_concurrency
 FROM accounts ORDER BY created_at DESC, id DESC LIMIT 100
 `
 
 type ListAccountsRow struct {
-	ID        string
-	Provider  string
-	Name      string
-	Email     string
-	Plan      string
-	Enabled   bool
-	Status    string
-	ExpiresAt int64
-	CreatedAt int64
-	UpdatedAt int64
+	ID             string
+	Provider       string
+	Name           string
+	Email          string
+	Plan           string
+	Enabled        bool
+	Status         string
+	ExpiresAt      int64
+	CreatedAt      int64
+	UpdatedAt      int64
+	MaxConcurrency int64
 }
 
 func (q *Queries) ListAccounts(ctx context.Context) ([]ListAccountsRow, error) {
@@ -134,6 +136,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]ListAccountsRow, error) {
 			&i.ExpiresAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MaxConcurrency,
 		); err != nil {
 			return nil, err
 		}

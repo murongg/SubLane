@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -111,7 +112,7 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
 	principal, _ := r.Context().Value(keyPrincipalKey{}).(apikey.Principal)
-	result, err := h.gateway.Open(ctx, principal.UserID, principal.GroupID, raw, r.Header, kind)
+	result, err := h.gateway.Open(gateway.WithRequestIdentity(ctx, principal.KeyID, "http"), principal.UserID, principal.GroupID, raw, r.Header, kind)
 	if err != nil {
 		gatewayError(w, err)
 		return
@@ -124,9 +125,11 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	if kind == gateway.Compact {
 		data, err := io.ReadAll(io.LimitReader(result.Body, upstream.MaxBody+1))
 		if err != nil || len(data) > upstream.MaxBody || !json.Valid(data) {
+			result.Fail(upstream.ErrResponse)
 			gatewayError(w, upstream.ErrResponse)
 			return
 		}
+		result.AcceptCompact(data)
 		writeRawJSON(w, data)
 		return
 	}
@@ -229,6 +232,10 @@ func gatewayFailure(err error) (int, string) {
 		return 409, "conversation_account_unavailable"
 	case errors.Is(err, gateway.ErrNoAccount):
 		return 503, "no_accounts_available"
+	case errors.Is(err, gateway.ErrAccountCooling):
+		return 429, "account_cooling"
+	case errors.Is(err, gateway.ErrAccountBusy):
+		return 429, "account_busy"
 	case errors.Is(err, gateway.ErrBusy), errors.Is(err, gateway.ErrAffinityLimit):
 		return 429, "gateway_busy"
 	case errors.Is(err, accounts.ErrDisabled), errors.Is(err, accounts.ErrNotFound):
@@ -267,6 +274,10 @@ func gatewayError(w http.ResponseWriter, err error) {
 		var rejected *upstream.UpstreamError
 		if errors.As(err, &rejected) {
 			value = rejected.RetryAfter
+		}
+		var cooling *gateway.CoolingError
+		if errors.As(err, &cooling) {
+			value = strconv.FormatInt(cooling.RetryAfter, 10)
 		}
 		retryAfter(w, value)
 	}

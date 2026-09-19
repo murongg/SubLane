@@ -7,6 +7,7 @@ import {
   Plus,
   Power,
   RefreshCw,
+  SlidersHorizontal,
   Trash2,
   Workflow,
 } from 'lucide-react'
@@ -24,6 +25,8 @@ import { AccountUsage } from '@/components/AccountUsage'
 import { ConnectAccount } from '@/components/ConnectAccount'
 import { DeleteAccount } from '@/components/DeleteAccount'
 import { Status } from '@/components/Status'
+import { AccountLimits } from '@/components/AccountLimits'
+import { runtimeOptions } from '@/lib/runtime'
 import { ProviderLogo } from '@/components/ProviderLogo'
 import { Button } from '@/components/ui/Button'
 import {
@@ -41,6 +44,8 @@ export function Accounts() {
   const { t, i18n } = useTranslation()
   const client = useQueryClient()
   const query = useQuery(accountOptions)
+  const runtime = useQuery(runtimeOptions)
+  const [limits, setLimits] = useState<Account | null>(null)
   const [connecting, setConnecting] = useState<Account | 'new' | null>(null)
   const [removing, setRemoving] = useState<Account | null>(null)
   const [verified, setVerified] = useState<{
@@ -51,6 +56,7 @@ export function Accounts() {
   const invalidate = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['accounts'] }),
+      client.invalidateQueries({ queryKey: ['account-runtime'] }),
       client.invalidateQueries({ queryKey: ['system'] }),
       client.invalidateQueries({ queryKey: ['connection'] }),
     ])
@@ -97,6 +103,11 @@ export function Accounts() {
           {t('addAccount')}
         </Button>
       </div>
+      {runtime.isError && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {t('runtimeLoadFailed')}
+        </p>
+      )}
       {verified && (
         <p role="status" className="text-sm text-success">
           {t('accountVerificationResult', verified)}
@@ -212,6 +223,45 @@ export function Accounts() {
                   </div>
                   <div className="min-w-0 space-y-2.5">
                     <AccountStatus account={account} />
+                    {runtime.data?.accounts
+                      .filter((state) => state.id === account.id)
+                      .map((state) => (
+                        <div
+                          key={state.id}
+                          className="space-y-1.5 text-xs text-muted-foreground"
+                        >
+                          <p>
+                            {t('accountInFlight', {
+                              active: state.in_flight,
+                              limit: state.max_concurrency,
+                            })}
+                          </p>
+                          {account.enabled &&
+                            account.status !== 'reauth_required' &&
+                            state.state !== 'available' && (
+                              <>
+                                <Status kind="warning">
+                                  {t(
+                                    state.state === 'cooling'
+                                      ? 'accountCooling'
+                                      : state.state === 'probing'
+                                        ? 'accountProbing'
+                                        : 'accountRetryReady',
+                                  )}
+                                </Status>
+                                {state.state === 'cooling' && (
+                                  <p>
+                                    {t('accountRetryAt', {
+                                      time: dates.format(
+                                        state.cooldown_until * 1000,
+                                      ),
+                                    })}
+                                  </p>
+                                )}
+                              </>
+                            )}
+                        </div>
+                      ))}
                     <p className="text-xs leading-5 text-muted-foreground">
                       <span className="block">{t('accountExpires')}</span>
                       {account.expires_at ? (
@@ -270,6 +320,10 @@ export function Accounts() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => setLimits(account)}>
+                          <SlidersHorizontal aria-hidden="true" />
+                          {t('accountScheduling')}
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           className="[@media(pointer:coarse)]:min-h-11"
                           onSelect={() => {
@@ -316,6 +370,17 @@ export function Accounts() {
             ))}
           </ul>
         </div>
+      )}
+      {limits && (
+        <AccountLimits
+          account={limits}
+          runtime={runtime.data?.accounts.find(
+            (state) => state.id === limits.id,
+          )}
+          onClose={() => setLimits(null)}
+          onChanged={invalidate}
+          restoreFocus={restoreFocus}
+        />
       )}
       {connecting && (
         <ConnectAccount

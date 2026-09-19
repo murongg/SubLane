@@ -153,7 +153,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			turnCtx, turnCancel := context.WithTimeout(ctx, 10*time.Minute)
-			err = h.websocketTurn(turnCtx, principal.UserID, principal.GroupID, normalized, headers, &conversation, write)
+			err = h.websocketTurn(gateway.WithRequestIdentity(turnCtx, principal.KeyID, "websocket"), principal.UserID, principal.GroupID, normalized, headers, &conversation, write)
 			turnCancel()
 			release()
 			if err != nil && ctx.Err() == nil {

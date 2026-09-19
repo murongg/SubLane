@@ -111,6 +111,12 @@ func New(o Options) http.Handler {
 			personal.NotFound(requireAdminRole(http.HandlerFunc(notFound)).ServeHTTP)
 			keys.register(personal)
 		})
+		api.Route("/me", func(personal chi.Router) {
+			routeErrors(personal)
+			personal.Use(login.requireUser)
+			personal.NotFound(requireAdminRole(http.HandlerFunc(notFound)).ServeHTTP)
+			personal.Get("/requests", accountManagement.personalRequests)
+		})
 		management := chi.NewRouter()
 		routeErrors(management)
 		// Router middleware also protects 404/405 responses; inline With would only protect matched methods.
@@ -119,6 +125,7 @@ func New(o Options) http.Handler {
 		management.Head("/system", system)
 		management.Route("/members", login.registerMembers)
 		management.Route("/accounts", accountManagement.register)
+		management.Get("/requests", accountManagement.requests)
 		management.Route("/groups", (&groupHTTP{service: o.Groups}).register)
 		api.Mount("/", management)
 	})

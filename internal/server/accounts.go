@@ -23,6 +23,9 @@ func (h *accountHTTP) register(router chi.Router) {
 	router.Group(func(accounts chi.Router) {
 		accounts.Use(h.available)
 		accounts.Get("/", h.list)
+		accounts.Get("/runtime", h.runtime)
+		accounts.Patch("/{id}/limits", h.limits)
+		accounts.Post("/{id}/resume", h.resume)
 		accounts.Post("/import", h.importCredential)
 		accounts.Post("/oauth", h.beginOAuth)
 		accounts.Post("/oauth/complete", h.finishOAuth)

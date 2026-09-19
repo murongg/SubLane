@@ -146,12 +146,6 @@ func TestGatewayForwardsResponsesAndCancelsUpstream(t *testing.T) {
 	if err != nil || completed.ID != "resp_test" {
 		t.Fatal("invalid completed response", err)
 	}
-	response = call(context.Background(), `{"model":"synthetic-model","input":"synthetic-rate"}`)
-	data, _ := io.ReadAll(response.Body)
-	response.Body.Close()
-	if response.StatusCode != 429 || response.Header.Get("Retry-After") != "2" || strings.Contains(string(data), "synthetic-private-token") {
-		t.Fatal("upstream errors were not safely mapped")
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	response = call(ctx, `{"model":"synthetic-model","input":"synthetic-cancel","stream":true}`)
@@ -170,6 +164,13 @@ func TestGatewayForwardsResponsesAndCancelsUpstream(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("upstream request was not canceled")
 	}
+	response = call(context.Background(), `{"model":"synthetic-model","input":"synthetic-rate"}`)
+	data, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if response.StatusCode != 429 || response.Header.Get("Retry-After") != "2" || strings.Contains(string(data), "synthetic-private-token") {
+		t.Fatal("upstream errors were not safely mapped")
+	}
+
 }
 
 func TestGatewayTranslatesChatToolCalls(t *testing.T) {

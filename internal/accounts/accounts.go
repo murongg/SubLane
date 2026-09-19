@@ -29,16 +29,17 @@ var (
 )
 
 type Account struct {
-	ID        string `json:"id"`
-	Provider  string `json:"provider"`
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	Plan      string `json:"plan"`
-	Enabled   bool   `json:"enabled"`
-	Status    string `json:"status"`
-	ExpiresAt int64  `json:"expires_at"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	ID             string `json:"id"`
+	Provider       string `json:"provider"`
+	Name           string `json:"name"`
+	Email          string `json:"email"`
+	Plan           string `json:"plan"`
+	Enabled        bool   `json:"enabled"`
+	Status         string `json:"status"`
+	ExpiresAt      int64  `json:"expires_at"`
+	CreatedAt      int64  `json:"created_at"`
+	UpdatedAt      int64  `json:"updated_at"`
+	MaxConcurrency int64  `json:"max_concurrency"`
 }
 
 type Service struct {
@@ -145,7 +146,7 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	if err := tx.Commit(); err != nil {
 		return Account{}, err
 	}
-	return Account{ID: id, Provider: credential.Kind(), Name: name, Email: credential.Email, Plan: credential.Plan, Enabled: true, Status: status, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now}, nil
+	return Account{ID: id, Provider: credential.Kind(), Name: name, Email: credential.Email, Plan: credential.Plan, Enabled: true, Status: status, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now, MaxConcurrency: 2}, nil
 }
 
 func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) (Account, error) {
@@ -272,7 +273,7 @@ func (s *Service) get(ctx context.Context, id string) (db.Account, error) {
 }
 
 func metadata(row db.Account) Account {
-	return Account{ID: row.ID, Provider: row.Provider, Name: row.Name, Email: row.Email, Plan: row.Plan, Enabled: row.Enabled, Status: row.Status, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	return Account{ID: row.ID, Provider: row.Provider, Name: row.Name, Email: row.Email, Plan: row.Plan, Enabled: row.Enabled, Status: row.Status, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, MaxConcurrency: row.MaxConcurrency}
 }
 
 func NormalizeName(name string) (string, error) {

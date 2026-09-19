@@ -73,6 +73,10 @@ Open **Accounts** as the administrator, select **Codex**, **Claude**, or **Antig
 
 Administrators can organize accounts into pools and grant member access. Each personal key is bound to one group; only accounts in that pool can serve its requests. Existing accounts and keys migrate to the default group. See [account groups](docs/groups.md) for isolation, shared accounts, and permission changes.
 
+## Pool operation
+
+Accounts expose current concurrency and durable cooldown state, with administrator-configurable limits. Each user can inspect their own model-call metadata under **Requests**; administrators can inspect **All requests**. Neither view records prompt or response bodies. See [pool runtime](docs/pool-runtime.md) for recovery behavior, history retention, and current limits.
+
 ## Configuration
 
 | Environment variable | Default | Purpose |

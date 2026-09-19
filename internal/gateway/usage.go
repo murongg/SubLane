@@ -53,6 +53,11 @@ func newUsageCache(parent context.Context) *usageCache {
 }
 
 func (s *Service) Close() {
+	s.mu.Lock()
+	s.closed = true
+	s.stopRuntime()
+	s.mu.Unlock()
+	s.workers.Wait()
 	c := s.usage
 	c.mu.Lock()
 	// Close admission before waiting: no WaitGroup.Add may race with shutdown's Wait.

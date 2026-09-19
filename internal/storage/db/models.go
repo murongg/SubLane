@@ -5,18 +5,19 @@
 package db
 
 type Account struct {
-	ID         string
-	Provider   string
-	Name       string
-	AccountID  string
-	Email      string
-	Plan       string
-	Enabled    bool
-	Status     string
-	Credential []byte
-	ExpiresAt  int64
-	CreatedAt  int64
-	UpdatedAt  int64
+	ID             string
+	Provider       string
+	Name           string
+	AccountID      string
+	Email          string
+	Plan           string
+	Enabled        bool
+	Status         string
+	Credential     []byte
+	ExpiresAt      int64
+	CreatedAt      int64
+	UpdatedAt      int64
+	MaxConcurrency int64
 }
 
 type AccountGroup struct {

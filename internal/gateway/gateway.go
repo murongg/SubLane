@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -36,18 +37,26 @@ const (
 )
 
 type Service struct {
-	db       *sql.DB
-	queries  *db.Queries
-	accounts *accounts.Service
-	provider *upstream.Client
-	slots    chan struct{}
-	mu       sync.Mutex
-	next     int
-	usage    *usageCache
+	db          *sql.DB
+	queries     *db.Queries
+	accounts    *accounts.Service
+	provider    *upstream.Client
+	slots       chan struct{}
+	mu          sync.Mutex
+	next        map[string]int
+	health      map[string]*Runtime
+	now         func() time.Time
+	runContext  context.Context
+	stopRuntime context.CancelFunc
+	workers     sync.WaitGroup
+	closed      bool
+	sequence    int64
+	usage       *usageCache
 }
 
 func New(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *upstream.Client) *Service {
-	return &Service{db: connection, queries: db.New(connection), accounts: accounts, provider: provider, slots: make(chan struct{}, 8), usage: newUsageCache(ctx)}
+	runContext, stopRuntime := context.WithCancel(ctx)
+	return &Service{next: make(map[string]int), health: make(map[string]*Runtime), now: time.Now, runContext: runContext, stopRuntime: stopRuntime, db: connection, queries: db.New(connection), accounts: accounts, provider: provider, slots: make(chan struct{}, 8), usage: newUsageCache(ctx)}
 }
 
 func (s *Service) Acquire() (func(), error) {
@@ -59,7 +68,17 @@ func (s *Service) Acquire() (func(), error) {
 	}
 }
 
-func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, headers http.Header, kind Kind) (*upstream.Stream, error) {
+func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, headers http.Header, kind Kind) (exchange *Exchange, failure error) {
+	entry, err := s.begin(ctx, userID, groupID, kind)
+	if err != nil {
+		return nil, err
+	}
+	ctx = entry.ctx
+	defer func() {
+		if exchange == nil {
+			entry.fail(failure)
+		}
+	}()
 	var input map[string]json.RawMessage
 	if json.Unmarshal(raw, &input) != nil || input == nil {
 		return nil, upstream.ErrInput
@@ -68,10 +87,17 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if json.Unmarshal(input["model"], &model) != nil {
 		return nil, upstream.ErrInput
 	}
+	if safeModel.MatchString(model) {
+		entry.record.Model = model
+	}
 	provider := "codex"
 	if p, actual, found := strings.Cut(model, "/"); found && accounts.ValidProvider(p) {
 		provider, model = p, actual
 	}
+	if model == "" || len(model) > 128 {
+		return nil, upstream.ErrInput
+	}
+	entry.record.Provider = provider
 	input["model"], _ = json.Marshal(model)
 	if kind == Compact && provider != "codex" {
 		return nil, upstream.ErrInput
@@ -85,7 +111,17 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if len(session) > 1024 {
 		return nil, upstream.ErrInput
 	}
+	s.mu.Lock()
 	id, digest, err := s.selectAccount(ctx, userID, groupID, session, provider)
+	entry.record.AccountID = id
+	if err == nil {
+		state := s.health[id]
+		state.InFlight++
+		entry.record.AccountID = id
+		entry.revision = state.revision
+		entry.leased = true
+	}
+	s.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +167,7 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if result.StatusCode >= 200 && result.StatusCode < 300 {
 		_ = s.accounts.RecordUse(ctx, id, credential.AccessToken, true)
 	}
-	return result, nil
+	return trackExchange(result, entry), nil
 }
 
 func (s *Service) Models(ctx context.Context, userID, groupID int64) ([]upstream.Model, error) {
@@ -227,8 +263,15 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 	if userID <= 0 || groupID <= 0 {
 		return "", digest, upstream.ErrInput
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Called under s.mu by Open, keeping account selection and reservation atomic.
+	if err := s.loadRuntime(ctx); err != nil {
+		return "", digest, err
+	}
+	if session == "" {
+		if _, err := rand.Read(digest[:]); err != nil {
+			return "", digest, err
+		}
+	}
 	available, err := s.accounts.List(ctx)
 	if err != nil {
 		return "", digest, err
@@ -243,49 +286,85 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 	if err != nil {
 		return "", digest, err
 	}
-	now := time.Now().Unix()
-	existing, err := queries.GetAccountAffinity(ctx, db.GetAccountAffinityParams{GroupID: groupID, UserID: userID, SessionHash: digest[:], Provider: provider})
+	now := s.now().Unix()
 	expires := now + 24*3600
-	if err == nil && existing.ExpiresAt > now {
-		// A pool edit is an authorization change, not permission to silently move a conversation.
-		if !allowed[existing.AccountID] {
-			return "", digest, ErrAffinityUnavailable
+	if session != "" {
+		existing, err := queries.GetAccountAffinity(ctx, db.GetAccountAffinityParams{GroupID: groupID, UserID: userID, SessionHash: digest[:], Provider: provider})
+		if err == nil && existing.ExpiresAt > now {
+			// A pool edit is an authorization change, not permission to silently move a conversation.
+			if !allowed[existing.AccountID] {
+				return existing.AccountID, digest, ErrAffinityUnavailable
+			}
+			found := false
+			for _, account := range available {
+				if account.ID == existing.AccountID {
+					found = true
+					if err := s.accountAdmission(account); err != nil {
+						return existing.AccountID, digest, err
+					}
+					break
+				}
+			}
+			if !found {
+				return "", digest, accounts.ErrNotFound
+			}
+			if err := queries.TouchAccountAffinity(ctx, db.TouchAccountAffinityParams{GroupID: groupID, Provider: provider, UserID: userID, SessionHash: digest[:], ExpiresAt: expires, Threshold: expires - 1800}); err != nil {
+				return "", digest, err
+			}
+			if err := tx.Commit(); err != nil {
+				return "", digest, err
+			}
+			// Disabled or deleted accounts fail in Prepare; never silently move existing conversation state.
+			return existing.AccountID, digest, nil
 		}
-		if err := queries.TouchAccountAffinity(ctx, db.TouchAccountAffinityParams{GroupID: groupID, Provider: provider, UserID: userID, SessionHash: digest[:], ExpiresAt: expires, Threshold: expires - 1800}); err != nil {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return "", digest, err
 		}
-		if err := tx.Commit(); err != nil {
+		if err := queries.PruneAccountAffinity(ctx, now); err != nil {
 			return "", digest, err
 		}
-		// Disabled or deleted accounts fail in Prepare; never silently move existing conversation state.
-		return existing.AccountID, digest, nil
-	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return "", digest, err
-	}
-	if err := queries.PruneAccountAffinity(ctx, now); err != nil {
-		return "", digest, err
-	}
-	count, err := queries.CountAccountAffinity(ctx)
-	if err != nil {
-		return "", digest, err
-	}
-	if count >= 4096 {
-		return "", digest, ErrAffinityLimit
+		count, err := queries.CountAccountAffinity(ctx)
+		if err != nil {
+			return "", digest, err
+		}
+		if count >= 4096 {
+			return "", digest, ErrAffinityLimit
+		}
 	}
 	candidates := make([]string, 0, len(available))
+	busy := false
+	var cooling int64
 	for _, account := range available {
 		if allowed[account.ID] && account.Provider == provider && account.Enabled && account.Status != "reauth_required" {
+			if err := s.accountAdmission(account); err != nil {
+				if errors.Is(err, ErrAccountBusy) {
+					busy = true
+				}
+				var wait *CoolingError
+				if errors.As(err, &wait) && (cooling == 0 || wait.RetryAfter < cooling) {
+					cooling = wait.RetryAfter
+				}
+				continue
+			}
 			candidates = append(candidates, account.ID)
 		}
 	}
 	if len(candidates) == 0 {
+		if busy {
+			return "", digest, ErrAccountBusy
+		}
+		if cooling > 0 {
+			return "", digest, &CoolingError{RetryAfter: cooling}
+		}
 		return "", digest, ErrNoAccount
 	}
-	id := candidates[s.next%len(candidates)]
-	s.next = (s.next + 1) % len(candidates)
-	if err := queries.CreateAccountAffinity(ctx, db.CreateAccountAffinityParams{GroupID: groupID, Provider: provider, UserID: userID, SessionHash: digest[:], AccountID: id, ExpiresAt: expires}); err != nil {
-		return "", digest, err
+	cursor := fmt.Sprintf("%d:%s", groupID, provider)
+	id := candidates[s.next[cursor]%len(candidates)]
+	s.next[cursor] = (s.next[cursor] + 1) % len(candidates)
+	if session != "" {
+		if err := queries.CreateAccountAffinity(ctx, db.CreateAccountAffinityParams{GroupID: groupID, Provider: provider, UserID: userID, SessionHash: digest[:], AccountID: id, ExpiresAt: expires}); err != nil {
+			return "", digest, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return "", digest, err

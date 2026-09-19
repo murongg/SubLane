@@ -17,6 +17,7 @@ export const callbackURLs: Record<Provider, string> = {
 export const accountSchema = z.object({
   id: z.string().min(1),
   provider: z.enum(providers).default('codex'),
+  max_concurrency: z.number().int().min(1).max(8).default(2),
   name: z.string(),
   email: z.string(),
   plan: z.string(),

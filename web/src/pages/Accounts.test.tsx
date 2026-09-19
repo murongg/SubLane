@@ -245,3 +245,61 @@ it('chooses a provider and starts its authorization without reusing Codex URLs',
     expect((button as HTMLButtonElement).disabled).toBe(true)
   }
 })
+
+it('updates an account concurrency limit from scheduling settings', async () => {
+  let limit = 2
+  const fetch = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url.endsWith('/limits')) {
+        limit = JSON.parse(String(init?.body)).max_concurrency
+        return Promise.resolve(response({ ...account, max_concurrency: limit }))
+      }
+      if (url === '/api/accounts/runtime')
+        return Promise.resolve(
+          response({
+            accounts: [
+              {
+                id: account.id,
+                max_concurrency: limit,
+                in_flight: 0,
+                cooldown_until: 0,
+                reason: '',
+                failures: 0,
+                state: 'available',
+              },
+            ],
+            server_time: 1900000000,
+          }),
+        )
+      return Promise.resolve(
+        response({
+          accounts: [{ ...account, enabled: false, max_concurrency: limit }],
+        }),
+      )
+    })
+  vi.stubGlobal('fetch', fetch)
+  open()
+  const user = userEvent.setup()
+  await user.click(
+    await screen.findByRole('button', {
+      name: 'Actions for Test subscription',
+    }),
+  )
+  await user.click(
+    screen.getByRole('menuitem', { name: 'Scheduling settings' }),
+  )
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Scheduling settings',
+  })
+  const input = within(dialog).getByLabelText('Concurrent model requests')
+  await user.clear(input)
+  await user.type(input, '1')
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Save settings' }),
+  )
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(limit).toBe(1)
+})
