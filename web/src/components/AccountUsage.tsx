@@ -156,6 +156,14 @@ function QuotaWindow({ window, now }: { window: UsageWindow; now: number }) {
     window.used_percent === null
       ? null
       : Math.max(0, Math.min(100, 100 - window.used_percent))
+  const tone =
+    remaining === null
+      ? 'text-muted-foreground'
+      : remaining < 5
+        ? 'text-error'
+        : remaining < 20
+          ? 'text-warning'
+          : 'text-success'
   const percentage =
     remaining === null
       ? t('usageUnknown')
@@ -190,14 +198,7 @@ function QuotaWindow({ window, now }: { window: UsageWindow; now: number }) {
     <div className="space-y-1.5 text-xs">
       <div className="flex flex-wrap justify-between gap-x-3 gap-y-1">
         <span className="text-muted-foreground">{label}</span>
-        <span
-          className={cn(
-            'tabular-nums',
-            remaining !== null && remaining <= 10 && 'text-warning',
-          )}
-        >
-          {percentage}
-        </span>
+        <span className={cn('tabular-nums', tone)}>{percentage}</span>
       </div>
       {remaining !== null && (
         <div
@@ -210,10 +211,7 @@ function QuotaWindow({ window, now }: { window: UsageWindow; now: number }) {
           className="h-1 overflow-hidden rounded-full bg-muted"
         >
           <div
-            className={cn(
-              'h-full rounded-full bg-foreground',
-              remaining <= 10 && 'bg-warning',
-            )}
+            className={cn('h-full rounded-full bg-current', tone)}
             style={{ width: `${remaining}%` }}
           />
         </div>

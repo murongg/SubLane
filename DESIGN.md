@@ -93,6 +93,8 @@ Use the light and dark token pairs above. Dark mode changes both foreground and 
 
 Reserve `--destructive` for destructive controls. Error text and badges use `--error`, which has a lighter dark-theme foreground. Always pair status colors with text and, where helpful, an icon. Never rely on hue alone to communicate a state.
 
+Quota bars and remaining percentages use success at 20% or more, warning below 20%, and error below 5%. Unknown quota stays neutral and has no bar. These semantic tokens adapt to both themes; numeric labels remain visible.
+
 Keep text contrast at least 4.5:1 and visible control boundaries/focus indicators at least 3:1 against adjacent colors. Subtle structural dividers are not interactive control boundaries.
 
 ## Typography
