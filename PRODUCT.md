@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-A modular Go monolith with chi, sqlc-generated database queries, SQLite, and an embedded static frontend. The frontend uses the user-selected Shadcn Admin, React, TypeScript, Vite, TanStack Router, and TanStack Query. A dedicated adapter will integrate the CLIProxyAPI SDK in a subsequent milestone.
+A modular Go monolith with chi, sqlc-generated database queries, SQLite, and an embedded static frontend. The frontend uses the user-selected Shadcn Admin, React, TypeScript, Vite, TanStack Router, and TanStack Query. A provider adapter reuses CLIProxyAPI v7.3.7’s built-in executors while SubLane owns OAuth, encrypted storage, refresh, account selection, and the public HTTP boundary.
 
 ## Users
 
@@ -16,11 +16,11 @@ Administrators and members of internal teams. Administrators manage subscription
 
 ## Product Purpose
 
-Build a minimal, resource-efficient, self-hosted subscription gateway for internal teams. Prioritize Codex and support both its CLI and desktop clients. Consider official API key upstreams and other providers later.
+Build a minimal, resource-efficient, self-hosted subscription gateway for internal teams. Prioritize Codex and support both its CLI and desktop clients. Support Claude and Antigravity subscription accounts alongside Codex. Official API key upstreams remain later work.
 
 ## Capabilities and Constraints
 
-The foundation and local account access are implemented: one-time administrator setup, member creation and enable/disable controls, shared login/logout, per-user sessions, personal API key management and gateway authentication, administrator-only management APIs, role-aware navigation and homepages, startup configuration, SQLite migrations, health checks, themes, localization, and build tooling. Upstream account authorization, model forwarding, and usage reporting are not implemented yet. Do not populate the product with fabricated accounts, usage, or performance claims.
+The foundation and local account access are implemented: one-time administrator setup, member creation and enable/disable controls, shared login/logout, per-user sessions, personal API key management and gateway authentication, administrator-only management APIs, role-aware navigation and homepages, startup configuration, SQLite migrations, health checks, themes, localization, and build tooling. Codex, Claude, and Antigravity browser OAuth and credential JSON import, encrypted subscription credentials, and HTTP/SSE/WebSocket forwarding are implemented with synthetic upstream tests. Actual subscription authorization and desktop acceptance remain unverified; Codex subscription quota snapshots are available; Claude and Antigravity quota readers are not implemented; account pool groups, member grants, immutable key/group bindings, and group-scoped routing are implemented; per-account concurrency, durable cooldown/recovery, independent sessionless selection, and bounded request metadata with personal history and an administrator-wide view are implemented; aggregated per-member accounting and budgets are not implemented. Do not populate the product with fabricated accounts, usage, or performance claims.
 
 English is the default interface language. Support English and Simplified Chinese and persist the user's language preference. PRODUCT.md and the primary project documentation are written in English.
 

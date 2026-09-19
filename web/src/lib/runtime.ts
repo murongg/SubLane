@@ -1,0 +1,65 @@
+import { z } from 'zod'
+import type { en } from '@/locales/en'
+import { accountSchema } from './accounts'
+import { request } from './request'
+
+const runtimeSchema = z.object({
+  id: z.string(),
+  max_concurrency: z.number().int().min(1).max(8),
+  in_flight: z.number().int().nonnegative(),
+  cooldown_until: z.number().int().nonnegative(),
+  reason: z.string(),
+  failures: z.number().int().nonnegative(),
+  state: z.enum(['available', 'cooling', 'retry_ready', 'probing']),
+})
+export type AccountRuntime = z.infer<typeof runtimeSchema>
+export const runtimeOptions = {
+  queryKey: ['account-runtime'],
+  queryFn: ({ signal }: { signal: AbortSignal }) =>
+    request(
+      '/api/accounts/runtime',
+      z.object({
+        accounts: z.array(runtimeSchema).max(100),
+        server_time: z.number().int(),
+      }),
+      { signal },
+    ),
+  refetchInterval: 5000,
+  staleTime: 2000,
+}
+export function setConcurrency({
+  id,
+  max_concurrency,
+}: {
+  id: string
+  max_concurrency: number
+}) {
+  return request(`/api/accounts/${id}/limits`, accountSchema, {
+    method: 'PATCH',
+    body: JSON.stringify({ max_concurrency }),
+  })
+}
+export function resumeAccount(id: string) {
+  return request(`/api/accounts/${id}/resume`, z.undefined(), {
+    method: 'POST',
+    body: '{}',
+  })
+}
+export const reasonKeys: Record<string, keyof typeof en> = {
+  context_limit: 'reasonContextLimit',
+  rate_limited: 'reasonRateLimited',
+  timeout: 'reasonTimeout',
+  upstream_error: 'reasonUpstream',
+  upstream_unavailable: 'reasonUpstream',
+  stream_interrupted: 'reasonInterrupted',
+  client_disconnected: 'reasonCanceled',
+  account_busy: 'reasonAccountBusy',
+  account_cooling: 'reasonCooling',
+  account_unavailable: 'reasonAccountUnavailable',
+  group_unavailable: 'reasonGroupUnavailable',
+  auth_required: 'reasonAuthRequired',
+  upstream_forbidden: 'reasonForbidden',
+  upstream_rejected: 'reasonRejected',
+  invalid_request: 'reasonInvalid',
+  refresh_failed: 'reasonRefresh',
+}

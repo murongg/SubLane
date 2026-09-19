@@ -28,7 +28,7 @@ Unknown or other-user key IDs return `404 api_key_not_found`. The active-key lim
 
 Clients supply `Authorization: Bearer <api-key>` to `/v1/*`. Browser session cookies alone do not authenticate gateway requests. Conversely, API keys cannot access `/api/system`, `/api/members`, or `/api/keys`.
 
-Missing, invalid, revoked, and suspended-owner keys return `401 invalid_api_key`. For a valid key, `GET /v1/models`, `POST /v1/responses`, and `POST /v1/chat/completions` currently return `501 gateway_not_configured`. Unknown gateway paths return JSON 404 responses after authentication. This establishes the credential boundary; it does not implement model forwarding or prove Codex client compatibility.
+Missing, invalid, revoked, and suspended-owner keys return `401 invalid_api_key`. Valid keys can discover models and forward Responses HTTP/SSE/WebSocket, compaction, and Chat Completions requests through configured Codex subscriptions. Every WebSocket turn rechecks the key and member enablement. Unknown gateway paths return JSON 404 responses after authentication. See [Codex gateway](codex.md) for configuration, limits, and remaining live-client validation.
 
 Use the backend origin in development, or Vite's `/v1` proxy. The production binary serves the UI and gateway on the same origin. Use HTTPS for network deployments and avoid putting real keys into source control, shared logs, or shell history.
 

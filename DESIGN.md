@@ -93,6 +93,8 @@ Use the light and dark token pairs above. Dark mode changes both foreground and 
 
 Reserve `--destructive` for destructive controls. Error text and badges use `--error`, which has a lighter dark-theme foreground. Always pair status colors with text and, where helpful, an icon. Never rely on hue alone to communicate a state.
 
+Quota bars and remaining percentages use success at 20% or more, warning below 20%, and error below 5%. Unknown quota stays neutral and has no bar. These semantic tokens adapt to both themes; numeric labels remain visible.
+
 Keep text contrast at least 4.5:1 and visible control boundaries/focus indicators at least 3:1 against adjacent colors. Subtle structural dividers are not interactive control boundaries.
 
 ## Typography
@@ -143,7 +145,7 @@ Desktop controls are compact. Coarse-pointer targets expand to at least 44px tal
 
 ### Navigation
 
-Navigation follows persisted roles. The upper **General** group contains the shared overview and personal API key entries; the lower **Administration** group contains subscription accounts and member management and is hidden entirely for members. The overview itself shows instance information for administrators and a personal workspace for members. API key management is common to both roles and shows only the current user’s records; creation displays the full secret in a one-time dialog, and revocation requires confirmation. Both roles retain personal preferences in the header. Direct access to an administrator route shows a localized access-denied page before management content mounts. Member management uses a paginated table and a focused creation sheet; status changes show clear pending and error feedback.
+Navigation follows persisted roles. The upper **General** group contains the shared overview, personal API key, and personal request-history entries; the lower **Administration** group contains subscription accounts, account groups, all request records, and member management and is hidden entirely for members. The overview itself shows instance information for administrators and a personal workspace for members. API key management is common to both roles and shows only the current user’s records. Client configuration is opened on demand from a secondary Setup guide button beside Create key, using a right-side sheet with a fixed header and scrollable content. The closed guide takes no space below the key list and does not poll connection state; creation displays the full secret in a one-time dialog, and revocation requires confirmation. Both roles retain personal preferences in the header. Direct access to an administrator route shows a localized access-denied page before management content mounts. Member management uses a paginated table and a focused creation sheet; status changes show clear pending and error feedback.
 
 Reuse `SidebarProvider`, `Sidebar`, `SidebarMenuButton`, and `SidebarTrigger`. Active routes have a neutral selection surface and `aria-current`. Close the mobile sheet after navigation and retain keyboard focus handling from Radix. The account trigger opens a Shadcn Admin-style menu beside the desktop sidebar or above the trigger on mobile. Show the real username, account role, and a sign-out action; keep pending and failed sign-out feedback visible in the sidebar.
 
@@ -160,6 +162,14 @@ Use the shared `Status` component for success, warning, error, information, or n
 ### Data, errors, and empty states
 
 System data comes from the backend. Show a loading state while connecting, an actionable error with retry on failure, and an explicit empty state for unavailable account integration. Never fill these states with invented account counts or usage charts.
+
+The account connection form presents providers as three equal-width, horizontal choice buttons with their original full-color brand logos and short names. Preserve a neutral selected border/background, a checkmark, keyboard focus, and accessible pressed state. Keep all three options visible on narrow screens. Provider brand marks are an intentional exception to the monochrome supporting-graphics rule; do not recolor them with interface status tokens.
+
+Subscription accounts use a compact list: identity and plan, quota windows, account status with token expiry, and icon actions align in columns when the list has enough width. Narrow containers stack the same content in reading order. Keep each quota window within its column; a single window must not occupy a separate full-width panel. Snapshot time remains secondary, and icon actions retain accessible names and hover descriptions.
+
+Account groups use a compact list with names, enablement, account/member counts, and a clear edit action. Group editors use a bounded account checklist. Member grants live in the Members row action; personal key creation shows only authorized group choices through a custom dropdown. Explain revocation and shared pool membership before applying changes.
+
+Account scheduling metadata stays compact beside account status. Settings use a focused dialog; limits and cooldown controls do not replace authentication status. General → Requests shows the current user’s calls, with key/group metadata and a result filter. Administration → All requests adds caller/subscription-account information and an account filter. Both tables use bounded pagination and explicit unknown token values; the personal page never fetches subscription-account management data. Keep source content and credentials out of logs and UI.
 
 ### Motion
 

@@ -13,10 +13,12 @@ The member list is ordered newest first and paginated in batches of 50. Password
 | Member list and account creation/status | Allowed | Denied |
 | System status API | Allowed | Denied |
 | Personal API keys | Own keys only | Own keys only |
+| Requests | Own history | Own history |
+| All requests | All users’ history | Denied |
 | Appearance and language | Own preferences | Own preferences |
 | Session status and sign-out | Own session | Own session |
 
-Menus and direct-route access use the same frontend policy. The backend independently requires an enabled administrator session for management endpoints under `/api/`, with explicit ownership-protected exceptions for personal `/api/keys`. An authenticated member receives `403 forbidden`; missing, expired, or disabled sessions receive `401 unauthorized`. Changing browser state or calling a management URL directly does not grant permission.
+Menus and direct-route access use the same frontend policy. The backend independently requires an enabled administrator session for management endpoints under `/api/`, with explicit ownership-protected exceptions for personal `/api/keys` and `/api/me/requests`. An authenticated member receives `403 forbidden`; missing, expired, or disabled sessions receive `401 unauthorized`. Changing browser state or calling a management URL directly does not grant permission.
 
 Members do not request administrator data. Private cached query data is cleared on logout, sign-in, and when a background session check discovers an identity or role change in another tab. Unknown or missing roles are rejected at the frontend response boundary.
 
@@ -44,4 +46,4 @@ Migration `003_members.sql` copies the original administrator and every persiste
 
 The migration replaces the old administrator-only tables. Older binaries cannot use the new schema; downgrading requires restoring a database backup from before migration.
 
-Personal [API keys](api-keys.md) are available to both roles. Disabling a member suspends its non-revoked keys; re-enabling restores their use. Explicitly revoked keys never become valid again. Upstream subscription access and usage reports remain separate capabilities, and this build still cannot forward model requests.
+Personal [API keys](api-keys.md) are available to both roles. Disabling a member suspends its non-revoked keys; re-enabling restores their use. Explicitly revoked keys never become valid again. Model forwarding and personal request history are available. Aggregated usage reports and per-member budgets are not implemented.

@@ -2,7 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- Upgrade the public CLIProxyAPI translation SDK to v7.3.7 while retaining SubLane-owned authorization, credential storage, refresh, and forwarding.
+
 ### Added
+
+- Subscription quota windows, remaining percentages, reset times, and manual refresh on the accounts page, with durable SQLite snapshots, bounded memory caching, shared refreshes, and stale/failure feedback.
+- Codex OAuth and auth.json import, encrypted subscription credentials, serialized refresh, account management, and member-key HTTP/SSE/WebSocket forwarding with pinned account affinity.
+- A lightweight public CLIProxyAPI translation adapter and opt-in synthetic Codex CLI protocol tests.
 
 - chi routing and sqlc-generated database queries, with pinned generation tooling and CI drift checks.
 - Personal API key creation, one-time secret display, owner-scoped metadata, revocation, and a separate gateway authentication boundary.
@@ -19,4 +27,4 @@
 - Unit tests, race checks, build commands, container configuration, and CI.
 - AGPL-3.0-only license, third-party attribution, and contributor documentation.
 
-Upstream account authorization and model forwarding are not part of this milestone.
+Live subscription and desktop acceptance remain pending; usage accounting and advanced quotas remain planned.

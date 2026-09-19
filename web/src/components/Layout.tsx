@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import {
+  FolderClosed,
+  ListChecks,
   KeyRound,
   LayoutDashboard,
   Settings,
@@ -39,12 +41,15 @@ const navigation = [
     items: [
       { to: '/', label: 'overview', icon: LayoutDashboard },
       { to: '/keys', label: 'apiKeys', icon: KeyRound },
+      { to: '/requests', label: 'requests', icon: ListChecks },
     ],
   },
   {
     label: 'administration',
     items: [
       { to: '/accounts', label: 'accounts', icon: Workflow },
+      { to: '/groups', label: 'accountGroups', icon: FolderClosed },
+      { to: '/admin/requests', label: 'allRequests', icon: ListChecks },
       { to: '/members', label: 'members', icon: Users },
     ],
   },

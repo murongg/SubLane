@@ -47,6 +47,24 @@ const routes = root.addChildren([
   }),
   createRoute({
     getParentRoute: () => root,
+    path: '/requests',
+    component: lazyRouteComponent(() => import('@/pages/Requests'), 'Requests'),
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/admin/requests',
+    component: lazyRouteComponent(
+      () => import('@/pages/Requests'),
+      'AllRequests',
+    ),
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/groups',
+    component: lazyRouteComponent(() => import('@/pages/Groups'), 'Groups'),
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: '/members',
     component: lazyRouteComponent(() => import('@/pages/Members'), 'Members'),
   }),

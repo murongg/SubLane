@@ -35,7 +35,10 @@ export async function request<T>(
       Number.isFinite(retry) ? Math.max(0, retry) : 0,
     )
   }
-  const body: unknown = await response.json().catch(() => null)
+  const body: unknown =
+    response.status === 204
+      ? undefined
+      : await response.json().catch(() => null)
   const parsed = schema.safeParse(body)
   if (!parsed.success) throw new ApiError('invalid_response', response.status)
   return parsed.data

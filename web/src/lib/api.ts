@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { request } from './request'
+import { gatewayStatusSchema } from './connection'
 
 const systemSchema = z.object({
   name: z.literal('SubLane'),
@@ -11,8 +12,8 @@ const systemSchema = z.object({
     status: z.literal('ready'),
   }),
   gateway: z.object({
-    provider: z.literal('codex'),
-    status: z.literal('not_configured'),
+    provider: z.enum(['codex', 'multi']),
+    status: gatewayStatusSchema,
   }),
 })
 

@@ -19,3 +19,6 @@ setup.key
 /docs/plans/
 /docs/specs/
 /.impeccable/review/
+
+# Instance-local upstream credential encryption key.
+credentials.key

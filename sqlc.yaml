@@ -14,3 +14,7 @@ sql:
         overrides:
           - column: "users.enabled"
             go_type: "bool"
+          - column: "accounts.enabled"
+            go_type: "bool"
+          - column: "account_groups.enabled"
+            go_type: "bool"

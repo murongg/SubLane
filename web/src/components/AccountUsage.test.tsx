@@ -1,0 +1,293 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { expect, it, vi } from 'vitest'
+import { AccountUsage } from './AccountUsage'
+
+const now = Math.floor(Date.now() / 1000)
+const metadata = {
+  server_time: now,
+  expires_at: now + 120,
+  stale: false,
+  refreshing: false,
+  refresh_failed: false,
+  retry_after_seconds: 0,
+}
+const snapshot = {
+  ...metadata,
+  updated_at: now,
+  limits: [
+    {
+      name: '',
+      allowed: true,
+      limit_reached: false,
+      windows: [
+        {
+          kind: 'primary',
+          used_percent: 25,
+          window_seconds: 18000,
+          reset_at: now + 7200,
+        },
+        {
+          kind: 'secondary',
+          used_percent: 100,
+          window_seconds: 604800,
+          reset_at: now + 86400,
+        },
+      ],
+    },
+  ],
+}
+function mount() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  render(
+    <QueryClientProvider client={client}>
+      <AccountUsage id="synthetic-account" name="Test subscription" />
+    </QueryClientProvider>,
+  )
+  return client
+}
+it('loads actual quota windows and refreshes without confusing failure with exhaustion', async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify(snapshot)))
+  vi.stubGlobal('fetch', fetch)
+  mount()
+  await screen.findByText('75% remaining')
+  expect(screen.getByText('5-hour limit')).toBeTruthy()
+  expect(screen.getByText('7-day limit')).toBeTruthy()
+  expect(screen.getByText('0% remaining')).toBeTruthy()
+  expect(screen.getAllByRole('progressbar')).toHaveLength(2)
+  fetch.mockResolvedValueOnce(
+    new Response('{"error":"upstream_unavailable"}', { status: 502 }),
+  )
+  await userEvent.setup().click(
+    screen.getByRole('button', {
+      name: 'Refresh usage for Test subscription',
+    }),
+  )
+  await screen.findByText('Unable to refresh. Showing the last known usage.')
+  expect(screen.getByText('75% remaining')).toBeTruthy()
+  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(fetch.mock.calls[1][0]).toBe(
+    '/api/accounts/synthetic-account/usage/refresh',
+  )
+  expect(fetch.mock.calls[1][1].method).toBe('POST')
+})
+it('does not invent quota when no window or percentage is available', async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ ...metadata, updated_at: now, limits: [] }),
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...metadata,
+          updated_at: now,
+          limits: [
+            {
+              name: '',
+              allowed: null,
+              limit_reached: null,
+              windows: [
+                {
+                  kind: 'primary',
+                  window_seconds: 3600,
+                  used_percent: null,
+                  reset_at: null,
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    )
+  vi.stubGlobal('fetch', fetch)
+  mount()
+  await screen.findByText('No usage limits reported')
+  await userEvent.setup().click(
+    screen.getByRole('button', {
+      name: 'Refresh usage for Test subscription',
+    }),
+  )
+  await screen.findByText('Usage unavailable')
+  expect(screen.queryByText('100% remaining')).toBeNull()
+  expect(screen.queryByRole('progressbar')).toBeNull()
+  expect(screen.getByText('Reset time unavailable')).toBeTruthy()
+})
+it('shows a recoverable error when the initial request fails', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response('{"error":"upstream_rate_limited"}', { status: 429 }),
+      ),
+  )
+  mount()
+  await screen.findByText('Unable to load usage. Try refreshing later.')
+  expect(screen.queryByRole('progressbar')).toBeNull()
+})
+it('does not infer renewed quota after a reset time passes and respects upstream restrictions', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...snapshot,
+          limits: [
+            {
+              ...snapshot.limits[0],
+              allowed: false,
+              windows: [
+                { ...snapshot.limits[0].windows[0], reset_at: now - 1 },
+              ],
+            },
+          ],
+        }),
+      ),
+    ),
+  )
+  mount()
+  await screen.findByText('Currently limited')
+  await waitFor(() =>
+    expect(screen.getByText('Reset time passed · refresh usage')).toBeTruthy(),
+  )
+  expect(screen.queryByText('100% remaining')).toBeNull()
+})
+
+it('counts down from the snapshot time without rounding a fresh four-day reset to five days', async () => {
+  const future = now + 120
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...metadata,
+          server_time: future,
+          expires_at: future + 120,
+          updated_at: future,
+          limits: [
+            {
+              ...snapshot.limits[0],
+              windows: [
+                { ...snapshot.limits[0].windows[0], reset_at: future + 8340 },
+                { ...snapshot.limits[0].windows[1], reset_at: future + 345600 },
+              ],
+            },
+          ],
+        }),
+      ),
+    ),
+  )
+  mount()
+  await screen.findByText('Resets in 2h 19m')
+  expect(screen.getByText('Resets in 4d 0h')).toBeTruthy()
+})
+
+it('marks a restored snapshot as stale while a shared refresh runs, then replaces it', async () => {
+  const old = {
+    ...snapshot,
+    updated_at: now - 600,
+    server_time: now,
+    expires_at: now - 480,
+    stale: true,
+    refreshing: true,
+    refresh_failed: false,
+    retry_after_seconds: 0,
+  }
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(old)))
+    .mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            ...snapshot,
+            server_time: now,
+            expires_at: now + 120,
+            stale: false,
+            refreshing: false,
+            refresh_failed: false,
+            retry_after_seconds: 0,
+          }),
+        ),
+      ),
+    )
+  vi.stubGlobal('fetch', fetch)
+  mount()
+  await screen.findByText('Cached usage is outdated. Refreshing…')
+  expect(screen.getByText('75% remaining')).toBeTruthy()
+  // A restored snapshot must use the response clock, not restart its countdown from the old observation.
+  expect(screen.getByText('Resets in 2h 0m')).toBeTruthy()
+  await waitFor(
+    () =>
+      expect(
+        screen.queryByText('Cached usage is outdated. Refreshing…'),
+      ).toBeNull(),
+    { timeout: 2500 },
+  )
+  expect(fetch).toHaveBeenCalledTimes(2)
+})
+
+it('shows server-side refresh failure with the persisted snapshot', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...snapshot,
+          server_time: now,
+          expires_at: now + 120,
+          stale: true,
+          refreshing: false,
+          refresh_failed: true,
+          retry_after_seconds: 30,
+        }),
+      ),
+    ),
+  )
+  mount()
+  await screen.findByText('Unable to refresh. Showing the last known usage.')
+  expect(screen.getByText('75% remaining')).toBeTruthy()
+  expect(
+    screen
+      .getByRole('button', { name: 'Refresh usage for Test subscription' })
+      .hasAttribute('disabled'),
+  ).toBe(true)
+})
+
+it('allows retry if the connection is lost while waiting for a background refresh', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ ...snapshot, stale: true, refreshing: true }),
+        ),
+      )
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response('{"error":"unavailable"}', { status: 503 }),
+        ),
+      ),
+  )
+  mount()
+  await screen.findByText('Cached usage is outdated. Refreshing…')
+  await screen.findByText(
+    'Unable to refresh. Showing the last known usage.',
+    {},
+    { timeout: 2500 },
+  )
+  expect(
+    screen
+      .getByRole('button', { name: 'Refresh usage for Test subscription' })
+      .hasAttribute('disabled'),
+  ).toBe(false)
+})

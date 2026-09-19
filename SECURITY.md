@@ -8,7 +8,7 @@ Complete initialization before exposing the instance to other users. The setup p
 
 Personal gateway keys use 256-bit random secrets and SHA-256 digests at rest. Keys are shown once, scoped to their owner, and cannot access session-based management endpoints. Suspended members cannot authenticate gateway requests; explicit key revocation is permanent.
 
-Encrypted upstream credential storage, upstream OAuth, model forwarding, MFA, and password recovery are not implemented. The default service address and Compose host port bind to loopback. Use HTTPS and an explicit public origin for network deployments. This is still an early-development project, not a complete subscription gateway.
+Codex credentials are encrypted with AES-256-GCM using a private instance key. OAuth state is PKCE-protected, session-bound, short-lived, and single-use. Upstream tokens are refreshed and persisted under one owner; model requests and WebSocket history/concurrency are bounded. See [Codex security and verification boundaries](docs/codex.md). MFA and password recovery are not implemented. The default service address and Compose host port bind to loopback. Use HTTPS and an explicit public origin for network deployments. This is still an early-development project, not a complete subscription gateway.
 
 ## Reporting
 

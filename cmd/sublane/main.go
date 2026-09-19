@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,11 +13,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/config"
+	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/groups"
+	"github.com/murongg/SubLane/internal/oauth"
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/storage"
+	storedb "github.com/murongg/SubLane/internal/storage/db"
+	"github.com/murongg/SubLane/internal/upstream"
+	"github.com/murongg/SubLane/internal/vault"
 	"github.com/murongg/SubLane/web"
 )
 
@@ -51,10 +59,32 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	count, err := storedb.New(db).CountAccounts(ctx)
+	if err != nil {
+		return err
+	}
+	cipher, err := vault.Open(filepath.Join(cfg.DataDir, "credentials.key"), count == 0)
+	if err != nil {
+		return err
+	}
+	subscriptions := accounts.New(db, cipher)
+	if err := subscriptions.Verify(ctx); err != nil {
+		return fmt.Errorf("verify upstream credentials: %w", err)
+	}
+	provider := upstream.New()
+	defer provider.Close()
+	if err := provider.Start(ctx); err != nil {
+		return err
+	}
+	forwarding := gateway.New(ctx, db, subscriptions, provider)
+	defer forwarding.Close()
+	authorization := oauth.New(subscriptions, provider)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(server.Options{Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: apikey.New(db), PublicURL: cfg.PublicURL}),
+		Handler:           server.New(server.Options{Groups: groups.New(db), Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: apikey.New(db), PublicURL: cfg.PublicURL, Accounts: subscriptions, OAuth: authorization, Gateway: forwarding}),
+		BaseContext:       func(net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}

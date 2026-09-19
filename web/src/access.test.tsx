@@ -31,6 +31,8 @@ it('gives members their own workspace without management navigation or requests'
   await screen.findByRole('heading', { name: 'Your workspace' })
   expect(screen.queryByRole('link', { name: 'Accounts' })).toBeNull()
   expect(screen.queryByRole('link', { name: 'Members' })).toBeNull()
+  expect(screen.getByRole('link', { name: 'Requests' })).toBeTruthy()
+  expect(screen.queryByRole('link', { name: 'All requests' })).toBeNull()
   expect(screen.queryByRole('group', { name: 'Administration' })).toBeNull()
   await user.click(screen.getByRole('link', { name: 'Preferences' }))
   await screen.findByRole('heading', { name: 'Preferences' })
@@ -57,6 +59,10 @@ it('groups common and administrator navigation separately for administrators', a
   const general = screen.getByRole('group', { name: 'General' })
   const administration = screen.getByRole('group', { name: 'Administration' })
   expect(within(general).getByRole('link', { name: 'Overview' })).toBeTruthy()
+  expect(within(general).getByRole('link', { name: 'Requests' })).toBeTruthy()
+  expect(
+    within(administration).getByRole('link', { name: 'All requests' }),
+  ).toBeTruthy()
   expect(
     within(administration).getByRole('link', { name: 'Accounts' }),
   ).toBeTruthy()
@@ -65,7 +71,7 @@ it('groups common and administrator navigation separately for administrators', a
   ).toBeTruthy()
 })
 
-it.each(['/accounts', '/members'])(
+it.each(['/accounts', '/members', '/groups', '/admin/requests'])(
   'denies member direct access to %s before loading management data',
   async (path) => {
     const fetchMock = memberSession()

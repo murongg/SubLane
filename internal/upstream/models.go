@@ -1,0 +1,108 @@
+package upstream
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/murongg/SubLane/internal/accounts"
+	core "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
+)
+
+func (c *Client) providerModels(ctx context.Context, credential accounts.Credential) ([]Model, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	endpoint, method := "https://api.anthropic.com/v1/models?limit=1000", "GET"
+	if credential.Kind() == "antigravity" {
+		endpoint, method = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels", "POST"
+	}
+	req, _ := http.NewRequestWithContext(ctx, method, endpoint, strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Anthropic-Version", "2023-06-01")
+	executor, err := c.executor(credential.Kind())
+	if err != nil {
+		return nil, err
+	}
+	response, err := executor.HttpRequest(c.sdkContext(ctx), sdkAuth(credential), req)
+	if err != nil {
+		return nil, sdkError(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		return nil, &UpstreamError{Status: response.StatusCode, RetryAfter: response.Header.Get("Retry-After")}
+	}
+	raw, err := readBounded(response.Body, 2<<20)
+	if err != nil {
+		return nil, err
+	}
+	var value struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+		Models map[string]json.RawMessage `json:"models"`
+	}
+	if json.Unmarshal(raw, &value) != nil {
+		return nil, ErrResponse
+	}
+	result := []Model{}
+	if credential.Kind() == "claude" {
+		if value.Data == nil {
+			return nil, ErrResponse
+		}
+		for _, m := range value.Data {
+			if m.ID != "" && len(m.ID) <= 128 {
+				result = append(result, Model{ID: m.ID, Object: "model", OwnedBy: "claude"})
+			}
+		}
+	} else {
+		if value.Models == nil {
+			return nil, ErrResponse
+		}
+		for id := range value.Models {
+			if id != "" && len(id) <= 128 {
+				result = append(result, Model{ID: id, Object: "model", OwnedBy: "antigravity"})
+			}
+		}
+	}
+	if len(result) > 512 {
+		return nil, ErrResponse
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result, nil
+}
+func (c *Client) prepareProject(ctx context.Context, credential accounts.Credential) (accounts.Credential, error) {
+	executor, err := c.executor(credential.Kind())
+	if err != nil {
+		return accounts.Credential{}, err
+	}
+	preparer, ok := executor.(core.RequestAuthPreparer)
+	auth := sdkAuth(credential)
+	if !ok || !preparer.ShouldPrepareRequestAuth(auth) {
+		return credential, nil
+	}
+	updated, err := preparer.PrepareRequestAuth(c.sdkContext(ctx), auth)
+	if err != nil {
+		return accounts.Credential{}, sdkError(err)
+	}
+	if updated == nil {
+		return credential, nil
+	}
+	fields := map[string]json.RawMessage{}
+	data, _ := json.Marshal(credential)
+	json.Unmarshal(data, &fields)
+	delete(fields, "metadata")
+	for key, value := range credential.Metadata {
+		fields[key] = value
+	}
+	for _, key := range []string{"project_id"} {
+		if value, ok := updated.Metadata[key]; ok {
+			fields[key], _ = json.Marshal(value)
+		}
+	}
+	fields["type"], _ = json.Marshal(credential.Kind())
+	data, _ = json.Marshal(fields)
+	return accounts.ParseFor(credential.Kind(), data)
+}

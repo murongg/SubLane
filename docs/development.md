@@ -54,6 +54,16 @@ pnpm --dir web test src/App.test.tsx
 
 Browser verification should cover desktop and narrow layouts, mobile navigation, direct route reload, language changes, light/dark/system themes, and a disconnected backend. Unit tests do not replace these checks.
 
+## Codex adapter tests
+
+The adapter tests never use a real account. They inject local fake upstreams through a transport seam while production endpoint selection stays fixed. To exercise an installed Codex CLI with an isolated temporary configuration and synthetic model output:
+
+```sh
+SUBLANE_TEST_CODEX=1 go test ./internal/server -run TestCodexCLIProtocol -count=1 -v
+```
+
+The normal test suite skips this opt-in external-client test. Do not read a developer's existing `auth.json` or keychain for tests. Live provider and desktop acceptance require an explicitly authorized account; record those results separately from protocol coverage.
+
 ## Adding translations
 
 1. Add an English key in `web/src/locales/en.ts`.

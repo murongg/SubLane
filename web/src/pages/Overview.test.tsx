@@ -76,3 +76,23 @@ it('preserves the last successful status when refresh fails and recovers on retr
   expect(screen.queryByRole('alert')).toBeNull()
   expect(screen.getByText('Running')).toBeTruthy()
 })
+
+it('uses the verified account state for gateway readiness', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      const data =
+        url === '/api/auth/state'
+          ? authenticated
+          : { ...system, gateway: { provider: 'codex', status: 'ready' } }
+      return Promise.resolve(new Response(JSON.stringify(data)))
+    }),
+  )
+  open()
+  expect(
+    await screen.findByText(
+      'Your gateway is ready. Connect a client using a personal API key.',
+    ),
+  ).toBeTruthy()
+  expect(screen.queryByText('Not configured')).toBeNull()
+})

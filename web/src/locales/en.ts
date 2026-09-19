@@ -1,4 +1,103 @@
 export const en = {
+  gatewayAttentionDescription:
+    'Verify or reauthorize a subscription account to make the gateway available.',
+  gatewayChecking: 'Checking gateway…',
+  needsConnection: 'Not connected',
+  gatewayStatusUnknown: 'Connection status unknown',
+  clientConfigLocation:
+    'Set these values in your user-level ~/.codex/config.toml, replacing existing values with the same names.',
+  connectionStatusError: 'Could not check gateway availability.',
+  addAccount: 'Add account',
+  accountName: 'Account name',
+  connectAccountTitle: 'Connect subscription',
+  connectionMethod: 'Connection method',
+  accountOAuth: 'Browser authorization',
+  accountImport: 'Import auth.json',
+  startAuthorization: 'Start authorization',
+  openAuthorization: 'Open provider authorization',
+  copyAuthorization: 'Copy authorization link',
+  callbackURL: 'Callback URL',
+  callbackHint:
+    'After signing in, the localhost page may not load. Copy its complete address from the browser address bar and paste it here.',
+  completeAuthorization: 'Complete authorization',
+  authorizationInstructions:
+    'Open the provider authorization page, sign in, then return here with the complete callback URL.',
+  startAgain: 'Start again',
+  accountImportDescription:
+    'Choose an existing Codex auth.json file or paste its contents. Stored credentials are encrypted on this instance.',
+  authJSONContents: 'auth.json contents',
+  authJSONFile: 'auth.json file',
+  chooseAuthFile: 'Choose auth.json',
+  fileTooLarge: 'The file must be 64 KiB or smaller.',
+  fileReadFailed:
+    'Could not read this file. Choose it again or paste its contents.',
+  importAccount: 'Import account',
+  loadingAccounts: 'Loading subscription accounts…',
+  accountsLoadFailed: 'Could not load subscription accounts.',
+  accountActions: 'Actions for {{name}}',
+  checkAccount: 'Verify connection',
+  checkingAccount: 'Verifying…',
+  reauthorizeAccount: 'Reauthorize',
+  disableAccount: 'Disable account',
+  enableAccount: 'Enable account',
+  deleteAccount: 'Remove account',
+  deleteAccountTitle: 'Remove subscription account',
+  deleteAccountDescription:
+    'Remove “{{name}}” and its stored credentials? Conversations using this account will need a new session. This does not revoke your provider login.',
+  accountVerified: 'Verified',
+  accountUnverified: 'Not verified',
+  accountNeedsAuth: 'Reauthorization needed',
+  accountExpires: 'Token expiry',
+  accountUnknownExpiry: 'Checked on first use',
+  accountNameInvalid: 'Use 1–64 characters without control characters.',
+  accountJSONInvalid:
+    'Paste valid credential JSON for the selected provider. Official API keys are not supported here.',
+  accountInvalidInput:
+    'Check the account name, provider, and subscription credentials.',
+  accountExists:
+    'This subscription is already added. Use Reauthorize on the existing account.',
+  accountIdentityMismatch:
+    'Reauthorize with the same provider and account. Add a separate account for a different subscription.',
+  accountLimitReached:
+    'This instance supports up to 100 subscription accounts.',
+  accountDisabledHint: 'Enable this account before verifying or using it.',
+  accountReauthorizeHint: 'This account needs to be authorized again.',
+  accountRefreshFailed:
+    'Could not refresh this account. Check network access or reauthorize it.',
+  oauthStateInvalid:
+    'This authorization expired or was already used. Start a new authorization.',
+  oauthCallbackInvalid:
+    'Paste the full localhost callback URL from this authorization attempt.',
+  oauthAccessDenied:
+    'Authorization was declined. Start again when you are ready.',
+  accountBusy: 'The gateway is busy. Wait a moment and try again.',
+  accountUpstreamUnavailable:
+    'Could not reach the provider. Check network access and try again.',
+  accountCheckFailed:
+    'The provider could not complete the request. Try again or reauthorize this account.',
+  accountRateLimited:
+    'The provider is rate limiting this account. Try again later.',
+  accountActionFailed: 'Could not complete this action. Please try again.',
+  accountVerificationResult:
+    '“{{name}}” is connected. {{count}} models available.',
+  accountReadyDescription:
+    'A verified subscription account is available for gateway requests.',
+  gatewayNeedsAttention: 'Needs attention',
+  gatewayReadyDescription:
+    'Your gateway is ready. Connect a client using a personal API key.',
+  clientGuideTitle: 'Connect your client',
+  clientGuideDescription:
+    'Use your SubLane API key with this endpoint. Codex CLI and desktop use the same user-level provider configuration.',
+  clientEndpoint: 'API base URL',
+  clientConfig: 'Codex configuration',
+  clientGuideNote:
+    'Set SUBLANE_API_KEY in the client process environment, and choose a model available to your connected subscriptions. The desktop app must inherit the same environment variable.',
+  copyClientConfig: 'Copy configuration',
+  clientModel: 'Model ID',
+  clientModelHint:
+    'Use an ID from GET /v1/models, including its codex/, claude/, or antigravity/ prefix. Unqualified IDs use Codex.',
+  connectionNotConfigured:
+    'Ask an administrator to connect and verify a subscription account first.',
   checkingSession: 'Checking your session…',
   setupWelcome: 'Welcome to SubLane',
   setupWelcomeDescription:
@@ -36,7 +135,7 @@ export const en = {
   apiKey: 'API key',
   apiKeysDescription: 'Manage the gateway keys owned by your account.',
   gatewayKeysNotice:
-    'Keys authenticate gateway requests. Model forwarding will be available after Codex integration is complete.',
+    'Use these personal keys for model requests. Subscription credentials are managed separately by an administrator.',
   createKey: 'Create key',
   createKeyTitle: 'Create API key',
   createKeyDescription:
@@ -102,7 +201,7 @@ export const en = {
   memberOverviewTitle: 'Your workspace',
   memberOverviewDescription: 'Your account and gateway access.',
   memberAccessDescription:
-    'Create a personal API key for your client. Model requests will be available after your administrator connects Codex.',
+    'Create a personal API key and configure your client to use this gateway.',
   accessDenied: 'Access denied',
   adminAccessRequired:
     'This page is available to administrators only. Return to your workspace to continue.',
@@ -128,11 +227,11 @@ export const en = {
     'Instance health and progress toward your first request.',
   gatewaySetup: 'Gateway setup',
   gatewaySetupDescription:
-    'Your administrator account is ready. Next comes your team’s first Codex connection.',
+    'Your administrator account is ready. Next, connect your team’s first subscription.',
   adminReadyDescription:
     'Sign-in and management access are set up for this instance.',
   codexSetupDescription:
-    'Subscription account authorization is coming next. Connected accounts and their health will appear here.',
+    'Add a subscription, then verify its connection before inviting your team to use it.',
   teamAccess: 'Gateway keys',
   teamAccessDescription:
     'Administrators and members can create and revoke their own API keys.',
@@ -142,7 +241,7 @@ export const en = {
   codexCLI: 'Codex CLI',
   codexDesktop: 'Codex desktop',
   clientAccessDescription:
-    'Personal API keys are available. Codex account authorization and model forwarding are the next steps before clients can make model requests.',
+    'Use a personal API key and the client configuration on the API keys page.',
   lastChecked: 'Last checked',
   statusUnknown: 'Status unknown',
   refreshFailed:
@@ -163,13 +262,13 @@ export const en = {
     'The service is unavailable. Check that the backend is running, then try again.',
   invalidResponse:
     'The service returned an unexpected response. Check that the frontend and backend versions match.',
-  codexTitle: 'Codex connection',
+  codexTitle: 'Subscription access',
   viewAccounts: 'View accounts',
   accountsTitle: 'Subscription accounts',
   accountsDescription: 'Manage the subscription accounts used by your team.',
-  accountEmptyTitle: 'Account connections are coming next',
+  accountEmptyTitle: 'No subscription accounts',
   accountEmptyDescription:
-    'Codex authorization and request forwarding are not available in this foundation build. No subscription credentials are collected yet.',
+    'Connect Codex, Claude, or Antigravity using browser authorization or a credential JSON file.',
   backToOverview: 'Back to overview',
   preferencesDescription: 'Make this workspace feel familiar.',
   appearance: 'Appearance',
@@ -195,4 +294,151 @@ export const en = {
   sourceCode: 'Source code',
   sourceDescription:
     'This instance is distributed under AGPL-3.0. Source availability is described in the project README.',
+  accountUsage: 'Usage limits',
+  accountUsageLabel: 'Usage for {{name}}',
+  refreshAccountUsage: 'Refresh usage for {{name}}',
+  refreshUsage: 'Refresh usage',
+  usageLoading: 'Loading usage…',
+  usageUpdated: 'Updated {{time}}',
+  usageStale: 'Unable to refresh. Showing the last known usage.',
+  usageLoadFailed: 'Unable to load usage. Try refreshing later.',
+  usageNotReported: 'No usage limits reported',
+  usageLimited: 'Currently limited',
+  usagePrimary: 'Primary limit',
+  usageSecondary: 'Secondary limit',
+  usageDays: '{{count}}-day limit',
+  usageHours: '{{count}}-hour limit',
+  usageMinutes: '{{count}}-minute limit',
+  usageSeconds: '{{count}}-second limit',
+  usageUnknown: 'Usage unavailable',
+  usageRemaining: '{{percent}}% remaining',
+  usageResetUnknown: 'Reset time unavailable',
+  usageResetPassed: 'Reset time passed · refresh usage',
+  usageResetDays: 'Resets in {{days}}d {{hours}}h',
+  usageResetHours: 'Resets in {{hours}}h {{minutes}}m',
+  usageResetMinutes: 'Resets in {{minutes}}m',
+  usageRetryIn: 'Retry in {{seconds}}s',
+  usageRefreshingCached: 'Cached usage is outdated. Refreshing…',
+  usageExpired: 'Cached usage is outdated. Refresh to update.',
+  verifyAccountConnection: 'Verify connection for {{name}}',
+  serviceProvider: 'Service provider',
+  providerImportDescription:
+    'Import credential JSON exported by CLIProxyAPI for the selected provider. Credentials are encrypted on this instance.',
+  providerQuotaUnsupported:
+    'Quota reporting is not available for this provider yet.',
+  accountGroups: 'Account groups',
+  groupsDescription:
+    'Organize subscription accounts into pools for members and projects.',
+  groupsDefaultHint:
+    'Existing accounts and keys use the default group. New accounts and members join it automatically; administrators can adjust access.',
+  defaultGroup: 'Default group',
+  createGroup: 'Create group',
+  editGroup: 'Edit group',
+  editGroupNamed: 'Edit {{name}}',
+  groupName: 'Group name',
+  groupEnabled: 'Group enabled',
+  groupCounts: 'Accounts: {{accounts}} · Members: {{members}}',
+  loadingGroups: 'Loading groups…',
+  groupsLoadFailed: 'Could not load groups. Try again.',
+  groupEditorDescription:
+    'Choose the accounts available to keys in this group.',
+  groupAccounts: 'Subscription accounts',
+  groupAccountsHint:
+    'Accounts keep their other group memberships. For exclusive access, remove them from the default and other pools. Removing an account stops its existing conversations in this group.',
+  groupNoAccounts:
+    'Add a subscription account first, or save an empty pool and configure it later.',
+  saveGroup: 'Save group',
+  groupNameTaken: 'A group with this name already exists.',
+  groupLimitReached: 'This instance supports up to 32 groups.',
+  defaultGroupProtected:
+    'The default group stays enabled and keeps its name. You can edit its accounts and member access.',
+  groupInputInvalid:
+    'Use a group name of 1–64 characters and select existing accounts.',
+  groupSaveFailed: 'Could not save group changes. Try again.',
+  groupAccess: 'Group access',
+  memberGroupsNamed: 'Manage groups for {{username}}',
+  memberGroupsDescription:
+    'Choose which groups {{username}} can use when creating API keys.',
+  groupGrantRevocationHint:
+    'Removing access blocks existing keys for that group on their next request, including new WebSocket turns.',
+  memberNoGroupsHint:
+    'This member will not be able to create or use gateway keys until a group is granted.',
+  saveGroupAccess: 'Save access',
+  keyGroup: 'Account group',
+  keyGroupHint:
+    'This key can only use accounts in the selected group. Revoke and create a new key to change its group.',
+  noAvailableGroups:
+    'No groups are available. Ask your administrator to grant access.',
+  groupAccessChanged:
+    'Group access has changed. Select an available group and try again.',
+  keyGroupUnavailable: 'Group unavailable',
+  keyGroupName: 'Group: {{name}}',
+  chooseGroup: 'Choose a group',
+  clientGuideAction: 'Setup guide',
+  accountScheduling: 'Scheduling settings',
+  accountConcurrencyLimit: 'Concurrent model requests',
+  accountConcurrencyHint:
+    'Allow 1–8 active model requests for this account across all groups. Lowering the limit lets existing requests finish.',
+  accountConcurrencyInvalid: 'Enter a whole number from 1 to 8.',
+  lastAccountFailure: 'Last scheduling failure',
+  resumeAccountHint:
+    'Clear the cooldown to allow requests again. This does not enable a disabled account or renew its authorization.',
+  resumeAccount: 'Clear cooldown',
+  accountResumed: 'Cooldown cleared.',
+  accountSchedulingFailed: 'Could not update scheduling settings. Try again.',
+  saveAccountScheduling: 'Save settings',
+  runtimeLoadFailed: 'Scheduling status is temporarily unavailable.',
+  accountInFlight: 'Concurrent: {{active}} / {{limit}}',
+  accountCooling: 'Cooling down',
+  accountProbing: 'Recovering',
+  accountRetryReady: 'Ready to retry',
+  accountRetryAt: 'Retry after {{time}}',
+  requests: 'Requests',
+  allRequests: 'All requests',
+  yourRequests: 'Your requests',
+  personalRequestsDescription:
+    'Your model calls from the last 7 days, within the instance-wide limit of 5,000 records. Request and response bodies are never recorded.',
+  requestKey: 'API key',
+  requestGroup: 'Group',
+  requestsDescription:
+    'Completed model calls from the last 7 days, up to 5,000 records. Request and response bodies are never recorded.',
+  requestAccountFilter: 'Account filter',
+  requestResultFilter: 'Result filter',
+  allRequestAccounts: 'All accounts',
+  allRequestOutcomes: 'All results',
+  loadingRequests: 'Loading request records…',
+  requestsLoadFailed: 'Could not load request records.',
+  noRequests: 'No matching requests',
+  noRequestsHint:
+    'Records appear after model calls finish. Try another filter or refresh later.',
+  requestTime: 'Started',
+  requestCaller: 'Member / key',
+  requestAccount: 'Account / group',
+  requestModel: 'Model',
+  requestResult: 'Result',
+  requestDuration: 'Duration',
+  requestTokens: 'Tokens (in / out)',
+  requestCachedTokens: 'Cached: {{count}}',
+  requestDeletedAccount: 'Deleted account',
+  requestSuccess: 'Completed',
+  requestIncomplete: 'Incomplete',
+  requestFailed: 'Failed',
+  requestCanceled: 'Canceled',
+  requestRejected: 'Rejected',
+  reasonRateLimited: 'Rate limited',
+  reasonTimeout: 'Timed out',
+  reasonUpstream: 'Upstream unavailable',
+  reasonInterrupted: 'Stream interrupted',
+  reasonCanceled: 'Client disconnected',
+  reasonAccountBusy: 'Account at capacity',
+  reasonCooling: 'Account cooling down',
+  reasonAccountUnavailable: 'Account unavailable',
+  reasonGroupUnavailable: 'Group access unavailable',
+  reasonAuthRequired: 'Authorization required',
+  reasonForbidden: 'Upstream access denied',
+  reasonRejected: 'Upstream rejected request',
+  reasonInvalid: 'Invalid request',
+  reasonRefresh: 'Credential refresh failed',
+  reasonUnknown: 'Request failed',
+  reasonContextLimit: 'Conversation context limit',
 } satisfies Record<string, string>

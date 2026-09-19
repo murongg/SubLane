@@ -46,7 +46,7 @@ Keep the backend bound to loopback or a private network behind the proxy. Use HT
 
 ## Request protection and resource limits
 
-All management routes under `/api/` require a valid enabled administrator session by default, except the four explicit authentication endpoints. Personal `/api/keys` endpoints are explicitly session-protected for both roles and enforce ownership. Members can read their own session state and sign out, but cannot access administrator management APIs. Static SPA assets remain public; rendering the application bundle does not grant access to management data.
+All management routes under `/api/` require a valid enabled administrator session by default, except the four explicit authentication endpoints. Personal `/api/keys` and `/api/me/requests` endpoints are explicitly session-protected for both roles and enforce ownership. Members can read their own session state and sign out, but cannot access administrator management APIs. Static SPA assets remain public; rendering the application bundle does not grant access to management data.
 
 Mutations require an exact same-origin Origin header, reject cross-site Fetch Metadata, and accept JSON only. Auth bodies are limited to 4 KiB and have a five-second read deadline.
 

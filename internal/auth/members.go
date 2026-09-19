@@ -54,11 +54,24 @@ func (s *Service) CreateMember(ctx context.Context, username, password string) (
 	}
 	defer func() { <-s.hashSlots }()
 	hash := hashPassword(password)
-	row, err := s.queries.CreateMember(ctx, db.CreateMemberParams{Username: username, PasswordHash: hash, CreatedAt: s.now().Unix()})
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Member{}, err
+	}
+	defer tx.Rollback()
+	queries := s.queries.WithTx(tx)
+	row, err := queries.CreateMember(ctx, db.CreateMemberParams{Username: username, PasswordHash: hash, CreatedAt: s.now().Unix()})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Member{}, ErrUsernameTaken
 	}
 	if err != nil {
+		return Member{}, err
+	}
+	// A newly created member keeps the existing shared-pool behavior until an administrator changes grants.
+	if err := queries.AddDefaultGroupMember(ctx, row.ID); err != nil {
+		return Member{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return Member{}, err
 	}
 	return Member{User: User{ID: row.ID, Username: row.Username, Role: Role(row.Role)}, Enabled: row.Enabled, CreatedAt: row.CreatedAt}, nil

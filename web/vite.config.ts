@@ -12,7 +12,7 @@ export default defineConfig({
     proxy: {
       // Keep the browser Host so authentication Origin checks work through the dev proxy.
       '/api': { target: 'http://127.0.0.1:8080', changeOrigin: false },
-      '/v1': { target: 'http://127.0.0.1:8080', changeOrigin: false },
+      '/v1': { target: 'http://127.0.0.1:8080', changeOrigin: false, ws: true },
       '/healthz': 'http://127.0.0.1:8080',
       '/readyz': 'http://127.0.0.1:8080',
     },

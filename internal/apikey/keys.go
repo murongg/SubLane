@@ -12,6 +12,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
@@ -26,12 +27,15 @@ var (
 const maxActiveKeys = 20
 
 type Key struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	Prefix     string `json:"prefix"`
-	CreatedAt  int64  `json:"created_at"`
-	LastUsedAt *int64 `json:"last_used_at"`
-	RevokedAt  *int64 `json:"revoked_at"`
+	ID          int64  `json:"id"`
+	GroupID     int64  `json:"group_id"`
+	GroupName   string `json:"group_name"`
+	GroupAccess string `json:"group_access"`
+	Name        string `json:"name"`
+	Prefix      string `json:"prefix"`
+	CreatedAt   int64  `json:"created_at"`
+	LastUsedAt  *int64 `json:"last_used_at"`
+	RevokedAt   *int64 `json:"revoked_at"`
 }
 type CreatedKey struct {
 	Key    Key    `json:"key"`
@@ -41,7 +45,7 @@ type Page struct {
 	Keys       []Key `json:"keys"`
 	NextCursor int64 `json:"next_cursor"`
 }
-type Principal struct{ KeyID, UserID int64 }
+type Principal struct{ KeyID, UserID, GroupID int64 }
 type Service struct {
 	db      *sql.DB
 	queries *db.Queries
@@ -53,6 +57,13 @@ func New(connection *sql.DB) *Service {
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, name string) (CreatedKey, error) {
+	return s.CreateInGroup(ctx, userID, groups.DefaultID, name)
+}
+
+func (s *Service) CreateInGroup(ctx context.Context, userID, groupID int64, name string) (CreatedKey, error) {
+	if groupID <= 0 {
+		return CreatedKey{}, ErrInput
+	}
 	name = strings.TrimSpace(name)
 	if !utf8.ValidString(name) || utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 64 || strings.IndexFunc(name, unicode.IsControl) >= 0 {
 		return CreatedKey{}, ErrInput
@@ -74,6 +85,17 @@ func (s *Service) Create(ctx context.Context, userID int64, name string) (Create
 	if err != nil {
 		return CreatedKey{}, err
 	}
+	allowed, err := queries.CanUseGroup(ctx, db.CanUseGroupParams{UserID: userID, GroupID: groupID})
+	if err != nil {
+		return CreatedKey{}, err
+	}
+	if !allowed {
+		return CreatedKey{}, groups.ErrUnavailable
+	}
+	group, err := queries.GetGroup(ctx, groupID)
+	if err != nil {
+		return CreatedKey{}, err
+	}
 	count, err := queries.CountActiveKeys(ctx, userID)
 	if err != nil {
 		return CreatedKey{}, err
@@ -81,8 +103,8 @@ func (s *Service) Create(ctx context.Context, userID int64, name string) (Create
 	if count >= maxActiveKeys {
 		return CreatedKey{}, ErrLimit
 	}
-	key := Key{Name: name, Prefix: secret[:11], CreatedAt: s.now().Unix()}
-	key.ID, err = queries.CreateKey(ctx, db.CreateKeyParams{UserID: userID, Name: name, Prefix: key.Prefix, TokenHash: digest[:], CreatedAt: key.CreatedAt})
+	key := Key{GroupID: groupID, GroupName: group.Name, GroupAccess: "allowed", Name: name, Prefix: secret[:11], CreatedAt: s.now().Unix()}
+	key.ID, err = queries.CreateKey(ctx, db.CreateKeyParams{GroupID: groupID, UserID: userID, Name: name, Prefix: key.Prefix, TokenHash: digest[:], CreatedAt: key.CreatedAt})
 	if err != nil {
 		return CreatedKey{}, err
 	}
@@ -113,10 +135,15 @@ func (s *Service) List(ctx context.Context, userID, beforeID int64) (Page, error
 
 func (s *Service) Revoke(ctx context.Context, userID, keyID int64) (Key, error) {
 	now := s.now().Unix()
-	row, err := s.queries.RevokeKey(ctx, db.RevokeKeyParams{Now: &now, ID: keyID, UserID: userID})
-	if errors.Is(err, sql.ErrNoRows) {
+
+	n, err := s.queries.RevokeKey(ctx, db.RevokeKeyParams{Now: &now, ID: keyID, UserID: userID})
+	if err != nil {
+		return Key{}, err
+	}
+	if n == 0 {
 		return Key{}, ErrNotFound
 	}
+	row, err := s.queries.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID})
 	return Key(row), err
 }
 
@@ -129,7 +156,7 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Principal, e
 		return Principal{}, ErrInvalidKey
 	}
 	digest := sha256.Sum256([]byte(secret))
-	// Resolve owner enablement on every request so suspending a member also suspends their keys.
+	// Recheck membership and pool enablement on every request, including later WebSocket turns.
 	row, err := s.queries.AuthenticateKey(ctx, digest[:])
 	if errors.Is(err, sql.ErrNoRows) {
 		return Principal{}, ErrInvalidKey
@@ -141,5 +168,5 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Principal, e
 	threshold := now - 60
 	// Track usage without writing to SQLite for every request in a burst.
 	err = s.queries.TouchKey(ctx, db.TouchKeyParams{Now: &now, ID: row.ID, Threshold: &threshold})
-	return Principal{KeyID: row.ID, UserID: row.UserID}, err
+	return Principal{KeyID: row.ID, UserID: row.UserID, GroupID: row.GroupID}, err
 }

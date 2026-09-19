@@ -2,7 +2,7 @@
 
 ## Context
 
-Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. Local administrator/member authentication and role-based access are implemented; upstream subscription forwarding is not.
+Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. Local account access, Codex, Claude, and Antigravity OAuth/import, encrypted credentials, and gateway forwarding are implemented. Live subscription and desktop compatibility require separate evidence; see `docs/codex.md`.
 
 Use English for code comments, `PRODUCT.md`, and primary developer documentation. Keep the English and Simplified Chinese UI dictionaries complete. English is the default interface language.
 
@@ -19,11 +19,13 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - `cmd/sublane` owns startup, process lifecycle, and dependency wiring.
 - `internal/config` owns environment parsing and validation.
 - `internal/auth` owns local user credentials, roles, member lifecycle, first-run initialization, and persisted sessions.
-- `internal/apikey` owns personal gateway key generation, hashed storage, ownership, revocation, and bearer authentication. API keys must never authenticate browser management sessions.
+- `internal/groups` owns account pools, member group grants, available-group discovery, and group-scoped readiness. The default group preserves existing access; default grants can still be revoked.
+- `internal/apikey` owns personal gateway key generation, immutable group binding, hashed storage, ownership, revocation, and bearer authentication. API keys must never authenticate browser management sessions.
 - `internal/storage` owns SQLite initialization, migrations, query SQL, and sqlc-generated database access under `internal/storage/db`.
 - `internal/server` owns chi routing and HTTP handling; it must not silently serve HTML for API errors.
 - `web` is a client-rendered React app and an embedded Go asset package. It must not require a Node.js server in production.
-- Future provider integration belongs behind a narrow adapter under `internal/`. Membership, policy, and storage code must not depend on CLIProxyAPI-specific types.
+- `internal/upstream` owns provider protocols and the pinned public CLIProxyAPI SDK executors. Its SDK service is a private executor registry with an empty credential store, no-op watcher, blocked loopback HTTP routes, and automatic refresh disabled. Never register live credentials in the SDK manager or pass refresh tokens to execution auth. Antigravity may receive a refresh token only during the explicit SDK refresh call owned by `accounts.Prepare`; persist the returned snapshot before model execution. Do not import upstream `internal` packages.
+- `internal/accounts` owns subscription metadata and serialized credential changes, `internal/vault` owns encryption, `internal/oauth` owns session-bound OAuth attempts (PKCE where supported), and `internal/gateway` owns account affinity, account leases, durable cooldowns, bounded request metadata, request admission, and quota snapshot caching. Membership, policy, and storage code must not depend on SDK types.
 - Avoid adding packages solely for hypothetical reuse. Keep related code together and move it only when ownership or reuse justifies a boundary.
 
 ## Backend
@@ -34,7 +36,11 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - Write application queries in `internal/storage/queries/` and run `make generate`. Never hand-edit `internal/storage/db/`; keep generated code with its SQL changes. Migration bootstrap SQL remains in storage.
 - Keep transaction ownership in domain services and use `queries.WithTx(tx)` for every query inside a transaction. Keep database row types separate from public API responses.
 - SQLite migrations are additive, ordered SQL files. Never edit an already released migration; add a new one.
-- Do not hold a database transaction open during network IO or model generation.
+- Do not hold a database transaction open during network IO or model generation. Persist rotated credentials before returning them to callers.
+- Reauthorization must preserve upstream identity. Recheck gateway keys on every WebSocket turn, and never move an existing conversation to another account after disablement, deletion, or removal from its pool. Gateway candidates and models must remain inside the key’s group, and every request/WS turn must recheck current group access.
+- Persist a successful quota snapshot before publishing it. Cached reads must check account enablement; stale values retain their original observation time. Shared background refreshes use the process context and must be joined before closing SQLite.
+- Keep model-request leases until body closure and release exactly once on cancellation. Preserve sticky accounts under saturation/cooldown; sessionless requests must not create affinity. Never store prompt/response/error bodies or credentials in request history. Personal history must derive its user ID from the enabled session, filter ownership before pagination, and hide subscription account identities; full history remains administrator-only.
+- Keep OAuth states, request bodies, stream events, WebSocket history, and concurrent operations bounded. Never read local Codex credentials automatically or use real credentials in tests.
 - Preserve cancellation and graceful shutdown. Future model streaming routes need explicit timeout and resource policies rather than blanket response buffering.
 - Do not add authentication bypasses or expose management endpoints as member APIs.
 - Default to loopback listening. Keep management routes under the default administrator-only API subtree. Members must never inherit administrator API access; enforce roles on both direct routes and backend requests. First-run setup uses a username and password; preserve its atomic single-administrator guard and disable it after initialization. See `docs/authentication.md` for the current authentication contract.

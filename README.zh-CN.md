@@ -21,7 +21,7 @@
   <a href="README.md">English</a> · <a href="https://github.com/murongg/SubLane">项目仓库</a> · <a href="brand/README.zh-CN.md">品牌物料</a>
 </p>
 
-**当前处于开发初期。** 已提供管理员初始化、成员账号创建与启停、角色权限控制、个人 API 密钥、登录退出、SQLite 持久化、内嵌前端、中英文切换和明暗主题。订阅账号授权、模型转发和用量统计尚未实现。
+**当前处于开发初期。** 已提供管理员初始化、成员账号创建与启停、角色权限控制、个人 API 密钥、登录退出、SQLite 持久化、内嵌前端、中英文切换和明暗主题。已实现 Codex、Claude、Antigravity OAuth／凭据 JSON 导入、凭据加密和 HTTP/SSE/WebSocket 转发，并通过模拟上游测试。真实订阅和桌面端仍待验收，用量统计尚未实现。
 
 后端使用 Go、chi 路由、sqlc 生成的类型安全查询和纯 Go SQLite 驱动。sqlc 只用于开发时生成代码，生产部署仍是单个进程。
 
@@ -49,11 +49,15 @@ make build
 ./bin/sublane
 ```
 
-打开 http://127.0.0.1:8080。构建后为包含前端的单个二进制文件，运行时不需要 Node.js。数据库默认保存在 `./data/sublane.db`。
+打开 http://127.0.0.1:8080。构建后为包含前端的单个二进制文件，运行时不需要 Node.js。数据库默认保存在 `./data/sublane.db`，订阅凭据加密密钥为 `./data/credentials.key`，备份时需要一起保存。
 
 Docker：`docker compose up --build -d`。容器使用命名卷保存数据库，宿主端口仅绑定本机。
 
 Docker 部署同样通过页面创建首个管理员。网络部署应使用 HTTPS 反向代理，并在容器环境中设置 `SUBLANE_PUBLIC_URL` 为外部访问地址。会话有效期为 12 小时；退出会撤销当前会话。详见[认证说明](docs/authentication.md)。
+
+## 接入订阅账号
+
+管理员在「订阅账号」中选择 Codex、Claude 或 Antigravity，再选择浏览器授权或导入凭据 JSON，验证连接后，成员即可使用个人 API 密钥接入客户端。OAuth 授权后需将浏览器地址栏的 localhost 回调地址粘贴回页面；此时 localhost 页面无法打开是预期行为。密钥页面提供客户端配置。模型使用 `codex/…`、`claude/…`、`antigravity/…` 前缀，无前缀名称仍转发到 Codex。订阅额度目前仅支持 Codex。详细边界见 [多服务商说明](docs/providers.md) 和 [Codex 接入说明](docs/codex.md)。
 
 ## 检查
 
@@ -70,3 +74,11 @@ Docker 部署同样通过页面创建首个管理员。网络部署应使用 HTT
 ## 协议
 
 使用 [AGPL-3.0-only](LICENSE)，保留 [Shadcn Admin 等第三方的许可声明](THIRD_PARTY_NOTICES.md)。
+
+## 账号分组
+
+管理员可以创建账号池分组，并在成员管理中分配可用分组。个人 API 密钥绑定一个分组，请求只使用组内账号。已有账号和密钥自动迁移到默认组。账号可跨组共享；如需独占使用，应从默认组和其他分组中移出。详见 [分组说明](docs/groups.md)。
+
+## 账号池运行状态
+
+账号支持单账号并发限制、持久化冷却和请求驱动的恢复。每位用户可查看自己的请求记录，管理员还可查看全站请求的结果、耗时和已报告的 Token 用量，不记录提示词、响应正文或凭据。详见 [账号池运行说明](docs/pool-runtime.md)。
