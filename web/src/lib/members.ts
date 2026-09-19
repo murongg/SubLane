@@ -29,3 +29,10 @@ export function setMemberEnabled(input: { id: number; enabled: boolean }) {
     body: JSON.stringify({ enabled: input.enabled }),
   })
 }
+
+export function resetMemberPassword(id: number, password: string) {
+  return request(`/api/members/${id}/password`, z.undefined(), {
+    method: 'POST',
+    body: JSON.stringify({ new_password: password }),
+  })
+}

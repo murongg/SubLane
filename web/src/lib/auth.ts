@@ -74,3 +74,13 @@ export function setup(input: { username: string; password: string }) {
 export function signOut() {
   return request('/api/auth/logout', authSchema, { method: 'POST', body: '{}' })
 }
+
+export function changePassword(input: {
+  current_password: string
+  new_password: string
+}) {
+  return request('/api/me/password', authSchema, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}

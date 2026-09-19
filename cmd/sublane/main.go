@@ -46,6 +46,20 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if len(os.Args) > 1 {
+		if len(os.Args) != 3 || os.Args[1] != "reset-admin-password" || os.Args[2] != "--password-stdin" {
+			return errors.New("usage: sublane [--version | reset-admin-password --password-stdin]")
+		}
+		info, err := os.Stdin.Stat()
+		if err != nil || info.Mode()&os.ModeCharDevice != 0 {
+			return errors.New("supply the new password through a pipe or redirected file; terminal input is not accepted")
+		}
+		if err := recoverPassword(context.Background(), cfg.DataDir, os.Stdin); err != nil {
+			return err
+		}
+		fmt.Println("Administrator password reset. All administrator browser sessions were revoked; API keys are unchanged.")
+		return nil
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
 	slog.SetDefault(logger)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

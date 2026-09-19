@@ -2,7 +2,7 @@
 
 SubLane supports one administrator and local member accounts. The administrator opens **Members** to create accounts and enable or disable them. New members use the same login page and the same username/password rules as the administrator. Creation assigns the `member` role on the server; clients cannot choose or change a role.
 
-The member list is ordered newest first and paginated in batches of 50. Passwords and hashes are never returned. Share the initial credentials with the intended member privately. Public registration, invitation links, role promotion, account deletion, and password recovery are not implemented.
+The member list is ordered newest first and paginated in batches of 50. Passwords and hashes are never returned. Share the initial credentials with the intended member privately. Public registration, invitation links, role promotion and account deletion are not implemented. Password changes, administrator member resets and local administrator recovery are described in [team controls](team-controls.md).
 
 ## Permissions
 
@@ -15,6 +15,9 @@ The member list is ordered newest first and paginated in batches of 50. Password
 | Personal API keys | Own keys only | Own keys only |
 | Requests | Own history | Own history |
 | All requests | All users’ history | Denied |
+| Usage summaries | Own and team summaries | Own summaries |
+| Request-limit policy | Configure members | Read own limits |
+| Password changes | Own password; reset members | Own password |
 | Appearance and language | Own preferences | Own preferences |
 | Session status and sign-out | Own session | Own session |
 
@@ -46,4 +49,4 @@ Migration `003_members.sql` copies the original administrator and every persiste
 
 The migration replaces the old administrator-only tables. Older binaries cannot use the new schema; downgrading requires restoring a database backup from before migration.
 
-Personal [API keys](api-keys.md) are available to both roles. Disabling a member suspends its non-revoked keys; re-enabling restores their use. Explicitly revoked keys never become valid again. Model forwarding and personal request history are available. Aggregated usage reports and per-member budgets are not implemented.
+Personal [API keys](api-keys.md) are available to both roles. Disabling a member suspends its non-revoked keys; re-enabling restores their use. Explicitly revoked keys never become valid again. Model forwarding and personal request history are available. Daily usage summaries and member request limits are available. Per-member token budgets are not implemented.

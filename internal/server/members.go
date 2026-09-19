@@ -12,6 +12,7 @@ func (h *authHTTP) registerMembers(router chi.Router) {
 	router.Get("/", h.listMembers)
 	router.Post("/", h.createMember)
 	router.Patch("/{id}", h.memberStatus)
+	router.With(h.throttleLogin).Post("/{id}/password", h.resetMemberPassword)
 }
 
 func (h *authHTTP) listMembers(w http.ResponseWriter, r *http.Request) {

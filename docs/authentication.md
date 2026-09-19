@@ -1,6 +1,6 @@
 # Administrator authentication
 
-SubLane supports one local administrator and administrator-created members. Both roles share local login and persisted sessions. See [member access](members.md) for permissions and account lifecycle. Personal gateway keys are available through the separate [API key workflow](api-keys.md). Invitation links, upstream subscription authorization, MFA, and password recovery are separate milestones.
+SubLane supports one local administrator and administrator-created members. Both roles share local login and persisted sessions. See [member access](members.md) for permissions and account lifecycle. Personal gateway keys are available through the separate [API key workflow](api-keys.md). Invitation links and MFA remain later work. Password lifecycle and the local recovery command are described in [team controls](team-controls.md).
 
 ## First-time setup
 
@@ -16,7 +16,7 @@ The administrator and first session are committed in one transaction. A guarded 
 
 Existing administrator accounts and sessions are preserved. A leftover `setup.key` from an earlier development build is unused and may be deleted.
 
-Deleting or replacing the database is not a password-recovery procedure. No password reset endpoint or recovery command is provided in this milestone.
+Deleting or replacing the database is not a password-recovery procedure. Use the local `reset-admin-password --password-stdin` command for an existing administrator, or the authenticated change/reset flows described in [team controls](team-controls.md).
 
 ## Sessions
 
@@ -46,7 +46,7 @@ Keep the backend bound to loopback or a private network behind the proxy. Use HT
 
 ## Request protection and resource limits
 
-All management routes under `/api/` require a valid enabled administrator session by default, except the four explicit authentication endpoints. Personal `/api/keys` and `/api/me/requests` endpoints are explicitly session-protected for both roles and enforce ownership. Members can read their own session state and sign out, but cannot access administrator management APIs. Static SPA assets remain public; rendering the application bundle does not grant access to management data.
+All management routes under `/api/` require a valid enabled administrator session by default, except the four explicit authentication endpoints. Personal `/api/keys` and the explicit `/api/me/requests`, `/api/me/password`, `/api/me/limits` and `/api/me/usage` endpoints are session-protected for both roles and enforce ownership. Members can read their own session state and sign out, but cannot access administrator management APIs. Static SPA assets remain public; rendering the application bundle does not grant access to management data.
 
 Mutations require an exact same-origin Origin header, reject cross-site Fetch Metadata, and accept JSON only. Auth bodies are limited to 4 KiB and have a five-second read deadline.
 

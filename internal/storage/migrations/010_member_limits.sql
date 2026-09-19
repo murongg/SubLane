@@ -1,0 +1,10 @@
+CREATE TABLE member_limits (
+ user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ requests_per_minute INTEGER NOT NULL DEFAULT 0 CHECK(requests_per_minute BETWEEN 0 AND 6000),
+ max_concurrency INTEGER NOT NULL DEFAULT 0 CHECK(max_concurrency BETWEEN 0 AND 8)
+);
+CREATE TABLE member_rate (
+ user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ window_start INTEGER NOT NULL,
+ requests INTEGER NOT NULL CHECK(requests BETWEEN 1 AND 6000)
+);
