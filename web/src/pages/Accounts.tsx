@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/DropdownMenu'
 
 const accountColumns =
-  '@3xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(8.5rem,0.7fr)_6rem]'
+  '@3xl:grid-cols-[minmax(0,1fr)_minmax(0,16rem)_minmax(8.5rem,0.7fr)_6rem]'
 
 export function Accounts() {
   const { t, i18n } = useTranslation()
