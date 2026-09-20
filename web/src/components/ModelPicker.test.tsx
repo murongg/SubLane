@@ -11,7 +11,7 @@ function Picker() {
       id="test-model"
       value={value}
       onChange={setValue}
-      models={['codex/synthetic-basic', 'codex/synthetic-premium']}
+      models={['synthetic-basic', 'synthetic-premium']}
     />
   )
 }
@@ -24,7 +24,7 @@ it('filters discovered model IDs and supports keyboard selection', async () => {
   await user.type(input, 'premium')
   expect(screen.getAllByRole('option')).toHaveLength(1)
   await user.keyboard('{ArrowDown}{Enter}')
-  expect((input as HTMLInputElement).value).toBe('codex/synthetic-premium')
+  expect((input as HTMLInputElement).value).toBe('synthetic-premium')
   expect(screen.queryByRole('listbox')).toBeNull()
 })
 it('keeps the empty state distinct from a matching model', async () => {

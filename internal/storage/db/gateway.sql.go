@@ -45,32 +45,52 @@ func (q *Queries) CreateAccountAffinity(ctx context.Context, arg CreateAccountAf
 	return err
 }
 
-const getAccountAffinity = `-- name: GetAccountAffinity :one
-SELECT account_id, expires_at FROM account_affinity WHERE user_id = ?1 AND group_id = ?2 AND session_hash = ?3 AND provider = ?4
+const listSessionAffinities = `-- name: ListSessionAffinities :many
+SELECT provider, account_id, expires_at FROM account_affinity
+WHERE user_id = ?1 AND group_id = ?2
+AND session_hash = ?3 AND expires_at > ?4
+ORDER BY provider
 `
 
-type GetAccountAffinityParams struct {
+type ListSessionAffinitiesParams struct {
 	UserID      int64
 	GroupID     int64
 	SessionHash []byte
-	Provider    string
+	Now         int64
 }
 
-type GetAccountAffinityRow struct {
+type ListSessionAffinitiesRow struct {
+	Provider  string
 	AccountID string
 	ExpiresAt int64
 }
 
-func (q *Queries) GetAccountAffinity(ctx context.Context, arg GetAccountAffinityParams) (GetAccountAffinityRow, error) {
-	row := q.db.QueryRowContext(ctx, getAccountAffinity,
+func (q *Queries) ListSessionAffinities(ctx context.Context, arg ListSessionAffinitiesParams) ([]ListSessionAffinitiesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionAffinities,
 		arg.UserID,
 		arg.GroupID,
 		arg.SessionHash,
-		arg.Provider,
+		arg.Now,
 	)
-	var i GetAccountAffinityRow
-	err := row.Scan(&i.AccountID, &i.ExpiresAt)
-	return i, err
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSessionAffinitiesRow{}
+	for rows.Next() {
+		var i ListSessionAffinitiesRow
+		if err := rows.Scan(&i.Provider, &i.AccountID, &i.ExpiresAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const pruneAccountAffinity = `-- name: PruneAccountAffinity :exec

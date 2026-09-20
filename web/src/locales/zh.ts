@@ -113,7 +113,7 @@ export const zh: Record<keyof typeof en, string> = {
   groupRestrictModels: '限制可用模型',
   groupAllowedModels: '允许的模型 ID',
   groupModelsHint:
-    '每行一个完整模型 ID，最多 100 个。使用 /v1/models 返回的 ID；无前缀视为 Codex，不支持通配符。',
+    '每行一个模型 ID，最多 100 个。直接使用 /v1/models 返回的名称，无需服务商前缀。历史渠道限制仍然生效，不支持通配符。',
   groupNoModels: '白名单为空时，该分组不允许调用任何模型。',
   groupAllModelsHint: '可使用该分组内的全部模型，包括后续新增的模型。',
   groupAllModels: '全部模型',
@@ -321,7 +321,7 @@ export const zh: Record<keyof typeof en, string> = {
   copyClientConfig: '复制配置',
   clientModel: '模型 ID',
   clientModelHint:
-    '填写 GET /v1/models 返回的模型 ID，保留 codex/、claude/ 或 antigravity/ 前缀；无前缀名称使用 Codex。',
+    '直接填写 GET /v1/models 返回的模型 ID，SubLane 会选择分组内可用的账号。',
   connectionNotConfigured: '请先让管理员接入并验证订阅账号。',
   checkingSession: '正在检查登录状态…',
   setupWelcome: '欢迎使用 SubLane',

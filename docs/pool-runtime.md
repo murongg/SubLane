@@ -8,7 +8,7 @@ Each account defaults to two simultaneous model requests, configurable from 1 to
 
 A bound conversation keeps its account. Saturation returns `account_busy`; cooldown returns `account_cooling`, both with HTTP 429 and a bounded Retry-After header. No request automatically switches an existing conversation to another account. Group permissions and membership changes retain their existing guards.
 
-Without `Session_id` or a nonempty `prompt_cache_key`, every call gets independent selection and a random upstream correlation ID. It does not read or create an affinity entry. New selections rotate within each group/provider among eligible accounts. Existing explicit default-group conversations retain their historical digest.
+Without `Session_id` or a nonempty `prompt_cache_key`, every call gets independent selection and a random upstream correlation ID. It does not read or create an affinity entry. New native selections rotate within each group among eligible accounts supporting the model, across providers. Explicit legacy prefixes limit selection to their provider. Existing explicit default-group conversations retain their historical digest.
 
 The limit covers model requests; account verification, model discovery, and quota reads remain bounded by the existing global admission policy and do not consume model-request slots. These metadata operations do not clear model-request cooldowns.
 
@@ -24,7 +24,7 @@ The limit covers model requests; account verification, model discovery, and quot
 
 After cooldown expires, an account with no in-flight requests may admit one recovery probe. No background generation or provider polling occurs; a normal incoming request performs the probe. A successful probe restores normal concurrency; another failure cools the account again. Older in-flight success cannot clear newer failures, even within the same clock tick.
 
-**Clear cooldown** also clears the failure streak and advances the runtime revision so older outcomes cannot reinstate it. It does not enable an account or repair authorization. Account settings/cooldowns are stored in SQLite. In-flight counters and per-group cursors are process-local, and restart starts them empty. Run one SubLane process per database. Persistence failures are reported through sanitized application logs; in-memory cooldown still blocks admission if its write fails.
+**Clear cooldown** also clears the failure streak and advances the runtime revision so older outcomes cannot reinstate it. It does not enable an account or repair authorization. Account settings/cooldowns are stored in SQLite. Native conversation bindings use the existing affinity table with an `auto` scope and survive restarts. In-flight counters and per-group cursors are process-local, and restart starts them empty. Run one SubLane process per database. Persistence failures are reported through sanitized application logs; in-memory cooldown still blocks admission if its write fails.
 
 ## Recent request records
 

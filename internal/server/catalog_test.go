@@ -32,7 +32,7 @@ func TestCatalogEndpointsRespectRoleOwnershipAndKeyLifecycle(t *testing.T) {
 	admin := login("owner-test", "owner pass 42")
 	path := fmt.Sprintf("/api/keys/%d/models", f.keyID)
 	response := request(h, "GET", path, "", nil, member)
-	if response.Code != 200 || !strings.Contains(response.Body.String(), "codex/synthetic-model") {
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `"id":"synthetic-model"`) || strings.Contains(response.Body.String(), "codex/") {
 		t.Fatal("personal catalog", response.Code, response.Body.String())
 	}
 	if strings.Contains(response.Body.String(), "synthetic-upstream") || strings.Contains(response.Body.String(), f.secret) {
@@ -113,7 +113,13 @@ func TestCachedModelsDoNotConsumeUpstreamRequestSlots(t *testing.T) {
 	r.Header.Set("Authorization", "Bearer "+f.secret)
 	w := httptest.NewRecorder()
 	f.server.Config.Handler.ServeHTTP(w, r)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "synthetic-model") {
-		t.Fatal("cached model listing blocked by generation load", w.Code, w.Body.String())
+	var catalog struct {
+		Object string `json:"object"`
+		Data   []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &catalog) != nil || catalog.Object != "list" || len(catalog.Data) != 1 || catalog.Data[0].ID != "synthetic-model" {
+		t.Fatal("cached native model listing", w.Code, w.Body.String())
 	}
 }

@@ -1,6 +1,6 @@
 # Account groups
 
-Groups define which subscription accounts a personal gateway key may use. Roles continue to control management access. Groups can contain multiple providers; the requested model prefix selects the provider inside that pool.
+Groups define which subscription accounts a personal gateway key may use. Roles continue to control management access. Groups can contain multiple providers; native model IDs select supporting, permitted accounts inside that pool.
 
 ## Default group and migration
 
@@ -48,9 +48,9 @@ Back up SQLite and `credentials.key` together before upgrades. Restoring a pre-g
 
 ## Model access
 
-An administrator can enable **Limit allowed models** in the group editor. Enter up to 100 exact IDs, one per line, using the IDs returned by `/v1/models`. Qualified IDs select a provider; an unqualified ID is normalized to `codex/<id>`. Wildcards are not supported, and model variants must be listed explicitly.
+An administrator can enable **Limit allowed models** in the group editor. Enter up to 100 exact IDs, one per line, using the IDs returned by `/v1/models`. Native IDs allow that exact model across supporting providers in the group. Existing provider-qualified rules retain their original provider scope; updating SubLane does not rewrite or broaden them. Legacy qualified rules can still be submitted explicitly. Wildcards are not supported, and model variants must be listed explicitly.
 
-Groups remain unrestricted by default, including newly discovered models. Enabling the allowlist with no entries denies all models. The API accepts an optional `model_policy: {"restricted": true, "models": ["codex/synthetic-model"]}` on create/update. Omission preserves an existing policy; it does not reset access. Group responses include `restricted_models`; detail responses also include `allowed_models`.
+Groups remain unrestricted by default, including newly discovered models. Enabling the allowlist with no entries denies all models. The API accepts an optional `model_policy: {"restricted": true, "models": ["synthetic-model"]}` on create/update. Omission preserves an existing policy; it does not reset access. Group responses include `restricted_models`; detail responses also include `allowed_models`.
 
 Model discovery filters out models outside the allowlist and does not contact providers excluded entirely by the policy. Responses, Chat Completions, compaction, and every WebSocket turn (including local prewarm) check current policy before account selection or upstream work. A denied model returns `403 model_not_allowed`; it consumes no member rate/concurrency allowance and creates no affinity. Already admitted requests may finish. Migration `015_model_policy.sql` preserves existing unrestricted groups.
 

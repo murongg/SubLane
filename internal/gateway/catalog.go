@@ -6,7 +6,6 @@ import (
 	"math"
 	"slices"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -328,7 +327,7 @@ func (s *Service) GroupCatalog(ctx context.Context, userID, groupID int64, wait 
 	if err := tx.Commit(); err != nil {
 		return result, err
 	}
-	seen := map[string]bool{}
+	seen := map[string]int{}
 	for _, account := range rows {
 		if !policyHasProvider(policy, account.Provider) {
 			continue
@@ -355,25 +354,29 @@ func (s *Service) GroupCatalog(ctx context.Context, userID, groupID int64, wait 
 		if policy.Restricted {
 			ids = []string{}
 			for _, permitted := range policy.Models {
-				provider, native, _ := strings.Cut(permitted, "/")
-				if provider == account.Provider && catalogContains(snapshot.Models, native) {
+				provider, native := groups.SplitModel(permitted)
+				if (provider == "" || provider == account.Provider) && catalogContains(snapshot.Models, native) {
 					ids = append(ids, native)
 				}
 			}
 		}
 		for _, id := range ids {
-			qualified := account.Provider + "/" + id
-			if !policy.Allows(qualified) || seen[qualified] {
+			if !policy.Allows(account.Provider + "/" + id) {
 				continue
 			}
-			seen[qualified] = true
-			if len(seen) > 4096 {
+			metadata := modelMetadata(account.Provider, id)
+			if index, ok := seen[id]; ok {
+				// A shared native ID has multiple routes, not an arbitrary single owner.
+				if result.Models[index].OwnedBy != metadata.OwnedBy {
+					result.Models[index].OwnedBy = "sublane"
+				}
+				continue
+			}
+			if len(seen) >= 4096 {
 				return result, upstream.ErrResponse
 			}
-			if account.Provider == "codex" {
-				result.Models = append(result.Models, modelMetadata(account.Provider, id))
-			}
-			result.Models = append(result.Models, modelMetadata(account.Provider, qualified))
+			seen[id] = len(result.Models)
+			result.Models = append(result.Models, metadata)
 		}
 	}
 	sort.Slice(result.Models, func(i, j int) bool { return result.Models[i].ID < result.Models[j].ID })

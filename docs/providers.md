@@ -20,17 +20,13 @@ Verify the connection to fetch the provider’s model catalog. Reauthorization m
 
 ## Choose a model
 
-Use a personal SubLane key to request `GET /v1/models`. Configure an exact ID from that response:
+Use a personal SubLane key to request `GET /v1/models`, then use an exact native ID from that response. SubLane does not add `codex/`, `claude/` or `antigravity/` prefixes. Identical model IDs across providers appear once, and requests select an available account reporting that model within the key's group and model policy.
 
-- `codex/<available-model-id>`
-- `claude/<available-model-id>`
-- `antigravity/<available-model-id>`
-
-Unqualified model IDs continue to select Codex for existing clients. Prefixes are removed before upstream execution. Models from healthy providers remain visible when another provider is unavailable. The gateway keeps separate account bindings for the same member/session across providers, and never switches a bound conversation to another account after disablement or deletion.
+Existing explicitly prefixed requests remain compatible and select their named provider. Prefixes are removed before upstream execution. Models from healthy providers remain visible when another provider is unavailable. Native conversations keep one account across providers and never switch after account saturation, disablement or deletion. See [model catalogs](models.md) for legacy conversation migration and ambiguity handling.
 
 All three channels expose OpenAI-compatible `POST /v1/responses` and `POST /v1/chat/completions`, with JSON or SSE, plus the existing Responses WebSocket endpoint. This does not add a native Anthropic `/v1/messages` endpoint. Clients requiring that endpoint need a compatible Responses/Chat adapter. `/v1/responses/compact` remains Codex-only; clients using Claude or Antigravity must manage compaction locally or send a complete transcript.
 
-The API keys page’s Codex configuration remains a starting point for Codex clients. Replace `model` with the qualified ID returned by the model catalog. Arbitrary upstream models do not automatically inherit Codex-specific tools or capabilities.
+The API keys page’s Codex configuration remains a starting point for Codex clients. Replace `model` with the native ID returned by the model catalog. Arbitrary upstream models do not automatically inherit Codex-specific tools or capabilities.
 
 ## Credentials and verification
 

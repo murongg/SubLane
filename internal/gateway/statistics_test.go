@@ -15,7 +15,7 @@ import (
 func TestStatisticsAreDurableIndependentAndOwnerScoped(t *testing.T) {
 	ctx := context.Background()
 	var calls atomic.Int64
-	s, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
+	s, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
 		if calls.Add(1) == 1 {
 			return syntheticStream(), nil
 		}
@@ -66,7 +66,7 @@ func TestStatisticsAreDurableIndependentAndOwnerScoped(t *testing.T) {
 
 func TestStatisticsShareHistoryTransactionAndRetainOnlyNinetyDays(t *testing.T) {
 	ctx := context.Background()
-	s, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
+	s, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
 	if _, err := s.db.Exec("CREATE TRIGGER fail_statistics BEFORE INSERT ON usage_daily BEGIN SELECT RAISE(ABORT,'synthetic failure'); END"); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestStatisticsShareHistoryTransactionAndRetainOnlyNinetyDays(t *testing.T) 
 
 func TestStatisticsBoundsModelCardinalityWithoutLosingCounts(t *testing.T) {
 	ctx := context.Background()
-	s, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { t.Fatal("unexpected upstream"); return nil, nil }))
+	s, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { t.Fatal("unexpected upstream"); return nil, nil }))
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestStatisticsRejectsInvalidCoverageSettings(t *testing.T) {
 	for _, key := range []string{"usage.daily.started_at", "usage.hourly.started_at"} {
 		for _, value := range []string{"not-a-time", "9223372036854775808"} {
 			t.Run(key+"/"+value, func(t *testing.T) {
-				service, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { t.Fatal("unexpected upstream"); return nil, nil }))
+				service, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { t.Fatal("unexpected upstream"); return nil, nil }))
 				if _, err := service.db.Exec("UPDATE settings SET value=? WHERE key=?", value, key); err != nil {
 					t.Fatal(err)
 				}

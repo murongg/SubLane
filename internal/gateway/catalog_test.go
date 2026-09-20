@@ -40,8 +40,8 @@ func TestCatalogUnionsAccountsAndRoutesOnlySupportedModels(t *testing.T) {
 		t.Fatal(err)
 	}
 	models, err := s.Models(ctx, 1, pool.ID)
-	if err != nil || len(models) != 6 {
-		t.Fatalf("expected three models and Codex aliases, got %+v: %v", models, err)
+	if err != nil || len(models) != 3 {
+		t.Fatalf("expected three native models, got %+v: %v", models, err)
 	}
 	for range 3 {
 		response, err := s.Open(ctx, 1, pool.ID, []byte(`{"model":"codex/synthetic-premium-only","input":"synthetic"}`), nil, Responses)
@@ -66,14 +66,14 @@ func TestCatalogUnionsAccountsAndRoutesOnlySupportedModels(t *testing.T) {
 		t.Fatal(err)
 	}
 	models, err = s.Models(ctx, 1, pool.ID)
-	if err != nil || len(models) != 2 || models[0].ID != "codex/synthetic-shared" {
+	if err != nil || len(models) != 1 || models[0].ID != "synthetic-shared" {
 		t.Fatal("automatic catalog overwrote group policy", models, err)
 	}
 	if _, err := groups.New(s.db).Save(ctx, pool.ID, groups.Input{Name: pool.Name, Enabled: true, AccountIDs: []string{ids["codex"], extra.ID}, ModelPolicy: &groups.ModelPolicy{Restricted: true, Models: []string{"synthetic-shared(high)"}}}); err != nil {
 		t.Fatal(err)
 	}
 	models, err = s.Models(ctx, 1, pool.ID)
-	if err != nil || len(models) != 2 || models[0].ID != "codex/synthetic-shared(high)" {
+	if err != nil || len(models) != 1 || models[0].ID != "synthetic-shared(high)" {
 		t.Fatal("explicit thinking variant disappeared", models, err)
 	}
 	response, err = s.Open(ctx, 1, pool.ID, []byte(`{"model":"synthetic-shared(high)","input":"synthetic"}`), nil, Responses)
@@ -285,7 +285,7 @@ func TestCatalogRefreshesAfterDiscoverySourceChanges(t *testing.T) {
 		}
 		before := calls.Load()
 		models, err := s.Models(ctx, 1, 1)
-		if err != nil || len(models) != 4 || calls.Load() != before+1 {
+		if err != nil || len(models) != 2 || calls.Load() != before+1 {
 			t.Fatalf("fresh timestamp masked obsolete discovery source: count=%d calls=%d err=%v", len(models), calls.Load(), err)
 		}
 		catalog, err := s.accounts.Catalog(ctx, ids["codex"])

@@ -2,15 +2,12 @@ package gateway
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -88,19 +85,18 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if json.Unmarshal(input["model"], &model) != nil {
 		return nil, upstream.ErrInput
 	}
-	if safeModel.MatchString(model) {
-		entry.record.Model = model
+	if !safeModel.MatchString(model) {
+		return nil, upstream.ErrInput
 	}
-	provider := "codex"
-	if p, actual, found := strings.Cut(model, "/"); found && accounts.ValidProvider(p) {
-		provider, model = p, actual
-	}
+	entry.record.Model = model
+	requestedModel := model
+	provider, model := groups.SplitModel(model)
 	if model == "" || len(model) > 128 {
 		return nil, upstream.ErrInput
 	}
 	entry.record.Provider = provider
 	input["model"], _ = json.Marshal(model)
-	if kind == Compact && provider != "codex" {
+	if kind == Compact && provider != "" && provider != "codex" {
 		return nil, upstream.ErrInput
 	}
 	session := headers.Get("Session_id")
@@ -112,10 +108,14 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if len(session) > 1024 {
 		return nil, upstream.ErrInput
 	}
-	if err := s.AuthorizeModel(ctx, userID, groupID, provider+"/"+model); err != nil {
+	if err := s.AuthorizeModel(ctx, userID, groupID, requestedModel); err != nil {
 		return nil, err
 	}
-	if err := s.warmCatalogs(ctx, userID, groupID, provider, true); err != nil {
+	discoveryProvider := provider
+	if kind == Compact {
+		discoveryProvider = "codex"
+	}
+	if err := s.warmCatalogs(ctx, userID, groupID, discoveryProvider, true); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
@@ -124,16 +124,22 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		return nil, err
 	}
 	entry.memberLeased = true
-	id, digest, err := s.selectAccount(ctx, userID, groupID, session, provider, model)
+	id, digest, err := s.selectAccount(ctx, userID, groupID, session, provider, model, kind)
 	entry.record.AccountID = id
 	if err == nil {
 		state := s.health[id]
 		state.InFlight++
-		entry.record.AccountID = id
 		entry.revision = state.revision
 		entry.leased = true
 	}
 	s.mu.Unlock()
+	if id != "" {
+		if account, lookupErr := s.accounts.Get(ctx, id); lookupErr == nil {
+			entry.record.Provider = account.Provider
+		} else if err == nil {
+			err = lookupErr
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -207,166 +213,6 @@ func readAccount[T any](ctx context.Context, s *Service, id string, read func(co
 		_ = s.accounts.RecordUse(ctx, id, credential.AccessToken, false)
 	}
 	return result, err
-}
-
-func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, session, provider, model string) (string, [32]byte, error) {
-	digest := sha256.Sum256([]byte(fmt.Sprintf("%d:%s", userID, session)))
-	// Preserve legacy upstream session/cache IDs for conversations migrated into the default group.
-	if groupID != groups.DefaultID {
-		digest = sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%s", userID, groupID, session)))
-	}
-	if userID <= 0 || groupID <= 0 {
-		return "", digest, upstream.ErrInput
-	}
-	// Called under s.mu by Open, keeping account selection and reservation atomic.
-	if err := s.loadRuntime(ctx); err != nil {
-		return "", digest, err
-	}
-	if session == "" {
-		if _, err := rand.Read(digest[:]); err != nil {
-			return "", digest, err
-		}
-	}
-	available, err := s.accounts.List(ctx)
-	if err != nil {
-		return "", digest, err
-	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return "", digest, err
-	}
-	defer tx.Rollback()
-	queries := s.queries.WithTx(tx)
-	allowed, err := poolAccounts(ctx, queries, userID, groupID)
-	if err != nil {
-		return "", digest, err
-	}
-	if model != "" {
-		policy, err := groups.ReadPolicy(ctx, queries, userID, groupID)
-		if err != nil {
-			return "", digest, err
-		}
-		if !policy.Allows(provider + "/" + model) {
-			return "", digest, ErrModelNotAllowed
-		}
-	}
-	now := s.now().Unix()
-	expires := now + 24*3600
-	if session != "" {
-		existing, err := queries.GetAccountAffinity(ctx, db.GetAccountAffinityParams{GroupID: groupID, UserID: userID, SessionHash: digest[:], Provider: provider})
-		if err == nil && existing.ExpiresAt > now {
-			// A pool edit is an authorization change, not permission to silently move a conversation.
-			if !allowed[existing.AccountID] {
-				return existing.AccountID, digest, ErrAffinityUnavailable
-			}
-			found := false
-			for _, account := range available {
-				if account.ID == existing.AccountID {
-					found = true
-					if model != "" && account.Enabled && account.Status != "reauth_required" {
-						known, supported, err := s.catalogSupport(ctx, queries, account.ID, model, provider)
-						if err != nil {
-							return account.ID, digest, err
-						}
-						if !known {
-							return account.ID, digest, ErrCatalogUnavailable
-						}
-						if !supported {
-							return account.ID, digest, ErrAffinityUnavailable
-						}
-					}
-					if err := s.accountAdmission(account); err != nil {
-						return existing.AccountID, digest, err
-					}
-					break
-				}
-			}
-			if !found {
-				return "", digest, accounts.ErrNotFound
-			}
-			if err := queries.TouchAccountAffinity(ctx, db.TouchAccountAffinityParams{GroupID: groupID, Provider: provider, UserID: userID, SessionHash: digest[:], ExpiresAt: expires, Threshold: expires - 1800}); err != nil {
-				return "", digest, err
-			}
-			if err := tx.Commit(); err != nil {
-				return "", digest, err
-			}
-			// Disabled or deleted accounts fail in Prepare; never silently move existing conversation state.
-			return existing.AccountID, digest, nil
-		}
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return "", digest, err
-		}
-		if err := queries.PruneAccountAffinity(ctx, now); err != nil {
-			return "", digest, err
-		}
-		count, err := queries.CountAccountAffinity(ctx)
-		if err != nil {
-			return "", digest, err
-		}
-		if count >= 4096 {
-			return "", digest, ErrAffinityLimit
-		}
-	}
-	candidates := make([]string, 0, len(available))
-	busy := false
-	unknown, eligible := false, false
-	var cooling int64
-	for _, account := range available {
-		if allowed[account.ID] && account.Provider == provider && account.Enabled && account.Status != "reauth_required" {
-			eligible = true
-			if model != "" {
-				known, supported, err := s.catalogSupport(ctx, queries, account.ID, model, provider)
-				if err != nil {
-					return "", digest, err
-				}
-				if !known {
-					unknown = true
-					continue
-				}
-				if !supported {
-					continue
-				}
-			}
-			if err := s.accountAdmission(account); err != nil {
-				if errors.Is(err, ErrAccountBusy) {
-					busy = true
-				}
-				var wait *CoolingError
-				if errors.As(err, &wait) && (cooling == 0 || wait.RetryAfter < cooling) {
-					cooling = wait.RetryAfter
-				}
-				continue
-			}
-			candidates = append(candidates, account.ID)
-		}
-	}
-	if len(candidates) == 0 {
-		if busy {
-			return "", digest, ErrAccountBusy
-		}
-		if cooling > 0 {
-			return "", digest, &CoolingError{RetryAfter: cooling}
-		}
-		if unknown {
-			return "", digest, ErrCatalogUnavailable
-		}
-		if eligible && model != "" {
-			return "", digest, ErrModelUnavailable
-		}
-		return "", digest, ErrNoAccount
-	}
-	cursor := fmt.Sprintf("%d:%s", groupID, provider)
-	id := candidates[s.next[cursor]%len(candidates)]
-	s.next[cursor] = (s.next[cursor] + 1) % len(candidates)
-	if session != "" {
-		if err := queries.CreateAccountAffinity(ctx, db.CreateAccountAffinityParams{GroupID: groupID, Provider: provider, UserID: userID, SessionHash: digest[:], AccountID: id, ExpiresAt: expires}); err != nil {
-			return "", digest, err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return "", digest, err
-	}
-	return id, digest, nil
 }
 
 func poolAccounts(ctx context.Context, queries *db.Queries, userID, groupID int64) (map[string]bool, error) {

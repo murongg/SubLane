@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { List, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
-  catalogModelIDs,
   catalogOptions,
   refreshCatalog,
   type CatalogTarget,
@@ -86,7 +85,7 @@ function CatalogContent({
     query.isFetching || refresh.isPending || Boolean(data?.refreshing)
   const failed =
     query.isError || refresh.isError || Boolean(data?.refresh_failed)
-  const models = catalogModelIDs(data?.models ?? []).filter((model) =>
+  const models = (data?.models ?? []).filter((model) =>
     model.toLowerCase().includes(filter.toLowerCase()),
   )
   return (
@@ -104,7 +103,7 @@ function CatalogContent({
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>
           {data?.known
-            ? t('catalogCount', { count: catalogModelIDs(data.models).length })
+            ? t('catalogCount', { count: data.models.length })
             : t('catalogUnknown')}
         </span>
         <Button

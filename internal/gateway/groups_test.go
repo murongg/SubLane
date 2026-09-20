@@ -45,13 +45,13 @@ func TestGroupRoutingAndAffinityNeverEscapeTheirPool(t *testing.T) {
 		id      int64
 		account string
 	}{{a.ID, ids["codex"]}, {b.ID, second.ID}} {
-		id, _, err := gateway.selectAccount(ctx, 1, test.id, "same-session", "codex", "")
+		id, _, err := gateway.selectAccount(ctx, 1, test.id, "same-session", "codex", "", Responses)
 		if err != nil || id != test.account {
 			t.Fatal("cross-group affinity", id, err)
 		}
 	}
 	catalog, err := gateway.Models(ctx, 1, b.ID)
-	if err != nil || len(catalog) != 4 || catalog[1].ID != "codex/synthetic-second" {
+	if err != nil || len(catalog) != 2 || catalog[1].ID != "synthetic-second" {
 		t.Fatal("models escaped pool", catalog, err)
 	}
 	if _, err := pools.Save(ctx, a.ID, groups.Input{Name: a.Name, Enabled: true, AccountIDs: []string{second.ID}}); err != nil {
