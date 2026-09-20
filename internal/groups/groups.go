@@ -9,6 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
@@ -25,27 +26,30 @@ var (
 )
 
 type Group struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Enabled      bool   `json:"enabled"`
-	IsDefault    bool   `json:"is_default"`
-	CreatedAt    int64  `json:"created_at"`
-	UpdatedAt    int64  `json:"updated_at"`
-	AccountCount int64  `json:"account_count"`
-	MemberCount  int64  `json:"member_count"`
+	RestrictedModels bool   `json:"restricted_models"`
+	ID               int64  `json:"id"`
+	Name             string `json:"name"`
+	Enabled          bool   `json:"enabled"`
+	IsDefault        bool   `json:"is_default"`
+	CreatedAt        int64  `json:"created_at"`
+	UpdatedAt        int64  `json:"updated_at"`
+	AccountCount     int64  `json:"account_count"`
+	MemberCount      int64  `json:"member_count"`
 }
 type Detail struct {
 	Group
-	AccountIDs []string `json:"account_ids"`
+	AccountIDs    []string `json:"account_ids"`
+	AllowedModels []string `json:"allowed_models"`
 }
 type Choice struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
 }
 type Input struct {
-	Name       string   `json:"name"`
-	Enabled    bool     `json:"enabled"`
-	AccountIDs []string `json:"account_ids"`
+	ModelPolicy *ModelPolicy `json:"model_policy,omitempty"`
+	Name        string       `json:"name"`
+	Enabled     bool         `json:"enabled"`
+	AccountIDs  []string     `json:"account_ids"`
 }
 type Service struct {
 	connection *sql.DB
@@ -63,7 +67,7 @@ func (s *Service) List(ctx context.Context) ([]Group, error) {
 	}
 	result := make([]Group, 0, len(rows))
 	for _, r := range rows {
-		result = append(result, Group{ID: r.ID, Name: r.Name, Enabled: r.Enabled, IsDefault: r.ID == DefaultID, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, AccountCount: r.AccountCount, MemberCount: r.MemberCount})
+		result = append(result, Group{RestrictedModels: r.RestrictedModels, ID: r.ID, Name: r.Name, Enabled: r.Enabled, IsDefault: r.ID == DefaultID, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, AccountCount: r.AccountCount, MemberCount: r.MemberCount})
 	}
 	return result, nil
 }
@@ -89,10 +93,25 @@ func (s *Service) Get(ctx context.Context, id int64) (Detail, error) {
 	if err != nil {
 		return Detail{}, err
 	}
-	result := Detail{Group: Group{ID: row.ID, Name: row.Name, Enabled: row.Enabled, IsDefault: id == DefaultID, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, AccountCount: int64(len(ids)), MemberCount: count}, AccountIDs: ids}
+	result := Detail{Group: Group{RestrictedModels: row.RestrictedModels, ID: row.ID, Name: row.Name, Enabled: row.Enabled, IsDefault: id == DefaultID, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, AccountCount: int64(len(ids)), MemberCount: count}, AccountIDs: ids}
+	result.AllowedModels, err = q.ListGroupModels(ctx, id)
+	if err != nil {
+		return Detail{}, err
+	}
 	return result, tx.Commit()
 }
 func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, error) {
+	action := "group.update"
+	if id == 0 {
+		action = "group.create"
+	}
+	if input.ModelPolicy != nil {
+		normalized, err := input.ModelPolicy.normalized()
+		if err != nil {
+			return Detail{}, err
+		}
+		input.ModelPolicy = &normalized
+	}
 	name := strings.TrimSpace(input.Name)
 	if id < 0 || !utf8.ValidString(name) || utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 64 || strings.IndexFunc(name, unicode.IsControl) >= 0 || input.AccountIDs == nil || len(input.AccountIDs) > 100 {
 		return Detail{}, ErrInput
@@ -159,6 +178,22 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 			return Detail{}, err
 		}
 	}
+	if input.ModelPolicy != nil {
+		if err := q.SetGroupModelPolicy(ctx, db.SetGroupModelPolicyParams{ID: id, Restricted: input.ModelPolicy.Restricted}); err != nil {
+			return Detail{}, err
+		}
+		if err := q.ClearGroupModels(ctx, id); err != nil {
+			return Detail{}, err
+		}
+		for _, model := range input.ModelPolicy.Models {
+			if err := q.AddGroupModel(ctx, db.AddGroupModelParams{GroupID: id, Model: model}); err != nil {
+				return Detail{}, err
+			}
+		}
+	}
+	if err := audit.Record(ctx, q, action, "group", audit.ID(id)); err != nil {
+		return Detail{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return Detail{}, err
 	}
@@ -217,6 +252,9 @@ func (s *Service) SetMemberGroups(ctx context.Context, userID int64, ids []int64
 		if err := q.GrantMemberGroup(ctx, db.GrantMemberGroupParams{GroupID: id, UserID: userID}); err != nil {
 			return err
 		}
+	}
+	if err := audit.Record(ctx, q, "member.groups", "member", audit.ID(userID)); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

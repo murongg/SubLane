@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/storage"
 )
@@ -36,7 +35,7 @@ func TestRouterGroupsProtectMethodErrorsAndFallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys := apikey.New(db)
+	keys := newTestKeyService(t, db)
 	key, err := keys.Create(ctx, member.ID, "Synthetic client")
 	if err != nil {
 		t.Fatal(err)

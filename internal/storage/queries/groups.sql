@@ -67,3 +67,15 @@ SELECT CASE WHEN EXISTS(
 
 -- name: CountGroupMembers :one
 SELECT count(*) FROM group_members m JOIN users u ON u.id=m.user_id WHERE m.group_id=sqlc.arg(group_id) AND u.role='member';
+
+-- name: SetGroupModelPolicy :exec
+UPDATE account_groups SET restricted_models=sqlc.arg(restricted) WHERE id=sqlc.arg(id);
+
+-- name: ClearGroupModels :exec
+DELETE FROM group_models WHERE group_id=sqlc.arg(group_id);
+
+-- name: AddGroupModel :exec
+INSERT INTO group_models(group_id,model) VALUES(sqlc.arg(group_id),sqlc.arg(model));
+
+-- name: ListGroupModels :many
+SELECT model FROM group_models WHERE group_id=sqlc.arg(group_id) ORDER BY model;

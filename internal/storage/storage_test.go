@@ -63,7 +63,7 @@ func TestOpenMigratesAndPreservesData(t *testing.T) {
 		t.Fatalf("value=%q err=%v", value, err)
 	}
 	var migrations int
-	if err := db.QueryRow("SELECT count(*) FROM schema_migrations").Scan(&migrations); err != nil || migrations != 12 {
+	if err := db.QueryRow("SELECT count(*) FROM schema_migrations").Scan(&migrations); err != nil || migrations != 17 {
 		t.Fatalf("migrations=%d err=%v", migrations, err)
 	}
 }
@@ -114,5 +114,49 @@ func TestUpgradePreservesAdministratorAndSessions(t *testing.T) {
 	}
 	if _, err := db.Exec("UPDATE users SET enabled=0 WHERE id=1"); err == nil {
 		t.Fatal("owner can be disabled")
+	}
+}
+
+func TestAccessMigrationPreservesExistingKeyAndGroupDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "access-upgrade.db")
+	connection, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connection.Exec("CREATE TABLE schema_migrations(name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	for _, name := range []string{"001_settings.sql", "002_auth.sql", "003_members.sql", "004_api_keys.sql", "005_accounts.sql", "006_usage.sql", "007_providers.sql", "008_groups.sql", "009_pool_runtime.sql", "010_member_limits.sql", "011_statistics.sql", "012_hourly_usage.sql"} {
+		if err := apply(ctx, connection, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	digest := bytes.Repeat([]byte{9}, 32)
+	if _, err := connection.Exec("INSERT INTO users(id,username,password_hash,role,enabled,created_at) VALUES(1,'synthetic-admin','synthetic-hash','admin',1,123)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connection.Exec("INSERT INTO api_keys(id,user_id,group_id,name,prefix,token_hash,created_at) VALUES(1,1,1,'Synthetic key','sl_synthetic',?,123)", digest); err != nil {
+		t.Fatal(err)
+	}
+	if err := connection.Close(); err != nil {
+		t.Fatal(err)
+	}
+	connection, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	var got []byte
+	var enabled, restricted bool
+	var expiry *int64
+	if err := connection.QueryRow("SELECT token_hash,enabled,expires_at FROM api_keys WHERE id=1").Scan(&got, &enabled, &expiry); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, digest) || !enabled || expiry != nil {
+		t.Fatal("existing key changed")
+	}
+	if err := connection.QueryRow("SELECT restricted_models FROM account_groups WHERE id=1").Scan(&restricted); err != nil || restricted {
+		t.Fatal("existing group restricted", err)
 	}
 }

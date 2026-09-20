@@ -11,6 +11,8 @@ import {
   DropdownMenuTrigger,
 } from './ui/DropdownMenu'
 import { createKey } from '@/lib/keys'
+import { KeyExpiry } from './KeyExpiry'
+import { expiryValue, type ExpiryChoice } from '@/lib/keys'
 import { ApiError } from '@/lib/request'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -69,10 +71,11 @@ function KeyForm({
   const selectedGroup = groups.data?.groups.find(
     (group) => group.id === groupID,
   )
+  const [expiry, setExpiry] = useState<ExpiryChoice>('never')
   const [nameError, setNameError] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
-  // Only this mounted dialog holds the one-time secret; closing it releases mutation data immediately.
+  // Creation holds the secret only in this dialog; later copies use a separate owner-checked request.
   const mutation = useMutation({
     mutationFn: createKey,
     gcTime: 0,
@@ -102,7 +105,11 @@ function KeyForm({
     setNameError(invalid)
     if (invalid) return
     setSelectedID(selectedGroup.id)
-    mutation.mutate({ name, group_id: selectedGroup.id })
+    mutation.mutate({
+      name,
+      group_id: selectedGroup.id,
+      expires_at: expiryValue(expiry, null),
+    })
   }
   const copy = async () => {
     if (!mutation.data) return
@@ -117,6 +124,7 @@ function KeyForm({
   return (
     <DialogContent
       showCloseButton={false}
+      className="max-h-[calc(100dvh-2rem)] overflow-y-auto"
       onInteractOutside={(event) => {
         if (mutation.isPending) event.preventDefault()
       }}
@@ -245,6 +253,11 @@ function KeyForm({
               {t('keyGroupHint')}
             </p>
           </div>
+          <KeyExpiry
+            value={expiry}
+            onChange={setExpiry}
+            disabled={mutation.isPending}
+          />
           {mutation.isError && (
             <p role="alert" className="text-sm text-error">
               {t(

@@ -12,11 +12,15 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage/db"
+	"github.com/murongg/SubLane/internal/vault"
 )
 
 var (
+	ErrNotCopyable      = errors.New("api_key_not_copyable")
+	ErrRevoked          = errors.New("api_key_revoked")
 	ErrInput            = errors.New("invalid_input")
 	ErrLimit            = errors.New("api_key_limit")
 	ErrNotFound         = errors.New("api_key_not_found")
@@ -36,24 +40,34 @@ type Key struct {
 	CreatedAt   int64  `json:"created_at"`
 	LastUsedAt  *int64 `json:"last_used_at"`
 	RevokedAt   *int64 `json:"revoked_at"`
+	Enabled     bool   `json:"enabled"`
+	ExpiresAt   *int64 `json:"expires_at"`
+	Copyable    bool   `json:"copyable"`
+}
+type UpdateInput struct {
+	Name      string `json:"name"`
+	Enabled   bool   `json:"enabled"`
+	ExpiresAt *int64 `json:"expires_at"`
 }
 type CreatedKey struct {
 	Key    Key    `json:"key"`
 	Secret string `json:"secret"`
 }
 type Page struct {
+	ServerTime int64 `json:"server_time"`
 	Keys       []Key `json:"keys"`
 	NextCursor int64 `json:"next_cursor"`
 }
 type Principal struct{ KeyID, UserID, GroupID int64 }
 type Service struct {
+	vault   *vault.Vault
 	db      *sql.DB
 	queries *db.Queries
 	now     func() time.Time
 }
 
-func New(connection *sql.DB) *Service {
-	return &Service{db: connection, queries: db.New(connection), now: time.Now}
+func New(connection *sql.DB, cipher *vault.Vault) *Service {
+	return &Service{vault: cipher, db: connection, queries: db.New(connection), now: time.Now}
 }
 
 func (s *Service) Create(ctx context.Context, userID int64, name string) (CreatedKey, error) {
@@ -61,7 +75,11 @@ func (s *Service) Create(ctx context.Context, userID int64, name string) (Create
 }
 
 func (s *Service) CreateInGroup(ctx context.Context, userID, groupID int64, name string) (CreatedKey, error) {
-	if groupID <= 0 {
+	return s.CreateWithExpiry(ctx, userID, groupID, name, nil)
+}
+
+func (s *Service) CreateWithExpiry(ctx context.Context, userID, groupID int64, name string, expiry *int64) (CreatedKey, error) {
+	if groupID <= 0 || !validExpiry(expiry, s.now().Unix()) {
 		return CreatedKey{}, ErrInput
 	}
 	name = strings.TrimSpace(name)
@@ -103,9 +121,20 @@ func (s *Service) CreateInGroup(ctx context.Context, userID, groupID int64, name
 	if count >= maxActiveKeys {
 		return CreatedKey{}, ErrLimit
 	}
-	key := Key{GroupID: groupID, GroupName: group.Name, GroupAccess: "allowed", Name: name, Prefix: secret[:11], CreatedAt: s.now().Unix()}
-	key.ID, err = queries.CreateKey(ctx, db.CreateKeyParams{GroupID: groupID, UserID: userID, Name: name, Prefix: key.Prefix, TokenHash: digest[:], CreatedAt: key.CreatedAt})
+	key := Key{GroupID: groupID, GroupName: group.Name, GroupAccess: "allowed", Name: name, Prefix: secret[:11], CreatedAt: s.now().Unix(), Enabled: true, ExpiresAt: expiry}
+	key.ID, err = queries.CreateKey(ctx, db.CreateKeyParams{GroupID: groupID, UserID: userID, Name: name, Prefix: key.Prefix, TokenHash: digest[:], CreatedAt: key.CreatedAt, ExpiresAt: expiry})
 	if err != nil {
+		return CreatedKey{}, err
+	}
+	encrypted, err := s.vault.SealAPIKey(userID, key.ID, []byte(secret))
+	if err != nil {
+		return CreatedKey{}, err
+	}
+	if err := queries.SaveKeySecret(ctx, db.SaveKeySecretParams{KeyID: key.ID, Secret: encrypted}); err != nil {
+		return CreatedKey{}, err
+	}
+	key.Copyable = true
+	if err := audit.Record(ctx, queries, "key.create", "key", audit.ID(key.ID)); err != nil {
 		return CreatedKey{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -115,7 +144,7 @@ func (s *Service) CreateInGroup(ctx context.Context, userID, groupID int64, name
 }
 
 func (s *Service) List(ctx context.Context, userID, beforeID int64) (Page, error) {
-	page := Page{Keys: []Key{}}
+	page := Page{Keys: []Key{}, ServerTime: s.now().Unix()}
 	if beforeID < 0 {
 		return page, ErrInput
 	}
@@ -133,18 +162,71 @@ func (s *Service) List(ctx context.Context, userID, beforeID int64) (Page, error
 	return page, nil
 }
 
-func (s *Service) Revoke(ctx context.Context, userID, keyID int64) (Key, error) {
-	now := s.now().Unix()
+func validExpiry(expiry *int64, now int64) bool {
+	return expiry == nil || (*expiry > now && *expiry <= 253402300799)
+}
 
-	n, err := s.queries.RevokeKey(ctx, db.RevokeKeyParams{Now: &now, ID: keyID, UserID: userID})
+func (s *Service) Update(ctx context.Context, userID, keyID int64, input UpdateInput) (Key, error) {
+	input.Name = strings.TrimSpace(input.Name)
+	if !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) < 1 || utf8.RuneCountInString(input.Name) > 64 || strings.IndexFunc(input.Name, unicode.IsControl) >= 0 {
+		return Key{}, ErrInput
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Key{}, err
 	}
-	if n == 0 {
+	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	row, err := q.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID})
+	if errors.Is(err, sql.ErrNoRows) {
 		return Key{}, ErrNotFound
 	}
-	row, err := s.queries.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID})
-	return Key(row), err
+	if err != nil {
+		return Key{}, err
+	}
+	if row.RevokedAt != nil {
+		return Key{}, ErrRevoked
+	}
+	// An unchanged past deadline may be retained when renaming an already expired key.
+	unchanged := row.ExpiresAt != nil && input.ExpiresAt != nil && *row.ExpiresAt == *input.ExpiresAt
+	if !unchanged && !validExpiry(input.ExpiresAt, s.now().Unix()) {
+		return Key{}, ErrInput
+	}
+	if err := q.UpdateKey(ctx, db.UpdateKeyParams{ID: keyID, UserID: userID, Name: input.Name, Enabled: input.Enabled, ExpiresAt: input.ExpiresAt}); err != nil {
+		return Key{}, err
+	}
+	if err := audit.Record(ctx, q, "key.update", "key", audit.ID(keyID)); err != nil {
+		return Key{}, err
+	}
+	row.Name, row.Enabled, row.ExpiresAt = input.Name, input.Enabled, input.ExpiresAt
+	return Key(row), tx.Commit()
+}
+func (s *Service) Revoke(ctx context.Context, userID, keyID int64) (Key, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Key{}, err
+	}
+	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	row, err := q.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return Key{}, ErrNotFound
+	}
+	if err != nil {
+		return Key{}, err
+	}
+	if row.RevokedAt == nil {
+		now := s.now().Unix()
+		if _, err := q.RevokeKey(ctx, db.RevokeKeyParams{Now: &now, ID: keyID, UserID: userID}); err != nil {
+			return Key{}, err
+		}
+		row.Copyable = false
+		if err := audit.Record(ctx, q, "key.revoke", "key", audit.ID(keyID)); err != nil {
+			return Key{}, err
+		}
+		row.RevokedAt = &now
+	}
+	return Key(row), tx.Commit()
 }
 
 func (s *Service) Authenticate(ctx context.Context, secret string) (Principal, error) {
@@ -157,14 +239,14 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Principal, e
 	}
 	digest := sha256.Sum256([]byte(secret))
 	// Recheck membership and pool enablement on every request, including later WebSocket turns.
-	row, err := s.queries.AuthenticateKey(ctx, digest[:])
+	now := s.now().Unix()
+	row, err := s.queries.AuthenticateKey(ctx, db.AuthenticateKeyParams{TokenHash: digest[:], Now: &now})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Principal{}, ErrInvalidKey
 	}
 	if err != nil {
 		return Principal{}, err
 	}
-	now := s.now().Unix()
 	threshold := now - 60
 	// Track usage without writing to SQLite for every request in a burst.
 	err = s.queries.TouchKey(ctx, db.TouchKeyParams{Now: &now, ID: row.ID, Threshold: &threshold})

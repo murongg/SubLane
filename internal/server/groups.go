@@ -59,18 +59,19 @@ func (h *groupHTTP) update(w http.ResponseWriter, r *http.Request) {
 }
 func (h *groupHTTP) save(w http.ResponseWriter, r *http.Request, id int64) {
 	var input struct {
-		Name       string   `json:"name"`
-		Enabled    *bool    `json:"enabled"`
-		AccountIDs []string `json:"account_ids"`
+		ModelPolicy *groups.ModelPolicy `json:"model_policy"`
+		Name        string              `json:"name"`
+		Enabled     *bool               `json:"enabled"`
+		AccountIDs  []string            `json:"account_ids"`
 	}
-	if !decodeJSON(w, r, &input) {
+	if !decodeJSONLimit(w, r, &input, 32<<10) {
 		return
 	}
 	if input.Enabled == nil {
 		groupError(w, groups.ErrInput)
 		return
 	}
-	value, err := h.service.Save(r.Context(), id, groups.Input{Name: input.Name, Enabled: *input.Enabled, AccountIDs: input.AccountIDs})
+	value, err := h.service.Save(r.Context(), id, groups.Input{ModelPolicy: input.ModelPolicy, Name: input.Name, Enabled: *input.Enabled, AccountIDs: input.AccountIDs})
 	if err != nil {
 		groupError(w, err)
 		return

@@ -16,7 +16,7 @@ func TestActivityUsesUTCHoursAndSessionOwnershipAcrossWeeks(t *testing.T) {
 	now := time.Date(2026, 9, 21, 10, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return now }
 	since := now.AddDate(0, 0, -7).Add(-90 * time.Minute).Unix()
-	if _, err := s.db.Exec("UPDATE usage_hourly_coverage SET started_at=?", since); err != nil {
+	if _, err := s.db.Exec("UPDATE settings SET value=? WHERE key='usage.hourly.started_at'", since); err != nil {
 		t.Fatal(err)
 	}
 	input, ownerInput := int64(10), int64(70)
@@ -59,7 +59,7 @@ func TestActivityUsesUTCHoursAndSessionOwnershipAcrossWeeks(t *testing.T) {
 	if today.Activity.Cells[0].Samples != 1 || today.Activity.Cells[0].Requests != 0 || today.Activity.Cells[10].Samples != 1 || today.Activity.Cells[11].Samples != 0 || today.Activity.Cells[24].Samples != 0 {
 		t.Fatal("zero activity and future hours were conflated")
 	}
-	if _, err := s.db.Exec("UPDATE usage_hourly_coverage SET started_at=?", now.Unix()); err != nil {
+	if _, err := s.db.Exec("UPDATE settings SET value=? WHERE key='usage.hourly.started_at'", now.Unix()); err != nil {
 		t.Fatal(err)
 	}
 	fresh, err := s.UserStatistics(ctx, member, 1)

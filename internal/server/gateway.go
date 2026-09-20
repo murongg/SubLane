@@ -222,6 +222,8 @@ func gatewayFailure(err error) (int, string) {
 		return 401, "invalid_api_key"
 	case errors.Is(err, gateway.ErrContextLimit):
 		return 400, "conversation_context_limit"
+	case errors.Is(err, gateway.ErrModelNotAllowed):
+		return 403, "model_not_allowed"
 	case errors.Is(err, upstream.ErrInput):
 		return 400, "invalid_model_request"
 	case errors.Is(err, upstream.ErrContinuation):

@@ -11,9 +11,14 @@ import (
 
 const authenticateKey = `-- name: AuthenticateKey :one
 SELECT k.id,k.user_id,k.group_id FROM api_keys k JOIN users u ON u.id=k.user_id JOIN account_groups g ON g.id=k.group_id
-WHERE k.token_hash=?1 AND k.revoked_at IS NULL AND u.enabled=1 AND g.enabled=1
+WHERE k.token_hash=?1 AND k.revoked_at IS NULL AND k.enabled=1 AND (k.expires_at IS NULL OR k.expires_at>?2) AND u.enabled=1 AND g.enabled=1
 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id))
 `
+
+type AuthenticateKeyParams struct {
+	TokenHash []byte
+	Now       *int64
+}
 
 type AuthenticateKeyRow struct {
 	ID      int64
@@ -21,8 +26,8 @@ type AuthenticateKeyRow struct {
 	GroupID int64
 }
 
-func (q *Queries) AuthenticateKey(ctx context.Context, tokenHash []byte) (AuthenticateKeyRow, error) {
-	row := q.db.QueryRowContext(ctx, authenticateKey, tokenHash)
+func (q *Queries) AuthenticateKey(ctx context.Context, arg AuthenticateKeyParams) (AuthenticateKeyRow, error) {
+	row := q.db.QueryRowContext(ctx, authenticateKey, arg.TokenHash, arg.Now)
 	var i AuthenticateKeyRow
 	err := row.Scan(&i.ID, &i.UserID, &i.GroupID)
 	return i, err
@@ -40,8 +45,8 @@ func (q *Queries) CountActiveKeys(ctx context.Context, userID int64) (int64, err
 }
 
 const createKey = `-- name: CreateKey :execlastid
-INSERT INTO api_keys(user_id,group_id,name,prefix,token_hash,created_at)
-VALUES(?1,?2,?3,?4,?5,?6)
+INSERT INTO api_keys(user_id,group_id,name,prefix,token_hash,created_at,expires_at)
+VALUES(?1,?2,?3,?4,?5,?6,?7)
 `
 
 type CreateKeyParams struct {
@@ -51,6 +56,7 @@ type CreateKeyParams struct {
 	Prefix    string
 	TokenHash []byte
 	CreatedAt int64
+	ExpiresAt *int64
 }
 
 func (q *Queries) CreateKey(ctx context.Context, arg CreateKeyParams) (int64, error) {
@@ -61,6 +67,7 @@ func (q *Queries) CreateKey(ctx context.Context, arg CreateKeyParams) (int64, er
 		arg.Prefix,
 		arg.TokenHash,
 		arg.CreatedAt,
+		arg.ExpiresAt,
 	)
 	if err != nil {
 		return 0, err
@@ -71,7 +78,8 @@ func (q *Queries) CreateKey(ctx context.Context, arg CreateKeyParams) (int64, er
 const getKey = `-- name: GetKey :one
 SELECT k.id,k.group_id,g.name AS group_name,
 CASE WHEN g.enabled=1 AND u.enabled=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id)) THEN 'allowed' ELSE 'blocked' END AS group_access,
-k.name,k.prefix,k.created_at,k.last_used_at,k.revoked_at
+k.name,k.prefix,k.created_at,k.last_used_at,k.revoked_at,k.enabled,k.expires_at,
+CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copyable
 FROM api_keys k JOIN account_groups g ON g.id=k.group_id JOIN users u ON u.id=k.user_id
 WHERE k.id=?1 AND k.user_id=?2
 `
@@ -91,6 +99,9 @@ type GetKeyRow struct {
 	CreatedAt   int64
 	LastUsedAt  *int64
 	RevokedAt   *int64
+	Enabled     bool
+	ExpiresAt   *int64
+	Copyable    bool
 }
 
 func (q *Queries) GetKey(ctx context.Context, arg GetKeyParams) (GetKeyRow, error) {
@@ -106,6 +117,9 @@ func (q *Queries) GetKey(ctx context.Context, arg GetKeyParams) (GetKeyRow, erro
 		&i.CreatedAt,
 		&i.LastUsedAt,
 		&i.RevokedAt,
+		&i.Enabled,
+		&i.ExpiresAt,
+		&i.Copyable,
 	)
 	return i, err
 }
@@ -124,7 +138,8 @@ func (q *Queries) GetKeyOwnerEnabled(ctx context.Context, userID int64) (bool, e
 const listKeys = `-- name: ListKeys :many
 SELECT k.id,k.group_id,g.name AS group_name,
 CASE WHEN g.enabled=1 AND u.enabled=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id)) THEN 'allowed' ELSE 'blocked' END AS group_access,
-k.name,k.prefix,k.created_at,k.last_used_at,k.revoked_at
+k.name,k.prefix,k.created_at,k.last_used_at,k.revoked_at,k.enabled,k.expires_at,
+CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copyable
 FROM api_keys k JOIN account_groups g ON g.id=k.group_id JOIN users u ON u.id=k.user_id
 WHERE k.user_id=?1 AND (k.id<?2 OR ?2=0)
 ORDER BY k.id DESC LIMIT 51
@@ -145,6 +160,9 @@ type ListKeysRow struct {
 	CreatedAt   int64
 	LastUsedAt  *int64
 	RevokedAt   *int64
+	Enabled     bool
+	ExpiresAt   *int64
+	Copyable    bool
 }
 
 func (q *Queries) ListKeys(ctx context.Context, arg ListKeysParams) ([]ListKeysRow, error) {
@@ -166,6 +184,9 @@ func (q *Queries) ListKeys(ctx context.Context, arg ListKeysParams) ([]ListKeysR
 			&i.CreatedAt,
 			&i.LastUsedAt,
 			&i.RevokedAt,
+			&i.Enabled,
+			&i.ExpiresAt,
+			&i.Copyable,
 		); err != nil {
 			return nil, err
 		}
@@ -181,7 +202,7 @@ func (q *Queries) ListKeys(ctx context.Context, arg ListKeysParams) ([]ListKeysR
 }
 
 const revokeKey = `-- name: RevokeKey :execrows
-UPDATE api_keys SET revoked_at=COALESCE(revoked_at,?1) WHERE id=?2 AND user_id=?3
+UPDATE api_keys SET revoked_at=COALESCE(revoked_at,?1),encrypted_secret=NULL WHERE id=?2 AND user_id=?3
 `
 
 type RevokeKeyParams struct {
@@ -212,5 +233,29 @@ type TouchKeyParams struct {
 
 func (q *Queries) TouchKey(ctx context.Context, arg TouchKeyParams) error {
 	_, err := q.db.ExecContext(ctx, touchKey, arg.Now, arg.ID, arg.Threshold)
+	return err
+}
+
+const updateKey = `-- name: UpdateKey :exec
+UPDATE api_keys SET name=?1,enabled=?2,expires_at=?3
+WHERE id=?4 AND user_id=?5 AND revoked_at IS NULL
+`
+
+type UpdateKeyParams struct {
+	Name      string
+	Enabled   bool
+	ExpiresAt *int64
+	ID        int64
+	UserID    int64
+}
+
+func (q *Queries) UpdateKey(ctx context.Context, arg UpdateKeyParams) error {
+	_, err := q.db.ExecContext(ctx, updateKey,
+		arg.Name,
+		arg.Enabled,
+		arg.ExpiresAt,
+		arg.ID,
+		arg.UserID,
+	)
 	return err
 }

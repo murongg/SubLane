@@ -1,12 +1,14 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { KeyRound, LoaderCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { authOptions } from '@/lib/auth'
-import { keyOptions } from '@/lib/keys'
+import { keyOptions, keyState } from '@/lib/keys'
 import { CreateKey } from '@/components/CreateKey'
+import { CopyKey } from '@/components/CopyKey'
 import { ClientGuide } from '@/components/ClientGuide'
 import { RevokeKey } from '@/components/RevokeKey'
+import { EditKey } from '@/components/EditKey'
 import { Status } from '@/components/Status'
 import { Button } from '@/components/ui/Button'
 
@@ -25,6 +27,14 @@ function KeyManager({ userID }: { userID: number }) {
   const query = useQuery(
     keyOptions(client, userID, cursors[cursors.length - 1]),
   )
+  const [clock, setClock] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const now = query.data
+    ? query.data.server_time + Math.max(0, clock - query.dataUpdatedAt) / 1000
+    : clock / 1000
   const invalidate = () => {
     return client.invalidateQueries({ queryKey: ['keys', userID] })
   }
@@ -112,7 +122,7 @@ function KeyManager({ userID }: { userID: number }) {
             <tbody className="divide-y divide-border">
               {query.data.keys.map((key) => (
                 <tr key={key.id}>
-                  <td className="max-w-64 px-5 py-4">
+                  <td className="min-w-48 max-w-64 px-5 py-4">
                     <p className="break-words font-medium">{key.name}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {t('keyGroupName', {
@@ -122,28 +132,42 @@ function KeyManager({ userID }: { userID: number }) {
                             : key.group_name,
                       })}
                     </p>
-                    <code className="mt-1 block text-xs text-muted-foreground">
-                      {key.prefix}…
-                    </code>
+                    <CopyKey
+                      key={String(key.copyable)}
+                      value={key}
+                      userID={userID}
+                    />
                   </td>
                   <td className="px-5 py-4">
                     <Status
                       kind={
-                        key.revoked_at !== null
-                          ? 'neutral'
-                          : key.group_access === 'allowed'
-                            ? 'success'
-                            : 'warning'
+                        keyState(key, now) === 'active'
+                          ? 'success'
+                          : ['keyExpired', 'keyGroupUnavailable'].includes(
+                                keyState(key, now),
+                              )
+                            ? 'warning'
+                            : 'neutral'
                       }
                     >
-                      {t(
-                        key.revoked_at !== null
-                          ? 'revoked'
-                          : key.group_access === 'allowed'
-                            ? 'active'
-                            : 'keyGroupUnavailable',
-                      )}
+                      {t(keyState(key, now))}
                     </Status>
+                    <p
+                      className="mt-2 whitespace-nowrap text-xs text-muted-foreground"
+                      title={
+                        key.expires_at === null
+                          ? undefined
+                          : new Date(key.expires_at * 1000).toLocaleString(
+                              i18n.resolvedLanguage,
+                            )
+                      }
+                    >
+                      {key.expires_at === null
+                        ? t('keyNeverExpires')
+                        : t('keyExpiresOn', {
+                            date: dates.format(key.expires_at * 1000),
+                          })}
+                    </p>
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-muted-foreground">
                     {key.last_used_at === null
@@ -151,11 +175,14 @@ function KeyManager({ userID }: { userID: number }) {
                       : dates.format(key.last_used_at * 1000)}
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <RevokeKey
-                      value={key}
-                      onRevoked={invalidate}
-                      focusAfterRevoke={() => heading.current?.focus()}
-                    />
+                    <div className="flex justify-end gap-2">
+                      <EditKey value={key} onSaved={invalidate} />
+                      <RevokeKey
+                        value={key}
+                        onRevoked={invalidate}
+                        focusAfterRevoke={() => heading.current?.focus()}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -112,6 +112,9 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if len(session) > 1024 {
 		return nil, upstream.ErrInput
 	}
+	if err := s.AuthorizeModel(ctx, userID, groupID, provider+"/"+model); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	if err := s.admitMember(ctx, userID); err != nil {
 		s.mu.Unlock()
@@ -181,6 +184,13 @@ func (s *Service) Models(ctx context.Context, userID, groupID int64) ([]upstream
 	if err != nil {
 		return nil, err
 	}
+	policy, err := s.modelPolicy(ctx, userID, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if policy.Restricted && len(policy.Models) == 0 {
+		return []upstream.Model{}, nil
+	}
 	rows, err := s.accounts.List(ctx)
 	if err != nil {
 		return nil, err
@@ -198,7 +208,7 @@ func (s *Service) Models(ctx context.Context, userID, groupID int64) ([]upstream
 	var firstError error
 	successful := 0
 	for _, provider := range []string{"codex", "claude", "antigravity"} {
-		if providers[provider] == "" {
+		if providers[provider] == "" || !policyHasProvider(policy, provider) {
 			continue
 		}
 		// Discovery has no conversation state and must not create or reuse an affinity binding.
@@ -214,6 +224,9 @@ func (s *Service) Models(ctx context.Context, userID, groupID int64) ([]upstream
 		}
 		successful++
 		for _, model := range models {
+			if !policy.Allows(provider + "/" + model.ID) {
+				continue
+			}
 			if provider == "codex" {
 				result = append(result, model)
 			}

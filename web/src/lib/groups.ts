@@ -8,6 +8,7 @@ const groupSchema = z.object({
   name: z.string().min(1),
   enabled: z.boolean(),
   is_default: z.boolean(),
+  restricted_models: z.boolean(),
   created_at: z.number().int().nonnegative(),
   updated_at: z.number().int().nonnegative(),
   account_count: z.number().int().nonnegative(),
@@ -15,6 +16,7 @@ const groupSchema = z.object({
 })
 const detailSchema = groupSchema.extend({
   account_ids: z.array(z.string()).max(100),
+  allowed_models: z.array(z.string()).max(100),
 })
 const choicesSchema = z.object({
   groups: z.array(groupSchema.pick({ id: true, name: true })).max(32),
@@ -42,6 +44,7 @@ export function saveGroup({
   name: string
   enabled: boolean
   account_ids: string[]
+  model_policy: { restricted: boolean; models: string[] }
 }) {
   return request(id ? `/api/groups/${id}` : '/api/groups', detailSchema, {
     method: id ? 'PATCH' : 'POST',

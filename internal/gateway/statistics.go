@@ -75,7 +75,12 @@ func (s *Service) statistics(ctx context.Context, userID, days int64) (Statistic
 	if err != nil {
 		return page, err
 	}
-	page.TrackingSince, err = q.GetStatisticsCoverage(ctx)
+	coverage, err := q.GetStatisticsCoverage(ctx)
+	if err != nil {
+		return page, err
+	}
+	// Parse metadata explicitly: SQLite CAST would turn invalid text into a misleading zero.
+	page.TrackingSince, err = strconv.ParseInt(coverage, 10, 64)
 	if err != nil {
 		return page, err
 	}

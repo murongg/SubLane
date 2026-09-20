@@ -15,6 +15,7 @@ import (
 
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
+	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/config"
 	"github.com/murongg/SubLane/internal/gateway"
@@ -22,9 +23,7 @@ import (
 	"github.com/murongg/SubLane/internal/oauth"
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/storage"
-	storedb "github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/upstream"
-	"github.com/murongg/SubLane/internal/vault"
 	"github.com/murongg/SubLane/web"
 )
 
@@ -73,13 +72,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	count, err := storedb.New(db).CountAccounts(ctx)
+	cipher, err := openVault(ctx, db, cfg.DataDir)
 	if err != nil {
 		return err
 	}
-	cipher, err := vault.Open(filepath.Join(cfg.DataDir, "credentials.key"), count == 0)
-	if err != nil {
-		return err
+	keys := apikey.New(db, cipher)
+	if err := keys.Verify(ctx); err != nil {
+		return fmt.Errorf("verify API key secrets: %w", err)
 	}
 	subscriptions := accounts.New(db, cipher)
 	if err := subscriptions.Verify(ctx); err != nil {
@@ -95,7 +94,7 @@ func run() error {
 	authorization := oauth.New(subscriptions, provider)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(server.Options{Groups: groups.New(db), Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: apikey.New(db), PublicURL: cfg.PublicURL, Accounts: subscriptions, OAuth: authorization, Gateway: forwarding}),
+		Handler:           server.New(server.Options{Audit: audit.New(db), Groups: groups.New(db), Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: keys, PublicURL: cfg.PublicURL, Accounts: subscriptions, OAuth: authorization, Gateway: forwarding}),
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,

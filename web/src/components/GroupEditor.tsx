@@ -12,6 +12,7 @@ import {
 } from '@/lib/groups'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
+import { Textarea } from './ui/Textarea'
 import {
   Dialog,
   DialogContent,
@@ -87,6 +88,10 @@ function GroupForm({
   const [name, setName] = useState(value?.name ?? '')
   const [enabled, setEnabled] = useState(value?.enabled ?? true)
   const [selected, setSelected] = useState<string[]>(value?.account_ids ?? [])
+  const [restricted, setRestricted] = useState(
+    value?.restricted_models ?? false,
+  )
+  const [models, setModels] = useState(value?.allowed_models.join('\n') ?? '')
   const [invalid, setInvalid] = useState(false)
   const accounts = useQuery(accountOptions)
   const mutation = useMutation({ mutationFn: saveGroup, onSuccess: onSaved })
@@ -101,6 +106,13 @@ function GroupForm({
         name: name.trim(),
         enabled,
         account_ids: selected,
+        model_policy: {
+          restricted,
+          models: models
+            .split(/\r?\n/)
+            .map((value) => value.trim())
+            .filter(Boolean),
+        },
       })
   }
   return (
@@ -211,6 +223,52 @@ function GroupForm({
                 </label>
               ))}
             </div>
+          )}
+        </fieldset>
+        <fieldset className="space-y-3" disabled={mutation.isPending}>
+          <legend className="text-sm font-medium">
+            {t('groupModelPolicy')}
+          </legend>
+          <label className="flex items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 accent-primary focus-visible:ring-2 focus-visible:ring-ring"
+              checked={restricted}
+              onChange={(event) => setRestricted(event.target.checked)}
+            />
+            {t('groupRestrictModels')}
+          </label>
+          {restricted ? (
+            <div className="space-y-2">
+              <label htmlFor="group-models" className="text-sm font-medium">
+                {t('groupAllowedModels')}
+              </label>
+              <Textarea
+                id="group-models"
+                rows={4}
+                maxLength={16100}
+                spellCheck={false}
+                value={models}
+                onChange={(event) => setModels(event.target.value)}
+                aria-describedby="group-models-hint"
+                className="font-mono text-sm"
+              />
+              <p
+                id="group-models-hint"
+                className="text-xs leading-5 text-muted-foreground"
+              >
+                {t('groupModelsHint')}
+              </p>
+              {!models.trim() && (
+                <p role="status" className="text-sm text-warning">
+                  {t('groupNoModels')}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs leading-5 text-muted-foreground">
+              {t('groupAllModelsHint')}
+            </p>
           )}
         </fieldset>
         {mutation.isError && (

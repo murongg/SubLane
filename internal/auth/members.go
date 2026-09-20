@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
@@ -71,6 +72,9 @@ func (s *Service) CreateMember(ctx context.Context, username, password string) (
 	if err := queries.AddDefaultGroupMember(ctx, row.ID); err != nil {
 		return Member{}, err
 	}
+	if err := audit.Record(ctx, queries, "member.create", "member", audit.ID(row.ID)); err != nil {
+		return Member{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return Member{}, err
 	}
@@ -99,6 +103,9 @@ func (s *Service) SetMemberEnabled(ctx context.Context, id int64, enabled bool) 
 		if err := queries.DeleteUserSessions(ctx, id); err != nil {
 			return Member{}, err
 		}
+	}
+	if err := audit.Record(ctx, queries, "member.update", "member", audit.ID(id)); err != nil {
+		return Member{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return Member{}, err

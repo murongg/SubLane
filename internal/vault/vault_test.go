@@ -2,6 +2,8 @@ package vault
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"os"
 	"path/filepath"
 	"testing"
@@ -63,5 +65,59 @@ func TestMissingOrCorruptKeyFailsClosed(t *testing.T) {
 	data, err := os.ReadFile(path)
 	if err != nil || string(data) != "invalid-key" {
 		t.Fatal("corrupt key was overwritten")
+	}
+}
+
+func TestAPIKeysBindOwnerRecordAndDomain(t *testing.T) {
+	v, err := Open(filepath.Join(t.TempDir(), "credentials.key"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := []byte("synthetic-key")
+	encrypted, err := v.SealAPIKey(2, 3, plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := v.OpenAPIKey(2, 3, encrypted)
+	if err != nil || !bytes.Equal(plain, got) {
+		t.Fatal(err)
+	}
+	for _, ids := range [][2]int64{{1, 3}, {2, 4}, {0, 3}} {
+		if _, err := v.OpenAPIKey(ids[0], ids[1], encrypted); err == nil {
+			t.Fatal("moved key accepted")
+		}
+	}
+	if _, err := v.Open("api-key:2:3", encrypted); err == nil {
+		t.Fatal("ciphertext crossed credential domains")
+	}
+	if _, err := v.SealAPIKey(0, 3, plain); err == nil {
+		t.Fatal("invalid owner accepted")
+	}
+}
+
+func TestExistingAccountEnvelopeRemainsReadable(t *testing.T) {
+	key := bytes.Repeat([]byte{7}, 32)
+	nonce := bytes.Repeat([]byte{9}, 12)
+	path := filepath.Join(t.TempDir(), "credentials.key")
+	if err := os.WriteFile(path, key, 0600); err != nil {
+		t.Fatal(err)
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Construct the previously released envelope independently of Vault's helpers.
+	encrypted := aead.Seal(append([]byte{1}, nonce...), nonce, []byte("synthetic-credential"), []byte("sublane:account:synthetic-account"))
+	reopened, err := Open(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := reopened.Open("synthetic-account", encrypted)
+	if err != nil || string(plain) != "synthetic-credential" {
+		t.Fatal("existing credential format changed", err)
 	}
 }

@@ -80,7 +80,7 @@ func newProviderFixture(t *testing.T, provider string, handler http.HandlerFunc)
 		return http.DefaultTransport.RoundTrip(copy)
 	}))
 	t.Cleanup(client.Close)
-	keys := apikey.New(db)
+	keys := newTestKeyService(t, db)
 	created, err := keys.Create(ctx, member.ID, "Synthetic client")
 	if err != nil {
 		t.Fatal(err)

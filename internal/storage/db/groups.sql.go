@@ -41,6 +41,20 @@ func (q *Queries) AddGroupAccount(ctx context.Context, arg AddGroupAccountParams
 	return err
 }
 
+const addGroupModel = `-- name: AddGroupModel :exec
+INSERT INTO group_models(group_id,model) VALUES(?1,?2)
+`
+
+type AddGroupModelParams struct {
+	GroupID int64
+	Model   string
+}
+
+func (q *Queries) AddGroupModel(ctx context.Context, arg AddGroupModelParams) error {
+	_, err := q.db.ExecContext(ctx, addGroupModel, arg.GroupID, arg.Model)
+	return err
+}
+
 const canUseGroup = `-- name: CanUseGroup :one
 SELECT EXISTS(SELECT 1 FROM account_groups g JOIN users u ON u.id=?1
 WHERE g.id=?2 AND g.enabled=1 AND u.enabled=1
@@ -65,6 +79,15 @@ DELETE FROM group_accounts WHERE group_id=?1
 
 func (q *Queries) ClearGroupAccounts(ctx context.Context, groupID int64) error {
 	_, err := q.db.ExecContext(ctx, clearGroupAccounts, groupID)
+	return err
+}
+
+const clearGroupModels = `-- name: ClearGroupModels :exec
+DELETE FROM group_models WHERE group_id=?1
+`
+
+func (q *Queries) ClearGroupModels(ctx context.Context, groupID int64) error {
+	_, err := q.db.ExecContext(ctx, clearGroupModels, groupID)
 	return err
 }
 
@@ -130,7 +153,7 @@ func (q *Queries) FindGroupName(ctx context.Context, name string) (int64, error)
 }
 
 const getGroup = `-- name: GetGroup :one
-SELECT id, name, enabled, created_at, updated_at FROM account_groups WHERE id=?1
+SELECT id, name, enabled, created_at, updated_at, restricted_models FROM account_groups WHERE id=?1
 `
 
 func (q *Queries) GetGroup(ctx context.Context, id int64) (AccountGroup, error) {
@@ -142,6 +165,7 @@ func (q *Queries) GetGroup(ctx context.Context, id int64) (AccountGroup, error) 
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RestrictedModels,
 	)
 	return i, err
 }
@@ -249,20 +273,48 @@ func (q *Queries) ListGroupAccounts(ctx context.Context, groupID int64) ([]strin
 	return items, nil
 }
 
+const listGroupModels = `-- name: ListGroupModels :many
+SELECT model FROM group_models WHERE group_id=?1 ORDER BY model
+`
+
+func (q *Queries) ListGroupModels(ctx context.Context, groupID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupModels, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var model string
+		if err := rows.Scan(&model); err != nil {
+			return nil, err
+		}
+		items = append(items, model)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGroups = `-- name: ListGroups :many
-SELECT g.id, g.name, g.enabled, g.created_at, g.updated_at, (SELECT count(*) FROM group_accounts a WHERE a.group_id=g.id) AS account_count,
+SELECT g.id, g.name, g.enabled, g.created_at, g.updated_at, g.restricted_models, (SELECT count(*) FROM group_accounts a WHERE a.group_id=g.id) AS account_count,
 (SELECT count(*) FROM group_members m JOIN users u ON u.id=m.user_id WHERE m.group_id=g.id AND u.role='member') AS member_count
 FROM account_groups g ORDER BY g.id
 `
 
 type ListGroupsRow struct {
-	ID           int64
-	Name         string
-	Enabled      bool
-	CreatedAt    int64
-	UpdatedAt    int64
-	AccountCount int64
-	MemberCount  int64
+	ID               int64
+	Name             string
+	Enabled          bool
+	CreatedAt        int64
+	UpdatedAt        int64
+	RestrictedModels bool
+	AccountCount     int64
+	MemberCount      int64
 }
 
 func (q *Queries) ListGroups(ctx context.Context) ([]ListGroupsRow, error) {
@@ -280,6 +332,7 @@ func (q *Queries) ListGroups(ctx context.Context) ([]ListGroupsRow, error) {
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RestrictedModels,
 			&i.AccountCount,
 			&i.MemberCount,
 		); err != nil {
@@ -321,6 +374,20 @@ func (q *Queries) ListMemberGroups(ctx context.Context, userID int64) ([]int64, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const setGroupModelPolicy = `-- name: SetGroupModelPolicy :exec
+UPDATE account_groups SET restricted_models=?1 WHERE id=?2
+`
+
+type SetGroupModelPolicyParams struct {
+	Restricted bool
+	ID         int64
+}
+
+func (q *Queries) SetGroupModelPolicy(ctx context.Context, arg SetGroupModelPolicyParams) error {
+	_, err := q.db.ExecContext(ctx, setGroupModelPolicy, arg.Restricted, arg.ID)
+	return err
 }
 
 const updateGroup = `-- name: UpdateGroup :exec

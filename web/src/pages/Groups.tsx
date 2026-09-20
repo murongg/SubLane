@@ -83,6 +83,12 @@ export function Groups() {
                   </Status>
                 </div>
                 <p className="text-sm text-muted-foreground">
+                  {t(
+                    group.restricted_models
+                      ? 'groupRestrictedModels'
+                      : 'groupAllModels',
+                  )}{' '}
+                  ·{' '}
                   {t('groupCounts', {
                     accounts: group.account_count,
                     members: group.member_count,

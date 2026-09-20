@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
+	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
@@ -24,6 +25,7 @@ type Options struct {
 	Version   string
 	StartedAt time.Time
 	Ping      func(context.Context) error
+	Audit     *audit.Service
 	Auth      *auth.Service
 	Keys      *apikey.Service
 	Accounts  *accounts.Service
@@ -41,7 +43,7 @@ func New(o Options) http.Handler {
 		middleware.SetHeader("X-Frame-Options", "DENY"),
 	)
 	routeErrors(router)
-	login := &authHTTP{service: o.Auth, publicURL: o.PublicURL, limiter: newLoginLimiter()}
+	login := &authHTTP{audit: o.Audit, service: o.Auth, publicURL: o.PublicURL, limiter: newLoginLimiter()}
 	keys := &keyHTTP{groups: o.Groups, service: o.Keys, gateway: o.Gateway, publicURL: o.PublicURL, sockets: make(chan struct{}, 8)}
 	accountManagement := &accountHTTP{service: o.Accounts, oauth: o.OAuth, gateway: o.Gateway}
 	memberManagement := &memberHTTP{gateway: o.Gateway}
@@ -133,6 +135,7 @@ func New(o Options) http.Handler {
 			members.Patch("/{id}/limits", memberManagement.updateLimits)
 		})
 		management.Get("/usage", memberManagement.usage)
+		management.Get("/audit", (&auditHTTP{service: o.Audit}).list)
 		management.Route("/accounts", accountManagement.register)
 		management.Get("/requests", accountManagement.requests)
 		management.Route("/groups", (&groupHTTP{service: o.Groups}).register)

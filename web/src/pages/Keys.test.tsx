@@ -10,6 +10,9 @@ import { memberAuthenticated } from '@/test/fixtures'
 
 const secret = 'sl_' + 'x'.repeat(43)
 const metadata = {
+  copyable: true,
+  enabled: true,
+  expires_at: null as number | null,
   id: 1,
   group_id: 1,
   group_name: 'Default',
@@ -20,7 +23,14 @@ const metadata = {
   last_used_at: null,
   revoked_at: null as number | null,
 }
-const response = (value: unknown) => new Response(JSON.stringify(value))
+const response = (value: unknown) =>
+  new Response(
+    JSON.stringify(
+      value && typeof value === 'object' && 'keys' in value
+        ? { server_time: 1900000000, ...value }
+        : value,
+    ),
+  )
 function open() {
   render(
     <App
@@ -143,6 +153,7 @@ it('binds a member key to the chosen authorized group', async () => {
         expect(JSON.parse(String(init.body))).toEqual({
           name: 'Synthetic project key',
           group_id: 3,
+          expires_at: null,
         })
         return Promise.resolve(
           response({
@@ -217,3 +228,263 @@ it('opens client setup on demand, copies the model config, and restores focus on
     ((await screen.findByLabelText('Model ID')) as HTMLInputElement).value,
   ).toBe('codex/synthetic-model')
 })
+
+it('renames and pauses a key without replacing its secret or group', async () => {
+  let value = { ...metadata, enabled: true, expires_at: null }
+  const fetch = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(memberAuthenticated))
+      if (init?.method === 'PATCH') {
+        expect(JSON.parse(String(init.body))).toEqual({
+          name: 'Paused laptop',
+          enabled: false,
+          expires_at: null,
+        })
+        value = { ...value, ...JSON.parse(String(init.body)) }
+        return Promise.resolve(response(value))
+      }
+      return Promise.resolve(
+        response({ keys: [value], next_cursor: 0, server_time: 1900000000 }),
+      )
+    })
+  vi.stubGlobal('fetch', fetch)
+  const user = userEvent.setup()
+  open()
+  await user.click(
+    await screen.findByRole('button', { name: 'Edit Synthetic laptop' }),
+  )
+  const dialog = await screen.findByRole('dialog', { name: 'Edit API key' })
+  await user.clear(within(dialog).getByLabelText('Name'))
+  await user.type(within(dialog).getByLabelText('Name'), 'Paused laptop')
+  await user.click(within(dialog).getByLabelText('Key enabled'))
+  await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(await screen.findByText('Paused')).toBeTruthy()
+  expect(screen.queryByDisplayValue(secret)).toBeNull()
+})
+
+it('uses the server clock to display expired keys', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(
+        response(
+          url === '/api/auth/state'
+            ? memberAuthenticated
+            : {
+                keys: [{ ...metadata, expires_at: 1899999999 }],
+                next_cursor: 0,
+                server_time: 1900000000,
+              },
+        ),
+      ),
+    ),
+  )
+  open()
+  expect(await screen.findByText('Expired')).toBeTruthy()
+})
+it('creates a key with the selected expiry period', async () => {
+  const before = Math.floor(Date.now() / 1000)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(memberAuthenticated))
+      if (url === '/api/keys/groups')
+        return Promise.resolve(
+          response({ groups: [{ id: 1, name: 'Default' }] }),
+        )
+      if (init?.method === 'POST') {
+        const data = JSON.parse(String(init.body))
+        expect(data.expires_at).toBeGreaterThanOrEqual(before + 7 * 86400)
+        expect(data.expires_at).toBeLessThanOrEqual(
+          Math.floor(Date.now() / 1000) + 7 * 86400,
+        )
+        return Promise.resolve(
+          response({
+            key: { ...metadata, expires_at: data.expires_at },
+            secret,
+          }),
+        )
+      }
+      return Promise.resolve(response({ keys: [], next_cursor: 0 }))
+    }),
+  )
+  const user = userEvent.setup()
+  open()
+  await screen.findByText('No API keys yet')
+  await user.click(screen.getByRole('button', { name: 'Create key' }))
+  const dialog = await screen.findByRole('dialog')
+  await user.type(
+    within(dialog).getByLabelText('Name'),
+    'Synthetic expiring key',
+  )
+  await user.click(within(dialog).getByRole('button', { name: 'Expires' }))
+  await user.click(screen.getByRole('menuitemradio', { name: 'In 7 days' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Create key' }))
+  await screen.findByDisplayValue(secret)
+})
+
+it('fetches a full key only for explicit copy and never retains it in query or mutation data', async () => {
+  const client = queries.createQueryClient()
+  vi.spyOn(queries, 'createQueryClient').mockReturnValue(client)
+  const fetch = vi
+    .fn()
+    .mockImplementation((url: string) =>
+      Promise.resolve(
+        response(
+          url === '/api/auth/state'
+            ? memberAuthenticated
+            : url === '/api/keys/1/secret'
+              ? { secret }
+              : { keys: [{ ...metadata, copyable: true }], next_cursor: 0 },
+        ),
+      ),
+    )
+  vi.stubGlobal('fetch', fetch)
+  const user = userEvent.setup()
+  const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+  open()
+  const button = await screen.findByRole('button', {
+    name: 'Copy Synthetic laptop',
+  })
+  expect(fetch.mock.calls.some(([url]) => url === '/api/keys/1/secret')).toBe(
+    false,
+  )
+  await user.click(button)
+  await waitFor(() => expect(copy).toHaveBeenCalledWith(secret))
+  expect(screen.queryByDisplayValue(secret)).toBeNull()
+  await user.click(button)
+  await waitFor(() => expect(copy).toHaveBeenCalledTimes(2))
+  expect(
+    fetch.mock.calls.filter(([url]) => url === '/api/keys/1/secret'),
+  ).toHaveLength(2)
+  expect(
+    JSON.stringify(
+      client
+        .getQueryCache()
+        .getAll()
+        .map((query) => query.state.data),
+    ),
+  ).not.toContain(secret)
+  expect(
+    JSON.stringify(
+      client
+        .getMutationCache()
+        .getAll()
+        .map((mutation) => mutation.state.data),
+    ),
+  ).not.toContain(secret)
+})
+it('explains legacy keys and offers manual copy when clipboard access fails', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(
+        response(
+          url === '/api/auth/state'
+            ? memberAuthenticated
+            : url === '/api/keys/1/secret'
+              ? { secret }
+              : {
+                  keys: [
+                    { ...metadata, copyable: true },
+                    {
+                      ...metadata,
+                      id: 2,
+                      name: 'Synthetic legacy key',
+                      copyable: false,
+                    },
+                  ],
+                  next_cursor: 0,
+                },
+        ),
+      ),
+    ),
+  )
+  const user = userEvent.setup()
+  vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(
+    new Error('synthetic clipboard denial'),
+  )
+  open()
+  const disabled = await screen.findByRole('button', {
+    name: 'Copy Synthetic legacy key',
+  })
+  expect(disabled.hasAttribute('disabled')).toBe(true)
+  expect(
+    screen.getByText(
+      'This older key cannot be copied again. Create a new key if you need its full value.',
+    ),
+  ).toBeTruthy()
+  await user.click(
+    screen.getByRole('button', { name: 'Copy Synthetic laptop' }),
+  )
+  const dialog = await screen.findByRole('dialog', { name: 'Copy API key' })
+  expect(
+    (within(dialog).getByLabelText('API key') as HTMLInputElement).value,
+  ).toBe(secret)
+  await user.click(within(dialog).getByRole('button', { name: 'Done' }))
+  await waitFor(() => expect(screen.queryByDisplayValue(secret)).toBeNull())
+  expect(document.activeElement).toBe(
+    screen.getByRole('button', { name: 'Copy Synthetic laptop' }),
+  )
+})
+it.each([200, 401])(
+  'ignores a late secret response (%i) after an identity change',
+  async (status) => {
+    const client = queries.createQueryClient()
+    vi.spyOn(queries, 'createQueryClient').mockReturnValue(client)
+    let state = memberAuthenticated
+    let resolveSecret!: (value: Response) => void
+    let signal: AbortSignal | undefined
+    const pending = new Promise<Response>((resolve) => {
+      resolveSecret = resolve
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url === '/api/auth/state') return Promise.resolve(response(state))
+        if (url === '/api/keys/1/secret') {
+          signal = init?.signal ?? undefined
+          return pending
+        }
+        return Promise.resolve(
+          response({ keys: [{ ...metadata, copyable: true }], next_cursor: 0 }),
+        )
+      }),
+    )
+    const user = userEvent.setup()
+    const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+    open()
+    await user.click(
+      await screen.findByRole('button', { name: 'Copy Synthetic laptop' }),
+    )
+    state = {
+      ...memberAuthenticated,
+      user: {
+        ...memberAuthenticated.user,
+        id: 3,
+        username: 'other-synthetic-member',
+      },
+    }
+    await act(async () => {
+      await client.fetchQuery({ ...authOptions(), staleTime: 0 })
+    })
+    await waitFor(() => expect(signal?.aborted).toBe(true))
+    await act(async () => {
+      resolveSecret(
+        status === 200
+          ? response({ secret })
+          : new Response(JSON.stringify({ error: 'unauthorized' }), { status }),
+      )
+      await pending
+    })
+    expect(copy).not.toHaveBeenCalled()
+    expect(
+      client.getQueryData<{ user: { id: number } }>(['auth'])?.user?.id,
+    ).toBe(3)
+    expect(screen.queryByDisplayValue(secret)).toBeNull()
+  },
+)

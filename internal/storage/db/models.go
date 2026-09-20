@@ -21,9 +21,24 @@ type Account struct {
 }
 
 type AccountGroup struct {
-	ID        int64
-	Name      string
-	Enabled   bool
-	CreatedAt int64
-	UpdatedAt int64
+	ID               int64
+	Name             string
+	Enabled          bool
+	CreatedAt        int64
+	UpdatedAt        int64
+	RestrictedModels bool
+}
+
+type AuditEvent struct {
+	ID         int64
+	ActorID    int64
+	ActorName  string
+	ActorRole  string
+	Source     string
+	Action     string
+	Resource   string
+	ResourceID string
+	Outcome    string
+	HttpStatus *int64
+	CreatedAt  int64
 }

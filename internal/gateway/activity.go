@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/murongg/SubLane/internal/storage/db"
@@ -30,7 +31,11 @@ func readActivity(ctx context.Context, q *db.Queries, userID, from, to, now int6
 		result.Cells[i].Weekday = int64(i / 24)
 		result.Cells[i].Hour = int64(i % 24)
 	}
-	since, err := q.GetHourlyCoverage(ctx)
+	coverage, err := q.GetHourlyCoverage(ctx)
+	if err != nil {
+		return result, err
+	}
+	since, err := strconv.ParseInt(coverage, 10, 64)
 	if err != nil {
 		return result, err
 	}
