@@ -12,6 +12,33 @@ import (
 	core "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 )
 
+// CatalogSource invalidates cached discovery when its request contract changes.
+// Bump the adapter revision if a provider's discovery protocol or normalization changes.
+func CatalogSource(provider string) string {
+	return catalogSource(provider, DefaultCodexVersion)
+}
+
+func (c *Client) CatalogSource(provider string) string {
+	return catalogSource(provider, c.codexVersion())
+}
+
+func catalogSource(provider, version string) string {
+	source := provider + ":v1"
+	if provider == "codex" {
+		source += ":" + version
+	}
+	return source
+}
+
+// Thinking suffixes are SDK request options; capability discovery reports the base model.
+// Group permission checks still use the complete client-requested ID.
+func CatalogModelID(model string) string {
+	if index := strings.LastIndex(model, "("); index > 0 && strings.HasSuffix(model, ")") {
+		return model[:index]
+	}
+	return model
+}
+
 func (c *Client) providerModels(ctx context.Context, credential accounts.Credential) ([]Model, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()

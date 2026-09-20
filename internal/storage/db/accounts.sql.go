@@ -73,7 +73,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, id string) (int64, error) {
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at, max_concurrency FROM accounts WHERE id = ?1
+SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at, max_concurrency, models_snapshot, models_revision FROM accounts WHERE id = ?1
 `
 
 func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
@@ -93,6 +93,8 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.MaxConcurrency,
+		&i.ModelsSnapshot,
+		&i.ModelsRevision,
 	)
 	return i, err
 }
@@ -152,7 +154,9 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]ListAccountsRow, error) {
 }
 
 const setAccountEnabled = `-- name: SetAccountEnabled :exec
-UPDATE accounts SET enabled = ?1, updated_at = ?2 WHERE id = ?3
+UPDATE accounts SET enabled = ?1, updated_at = ?2,
+models_revision = models_revision + CASE WHEN enabled != ?1 THEN 1 ELSE 0 END
+WHERE id = ?3
 `
 
 type SetAccountEnabledParams struct {

@@ -18,21 +18,23 @@ import (
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/oauth"
+	"github.com/murongg/SubLane/internal/versions"
 )
 
 type Options struct {
-	Assets    fs.FS
-	Version   string
-	StartedAt time.Time
-	Ping      func(context.Context) error
-	Audit     *audit.Service
-	Auth      *auth.Service
-	Keys      *apikey.Service
-	Accounts  *accounts.Service
-	OAuth     *oauth.Flow
-	Gateway   *gateway.Service
-	Groups    *groups.Service
-	PublicURL string
+	Assets        fs.FS
+	Version       string
+	StartedAt     time.Time
+	Ping          func(context.Context) error
+	Audit         *audit.Service
+	Auth          *auth.Service
+	Keys          *apikey.Service
+	Accounts      *accounts.Service
+	OAuth         *oauth.Flow
+	Gateway       *gateway.Service
+	Groups        *groups.Service
+	PublicURL     string
+	CodexVersions *versions.Service
 }
 
 func New(o Options) http.Handler {
@@ -136,9 +138,10 @@ func New(o Options) http.Handler {
 		})
 		management.Get("/usage", memberManagement.usage)
 		management.Get("/audit", (&auditHTTP{service: o.Audit}).list)
+		management.Route("/settings/codex", (&versionHTTP{service: o.CodexVersions}).register)
 		management.Route("/accounts", accountManagement.register)
 		management.Get("/requests", accountManagement.requests)
-		management.Route("/groups", (&groupHTTP{service: o.Groups}).register)
+		management.Route("/groups", (&groupHTTP{service: o.Groups, gateway: o.Gateway}).register)
 		api.Mount("/", management)
 	})
 	router.HandleFunc("/api", notFound)

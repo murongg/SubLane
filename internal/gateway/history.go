@@ -245,6 +245,10 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 		return "rejected", "group_unavailable", ""
 	case errors.Is(err, accounts.ErrReauthorize):
 		return "error", "auth_required", ""
+	case errors.Is(err, ErrModelUnavailable):
+		return "rejected", "model_not_available", ""
+	case errors.Is(err, ErrCatalogUnavailable):
+		return "rejected", "model_catalog_unavailable", ""
 	case errors.Is(err, ErrModelNotAllowed):
 		return "rejected", "model_not_allowed", ""
 	case errors.Is(err, upstream.ErrInput), errors.Is(err, upstream.ErrContinuation):

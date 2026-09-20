@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FolderClosed, LoaderCircle, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { groupOptions } from '@/lib/groups'
+import { CatalogDialog } from '@/components/CatalogDialog'
 import { GroupEditor } from '@/components/GroupEditor'
 import { Button } from '@/components/ui/Button'
 import { Status } from '@/components/Status'
@@ -15,6 +16,7 @@ export function Groups() {
   const saved = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['groups'] }),
+      client.invalidateQueries({ queryKey: ['model-catalog'] }),
       client.invalidateQueries({ queryKey: ['available-groups'] }),
       client.invalidateQueries({ queryKey: ['keys'] }),
       client.invalidateQueries({ queryKey: ['connection'] }),
@@ -95,16 +97,23 @@ export function Groups() {
                   })}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditing(group.id)}
-                aria-label={t('editGroupNamed', {
-                  name: group.is_default ? t('defaultGroup') : group.name,
-                })}
-              >
-                {t('editGroup')}
-              </Button>
+              <div className="flex items-center gap-2">
+                <CatalogDialog
+                  target={{ kind: 'group', id: group.id }}
+                  name={group.is_default ? t('defaultGroup') : group.name}
+                  disabled={!group.enabled}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditing(group.id)}
+                  aria-label={t('editGroupNamed', {
+                    name: group.is_default ? t('defaultGroup') : group.name,
+                  })}
+                >
+                  {t('editGroup')}
+                </Button>
+              </div>
             </section>
           ))}
         </div>

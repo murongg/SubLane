@@ -21,6 +21,7 @@ import {
   providerLabels,
 } from '@/lib/accounts'
 import { cn } from '@/lib/cn'
+import { CatalogDialog } from '@/components/CatalogDialog'
 import { AccountUsage } from '@/components/AccountUsage'
 import { ConnectAccount } from '@/components/ConnectAccount'
 import { DeleteAccount } from '@/components/DeleteAccount'
@@ -56,6 +57,7 @@ export function Accounts() {
   const invalidate = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['accounts'] }),
+      client.invalidateQueries({ queryKey: ['model-catalog'] }),
       client.invalidateQueries({ queryKey: ['account-runtime'] }),
       client.invalidateQueries({ queryKey: ['system'] }),
       client.invalidateQueries({ queryKey: ['connection'] }),
@@ -202,6 +204,16 @@ export function Accounts() {
                           {account.email}
                         </span>
                       )}
+                    </div>
+                    <div className="-ml-2 mt-1">
+                      <CatalogDialog
+                        target={{ kind: 'account', id: account.id }}
+                        name={account.name}
+                        disabled={
+                          !account.enabled ||
+                          account.status === 'reauth_required'
+                        }
+                      />
                     </div>
                   </div>
                   <div className="col-span-2 min-w-0 @3xl:col-span-1">

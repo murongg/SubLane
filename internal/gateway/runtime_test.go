@@ -22,11 +22,11 @@ func TestSessionlessRequestsRotateWithoutPersistingAffinity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, one, err := service.selectAccount(ctx, 1, 1, "", "codex")
+	first, one, err := service.selectAccount(ctx, 1, 1, "", "codex", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, two, err := service.selectAccount(ctx, 1, 1, "", "codex")
+	second, two, err := service.selectAccount(ctx, 1, 1, "", "codex", "")
 	if err != nil {
 		t.Fatal(err)
 	}

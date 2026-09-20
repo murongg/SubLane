@@ -27,6 +27,18 @@ const response = (value: unknown, status = 200) =>
 function open(value = key) {
   const client = createQueryClient()
   client.setQueryData(authKey, memberAuthenticated)
+  client.setQueryData(['model-catalog', 2, 'key', 1], {
+    models: ['codex/synthetic-model'],
+    updated_at: 0,
+    server_time: 1900000000,
+    known: true,
+    usable: true,
+    stale: false,
+    refreshing: false,
+    refresh_failed: false,
+    retry_after_seconds: 0,
+    partial: false,
+  })
   const result = render(
     <QueryClientProvider client={client}>
       <CCSwitchImport value={value} userID={2} usable />

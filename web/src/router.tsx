@@ -3,6 +3,7 @@ import {
   createRoute,
   createRouter,
   lazyRouteComponent,
+  redirect,
   type RouterHistory,
 } from '@tanstack/react-router'
 import { AuthGate } from '@/components/AuthGate'
@@ -14,7 +15,30 @@ const root = createRootRoute({
   component: AuthGate,
   notFoundComponent: NotFound,
 })
+const settings = createRoute({
+  getParentRoute: () => root,
+  path: '/admin/settings',
+  component: lazyRouteComponent(() => import('@/pages/System'), 'System'),
+})
 const routes = root.addChildren([
+  settings.addChildren([
+    createRoute({
+      getParentRoute: () => settings,
+      path: '/',
+      beforeLoad: () => {
+        // Redirect before rendering so an old index page cannot redirect a later navigation.
+        throw redirect({ to: '/admin/settings/codex', replace: true })
+      },
+    }),
+    createRoute({
+      getParentRoute: () => settings,
+      path: 'codex',
+      component: lazyRouteComponent(
+        () => import('@/pages/System'),
+        'CodexSettings',
+      ),
+    }),
+  ]),
   createRoute({
     getParentRoute: () => root,
     path: '/admin/audit',

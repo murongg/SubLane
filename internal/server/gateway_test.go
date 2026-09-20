@@ -37,6 +37,7 @@ type forwardFixture struct {
 	identity      *auth.Service
 	groups        *groups.Service
 	accounts      *accounts.Service
+	forwarding    *gateway.Service
 }
 
 func newForwardFixture(t *testing.T, handler http.HandlerFunc) forwardFixture {
@@ -70,6 +71,15 @@ func newProviderFixture(t *testing.T, provider string, handler http.HandlerFunc)
 	if _, err := service.Authorize(ctx, "Synthetic subscription", accounts.Credential{Provider: provider, Metadata: map[string]json.RawMessage{"project_id": json.RawMessage(`"synthetic-project"`)}, AccessToken: "synthetic-upstream-access", RefreshToken: "synthetic-upstream-refresh", AccountID: "synthetic-upstream-account", ExpiresAt: time.Now().Add(time.Hour).Unix()}, ""); err != nil {
 		t.Fatal(err)
 	}
+	rows, err := service.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if err := service.SaveCatalog(ctx, row.ID, 0, []string{"synthetic-model"}, time.Now().Unix(), upstream.CatalogSource(provider)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	fakeUpstream := httptest.NewServer(handler)
 	t.Cleanup(fakeUpstream.Close)
 	target, _ := url.Parse(fakeUpstream.URL)
@@ -97,7 +107,7 @@ func newProviderFixture(t *testing.T, provider string, handler http.HandlerFunc)
 	}
 	server.Start()
 	t.Cleanup(server.Close)
-	return forwardFixture{groups: pools, accounts: service, server: server, upgrades: upgrades, secret: created.Secret, keyID: created.Key.ID, userID: member.ID, keys: keys, identity: identity}
+	return forwardFixture{groups: pools, accounts: service, forwarding: forwarding, server: server, upgrades: upgrades, secret: created.Secret, keyID: created.Key.ID, userID: member.ID, keys: keys, identity: identity}
 }
 
 func TestGatewayForwardsResponsesAndCancelsUpstream(t *testing.T) {

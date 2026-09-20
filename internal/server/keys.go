@@ -36,6 +36,7 @@ func (h *keyHTTP) register(router chi.Router) {
 		keys.Post("/", h.create)
 		keys.Post("/{id}/revoke", h.revoke)
 		keys.Post("/{id}/secret", h.reveal)
+		keys.Get("/{id}/models", h.catalog)
 		keys.Patch("/{id}", h.update)
 	})
 }
@@ -108,6 +109,8 @@ func (h *keyHTTP) revoke(w http.ResponseWriter, r *http.Request) {
 func keyError(w http.ResponseWriter, err error) {
 	status, code := 503, "unavailable"
 	switch {
+	case errors.Is(err, apikey.ErrInactive):
+		status, code = 409, "api_key_inactive"
 	case errors.Is(err, groups.ErrUnavailable):
 		status, code = 403, "group_unavailable"
 	case errors.Is(err, apikey.ErrInput):

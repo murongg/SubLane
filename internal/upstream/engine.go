@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -201,7 +202,7 @@ func sdkAuth(c accounts.Credential) *core.Auth {
 }
 func (c *Client) sdkContext(ctx context.Context) context.Context {
 	// This is the public SDK's documented per-request transport hook; it also provides a synthetic test seam.
-	return context.WithValue(ctx, "cliproxy.roundtripper", &engineTransport{base: c.http.Transport})
+	return context.WithValue(ctx, "cliproxy.roundtripper", &engineTransport{base: c.http.Transport, codexVersion: c.codexVersion()})
 }
 func sdkError(err error) error {
 	if err == nil {
@@ -225,7 +226,8 @@ func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, bod
 	if err != nil {
 		return nil, err
 	}
-	transport := &engineTransport{base: c.http.Transport}
+	version := c.codexVersion()
+	transport := &engineTransport{base: c.http.Transport, codexVersion: version}
 	ctx = context.WithValue(ctx, "cliproxy.roundtripper", transport)
 	auth := sdkAuth(credential)
 	if credential.Kind() == "codex" {
@@ -242,6 +244,9 @@ func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, bod
 		if value := headers.Get(key); len(value) > 0 && len(value) <= 1024 {
 			clean.Set(key, value)
 		}
+	}
+	if credential.Kind() == "codex" {
+		clean.Set("Version", version)
 	}
 	opts := exec.Options{Stream: true, SourceFormat: translator.FormatOpenAIResponse, ResponseFormat: translator.FormatOpenAIResponse, Headers: clean, OriginalRequest: body}
 	req := exec.Request{Model: request.Model, Payload: body}
@@ -309,12 +314,18 @@ func (b *cancelBody) Close() error { b.cancel(); return b.ReadCloser.Close() }
 
 // The SDK may discard Retry-After when converting HTTP failures to errors. Keep the header at the transport boundary.
 type engineTransport struct {
-	base       http.RoundTripper
-	mu         sync.Mutex
-	retryAfter string
+	codexVersion string
+	base         http.RoundTripper
+	mu           sync.Mutex
+	retryAfter   string
 }
 
 func (t *engineTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if t.codexVersion != "" && r.URL.Host == "chatgpt.com" && strings.HasPrefix(r.URL.Path, "/backend-api/codex/") {
+		// Clone before overriding SDK headers; unrelated providers and shared request objects remain untouched.
+		r = r.Clone(r.Context())
+		applyCodexVersion(r.Header, t.codexVersion)
+	}
 	response, err := t.base.RoundTrip(r)
 	if err != nil {
 		return nil, err

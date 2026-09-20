@@ -56,7 +56,7 @@ func (c *Client) Usage(ctx context.Context, credential accounts.Credential) (Usa
 	if err != nil {
 		return Usage{}, ErrInput
 	}
-	upstreamHeaders(request, credential, nil, false)
+	upstreamHeaders(request, credential, nil, false, c.codexVersion())
 	response, err := c.http.Do(request)
 	if err != nil {
 		return Usage{}, ErrUpstream

@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -53,11 +52,12 @@ type Service struct {
 	closed       bool
 	sequence     int64
 	usage        *usageCache
+	catalog      *catalogCache
 }
 
 func New(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *upstream.Client) *Service {
 	runContext, stopRuntime := context.WithCancel(ctx)
-	return &Service{memberActive: make(map[int64]int64), next: make(map[string]int), health: make(map[string]*Runtime), now: time.Now, runContext: runContext, stopRuntime: stopRuntime, db: connection, queries: db.New(connection), accounts: accounts, provider: provider, slots: make(chan struct{}, 8), usage: newUsageCache(ctx)}
+	return &Service{memberActive: make(map[int64]int64), next: make(map[string]int), health: make(map[string]*Runtime), now: time.Now, runContext: runContext, stopRuntime: stopRuntime, db: connection, queries: db.New(connection), accounts: accounts, provider: provider, slots: make(chan struct{}, 8), usage: newUsageCache(ctx), catalog: newCatalogCache(ctx)}
 }
 
 func (s *Service) Acquire() (func(), error) {
@@ -115,13 +115,16 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if err := s.AuthorizeModel(ctx, userID, groupID, provider+"/"+model); err != nil {
 		return nil, err
 	}
+	if err := s.warmCatalogs(ctx, userID, groupID, provider, true); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	if err := s.admitMember(ctx, userID); err != nil {
 		s.mu.Unlock()
 		return nil, err
 	}
 	entry.memberLeased = true
-	id, digest, err := s.selectAccount(ctx, userID, groupID, session, provider)
+	id, digest, err := s.selectAccount(ctx, userID, groupID, session, provider, model)
 	entry.record.AccountID = id
 	if err == nil {
 		state := s.health[id]
@@ -179,73 +182,6 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	return trackExchange(result, entry), nil
 }
 
-func (s *Service) Models(ctx context.Context, userID, groupID int64) ([]upstream.Model, error) {
-	allowed, err := poolAccounts(ctx, s.queries, userID, groupID)
-	if err != nil {
-		return nil, err
-	}
-	policy, err := s.modelPolicy(ctx, userID, groupID)
-	if err != nil {
-		return nil, err
-	}
-	if policy.Restricted && len(policy.Models) == 0 {
-		return []upstream.Model{}, nil
-	}
-	rows, err := s.accounts.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	providers := map[string]string{}
-	for _, row := range rows {
-		if allowed[row.ID] && row.Enabled && row.Status != "reauth_required" && providers[row.Provider] == "" {
-			providers[row.Provider] = row.ID
-		}
-	}
-	if len(providers) == 0 {
-		return nil, ErrNoAccount
-	}
-	result := []upstream.Model{}
-	var firstError error
-	successful := 0
-	for _, provider := range []string{"codex", "claude", "antigravity"} {
-		if providers[provider] == "" || !policyHasProvider(policy, provider) {
-			continue
-		}
-		// Discovery has no conversation state and must not create or reuse an affinity binding.
-		models, err := s.Check(ctx, providers[provider])
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			if firstError == nil {
-				firstError = err
-			}
-			continue
-		}
-		successful++
-		for _, model := range models {
-			if !policy.Allows(provider + "/" + model.ID) {
-				continue
-			}
-			if provider == "codex" {
-				result = append(result, model)
-			}
-			model.ID = provider + "/" + model.ID
-			result = append(result, model)
-		}
-	}
-	// A temporarily unavailable provider must not hide the healthy providers from clients.
-	if successful == 0 && firstError != nil {
-		return nil, firstError
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
-	return result, nil
-}
-
-func (s *Service) Check(ctx context.Context, id string) ([]upstream.Model, error) {
-	return readAccount(ctx, s, id, s.provider.Models)
-}
-
 // Account reads share the same refresh owner and stale-token rejection rules as forwarding.
 func readAccount[T any](ctx context.Context, s *Service, id string, read func(context.Context, accounts.Credential) (T, error)) (T, error) {
 	var empty T
@@ -273,7 +209,7 @@ func readAccount[T any](ctx context.Context, s *Service, id string, read func(co
 	return result, err
 }
 
-func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, session, provider string) (string, [32]byte, error) {
+func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, session, provider, model string) (string, [32]byte, error) {
 	digest := sha256.Sum256([]byte(fmt.Sprintf("%d:%s", userID, session)))
 	// Preserve legacy upstream session/cache IDs for conversations migrated into the default group.
 	if groupID != groups.DefaultID {
@@ -305,6 +241,15 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 	if err != nil {
 		return "", digest, err
 	}
+	if model != "" {
+		policy, err := groups.ReadPolicy(ctx, queries, userID, groupID)
+		if err != nil {
+			return "", digest, err
+		}
+		if !policy.Allows(provider + "/" + model) {
+			return "", digest, ErrModelNotAllowed
+		}
+	}
 	now := s.now().Unix()
 	expires := now + 24*3600
 	if session != "" {
@@ -318,6 +263,18 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 			for _, account := range available {
 				if account.ID == existing.AccountID {
 					found = true
+					if model != "" && account.Enabled && account.Status != "reauth_required" {
+						known, supported, err := s.catalogSupport(ctx, queries, account.ID, model, provider)
+						if err != nil {
+							return account.ID, digest, err
+						}
+						if !known {
+							return account.ID, digest, ErrCatalogUnavailable
+						}
+						if !supported {
+							return account.ID, digest, ErrAffinityUnavailable
+						}
+					}
 					if err := s.accountAdmission(account); err != nil {
 						return existing.AccountID, digest, err
 					}
@@ -352,9 +309,24 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 	}
 	candidates := make([]string, 0, len(available))
 	busy := false
+	unknown, eligible := false, false
 	var cooling int64
 	for _, account := range available {
 		if allowed[account.ID] && account.Provider == provider && account.Enabled && account.Status != "reauth_required" {
+			eligible = true
+			if model != "" {
+				known, supported, err := s.catalogSupport(ctx, queries, account.ID, model, provider)
+				if err != nil {
+					return "", digest, err
+				}
+				if !known {
+					unknown = true
+					continue
+				}
+				if !supported {
+					continue
+				}
+			}
 			if err := s.accountAdmission(account); err != nil {
 				if errors.Is(err, ErrAccountBusy) {
 					busy = true
@@ -374,6 +346,12 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 		}
 		if cooling > 0 {
 			return "", digest, &CoolingError{RetryAfter: cooling}
+		}
+		if unknown {
+			return "", digest, ErrCatalogUnavailable
+		}
+		if eligible && model != "" {
+			return "", digest, ErrModelUnavailable
 		}
 		return "", digest, ErrNoAccount
 	}

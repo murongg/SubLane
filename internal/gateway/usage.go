@@ -58,6 +58,7 @@ func (s *Service) Close() {
 	s.stopRuntime()
 	s.mu.Unlock()
 	s.workers.Wait()
+	s.catalog.close()
 	c := s.usage
 	c.mu.Lock()
 	// Close admission before waiting: no WaitGroup.Add may race with shutdown's Wait.

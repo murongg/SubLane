@@ -53,3 +53,9 @@ An administrator can enable **Limit allowed models** in the group editor. Enter 
 Groups remain unrestricted by default, including newly discovered models. Enabling the allowlist with no entries denies all models. The API accepts an optional `model_policy: {"restricted": true, "models": ["codex/synthetic-model"]}` on create/update. Omission preserves an existing policy; it does not reset access. Group responses include `restricted_models`; detail responses also include `allowed_models`.
 
 Model discovery filters out models outside the allowlist and does not contact providers excluded entirely by the policy. Responses, Chat Completions, compaction, and every WebSocket turn (including local prewarm) check current policy before account selection or upstream work. A denied model returns `403 model_not_allowed`; it consumes no member rate/concurrency allowance and creates no affinity. Already admitted requests may finish. Migration `015_model_policy.sql` preserves existing unrestricted groups.
+
+## Automatically discovered models
+
+Open **Models** on a group to inspect the union of its eligible accounts’ saved model catalogs. The list follows account membership and applies the existing allowlist; it is not a second editable copy of that policy. New upstream models appear automatically only in unrestricted groups. Explicit restrictions, including an enabled empty deny-all list, remain unchanged by synchronization.
+
+Inference uses account-specific catalog support before applying normal load/cooldown rules. Accounts with different subscription capabilities may share a group: a request is eligible only for accounts that reported its model. See [model catalogs](models.md) for freshness, failures and conversation affinity.

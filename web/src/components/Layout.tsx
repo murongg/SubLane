@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import {
   FolderClosed,
+  ChevronRight,
   ShieldCheck,
   ChartNoAxesCombined,
   ListChecks,
@@ -32,6 +33,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
@@ -56,9 +60,94 @@ const navigation = [
       { to: '/admin/usage', label: 'teamUsage', icon: ChartNoAxesCombined },
       { to: '/members', label: 'members', icon: Users },
       { to: '/admin/audit', label: 'auditLog', icon: ShieldCheck },
+      {
+        to: '/admin/settings',
+        label: 'systemSettings',
+        icon: Settings,
+        children: [{ to: '/admin/settings/codex', label: 'codexVersionTitle' }],
+      },
     ],
   },
 ] as const
+
+function NavigationItem({
+  item,
+  pathname,
+}: {
+  item: (typeof navigation)[number]['items'][number]
+  pathname: string
+}) {
+  const { t } = useTranslation()
+  const { setOpenMobile } = useSidebar()
+  const id = useId()
+  const active = pathname === item.to || pathname.startsWith(item.to + '/')
+  const [disclosure, setDisclosure] = useState({ pathname, expanded: active })
+  // A new route reveals its active branch without overriding a manual collapse on this page.
+  const expanded =
+    disclosure.pathname === pathname ? disclosure.expanded : active
+  const Icon = item.icon
+  return (
+    <SidebarMenuItem>
+      {'children' in item ? (
+        <>
+          <SidebarMenuButton
+            className="h-10"
+            aria-expanded={expanded}
+            aria-controls={id}
+            onClick={() => setDisclosure({ pathname, expanded: !expanded })}
+          >
+            <Icon aria-hidden="true" />
+            <span>{t(item.label)}</span>
+            <ChevronRight
+              aria-hidden="true"
+              className={`ml-auto shrink-0 motion-safe:transition-transform ${expanded ? 'rotate-90' : ''}`}
+            />
+          </SidebarMenuButton>
+          <SidebarMenuSub
+            id={id}
+            hidden={!expanded}
+            className={!expanded ? 'hidden' : undefined}
+          >
+            {item.children.map((child) => (
+              <SidebarMenuSubItem key={child.to}>
+                <SidebarMenuSubButton
+                  asChild
+                  isActive={pathname === child.to}
+                  className="h-auto min-h-9 py-2 [@media(pointer:coarse)]:min-h-11"
+                >
+                  <Link
+                    to={child.to}
+                    aria-current={pathname === child.to ? 'page' : undefined}
+                    onClick={() => setOpenMobile(false)}
+                  >
+                    <span className="whitespace-normal break-words">
+                      {t(child.label)}
+                    </span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            ))}
+          </SidebarMenuSub>
+        </>
+      ) : (
+        <SidebarMenuButton
+          asChild
+          isActive={pathname === item.to}
+          className="h-10"
+        >
+          <Link
+            to={item.to}
+            onClick={() => setOpenMobile(false)}
+            aria-current={pathname === item.to ? 'page' : undefined}
+          >
+            <Icon aria-hidden="true" />
+            <span>{t(item.label)}</span>
+          </Link>
+        </SidebarMenuButton>
+      )}
+    </SidebarMenuItem>
+  )
+}
 
 function Navigation() {
   const { t } = useTranslation()
@@ -101,23 +190,12 @@ function Navigation() {
               <SidebarGroupLabel>{t(group.label)}</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {items.map(({ to, label, icon: Icon }) => (
-                    <SidebarMenuItem key={to}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={pathname === to}
-                        className="h-10"
-                      >
-                        <Link
-                          to={to}
-                          onClick={() => setOpenMobile(false)}
-                          aria-current={pathname === to ? 'page' : undefined}
-                        >
-                          <Icon aria-hidden="true" />
-                          <span>{t(label)}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
+                  {items.map((item) => (
+                    <NavigationItem
+                      key={item.to}
+                      item={item}
+                      pathname={pathname}
+                    />
                   ))}
                 </SidebarMenu>
               </SidebarGroupContent>

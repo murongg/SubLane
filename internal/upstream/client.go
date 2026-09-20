@@ -23,9 +23,11 @@ const (
 	redirectURI = "http://localhost:1455/auth/callback"
 	// The catalog is version-gated: obsolete clients can receive HTTP 200 with only hidden models.
 	// Keep discovery and its User-Agent aligned with a verified Codex client release.
-	clientVersion = "0.152.1"
+	clientVersion = "0.155.1"
 	MaxBody       = 8 << 20
 )
+
+const DefaultCodexVersion = clientVersion
 
 var (
 	ErrInput        = errors.New("invalid_model_request")
@@ -43,22 +45,41 @@ type Client struct {
 	http              *http.Client
 	tokenURL, baseURL string
 	registry          *translator.Registry
+	version           func() string
 }
 
 func New() *Client {
+	return NewWithVersion(nil)
+}
+
+// The resolver is installed before startup and returns an already validated version.
+func NewWithVersion(version func() string) *Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = 20 * time.Second
 	transport.MaxIdleConns = 16
 	transport.MaxIdleConnsPerHost = 8
-	return NewWithTransport(transport)
+	return NewWithTransport(transport, version)
+}
+
+func (c *Client) codexVersion() string {
+	if c.version != nil {
+		if version := c.version(); version != "" {
+			return version
+		}
+	}
+	return DefaultCodexVersion
 }
 
 // NewWithTransport provides an HTTP seam for synthetic upstream tests. Production endpoints remain fixed.
-func NewWithTransport(transport http.RoundTripper) *Client {
+func NewWithTransport(transport http.RoundTripper, version ...func() string) *Client {
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-	return &Client{http: &http.Client{Transport: transport, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}, tokenURL: "https://auth.openai.com/oauth/token", baseURL: "https://chatgpt.com/backend-api/codex", registry: builtin.Registry()}
+	client := &Client{http: &http.Client{Transport: transport, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}, tokenURL: "https://auth.openai.com/oauth/token", baseURL: "https://chatgpt.com/backend-api/codex", registry: builtin.Registry()}
+	if len(version) > 0 {
+		client.version = version[0]
+	}
+	return client
 }
 
 func (c *Client) AuthorizationURL(state, challenge string) string {
@@ -141,16 +162,32 @@ type Model struct {
 }
 
 func (c *Client) Models(ctx context.Context, credential accounts.Credential) ([]Model, error) {
+	value, err := c.Discover(ctx, credential)
+	return value.Models, err
+}
+
+type Discovery struct {
+	Models []Model
+	Source string
+}
+
+func (c *Client) Discover(ctx context.Context, credential accounts.Credential) (Discovery, error) {
+	version := c.codexVersion()
+	models, err := c.models(ctx, credential, version)
+	return Discovery{Models: models, Source: catalogSource(credential.Kind(), version)}, err
+}
+
+func (c *Client) models(ctx context.Context, credential accounts.Credential, version string) ([]Model, error) {
 	if credential.Kind() != "codex" {
 		return c.providerModels(ctx, credential)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/models?client_version="+clientVersion, nil)
+	request, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/models?client_version="+version, nil)
 	if err != nil {
 		return nil, ErrInput
 	}
-	upstreamHeaders(request, credential, nil, false)
+	upstreamHeaders(request, credential, nil, false, version)
 	response, err := c.http.Do(request)
 	if err != nil {
 		return nil, ErrUpstream
@@ -272,22 +309,27 @@ func (s *Stream) Complete(ctx context.Context, event []byte) []byte {
 	return s.registry.TranslateNonStream(ctx, translator.FormatCodex, s.format, s.model, s.original, s.request, event, &s.state)
 }
 
-func upstreamHeaders(request *http.Request, credential accounts.Credential, client http.Header, stream bool) {
+func upstreamHeaders(request *http.Request, credential accounts.Credential, client http.Header, stream bool, version string) {
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+credential.AccessToken)
 	request.Header.Set("Chatgpt-Account-Id", credential.AccountID)
-	request.Header.Set("Originator", "codex_cli_rs")
-	request.Header.Set("User-Agent", "codex_cli_rs/"+clientVersion)
+	applyCodexVersion(request.Header, version)
 	request.Header.Set("Accept", "application/json")
 	if stream {
 		request.Header.Set("Accept", "text/event-stream")
 	}
 	// Client session metadata is useful; client credentials, cookies and arbitrary proxy headers are never forwarded.
-	for _, key := range []string{"Version", "X-Codex-Turn-Metadata", "X-Client-Request-Id", "Session_id", "X-Codex-Beta-Features"} {
+	for _, key := range []string{"X-Codex-Turn-Metadata", "X-Client-Request-Id", "Session_id", "X-Codex-Beta-Features"} {
 		if value := client.Get(key); len(value) > 0 && len(value) <= 1024 {
 			request.Header.Set(key, value)
 		}
 	}
+}
+
+func applyCodexVersion(headers http.Header, version string) {
+	headers.Set("Originator", "codex_cli_rs")
+	headers.Set("User-Agent", "codex_cli_rs/"+version)
+	headers.Set("Version", version)
 }
 
 func readBounded(reader io.Reader, limit int64) ([]byte, error) {

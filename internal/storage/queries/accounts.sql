@@ -18,7 +18,9 @@ UPDATE accounts SET credential = sqlc.arg(credential), email = sqlc.arg(email), 
 WHERE id = sqlc.arg(id);
 
 -- name: SetAccountEnabled :exec
-UPDATE accounts SET enabled = sqlc.arg(enabled), updated_at = sqlc.arg(updated_at) WHERE id = sqlc.arg(id);
+UPDATE accounts SET enabled = sqlc.arg(enabled), updated_at = sqlc.arg(updated_at),
+models_revision = models_revision + CASE WHEN enabled != sqlc.arg(enabled) THEN 1 ELSE 0 END
+WHERE id = sqlc.arg(id);
 
 -- name: SetAccountStatus :exec
 UPDATE accounts SET status = sqlc.arg(status), updated_at = sqlc.arg(updated_at) WHERE id = sqlc.arg(id);

@@ -18,6 +18,8 @@ type Account struct {
 	CreatedAt      int64
 	UpdatedAt      int64
 	MaxConcurrency int64
+	ModelsSnapshot []byte
+	ModelsRevision int64
 }
 
 type AccountGroup struct {
