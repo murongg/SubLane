@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
   workflow_call:
     inputs:
@@ -42,11 +42,11 @@ jobs:
       - run: make setup
       - run: make check
         env:
-          SUBLANE_TEST_CHANGELOG: '1'
+          SUBLANE_TEST_CHANGELOG: "1"
       - name: Validate workflow and shell scripts
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-          shellcheck scripts/container-smoke.sh scripts/package.sh
+          shellcheck scripts/container-smoke.sh scripts/package.sh scripts/install.sh
       - name: Validate Compose configurations
         run: |
           docker compose -f docker.compose.yaml config --quiet

@@ -34,23 +34,23 @@ SubLane 将团队的 AI 订阅账号整合为统一、自托管的网关，采�
 
 ## 快速开始
 
-安装 Docker 后运行：
+安装 Docker、Compose、curl 和 jq 后，运行：
 
 ```sh
-git clone https://github.com/murongg/SubLane.git
-cd SubLane
-docker compose -f docker.compose.yaml -f docker.compose.build.yaml up --build -d
+curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh | bash
 ```
 
 打开 http://127.0.0.1:8080，创建管理员、添加订阅账号，再创建 API 密钥接入客户端。
 
-预构建镜像、二进制部署、HTTPS 和升级步骤见[部署文档](docs/deployment.md)。
+脚本会在 `./sublane` 安装最新正式版，没有正式版时使用最新预发布版。数据保存在 Docker 数据卷中，不会覆盖已有目录。自定义参数、手动 Compose 部署、HTTPS 和升级步骤见[部署文档](docs/deployment.md)。
 
 ## 本地开发
 
 需要 Go 1.26+、Node.js 24、pnpm 9.12.2。
 
 ```sh
+git clone https://github.com/murongg/SubLane.git
+cd SubLane
 make setup
 make dev
 ```

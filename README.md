@@ -34,23 +34,23 @@ SubLane brings your team's AI subscriptions into one self-hosted gateway. It run
 
 ## Quick start
 
-With Docker installed:
+With Docker, Compose, curl and jq installed, run:
 
 ```sh
-git clone https://github.com/murongg/SubLane.git
-cd SubLane
-docker compose -f docker.compose.yaml -f docker.compose.build.yaml up --build -d
+curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh | bash
 ```
 
 Open http://127.0.0.1:8080, create the administrator, add a subscription account and create an API key for your client.
 
-For prebuilt images, binaries, HTTPS and upgrades, see the [deployment guide](docs/deployment.md).
+The script installs the latest stable release, or the newest prerelease if no stable release exists, in `./sublane`. Data stays in a Docker volume; existing directories are left unchanged. For options, manual Compose deployment, HTTPS and upgrades, see the [deployment guide](docs/deployment.md).
 
 ## Development
 
 Requires Go 1.26+, Node.js 24 and pnpm 9.12.2.
 
 ```sh
+git clone https://github.com/murongg/SubLane.git
+cd SubLane
 make setup
 make dev
 ```

@@ -4,7 +4,7 @@ SubLane is at the foundation stage. Read [PRODUCT.md](PRODUCT.md) and [the roadm
 
 ## Local workflow
 
-1. Install Go 1.26+, Node.js 24, and pnpm 9.12.2.
+1. Install Go 1.26+, Node.js 24, pnpm 9.12.2, and jq.
 2. Run `make setup`, then `make dev`.
 3. Write a failing test for a behavior change; implement the change and rerun the test.
 4. Run `make check` before submitting your work.

@@ -36,7 +36,7 @@ test:
 	$(PNPM) --dir web test
 
 lint:
-	bash -n scripts/package.sh scripts/container-smoke.sh
+	@for script in scripts/*.sh; do bash -n "$$script" || exit 1; done
 	node --check scripts/release.mjs
 	node --check scripts/publish.mjs
 	node --check scripts/changelog.mjs
