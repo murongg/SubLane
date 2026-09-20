@@ -18,6 +18,7 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 
 - `cmd/sublane` owns startup, process lifecycle, and dependency wiring.
 - `internal/config` owns environment parsing and validation.
+- `internal/backup` owns bounded backup archives, integrity/key validation and atomic publication into new paths. `internal/storage` owns read-only SQLite snapshots. Never overwrite a live data directory or export backups to unauthenticated/member routes.
 - `internal/versions` owns persisted Codex version policy, bounded official release checks and their lifecycle. Publish versions only after persistence; manual pins take priority. It must not depend on SDK types or install executables.
 - `internal/auth` owns local user credentials, roles, member lifecycle, first-run initialization, and persisted sessions.
 - `internal/groups` owns account pools, member group grants, available-group discovery, and group-scoped readiness. The default group preserves existing access; default grants can still be revoked.

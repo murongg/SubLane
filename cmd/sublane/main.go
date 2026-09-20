@@ -42,13 +42,22 @@ func run() error {
 		fmt.Println(version)
 		return nil
 	}
+	if len(os.Args) > 1 && (os.Args[1] == "--help" || os.Args[1] == "-h") {
+		fmt.Print(commandHelp)
+		return nil
+	}
+	if len(os.Args) > 1 && (os.Args[1] == "backup" || os.Args[1] == "restore") {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return runMaintenance(ctx, os.Args[1:], os.Getenv("SUBLANE_DATA_DIR"), os.Stdout)
+	}
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
 		return err
 	}
 	if len(os.Args) > 1 {
 		if len(os.Args) != 3 || os.Args[1] != "reset-admin-password" || os.Args[2] != "--password-stdin" {
-			return errors.New("usage: sublane [--version | reset-admin-password --password-stdin]")
+			return errors.New(commandHelp)
 		}
 		info, err := os.Stdin.Stat()
 		if err != nil || info.Mode()&os.ModeCharDevice != 0 {
@@ -103,7 +112,7 @@ func run() error {
 	authorization := oauth.New(subscriptions, provider)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(server.Options{CodexVersions: codexVersions, Audit: audit.New(db), Groups: groups.New(db), Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: keys, PublicURL: cfg.PublicURL, Accounts: subscriptions, OAuth: authorization, Gateway: forwarding}),
+		Handler:           server.New(server.Options{DataDir: cfg.DataDir, CodexVersions: codexVersions, Audit: audit.New(db), Groups: groups.New(db), Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: keys, PublicURL: cfg.PublicURL, Accounts: subscriptions, OAuth: authorization, Gateway: forwarding}),
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,

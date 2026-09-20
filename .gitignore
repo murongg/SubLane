@@ -22,3 +22,9 @@ setup.key
 
 # Instance-local credential and API-key encryption key.
 credentials.key
+
+# Private backup archives and interrupted staging directories.
+/backups/
+*.sublane-backup.tar.gz
+.sublane-backup-*/
+restore-ready/

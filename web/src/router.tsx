@@ -24,6 +24,11 @@ const routes = root.addChildren([
   settings.addChildren([
     createRoute({
       getParentRoute: () => settings,
+      path: 'backup',
+      component: lazyRouteComponent(() => import('@/pages/Backup'), 'Backup'),
+    }),
+    createRoute({
+      getParentRoute: () => settings,
       path: '/',
       beforeLoad: () => {
         // Redirect before rendering so an old index page cannot redirect a later navigation.

@@ -57,6 +57,7 @@ func New(connection *sql.DB) *Service {
 }
 
 var actions = map[string]string{
+	"backup.export": "backup", "backup.prepare": "backup", "backup.verify": "backup",
 	"settings.update": "settings",
 	"key.reveal":      "key", "key.create": "key", "key.update": "key", "key.revoke": "key",
 	"group.create": "group", "group.update": "group",
@@ -110,6 +111,20 @@ func record(ctx context.Context, q *db.Queries, action, resource, id string, sta
 	}
 	return q.PruneAuditEvents(ctx, now-int64((90*24*time.Hour)/time.Second))
 }
+
+// Observation audits disclosure and filesystem preparation without changing live domain records.
+// Database mutations must continue using Record with their own transaction.
+func (s *Service) Observation(ctx context.Context, action, resource, id string) error {
+	tx, err := s.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := Record(ctx, s.queries.WithTx(tx), action, resource, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 func (s *Service) Failure(ctx context.Context, action, resource, id string, status int) error {
 	if status < 400 || status > 599 {
 		return ErrInput
@@ -131,7 +146,7 @@ func (s *Service) List(ctx context.Context, f Filter) (Page, error) {
 		return page, ErrInput
 	}
 	switch f.Resource {
-	case "", "key", "group", "member", "user", "account", "settings":
+	case "", "key", "group", "member", "user", "account", "settings", "backup":
 	default:
 		return page, ErrInput
 	}

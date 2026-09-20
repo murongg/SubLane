@@ -25,6 +25,7 @@ In development, Vite serves the React app and proxies `/api`, `/v1` including We
 | --- | --- | --- |
 | `cmd/sublane` | Process signals, startup, wiring, shutdown | Domain policy |
 | `internal/config` | Validated process environment | Persistent team preferences |
+| `internal/backup` | Streamed archives, integrity and key validation, isolated restores and atomic no-replace publication | HTTP authentication, provider execution or replacing live data |
 | `internal/versions` | Persisted Codex version policy, official release metadata checks and synchronization lifecycle | SDK execution, account credentials or binary installation |
 | `internal/auth` | Local users, roles, member lifecycle, and sessions | Member keys or upstream credentials |
 | `internal/groups` | Account pools, member grants, personal group choices, and scoped readiness | Credentials or model protocols |
@@ -87,3 +88,7 @@ The vault key is generated as a 0600 file beside SQLite. Startup verifies existi
 Affinity is scoped to the member, group and client session, with one `auto` scope for native requests and provider-specific scopes for legacy qualified requests. It persists across normal process restarts, and expires after 24 hours of inactivity. Disabled/deleted accounts and accounts removed from a pool fail existing conversations instead of triggering unsafe account switching. WebSocket transcript state stays connection-local and bounded. HTTP previous_response_id is rejected because the upstream HTTP backend is stateless; callers must supply full input.
 
 Automated protocol tests use synthetic credentials and fake upstreams. An opt-in test has verified Codex CLI 0.152.1 through HTTP/SSE and WebSocket modes. Real subscription and desktop verification are still separate acceptance steps. No universal memory or throughput budget is claimed; measure the intended workload and deployment platform.
+
+## Instance backups
+
+The storage layer uses the SQLite online backup API through a separate read-only connection with bounded cache memory and incremental page copying. The archive layer packages the database, encryption key and manifest with streaming IO. Restore validates and migrates only a private staging copy, clears browser sessions, and publishes a new directory without overwriting existing paths. Administrators can export, verify and prepare restores from System settings; an operator restart activates the restored directory. Export/restore preparation are audited, and file operations do not hold a transaction in the live application database. See [backup and restore](backup.md).
