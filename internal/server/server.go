@@ -22,6 +22,7 @@ import (
 )
 
 type Options struct {
+	DataDir       string
 	Assets        fs.FS
 	Version       string
 	StartedAt     time.Time
@@ -138,6 +139,7 @@ func New(o Options) http.Handler {
 		})
 		management.Get("/usage", memberManagement.usage)
 		management.Get("/audit", (&auditHTTP{service: o.Audit}).list)
+		management.Route("/settings/backup", (&backupHTTP{directory: o.DataDir, version: o.Version, auth: o.Auth, audit: o.Audit, slots: make(chan struct{}, 1)}).register)
 		management.Route("/settings/codex", (&versionHTTP{service: o.CodexVersions}).register)
 		management.Route("/accounts", accountManagement.register)
 		management.Get("/requests", accountManagement.requests)

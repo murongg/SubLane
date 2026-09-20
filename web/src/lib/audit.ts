@@ -3,6 +3,9 @@ import { z } from 'zod'
 import type { en } from '@/locales/en'
 import { request } from './request'
 export const auditActions: Record<string, keyof typeof en> = {
+  'backup.export': 'auditBackupExport',
+  'backup.prepare': 'auditBackupPrepare',
+  'backup.verify': 'auditBackupVerify',
   'settings.update': 'auditSettingsUpdate',
   'key.reveal': 'auditKeyReveal',
   'key.create': 'auditKeyCreate',
@@ -25,6 +28,7 @@ export const auditActions: Record<string, keyof typeof en> = {
   'account.resume': 'auditAccountResume',
 }
 export const auditResources = {
+  backup: 'backupTitle',
   settings: 'auditSettings',
   key: 'apiKey',
   group: 'keyGroup',
@@ -41,7 +45,15 @@ const eventSchema = z.object({
   actor_role: z.enum(['admin', 'member']),
   source: z.enum(['user', 'local']),
   action: z.string().max(64),
-  resource: z.enum(['key', 'group', 'member', 'user', 'account', 'settings']),
+  resource: z.enum([
+    'key',
+    'group',
+    'member',
+    'user',
+    'account',
+    'settings',
+    'backup',
+  ]),
   resource_id: z.string().max(32),
   outcome: z.enum(['success', 'failure']),
   http_status: z.number().int().nullable(),

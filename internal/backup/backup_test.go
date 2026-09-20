@@ -1,0 +1,130 @@
+package backup
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/apikey"
+	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/groups"
+	"github.com/murongg/SubLane/internal/storage"
+	"github.com/murongg/SubLane/internal/vault"
+)
+
+func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
+	ctx := context.Background()
+	source := t.TempDir()
+	connection, err := storage.Open(ctx, filepath.Join(source, databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	member, err := identity.CreateMember(ctx, "synthetic-member", "synthetic-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := vault.Open(filepath.Join(source, keyName), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	account, err := accounts.New(connection, cipher).Authorize(ctx, "Synthetic account", accounts.Credential{AccountID: "synthetic-subject", AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", ExpiresAt: time.Now().Add(time.Hour).Unix()}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := groups.New(connection).Save(ctx, 0, groups.Input{Name: "Synthetic pool", Enabled: true, AccountIDs: []string{account.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := apikey.New(connection, cipher).Create(ctx, 1, "Synthetic key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connection.Exec("PRAGMA wal_autocheckpoint=0; INSERT INTO settings(key,value) VALUES('synthetic.backup','before')"); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "test.sublane-backup.tar.gz")
+	info, err := Create(ctx, source, output, "synthetic-version")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.SchemaVersion != 18 || info.Version != "synthetic-version" {
+		t.Fatal(info)
+	}
+	verified, err := Verify(ctx, output)
+	if err != nil || verified.DatabaseBytes <= 0 {
+		t.Fatal(verified, err)
+	}
+	if _, err := connection.Exec("UPDATE settings SET value='after' WHERE key='synthetic.backup'"); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "restored")
+	if _, err := Restore(ctx, output, target); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := storage.Open(ctx, filepath.Join(target, databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restored.Close()
+	restoredVault, err := vault.Open(filepath.Join(target, keyName), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secret, err := apikey.New(restored, restoredVault).Reveal(ctx, 1, key.Key.ID); err != nil || secret != key.Secret {
+		t.Fatal("key not recoverable", err)
+	}
+	credential, err := accounts.New(restored, restoredVault).Prepare(ctx, account.ID, func(context.Context, accounts.Credential) (accounts.Credential, error) {
+		t.Fatal("unexpected provider refresh")
+		return accounts.Credential{}, nil
+	})
+	if err != nil || credential.AccessToken != "synthetic-access" {
+		t.Fatal("credential restore", err)
+	}
+	if got, err := groups.New(restored).Get(ctx, pool.ID); err != nil || len(got.AccountIDs) != 1 {
+		t.Fatal("group restore", err)
+	}
+	restoredIdentity, err := auth.New(restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state, err := restoredIdentity.State(ctx, session.Token); err != nil || state.User != nil {
+		t.Fatal("restored session still authorized", err)
+	}
+	if login, err := restoredIdentity.Login(ctx, "synthetic-member", "synthetic-pass"); err != nil || login.User.ID != member.ID {
+		t.Fatal("member restore", err)
+	}
+	var value string
+	if err := restored.QueryRow("SELECT value FROM settings WHERE key='synthetic.backup'").Scan(&value); err != nil || value != "before" {
+		t.Fatal("snapshot settings changed", err)
+	}
+	if state, err := identity.State(ctx, session.Token); err != nil || state.User == nil {
+		t.Fatal("backup changed source sessions", err)
+	}
+	if _, err := Create(ctx, source, output, "synthetic-version"); err == nil {
+		t.Fatal("overwrote backup")
+	}
+	if _, err := Restore(ctx, output, target); err == nil {
+		t.Fatal("overwrote restored data")
+	}
+	if _, err := Restore(ctx, output, source); err == nil {
+		t.Fatal("overwrote live source")
+	}
+	for _, path := range []string{output, filepath.Join(target, databaseName), filepath.Join(target, keyName)} {
+		stat, err := os.Stat(path)
+		if err != nil || stat.Mode().Perm()&0077 != 0 {
+			t.Fatal("insecure restored file", err)
+		}
+	}
+}

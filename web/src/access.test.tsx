@@ -79,6 +79,7 @@ it.each([
   '/admin/usage',
   '/admin/settings',
   '/admin/settings/codex',
+  '/admin/settings/backup',
 ])(
   'denies member direct access to %s before loading management data',
   async (path) => {

@@ -1,6 +1,50 @@
 export const en = {
   auditSettingsUpdate: 'Updated instance settings',
   auditSettings: 'Instance settings',
+  backupTitle: 'Backup and restore',
+  backupDescription:
+    'Save your instance data or prepare an independent restored directory.',
+  backupExportTitle: 'Create a backup',
+  backupExportDescription:
+    'Export a consistent database snapshot and its encryption key while SubLane is running. The archive contains credentials; keep it private.',
+  backupDownload: 'Download backup',
+  backupExporting: 'Creating backup…',
+  backupRestoreTitle: 'Restore from a backup',
+  backupRestoreDescription:
+    'Verify your archive, then prepare a new data directory. Restart SubLane with that directory to activate the restored data.',
+  backupFile: 'Backup file',
+  backupFileLimit:
+    'SubLane .tar.gz archive, up to {{size}} MiB. Use the CLI for larger archives.',
+  backupVerify: 'Verify backup',
+  backupVerifying: 'Verifying…',
+  backupRestore: 'Prepare restore',
+  backupRestoring: 'Preparing restore…',
+  backupVerified: 'Backup verified',
+  backupCreatedAt: 'Created',
+  backupVersion: 'SubLane version',
+  backupDatabaseSize: 'Database size',
+  backupRestored: 'Restored data is ready',
+  backupRestartStop: 'Stop the current SubLane service.',
+  backupRestartDirectory: 'Set SUBLANE_DATA_DIR to the directory shown above.',
+  backupRestartStart: 'Restart SubLane and sign in again.',
+  backupSessionNotice:
+    'The original data is retained. Restored browser sessions are cleared; accounts and API keys return to their state at backup time.',
+  backupDestinationExists:
+    'The restore directory already exists and cannot be overwritten. Inspect it on the server or use the CLI to choose another new directory.',
+  backupInvalid:
+    'This archive could not be verified. Check its integrity, encryption key and SubLane version compatibility.',
+  backupTooLarge:
+    'This file exceeds the browser backup limit. Use the command-line backup tools.',
+  backupBusy:
+    'Another backup operation is running. Try again when it finishes.',
+  backupFailed:
+    'The backup operation failed. Check server storage and permissions, then try again.',
+  backupAuditFailed:
+    'Recovery data was prepared, but its audit record could not be saved. Inspect the restore directory on the server before retrying.',
+  backupLoadFailed: 'Could not load backup settings.',
+  auditBackupExport: 'Exported backup',
+  auditBackupPrepare: 'Prepared restored data',
+  auditBackupVerify: 'Verified backup',
   systemSettings: 'System settings',
   systemSettingsDescription: 'Manage instance-wide settings for your team.',
   codexVersionTitle: 'Codex client version',

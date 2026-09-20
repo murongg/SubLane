@@ -64,7 +64,10 @@ const navigation = [
         to: '/admin/settings',
         label: 'systemSettings',
         icon: Settings,
-        children: [{ to: '/admin/settings/codex', label: 'codexVersionTitle' }],
+        children: [
+          { to: '/admin/settings/codex', label: 'codexVersionTitle' },
+          { to: '/admin/settings/backup', label: 'backupTitle' },
+        ],
       },
     ],
   },

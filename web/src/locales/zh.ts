@@ -3,6 +3,46 @@ import type { en } from './en'
 export const zh: Record<keyof typeof en, string> = {
   auditSettingsUpdate: '更新实例设置',
   auditSettings: '实例设置',
+  backupTitle: '备份与恢复',
+  backupDescription: '保存实例数据，或从备份生成独立的恢复目录。',
+  backupExportTitle: '创建备份',
+  backupExportDescription:
+    '服务运行时也可导出一致的数据库快照和加密密钥。备份包含凭据，请妥善保存在私有位置。',
+  backupDownload: '下载备份',
+  backupExporting: '正在创建备份…',
+  backupRestoreTitle: '从备份恢复',
+  backupRestoreDescription:
+    '校验备份后生成新的数据目录，重启 SubLane 并切换到该目录后生效。',
+  backupFile: '备份文件',
+  backupFileLimit:
+    '选择 SubLane 的 .tar.gz 备份，最大 {{size}} MiB。更大的文件可使用命令行处理。',
+  backupVerify: '校验备份',
+  backupVerifying: '正在校验…',
+  backupRestore: '准备恢复',
+  backupRestoring: '正在准备恢复…',
+  backupVerified: '备份校验通过',
+  backupCreatedAt: '创建时间',
+  backupVersion: 'SubLane 版本',
+  backupDatabaseSize: '数据库大小',
+  backupRestored: '恢复数据已准备好',
+  backupRestartStop: '停止当前 SubLane 服务。',
+  backupRestartDirectory: '将 SUBLANE_DATA_DIR 设置为上方目录。',
+  backupRestartStart: '重新启动 SubLane 并登录。',
+  backupSessionNotice:
+    '原数据会保留。恢复后的浏览器会话已清除，账号与 API 密钥恢复为备份时的状态。',
+  backupDestinationExists:
+    '恢复目标目录已存在，不能覆盖。请在服务器上检查该目录，或通过命令行选择其他新目录。',
+  backupInvalid:
+    '备份未通过校验，请检查文件完整性、加密密钥和 SubLane 版本兼容性。',
+  backupTooLarge: '文件超过网页备份大小限制，请使用命令行备份工具。',
+  backupBusy: '其他备份操作正在进行，请稍后再试。',
+  backupFailed: '备份操作失败，请检查服务器存储空间和权限后重试。',
+  backupAuditFailed:
+    '恢复数据已生成，但未能保存操作审计。请先检查服务器上的恢复目录。',
+  backupLoadFailed: '无法加载备份设置。',
+  auditBackupExport: '导出备份',
+  auditBackupPrepare: '准备恢复数据',
+  auditBackupVerify: '校验备份',
   systemSettings: '系统设置',
   systemSettingsDescription: '管理对整个团队生效的实例配置。',
   codexVersionTitle: 'Codex 客户端版本',
