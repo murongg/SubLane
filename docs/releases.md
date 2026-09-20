@@ -11,7 +11,7 @@ Every release includes:
 - `sublane_VERSION_linux_amd64.tar.gz` and `sublane_VERSION_linux_arm64.tar.gz`.
 - `docker.compose.yaml` and `SHA256SUMS` for the public release files.
 - A multi-platform `ghcr.io/murongg/sublane:VERSION` image, plus the two architecture tags.
-- Automatically generated GitHub release notes.
+- Keep a Changelog release notes generated from Git history with pinned git-cliff 2.14.2.
 
 Only the highest stable version tag currently present in the repository can update the Docker `latest` channel and GitHub's latest-release designation. A prerelease or an older maintenance version never moves those channels backwards. If the highest stable tag's build fails, rerun that release; lower tags intentionally do not take its place. Deployments should pin a version or digest rather than rely on `latest`.
 
@@ -23,7 +23,7 @@ The repository source label links the image to the repository. GHCR packages can
 
 ## Publish a version
 
-Merge the release workflow and the desired changes first. Review `CHANGELOG.md`, update release-facing documentation, and run `make check`. Choose a new unused version; do not move an existing release tag.
+Generate and review `CHANGELOG.md` on your development branch with `make changelog`, then commit it with the release-facing documentation. Merge those changes and the release workflow first, and run `make check`. Choose a new unused version; do not move an existing release tag.
 
 For example, after choosing `v0.1.0`:
 
@@ -53,7 +53,7 @@ The example version is illustrative. Publish one chosen version at a time and in
 1. Validate the tag and compute the lowercase GHCR image path from the repository name.
 2. Call the normal CI workflow: sqlc drift check, Go race tests/vet, frontend checks/build, release metadata tests and Compose validation.
 3. Build and smoke-test the Docker image on native Linux amd64 and arm64 runners. On PRs and releases, extract the actual binary from each tested image, package it with deployment files and license notices, then unpack and execute it to verify the version. Release runs also save both tested images as short-lived Actions artifacts.
-4. After all checks pass, create or resume a draft GitHub Release. A previously published release is never overwritten.
+4. After all checks pass, fetch the full tagged history, generate release notes with `cliff.toml`, and create or resume a draft GitHub Release. Draft notes are regenerated on retry; a previously published release is never overwritten.
 5. Load and push those tested images, then create the multi-platform version tag. No second application build happens during publication.
 6. Upload binary archives, Compose and SHA-256 checksums. Promote the newest stable channel when eligible, then publish the completed release.
 
@@ -74,3 +74,24 @@ make release VERSION=0.0.0-test
 ```
 
 This builds the frontend once, cross-compiles the two Linux binaries and writes archives plus `SHA256SUMS` under ignored `dist/release/`. Existing archives are not overwritten; use a fresh test version or move previous generated artifacts before rebuilding. This command does not push images or create releases. Keep local build validation separate from native container runtime evidence.
+
+## Changelog generation
+
+Install [git-cliff](https://git-cliff.org/docs/installation/) 2.14.2 (the version pinned in CI). It is a development tool, not a server dependency. For example, with Rust installed, use `cargo install git-cliff --locked --version 2.14.2`. A downloaded executable can be selected through `GIT_CLIFF=/path/to/git-cliff`.
+
+```sh
+make changelog
+make changelog-check
+```
+
+`cliff.toml` uses Keep a Changelog headings: Added, Changed, Deprecated, Removed, Fixed and Security. Features and fixes follow Conventional Commits; builds, performance and refactors are Changed. Explicit deprecations/removals and security-scoped changes get their own sections. Routine docs, tests, style and chores are omitted, while breaking changes and their explanations remain visible. Merge messages and non-conventional commits are excluded; review the generated text before release.
+
+Generation reads local Git history with network metadata and external template commands disabled. It replaces `CHANGELOG.md` only after rendering succeeds, and does not create tags, change versions or commit files. Commit the generated file through the normal PR flow before running `make publish`, which still requires a clean synchronized main. Repository changelogs include prerelease sections; stable Release notes summarize the whole cycle since the preceding stable tag, including changes first introduced in prereleases.
+
+For an existing tag checked out at HEAD:
+
+```sh
+make release-notes TAG=v0.1.0
+```
+
+This writes `dist/release-notes.md` using the same template; the release workflow installs the pinned generator, fetches complete history and passes this file to GitHub. A missing or mismatched tag is rejected. CI runs synthetic-history integration tests; run `make changelog-check` locally to enable those tests when git-cliff is installed. Ordinary `make check` keeps them optional unless `SUBLANE_TEST_CHANGELOG=1` is set. Neither command changes the README.

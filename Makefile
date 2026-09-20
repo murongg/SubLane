@@ -1,9 +1,10 @@
-.PHONY: setup dev dev-api dev-web build generate generate-check test lint check clean brand release publish publish-check
+.PHONY: setup dev dev-api dev-web build generate generate-check test lint check clean brand release publish publish-check changelog changelog-check release-notes
 
 GO ?= go
 PNPM ?= pnpm
 VERSION ?= 0.1.0-dev
 WEB_PORT ?= 5173
+GIT_CLIFF ?= git-cliff
 SQLC = $(GO) run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 
 setup:
@@ -38,6 +39,7 @@ lint:
 	bash -n scripts/package.sh scripts/container-smoke.sh
 	node --check scripts/release.mjs
 	node --check scripts/publish.mjs
+	node --check scripts/changelog.mjs
 	$(GO) vet ./...
 	@test -z "$$(gofmt -l cmd internal web/*.go)" || (echo 'Run gofmt before checking.'; exit 1)
 	$(PNPM) --dir web typecheck
@@ -74,3 +76,16 @@ publish:
 
 publish-check:
 	node scripts/publish.mjs --dry-run
+
+export GIT_CLIFF
+release-notes: export SUBLANE_CHANGELOG_TAG = $(value TAG)
+
+changelog:
+	node scripts/changelog.mjs
+
+release-notes:
+	node scripts/changelog.mjs --release
+
+changelog-check:
+	"$(GIT_CLIFF)" --version
+	SUBLANE_TEST_CHANGELOG=1 node --test scripts/changelog.test.mjs

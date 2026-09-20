@@ -17,6 +17,9 @@ Run all Make targets from the repository root.
 | `make dev` | Build the development backend and launch it with Vite |
 | `make dev-api` | Run only the Go backend |
 | `make dev-web` | Run only Vite |
+| `make changelog` | Generate `CHANGELOG.md` with git-cliff 2.14.2 |
+| `make changelog-check` | Verify changelog formatting and release ranges with synthetic Git history |
+| `make release-notes TAG=v0.1.0` | Generate notes for an existing tag at HEAD |
 | `make publish-check TAG=v0.1.0` | Validate release preconditions without creating or pushing a tag |
 | `make publish TAG=v0.1.0` | Create and push one annotated release tag from synchronized, clean main |
 | `make release VERSION=0.0.0-test` | Build Linux amd64/arm64 archives and SHA-256 checksums locally |
