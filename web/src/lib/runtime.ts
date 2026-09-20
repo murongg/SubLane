@@ -10,7 +10,13 @@ const runtimeSchema = z.object({
   cooldown_until: z.number().int().nonnegative(),
   reason: z.string(),
   failures: z.number().int().nonnegative(),
-  state: z.enum(['available', 'cooling', 'retry_ready', 'probing']),
+  state: z.enum([
+    'available',
+    'cooling',
+    'retry_ready',
+    'probing',
+    'quota_exhausted',
+  ]),
 })
 export type AccountRuntime = z.infer<typeof runtimeSchema>
 export const runtimeOptions = {
@@ -46,6 +52,7 @@ export function resumeAccount(id: string) {
   })
 }
 export const reasonKeys: Record<string, keyof typeof en> = {
+  quota_exhausted: 'reasonQuotaExhausted',
   model_not_allowed: 'reasonModelNotAllowed',
   model_not_available: 'reasonModelUnavailable',
   model_catalog_unavailable: 'reasonCatalogUnavailable',

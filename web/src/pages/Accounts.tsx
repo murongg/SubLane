@@ -254,13 +254,18 @@ export function Accounts() {
                               <>
                                 <Status kind="warning">
                                   {t(
-                                    state.state === 'cooling'
-                                      ? 'accountCooling'
-                                      : state.state === 'probing'
-                                        ? 'accountProbing'
-                                        : 'accountRetryReady',
+                                    state.state === 'quota_exhausted'
+                                      ? 'accountQuotaExhausted'
+                                      : state.state === 'cooling'
+                                        ? 'accountCooling'
+                                        : state.state === 'probing'
+                                          ? 'accountProbing'
+                                          : 'accountRetryReady',
                                   )}
                                 </Status>
+                                {state.state === 'quota_exhausted' && (
+                                  <p>{t('accountQuotaRoutingHint')}</p>
+                                )}
                                 {state.state === 'cooling' && (
                                   <p>
                                     {t('accountRetryAt', {

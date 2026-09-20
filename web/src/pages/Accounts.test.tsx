@@ -303,3 +303,50 @@ it('updates an account concurrency limit from scheduling settings', async () => 
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(limit).toBe(1)
 })
+
+it('explains why a quota-exhausted account is skipped for new sessions', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/accounts/runtime')
+        return Promise.resolve(
+          response({
+            accounts: [
+              {
+                id: account.id,
+                max_concurrency: 2,
+                in_flight: 0,
+                cooldown_until: 0,
+                reason: '',
+                failures: 0,
+                state: 'quota_exhausted',
+                quota_state: 'exhausted',
+              },
+            ],
+            server_time: 1900000000,
+          }),
+        )
+      if (url.endsWith('/usage'))
+        return Promise.resolve(
+          response({
+            limits: [],
+            updated_at: 1900000000,
+            server_time: 1900000000,
+            expires_at: 1900000120,
+            stale: false,
+            refreshing: false,
+            refresh_failed: false,
+            retry_after_seconds: 0,
+          }),
+        )
+      return Promise.resolve(response({ accounts: [account] }))
+    }),
+  )
+  open()
+  expect(await screen.findByText('Quota exhausted')).toBeTruthy()
+  expect(
+    screen.getByText(/New sessions use another available account/),
+  ).toBeTruthy()
+})

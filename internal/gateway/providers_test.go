@@ -69,7 +69,12 @@ func providerFixture(t *testing.T, transport http.RoundTripper, known bool, vers
 			}
 		}
 	}
-	client := upstream.NewWithTransport(transport, version...)
+	client := upstream.NewWithTransport(transportFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/backend-api/wham/usage" {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"rate_limit":{}}`))}, nil
+		}
+		return transport.RoundTrip(r)
+	}), version...)
 	t.Cleanup(client.Close)
 	gateway := New(ctx, connection, service, client)
 	t.Cleanup(gateway.Close)

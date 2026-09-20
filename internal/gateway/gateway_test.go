@@ -57,6 +57,10 @@ func TestGatewayKeepsAccountAffinityAndBoundsActiveRequests(t *testing.T) {
 	var mu sync.Mutex
 	var used []string
 	fakeUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/backend-api/wham/usage" {
+			io.WriteString(w, `{"rate_limit":{}}`)
+			return
+		}
 		mu.Lock()
 		used = append(used, r.Header.Get("Chatgpt-Account-Id"))
 		mu.Unlock()

@@ -118,6 +118,9 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if err := s.warmCatalogs(ctx, userID, groupID, discoveryProvider, true); err != nil {
 		return nil, err
 	}
+	if err := s.warmUsage(ctx, userID, groupID, discoveryProvider); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	if err := s.admitMember(ctx, userID); err != nil {
 		s.mu.Unlock()

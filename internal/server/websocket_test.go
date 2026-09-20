@@ -52,6 +52,9 @@ func TestWebsocketPrewarmAndPerTurnKeyRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	warmed := read("response.completed")
+	if warmed["request_id"] != nil {
+		t.Fatal("prewarm fabricated a recorded request ID")
+	}
 	if calls.Load() != 0 {
 		t.Fatal("prewarm made a generation request")
 	}
@@ -59,7 +62,11 @@ func TestWebsocketPrewarmAndPerTurnKeyRevocation(t *testing.T) {
 	if err := conn.WriteJSON(map[string]any{"type": "response.create", "previous_response_id": previous, "input": []any{}}); err != nil {
 		t.Fatal(err)
 	}
-	read("response.completed")
+	completed := read("response.completed")
+	id, ok := completed["request_id"].(string)
+	if !ok || !strings.HasPrefix(id, "req_") {
+		t.Fatal("missing turn correlation", completed)
+	}
 	if calls.Load() != 1 {
 		t.Fatal("generation was not forwarded")
 	}
@@ -70,6 +77,9 @@ func TestWebsocketPrewarmAndPerTurnKeyRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	rejected := read("error")
+	if rejected["request_id"] != nil {
+		t.Fatal("unrecorded turn reused previous correlation")
+	}
 	detail := rejected["error"].(map[string]any)
 	if detail["code"] != "invalid_api_key" || calls.Load() != 1 {
 		t.Fatal("revoked key started another turn")

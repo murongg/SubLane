@@ -30,6 +30,7 @@ type Runtime struct {
 	Reason              string `json:"reason"`
 	Failures            int64  `json:"failures"`
 	State               string `json:"state"`
+	QuotaState          string `json:"quota_state"`
 	lastFailureAt       int64
 	revision            int64
 }
@@ -79,6 +80,18 @@ func (s *Service) Runtime(ctx context.Context) ([]Runtime, error) {
 			if state.InFlight > 0 {
 				state.State = "probing"
 			}
+		}
+		account, err := s.accounts.Get(ctx, row.ID)
+		if err != nil {
+			return nil, err
+		}
+		quota, err := s.accountQuota(ctx, s.queries, account)
+		if err != nil {
+			return nil, err
+		}
+		state.QuotaState = quota.State
+		if state.State == "available" && quota.State == "exhausted" {
+			state.State = "quota_exhausted"
 		}
 		result = append(result, state)
 	}

@@ -10,35 +10,49 @@ import (
 )
 
 const getAccountUsage = `-- name: GetAccountUsage :one
-SELECT snapshot, updated_at FROM account_usage WHERE account_id = ?1
+SELECT u.snapshot, u.updated_at, a.models_revision AS revision
+FROM accounts a LEFT JOIN account_usage u ON u.account_id = a.id AND u.revision = a.models_revision
+WHERE a.id = ?1
 `
 
 type GetAccountUsageRow struct {
 	Snapshot  []byte
-	UpdatedAt int64
+	UpdatedAt *int64
+	Revision  int64
 }
 
 func (q *Queries) GetAccountUsage(ctx context.Context, accountID string) (GetAccountUsageRow, error) {
 	row := q.db.QueryRowContext(ctx, getAccountUsage, accountID)
 	var i GetAccountUsageRow
-	err := row.Scan(&i.Snapshot, &i.UpdatedAt)
+	err := row.Scan(&i.Snapshot, &i.UpdatedAt, &i.Revision)
 	return i, err
 }
 
-const saveAccountUsage = `-- name: SaveAccountUsage :exec
-INSERT INTO account_usage(account_id, snapshot, updated_at)
-VALUES (?1, ?2, ?3)
-ON CONFLICT(account_id) DO UPDATE SET snapshot = excluded.snapshot, updated_at = excluded.updated_at
-WHERE excluded.updated_at >= account_usage.updated_at
+const saveAccountUsage = `-- name: SaveAccountUsage :execrows
+INSERT INTO account_usage(account_id, snapshot, updated_at, revision)
+SELECT id, ?1, ?2, models_revision FROM accounts
+WHERE id = ?3 AND models_revision = ?4
+AND enabled = 1 AND status != 'reauth_required'
+ON CONFLICT(account_id) DO UPDATE SET snapshot = excluded.snapshot, updated_at = excluded.updated_at, revision = excluded.revision
+WHERE excluded.revision != account_usage.revision OR excluded.updated_at >= account_usage.updated_at
 `
 
 type SaveAccountUsageParams struct {
-	AccountID string
 	Snapshot  []byte
 	UpdatedAt int64
+	AccountID string
+	Revision  int64
 }
 
-func (q *Queries) SaveAccountUsage(ctx context.Context, arg SaveAccountUsageParams) error {
-	_, err := q.db.ExecContext(ctx, saveAccountUsage, arg.AccountID, arg.Snapshot, arg.UpdatedAt)
-	return err
+func (q *Queries) SaveAccountUsage(ctx context.Context, arg SaveAccountUsageParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, saveAccountUsage,
+		arg.Snapshot,
+		arg.UpdatedAt,
+		arg.AccountID,
+		arg.Revision,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

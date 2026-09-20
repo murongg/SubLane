@@ -78,7 +78,7 @@ func TestStatisticsShareHistoryTransactionAndRetainOnlyNinetyDays(t *testing.T) 
 		t.Fatal(err)
 	}
 	r.Body.Close()
-	history, err := s.Requests(ctx, 0, "", "")
+	history, err := s.Requests(ctx, RequestFilter{})
 	if err != nil || len(history.Requests) != 0 {
 		t.Fatal("history committed without aggregate", err)
 	}

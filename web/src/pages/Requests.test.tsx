@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryHistory } from '@tanstack/react-router'
 import { expect, it, vi } from 'vitest'
@@ -25,6 +25,8 @@ it('shows request metadata and filters failed calls', async () => {
             operation: 'responses',
             started_at: 1900000000,
             duration_ms: 125,
+            request_id: 'req_synthetic',
+            first_token_ms: 42,
             outcome: 'error',
             error_code: 'rate_limited',
             upstream_status: 429,
@@ -86,6 +88,8 @@ it.each([memberAuthenticated, authenticated])(
                   operation: 'responses',
                   started_at: 1900000000,
                   duration_ms: 125,
+                  request_id: 'req_synthetic',
+                  first_token_ms: 42,
                   outcome: 'success',
                   error_code: '',
                   upstream_status: 200,
@@ -167,6 +171,8 @@ it.each([
                     operation: 'responses',
                     started_at: 1900000000,
                     duration_ms: 125,
+                    request_id: 'req_synthetic',
+                    first_token_ms: 42,
                     outcome: 'success',
                     error_code: '',
                     upstream_status: 200,
@@ -195,5 +201,119 @@ it.each([
     expect(await screen.findByText('Cached: 1,070')).toBeTruthy()
     expect(await screen.findByText('Hit rate: 85.6%')).toBeTruthy()
     expect(screen.getByText('1,250 / 50')).toBeTruthy()
+    const table = screen.getByRole('table')
+    expect(within(table).getByText('req_synthetic')).toBeTruthy()
+    const user = userEvent.setup()
+    const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+    await user.click(
+      within(table).getByRole('button', { name: 'Copy request ID' }),
+    )
+    expect(copy).toHaveBeenCalledWith('req_synthetic')
+    expect(within(table).getByRole('status').textContent).toContain('Copied')
+    expect(screen.queryByRole('dialog')).toBeNull()
   },
 )
+
+it('filters diagnostics by model and caller, then copies the request ID', async () => {
+  const user = userEvent.setup()
+  const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+  const fetch = vi.fn().mockImplementation((url: string) => {
+    if (url === '/api/auth/state')
+      return Promise.resolve(new Response(JSON.stringify(authenticated)))
+    if (url === '/api/requests/filters')
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            callers: [
+              {
+                user_id: 2,
+                key_id: 7,
+                username: 'synthetic-member',
+                key_name: 'Synthetic diagnostic key',
+              },
+            ],
+          }),
+        ),
+      )
+    if (url.startsWith('/api/requests?'))
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            requests: [
+              {
+                id: 1,
+                user_id: 2,
+                key_id: 7,
+                group_id: 1,
+                account_id: 'synthetic-account',
+                account_name: 'Synthetic account',
+                provider: 'codex',
+                model: 'synthetic-model',
+                transport: 'http',
+                operation: 'responses',
+                started_at: 1900000000,
+                duration_ms: 120,
+                first_token_ms: 42,
+                request_id: 'req_synthetic',
+                outcome: 'success',
+                error_code: '',
+                upstream_status: 200,
+                input_tokens: 10,
+                output_tokens: 5,
+                cached_tokens: 5,
+                username: 'synthetic-member',
+                key_name: 'Synthetic diagnostic key',
+                group_name: 'Default',
+              },
+            ],
+            next_cursor: 0,
+          }),
+        ),
+      )
+    return Promise.resolve(new Response(JSON.stringify({ accounts: [] })))
+  })
+  vi.stubGlobal('fetch', fetch)
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/admin/requests'] }),
+      )}
+    />,
+  )
+  await screen.findByText('First output: 42 ms')
+  await user.click(screen.getByRole('button', { name: 'Filters' }))
+  await user.type(screen.getByLabelText('Model name'), 'synthetic-model')
+  await user.click(screen.getByRole('button', { name: 'Member filter' }))
+  await user.click(
+    await screen.findByRole('menuitemradio', { name: 'synthetic-member' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'API key filter' }))
+  await user.click(
+    screen.getByRole('menuitemradio', {
+      name: 'Synthetic diagnostic key · synthetic-member',
+    }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Apply filters' }))
+  await waitFor(() =>
+    expect(
+      fetch.mock.calls.some(
+        ([url]) =>
+          url.includes('model=synthetic-model') &&
+          url.includes('user_id=2') &&
+          url.includes('key_id=7'),
+      ),
+    ).toBe(true),
+  )
+  await user.click(screen.getByRole('button', { name: 'View request details' }))
+  expect(
+    await screen.findByRole('dialog', { name: 'Request details' }),
+  ).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Copy request ID' }))
+  expect(copy).toHaveBeenCalledWith('req_synthetic')
+  await user.keyboard('{Escape}')
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'View request details' }),
+    ),
+  )
+})

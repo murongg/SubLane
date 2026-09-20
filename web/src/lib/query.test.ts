@@ -22,14 +22,7 @@ it.each(['personal', 'all'] as const)(
         new Response(JSON.stringify({ requests: [], next_cursor: 0 })),
       )
     vi.stubGlobal('fetch', fetch)
-    const options = requestOptions(
-      client,
-      authenticated.user.id,
-      scope,
-      0,
-      '',
-      '',
-    )
+    const options = requestOptions(client, authenticated.user.id, scope, 0, {})
     await client.fetchQuery(options)
     const observer = new QueryObserver(client, options)
     const unsubscribe = observer.subscribe(() => {})

@@ -43,7 +43,13 @@ type forwardFixture struct {
 func newForwardFixture(t *testing.T, handler http.HandlerFunc) forwardFixture {
 	return newProviderFixture(t, "codex", handler)
 }
+func newQuotaForwardFixture(t *testing.T, handler http.HandlerFunc) forwardFixture {
+	return newForwardingFixture(t, "codex", handler, true)
+}
 func newProviderFixture(t *testing.T, provider string, handler http.HandlerFunc) forwardFixture {
+	return newForwardingFixture(t, provider, handler, false)
+}
+func newForwardingFixture(t *testing.T, provider string, handler http.HandlerFunc, quota bool) forwardFixture {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -84,6 +90,9 @@ func newProviderFixture(t *testing.T, provider string, handler http.HandlerFunc)
 	t.Cleanup(fakeUpstream.Close)
 	target, _ := url.Parse(fakeUpstream.URL)
 	client := upstream.NewWithTransport(gatewayTransport(func(r *http.Request) (*http.Response, error) {
+		if !quota && r.URL.Path == "/backend-api/wham/usage" {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"rate_limit":{}}`))}, nil
+		}
 		copy := r.Clone(r.Context())
 		copy.URL.Scheme = target.Scheme
 		copy.URL.Host = target.Host

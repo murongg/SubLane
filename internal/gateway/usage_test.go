@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/vault"
@@ -228,5 +229,72 @@ func TestUsageColdFailureIsCoalescedAndCached(t *testing.T) {
 	}
 	if _, err := f.service.RefreshUsage(context.Background(), f.id); err == nil || f.calls.Load() != 1 {
 		t.Fatal("cold failure was not backed off", err, f.calls.Load())
+	}
+}
+
+func TestUsageRefreshCannotPublishAcrossAccountLifecycle(t *testing.T) {
+	f := newQuotaFixture(t)
+	first := waitQuota(t, f)
+	f.clock.Add(121)
+	f.block = make(chan struct{})
+	f.started = make(chan struct{}, 1)
+	if _, err := f.service.Usage(context.Background(), f.id); err != nil {
+		t.Fatal(err)
+	}
+	<-f.started
+	if _, err := f.accounts.SetEnabled(context.Background(), f.id, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.accounts.SetEnabled(context.Background(), f.id, true); err != nil {
+		t.Fatal(err)
+	}
+	close(f.block)
+	f.service.Close()
+	var observed int64
+	if err := f.connection.QueryRow("SELECT updated_at FROM account_usage WHERE account_id=?", f.id).Scan(&observed); err != nil {
+		t.Fatal(err)
+	}
+	if observed != first.UpdatedAt {
+		t.Fatal("in-flight quota crossed lifecycle revision")
+	}
+}
+
+func TestTrafficQuotaRefreshDoesNotWaitAndBoundsWorkers(t *testing.T) {
+	f := newQuotaFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	identity, err := auth.New(f.connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"synthetic-second", "synthetic-third"} {
+		if _, err := f.accounts.Authorize(ctx, id, accounts.Credential{AccountID: id, AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", ExpiresAt: time.Now().Add(time.Hour).Unix()}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.block = make(chan struct{})
+	f.started = make(chan struct{}, 3)
+	defer close(f.block)
+	if err := f.service.warmUsage(ctx, 1, 1, "codex"); err != nil {
+		t.Fatal("metadata blocked model admission", err)
+	}
+	for range 2 {
+		select {
+		case <-f.started:
+		case <-ctx.Done():
+			t.Fatal("quota workers did not start")
+		}
+	}
+	if err := f.service.warmUsage(ctx, 1, 1, "codex"); err != nil {
+		t.Fatal(err)
+	}
+	if f.calls.Load() != 2 || len(f.service.usage.slots) != 2 {
+		t.Fatal("unbounded or duplicate refresh", f.calls.Load())
+	}
+	if len(f.service.slots) != 2 {
+		t.Fatal("quota did not share upstream admission")
 	}
 }

@@ -118,6 +118,9 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 			if err := s.accountAdmission(*bound); err != nil {
 				return id, digest, err
 			}
+			if err := s.quotaAdmission(ctx, q, *bound); err != nil {
+				return id, digest, err
+			}
 			if existing.Provider != scope {
 				if err := rememberAffinity(ctx, q, userID, groupID, digest, scope, id, now, expires); err != nil {
 					return "", digest, err
@@ -134,7 +137,7 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 	}
 	candidates := make([]string, 0, len(available))
 	busy, unknown, eligible := false, false, false
-	var cooling int64
+	var cooling, quotaWait int64
 	for _, account := range available {
 		if !allowed[account.ID] || !account.Enabled || account.Status == "reauth_required" || (provider != "" && account.Provider != provider) || (kind == Compact && account.Provider != "codex") {
 			continue
@@ -166,6 +169,16 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 			}
 			continue
 		}
+		if err := s.quotaAdmission(ctx, q, account); err != nil {
+			var quota *QuotaError
+			if !errors.As(err, &quota) {
+				return "", digest, err
+			}
+			if quotaWait == 0 || quota.RetryAfter < quotaWait {
+				quotaWait = quota.RetryAfter
+			}
+			continue
+		}
 		candidates = append(candidates, account.ID)
 	}
 	if len(candidates) == 0 {
@@ -174,6 +187,9 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 		}
 		if cooling > 0 {
 			return "", digest, &CoolingError{RetryAfter: cooling}
+		}
+		if quotaWait > 0 {
+			return "", digest, &QuotaError{RetryAfter: quotaWait}
 		}
 		if unknown {
 			return "", digest, ErrCatalogUnavailable

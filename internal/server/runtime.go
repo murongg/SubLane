@@ -73,25 +73,51 @@ func (h *accountHTTP) requestHistory(w http.ResponseWriter, r *http.Request, per
 		writeJSON(w, 503, map[string]string{"error": "unavailable"})
 		return
 	}
-	var cursor int64
-	if value := r.URL.Query().Get("cursor"); value != "" {
-		n, err := strconv.ParseInt(value, 10, 64)
-		if err != nil || n < 0 {
-			accountError(w, accounts.ErrInput)
-			return
+	values := r.URL.Query()
+	filter := gateway.RequestFilter{AccountID: values.Get("account_id"), Outcome: values.Get("outcome"), Model: values.Get("model"), RequestID: values.Get("request_id")}
+	numeric := map[string]*int64{"cursor": &filter.Cursor, "from": &filter.From, "until": &filter.Until, "key_id": &filter.KeyID}
+	if !personal {
+		numeric["user_id"] = &filter.MemberID
+	}
+	for key, target := range numeric {
+		if value := values.Get(key); value != "" {
+			n, err := strconv.ParseInt(value, 10, 64)
+			if err != nil || n < 0 {
+				accountError(w, accounts.ErrInput)
+				return
+			}
+			*target = n
 		}
-		cursor = n
 	}
 	var page gateway.RequestPage
 	var err error
 	if personal {
-		page, err = h.gateway.UserRequests(r.Context(), sessionUser(r).ID, cursor, r.URL.Query().Get("outcome"))
+		page, err = h.gateway.UserRequests(r.Context(), sessionUser(r).ID, filter)
 	} else {
-		page, err = h.gateway.Requests(r.Context(), cursor, r.URL.Query().Get("account_id"), r.URL.Query().Get("outcome"))
+		page, err = h.gateway.Requests(r.Context(), filter)
 	}
 	if err != nil {
 		accountError(w, err)
 		return
 	}
 	writeJSON(w, 200, page)
+}
+
+func (h *accountHTTP) requestFilters(w http.ResponseWriter, r *http.Request) {
+	h.requestCallers(w, r, 0)
+}
+func (h *accountHTTP) personalRequestFilters(w http.ResponseWriter, r *http.Request) {
+	h.requestCallers(w, r, sessionUser(r).ID)
+}
+func (h *accountHTTP) requestCallers(w http.ResponseWriter, r *http.Request, userID int64) {
+	if h.gateway == nil {
+		writeJSON(w, 503, map[string]string{"error": "unavailable"})
+		return
+	}
+	callers, err := h.gateway.RequestCallers(r.Context(), userID)
+	if err != nil {
+		accountError(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"callers": callers})
 }

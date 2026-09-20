@@ -222,7 +222,7 @@ func TestRestoreMigratesKnownOlderSchemaOnlyInStaging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := connection.Exec("ALTER TABLE accounts DROP COLUMN models_snapshot; ALTER TABLE accounts DROP COLUMN models_revision; DELETE FROM schema_migrations WHERE name='018_model_catalog.sql'"); err != nil {
+	if _, err := connection.Exec("DROP INDEX request_records_request_id; ALTER TABLE request_records DROP COLUMN request_id; ALTER TABLE request_records DROP COLUMN first_token_ms; ALTER TABLE account_usage DROP COLUMN revision; DELETE FROM schema_migrations WHERE name='019_request_diagnostics.sql'"); err != nil {
 		t.Fatal(err)
 	}
 	if err := connection.Close(); err != nil {
@@ -237,7 +237,7 @@ func TestRestoreMigratesKnownOlderSchemaOnlyInStaging(t *testing.T) {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(entries[1].data)
-	value.SchemaVersion = 17
+	value.SchemaVersion = 18
 	value.DatabaseBytes = int64(len(entries[1].data))
 	value.Files[databaseName] = digest{value.DatabaseBytes, hex.EncodeToString(sum[:])}
 	entries[0].data, _ = json.Marshal(value)
@@ -255,7 +255,7 @@ func TestRestoreMigratesKnownOlderSchemaOnlyInStaging(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer restored.Close()
-	if schema, err := storage.ValidateSnapshot(context.Background(), restored); err != nil || schema != 18 {
+	if schema, err := storage.ValidateSnapshot(context.Background(), restored); err != nil || schema != 19 {
 		t.Fatal("older backup not migrated", schema, err)
 	}
 	actual, err := os.ReadFile(archive)
