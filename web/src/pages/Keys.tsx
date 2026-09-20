@@ -7,6 +7,7 @@ import { keyOptions, keyState } from '@/lib/keys'
 import { CreateKey } from '@/components/CreateKey'
 import { CopyKey } from '@/components/CopyKey'
 import { ClientGuide } from '@/components/ClientGuide'
+import { CCSwitchImport } from '@/components/CCSwitchImport'
 import { RevokeKey } from '@/components/RevokeKey'
 import { EditKey } from '@/components/EditKey'
 import { Status } from '@/components/Status'
@@ -176,6 +177,11 @@ function KeyManager({ userID }: { userID: number }) {
                   </td>
                   <td className="px-5 py-4 text-right">
                     <div className="flex justify-end gap-2">
+                      <CCSwitchImport
+                        value={key}
+                        userID={userID}
+                        usable={keyState(key, now) === 'active'}
+                      />
                       <EditKey value={key} onSaved={invalidate} />
                       <RevokeKey
                         value={key}

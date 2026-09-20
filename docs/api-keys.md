@@ -40,12 +40,26 @@ Migration `004_api_keys.sql` adds the key table and indexes. Migration `014_key_
 
 ## Copying existing keys
 
-The browser fetches a full value only after an explicit copy action. The secret endpoint requires an enabled browser session, exact-origin validation and current ownership; an administrator cannot disclose another user's key. It uses POST with `Cache-Control: no-store`. Successful retrieval commits a metadata-only `key.reveal` audit record before returning the secret. Failed authenticated attempts use the existing sanitized audit path. This event records retrieval, not whether the operating system accepted the clipboard write.
+The browser fetches a full value only after an explicit copy or import preparation action. The secret endpoint requires an enabled browser session, exact-origin validation and current ownership; an administrator cannot disclose another user's key. It uses POST with `Cache-Control: no-store`. Successful retrieval commits a metadata-only `key.reveal` audit record before returning the secret. Failed authenticated attempts use the existing sanitized audit path. This event records retrieval, not whether the operating system accepted the clipboard write or an external application imported the configuration.
 
-The UI does not cache retrieved secrets in TanStack Query or mutation results, local/session storage, or URLs. If clipboard access fails, a focused dialog allows manual selection/copy; closing the dialog or switching identities drops that temporary value. Pending requests are aborted on unmount, and late successes or failures from a previous identity are ignored. Creation responses retain the existing short-lived dialog behavior.
+The UI does not cache retrieved secrets in TanStack Query or mutation results, local/session storage, or web URLs. If clipboard access fails, a focused dialog allows manual selection/copy; closing the dialog or switching identities drops that temporary value. Pending requests are aborted on unmount, and late successes or failures from a previous identity are ignored. Creation responses retain the existing short-lived dialog behavior. The optional CC Switch handoff below includes the selected secret in a local application URI.
 
 Paused and expired keys can still be copied by their owner; copying does not enable them or extend their expiry. Revocation atomically removes the encrypted value and disables subsequent retrieval. All keys expose a `copyable` metadata flag.
 
 Migration `016_key_secrets.sql` introduced encrypted values; `017_consolidate.sql` moves them into `api_keys.encrypted_secret` without changing key IDs, hashes or ciphertext. Existing hash-only keys remain untouched. Those keys remain valid but report `copyable: false`; retrieval returns `409 api_key_not_copyable`. There is no automatic reconstruction or capture from gateway requests. Users who no longer have their old key can create a new one, update clients and revoke the old key.
 
 Back up `credentials.key` alongside SQLite even when there are no upstream accounts. Startup must not replace a missing master key when encrypted gateway keys exist. Startup validates recoverable keys in bounded batches and fails if the encryption key or ciphertext is wrong. Existing upstream credential envelopes remain compatible.
+
+## Import into CC Switch
+
+Install [CC Switch](https://github.com/farion1231/cc-switch) on the computer running your browser. In **API keys**, choose the external-link icon on an active, recoverable key:
+
+1. Review the prefilled configuration name, key's group and instance URL. Enter an exact model ID available to that group, including its provider prefix when needed.
+2. Select **Prepare import** to retrieve your key through the same owner-only, audited endpoint used for copying.
+3. Select **Open CC Switch**, then review and confirm the configuration in that application. Enable it there when ready.
+
+This creates a **Codex** configuration using the current origin plus `/v1` and the Responses protocol. The [CC Switch V1 deep-link contract](https://github.com/farion1231/cc-switch/blob/main/docs/user-manual/zh/5-faq/5.3-deeplink.md) passes the configuration name, endpoint, model and full key through `ccswitch://v1/import`. No remote relay is used, and `enabled=false` avoids requesting an automatic provider switch. CC Switch manages the imported key in its own configuration/authentication storage; this differs from the environment-variable setup in [the manual client guide](codex.md#client-configuration).
+
+Preparation and opening use separate clicks so the external application launch retains a browser user gesture. The prepared URI exists only in the mounted dialog state, never in a rendered link or persisted browser cache. Closing or editing the dialog discards it. Legacy hash-only, paused, expired, revoked and group-inaccessible keys cannot use this action. Model availability is enforced by the gateway, not validated through a live model request during import.
+
+SubLane cannot detect whether CC Switch is installed or whether its confirmation completed. Tests validate URI encoding, configuration fields, cancellation and identity isolation with synthetic keys; they do not establish an actual installed-app import or live model response. Other client targets are not offered because SubLane does not currently expose their native Claude Messages or Gemini APIs.

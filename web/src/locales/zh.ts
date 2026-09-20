@@ -1,6 +1,26 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  ccSwitchImport: '导入 CC Switch',
+  ccSwitchImportNamed: '将 {{name}} 导入 CC Switch',
+  ccSwitchDescription:
+    '使用此 API 密钥准备 Codex 连接配置，然后在 CC Switch 中确认导入。',
+  ccSwitchName: '配置名称',
+  ccSwitchModelHint:
+    '填写此密钥所属分组允许的完整模型 ID，需要时带上服务商前缀。',
+  ccSwitchInputInvalid:
+    '配置名称需为 1～128 个字符且不含控制字符，并填写有效的模型 ID。',
+  ccSwitchPrivacy:
+    '此密钥和连接信息将交给本机 CC Switch，导入时不自动切换当前供应商。',
+  ccSwitchReady: '配置已准备好。打开 CC Switch 确认导入，然后按需启用。',
+  ccSwitchOpened:
+    '请在 CC Switch 中确认导入。如果未打开，请确认已安装该应用并重试。',
+  ccSwitchOpenFailed: '无法打开 CC Switch，请确认已安装后重试。',
+  ccSwitchKeyUnavailable: '请选择已启用、未过期且有分组访问权限的密钥。',
+  ccSwitchPrepare: '准备导入',
+  ccSwitchOpen: '打开 CC Switch',
+  ccSwitchEdit: '修改配置',
+
   copyKeyNamed: '复制 {{name}}',
   keyLegacyCopy: '此旧密钥无法再次复制。如需完整值，请创建新密钥。',
   retrievingKey: '正在获取密钥…',

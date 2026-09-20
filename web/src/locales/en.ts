@@ -1,4 +1,27 @@
 export const en = {
+  ccSwitchImport: 'Import into CC Switch',
+  ccSwitchImportNamed: 'Import {{name}} into CC Switch',
+  ccSwitchDescription:
+    'Prepare a Codex connection using this API key, then confirm the import in CC Switch.',
+  ccSwitchName: 'Configuration name',
+  ccSwitchModelHint:
+    'Enter an exact model ID allowed by this key’s group. Use the provider prefix when required.',
+  ccSwitchInputInvalid:
+    'Use a configuration name of 1–128 characters without control characters and a valid model ID.',
+  ccSwitchPrivacy:
+    'The selected key and connection details will be passed to CC Switch on this device. The imported provider will not be activated automatically.',
+  ccSwitchReady:
+    'Ready to open CC Switch. Confirm the configuration there, then enable it when needed.',
+  ccSwitchOpened:
+    'Confirm the import in CC Switch. If it did not open, check that the app is installed and try again.',
+  ccSwitchOpenFailed:
+    'Could not open CC Switch. Check that it is installed, then try again.',
+  ccSwitchKeyUnavailable:
+    'Use an enabled, unexpired key with access to its group.',
+  ccSwitchPrepare: 'Prepare import',
+  ccSwitchOpen: 'Open CC Switch',
+  ccSwitchEdit: 'Edit configuration',
+
   copyKeyNamed: 'Copy {{name}}',
   keyLegacyCopy:
     'This older key cannot be copied again. Create a new key if you need its full value.',

@@ -11,6 +11,8 @@ Sign in as the administrator, open **Accounts**, and choose **Add account**. Mem
 
 Use **Verify connection** to fetch the account's model catalog. Imported credentials show **Not verified** until successful use. The account menu provides enable/disable, reauthorization, and removal. Reauthorization must retain the same upstream account identity. Removing an account deletes its stored credentials from SubLane; it does not revoke the ChatGPT login itself.
 
+Codex model discovery sends the pinned client version `0.152.1` in the catalog query and User-Agent. The upstream catalog depends on that version: an obsolete version can return HTTP 200 with only hidden models, producing an empty `/v1/models` list after visibility filtering. Keep the pin aligned with a verified client release; changing group permissions does not resolve this compatibility issue.
+
 OAuth attempts use PKCE, 256-bit random state, a ten-minute expiry, one active attempt per administrator browser session, and a maximum of eight pending attempts. The callback is bound to the session that started it and consumed before exchanging its code. Closing the form requests cancellation; expiry is the fallback after a lost connection. Pending OAuth state is held only in memory.
 
 ## Subscription usage
@@ -56,7 +58,7 @@ supports_websockets = true
 
 Use your instance's actual URL, with HTTPS for network deployments. For HTTP/SSE transport, set `supports_websockets = false`. Codex CLI and desktop must read the intended user-level configuration. A desktop app already running does not automatically inherit environment variables exported in another terminal; restart it in an environment where the key is available.
 
-The API keys page provides a configuration snippet without embedding or retaining the secret. See the official [advanced configuration](https://learn.chatgpt.com/docs/config-file/config-advanced) and [authentication](https://learn.chatgpt.com/docs/auth) guidance for client configuration and credential storage.
+The API keys page provides a configuration snippet without embedding or retaining the secret. It also offers an optional [CC Switch import](api-keys.md#import-into-cc-switch) that passes the chosen key to the locally installed application after explicit preparation. CC Switch generates its own Codex authentication-file configuration; it does not preserve the environment-variable or WebSocket settings in the manual snippet above. See the official [advanced configuration](https://learn.chatgpt.com/docs/config-file/config-advanced) and [authentication](https://learn.chatgpt.com/docs/auth) guidance for client configuration and credential storage.
 
 ## Gateway contract
 
