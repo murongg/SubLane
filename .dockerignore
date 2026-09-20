@@ -1,16 +1,25 @@
-.git
-.impeccable
-bin
-dist
-data
+# Only send build inputs; local instances, backups and worktrees never enter the context.
+**
+!Dockerfile
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**
+!web/
+!web/**
+!LICENSE
+!THIRD_PARTY_NOTICES.md
+!licenses/
+!licenses/**
 web/node_modules
-tools/brand/node_modules
-brand
 web/dist
-docs/plans
-docs/specs
-.env*
-*.db*
-# Ignore leftover bootstrap files from earlier development builds.
+**/.env*
+**/*.db*
+**/credentials.key
 **/setup.key
 **/.setup-*
+**/*.sublane-backup.tar.gz
+**/.sublane-backup-*
+**/restore-ready

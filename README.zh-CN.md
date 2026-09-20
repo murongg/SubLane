@@ -14,16 +14,31 @@
   <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26%2B-171717?style=flat-square&amp;logo=go&amp;logoColor=white&amp;labelColor=555555" alt="Go 1.26+" height="20"></a>
   <a href="web/package.json"><img src="https://img.shields.io/badge/React-19-171717?style=flat-square&amp;logo=react&amp;logoColor=white&amp;labelColor=555555" alt="React 19" height="20"></a>
   <a href="internal/storage/storage.go"><img src="https://img.shields.io/badge/SQLite-embedded-171717?style=flat-square&amp;logo=sqlite&amp;logoColor=white&amp;labelColor=555555" alt="SQLite embedded" height="20"></a>
-  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/stage-foundation-92400E?style=flat-square&amp;labelColor=555555" alt="Stage: foundation" height="20"></a>
+  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/stage-internal%20testing-92400E?style=flat-square&amp;labelColor=555555" alt="Stage: internal testing" height="20"></a>
 </p>
 
 <p align="center">
   <a href="README.md">English</a> · <a href="https://github.com/murongg/SubLane">项目仓库</a> · <a href="brand/README.zh-CN.md">品牌物料</a>
 </p>
 
-**当前处于开发初期。** 已提供管理员初始化、成员账号创建与启停、角色权限控制、个人 API 密钥、登录退出、SQLite 持久化、内嵌前端、中英文切换和明暗主题。已实现 Codex、Claude、Antigravity OAuth／凭据 JSON 导入、凭据加密和 HTTP/SSE/WebSocket 转发，并通过模拟上游测试。真实订阅和桌面端仍待验收。已提供密码管理、成员请求限制和个人／团队用量汇总。
+**当前处于内部试用阶段。** 已提供管理员与成员权限、个人 API 密钥、账号分组、Codex／Claude／Antigravity 订阅管理、模型目录、HTTP/SSE/WebSocket 转发、请求诊断、用量图表以及备份恢复。Codex 账号池会依据新鲜额度快照避让已耗尽账号。真实服务商／桌面客户端兼容性与资源占用仍需单独验收。
+
+推送版本标签后，发布流程会生成 Linux 二进制和 GHCR 多架构镜像。首次成功发版后才会有可下载产物，详见[部署与升级](docs/deployment.md)和[发版流程](docs/releases.md)。
 
 后端使用 Go、chi 路由、sqlc 生成的类型安全查询和纯 Go SQLite 驱动。sqlc 只用于开发时生成代码，生产部署仍是单个进程。
+
+## Docker 部署
+
+从已发布的 [GitHub Release](https://github.com/murongg/SubLane/releases) 下载 `docker.compose.yaml`，然后运行：
+
+```sh
+docker compose -f docker.compose.yaml pull
+docker compose -f docker.compose.yaml up -d
+```
+
+默认拉取 `ghcr.io/murongg/sublane:latest`，支持 Linux amd64／arm64。建议在 Compose 的 `.env` 中通过 `SUBLANE_IMAGE` 固定到实际已发布的版本或镜像摘要。Compose 默认仅映射本机 `8080` 端口，通过命名卷保存数据库和加密密钥；升级时保留同一 Compose 项目，不要使用 `down -v`。
+
+首次镜像发布前，可以在源码目录使用 `docker compose -f docker.compose.yaml -f docker.compose.build.yaml up --build -d` 本地构建。独立二进制、HTTPS 反向代理和升级恢复步骤见[部署文档](docs/deployment.md)。
 
 ## 开始开发
 
@@ -51,7 +66,7 @@ make build
 
 打开 http://127.0.0.1:8080。构建后为包含前端的单个二进制文件，运行时不需要 Node.js。数据库默认保存在 `./data/sublane.db`，订阅凭据加密密钥为 `./data/credentials.key`，备份时需要一起保存。
 
-Docker：`docker compose up --build -d`。容器使用命名卷保存数据库，宿主端口仅绑定本机。
+源码构建 Docker：`docker compose -f docker.compose.yaml -f docker.compose.build.yaml up --build -d`。容器使用命名卷保存数据库，宿主端口仅绑定本机。
 
 Docker 部署同样通过页面创建首个管理员。网络部署应使用 HTTPS 反向代理，并在容器环境中设置 `SUBLANE_PUBLIC_URL` 为外部访问地址。会话有效期为 12 小时；退出会撤销当前会话。详见[认证说明](docs/authentication.md)。
 
@@ -63,7 +78,7 @@ Docker 部署同样通过页面创建首个管理员。网络部署应使用 HTT
 
 管理员可在「成员管理」中创建、启用或停用成员。成员登录后只显示个人工作空间，不能访问订阅账号、成员管理或系统状态；外观和语言设置对两种角色均可用。详见[成员与权限说明](docs/members.md)。
 
-运行 `make check`，执行 sqlc 生成代码一致性检查、后端检查与竞态测试、前端类型与格式检查、单元测试及生产构建。修改 SQL 查询或迁移文件后运行 `make generate`。CI 还会构建 Docker 镜像。
+运行 `make check`，执行 sqlc 生成代码一致性检查、后端检查与竞态测试、前端类型与格式检查、单元测试及生产构建。修改 SQL 查询或迁移文件后运行 `make generate`。CI 还会在原生 amd64 和 arm64 环境构建镜像，使用合成数据检查启动健康、非 root 运行、只读文件系统、持久化和备份恢复。
 
 界面默认英文，在顶部或偏好设置中切换中英文、明暗主题，偏好保存在当前浏览器。`PRODUCT.md` 和主开发文档使用英文。
 

@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+      version: ${{ steps.metadata.outputs.version }}
+      prerelease: ${{ steps.metadata.outputs.prerelease }}
+      image: ${{ steps.metadata.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Validate the version and registry path
+        id: metadata
+        run: node scripts/release.mjs metadata "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: prepare
+    uses: ./.github/workflows/ci.yaml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      release: true
+
+  publish:
+    needs: [prepare, verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+      IMAGE: ${{ needs.prepare.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Prepare a draft release without replacing a published version
+        run: |
+          if gh release view "$TAG" --json isDraft > release-state.json; then
+            jq -e '.isDraft == true' release-state.json >/dev/null || {
+              echo 'This release is already published; use a new version tag.' >&2
+              exit 1
+            }
+          else
+            gh release create "$TAG" --verify-tag --draft --title "$TAG" --generate-notes --prerelease="$PRERELEASE"
+          fi
+      - name: Publish the exact images that passed native smoke tests
+        run: |
+          for arch in amd64 arm64; do
+            gzip -dc "release-assets/image-$arch.tar.gz" | docker load
+            test "$(docker image inspect --format '{{.Architecture}}' "sublane:ci-$arch")" = "$arch"
+            test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "sublane:ci-$arch")" = "$VERSION"
+            docker tag "sublane:ci-$arch" "$IMAGE:$VERSION-$arch"
+            docker push "$IMAGE:$VERSION-$arch"
+          done
+          docker buildx imagetools create --tag "$IMAGE:$VERSION" "$IMAGE:$VERSION-amd64" "$IMAGE:$VERSION-arm64"
+          docker buildx imagetools inspect "$IMAGE:$VERSION"
+      - name: Upload binaries, deployment files and checksums
+        run: |
+          cp docker.compose.yaml release-assets/docker.compose.yaml
+          (
+            cd release-assets
+            sha256sum "sublane_${VERSION}_linux_amd64.tar.gz" "sublane_${VERSION}_linux_arm64.tar.gz" docker.compose.yaml > SHA256SUMS
+          )
+          gh release upload "$TAG" \
+            "release-assets/sublane_${VERSION}_linux_amd64.tar.gz" \
+            "release-assets/sublane_${VERSION}_linux_arm64.tar.gz" \
+            release-assets/docker.compose.yaml release-assets/SHA256SUMS --clobber
+      - name: Promote only the newest stable tag
+        id: channel
+        run: |
+          # Re-read remote tags after building so an older maintenance build cannot move latest backwards.
+          latest=$(gh api --paginate "repos/$GH_REPO/tags?per_page=100" --jq '.[].name' | node scripts/release.mjs latest "$TAG")
+          if [[ "$latest" == true ]]; then
+            docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE:$VERSION"
+          fi
+          printf 'latest=%s\n' "$latest" >> "$GITHUB_OUTPUT"
+      - name: Publish the completed release
+        env:
+          LATEST: ${{ steps.channel.outputs.latest }}
+        run: gh release edit "$TAG" --draft=false --prerelease="$PRERELEASE" --latest="$LATEST"
+      - name: Release summary
+        run: |
+          {
+            printf '## SubLane %s\n\n' "$VERSION"
+            printf 'Image: `%s:%s` (linux/amd64, linux/arm64)\n\n' "$IMAGE" "$VERSION"
+            printf 'Release: https://github.com/%s/releases/tag/%s\n' "$GH_REPO" "$TAG"
+          } >> "$GITHUB_STEP_SUMMARY"

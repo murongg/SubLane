@@ -1,4 +1,4 @@
-.PHONY: setup dev dev-api dev-web build generate generate-check test lint check clean brand
+.PHONY: setup dev dev-api dev-web build generate generate-check test lint check clean brand release
 
 GO ?= go
 PNPM ?= pnpm
@@ -30,10 +30,13 @@ generate-check:
 	$(SQLC) diff
 
 test:
+	node --test scripts/*.test.mjs
 	$(GO) test -race ./...
 	$(PNPM) --dir web test
 
 lint:
+	bash -n scripts/package.sh scripts/container-smoke.sh
+	node --check scripts/release.mjs
 	$(GO) vet ./...
 	@test -z "$$(gofmt -l cmd internal web/*.go)" || (echo 'Run gofmt before checking.'; exit 1)
 	$(PNPM) --dir web typecheck
@@ -49,3 +52,14 @@ brand:
 	$(PNPM) --dir tools/brand install --frozen-lockfile
 	$(PNPM) --dir tools/brand build
 	$(PNPM) --dir tools/brand check
+
+# Frontend is built once; each archive includes its matching cross-compiled binary.
+release:
+	@node scripts/release.mjs metadata "v$(VERSION)" owner/repo >/dev/null
+	$(PNPM) --dir web build
+	@for arch in amd64 arm64; do \
+		mkdir -p "dist/release/linux-$$arch"; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch $(GO) build -tags production -trimpath -buildvcs=false -ldflags="-s -w -X main.version=$(VERSION)" -o "dist/release/linux-$$arch/sublane" ./cmd/sublane || exit 1; \
+		bash scripts/package.sh "$(VERSION)" "$$arch" "dist/release/linux-$$arch/sublane" dist/release || exit 1; \
+	done
+	@cd dist/release && shasum -a 256 sublane_$(VERSION)_linux_*.tar.gz > SHA256SUMS
