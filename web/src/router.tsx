@@ -17,6 +17,16 @@ const root = createRootRoute({
 const routes = root.addChildren([
   createRoute({
     getParentRoute: () => root,
+    path: '/usage',
+    component: lazyRouteComponent(() => import('@/pages/Usage'), 'Usage'),
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/admin/usage',
+    component: lazyRouteComponent(() => import('@/pages/Usage'), 'TeamUsage'),
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: '/setup',
     component: Setup,
   }),

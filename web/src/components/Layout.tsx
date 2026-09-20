@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import {
   FolderClosed,
+  ChartNoAxesCombined,
   ListChecks,
   KeyRound,
   LayoutDashboard,
@@ -42,6 +43,7 @@ const navigation = [
       { to: '/', label: 'overview', icon: LayoutDashboard },
       { to: '/keys', label: 'apiKeys', icon: KeyRound },
       { to: '/requests', label: 'requests', icon: ListChecks },
+      { to: '/usage', label: 'usageSummary', icon: ChartNoAxesCombined },
     ],
   },
   {
@@ -50,6 +52,7 @@ const navigation = [
       { to: '/accounts', label: 'accounts', icon: Workflow },
       { to: '/groups', label: 'accountGroups', icon: FolderClosed },
       { to: '/admin/requests', label: 'allRequests', icon: ListChecks },
+      { to: '/admin/usage', label: 'teamUsage', icon: ChartNoAxesCombined },
       { to: '/members', label: 'members', icon: Users },
     ],
   },

@@ -104,16 +104,17 @@ func (s *Service) requests(ctx context.Context, userID, cursor int64, accountID,
 }
 
 type observation struct {
-	service    *Service
-	ctx        context.Context
-	cancel     context.CancelFunc
-	stopParent func() bool
-	once       sync.Once
-	started    time.Time
-	record     db.RecordRequestParams
-	revision   int64
-	leased     bool
-	sequence   int64
+	service      *Service
+	ctx          context.Context
+	cancel       context.CancelFunc
+	stopParent   func() bool
+	once         sync.Once
+	started      time.Time
+	record       db.RecordRequestParams
+	revision     int64
+	leased       bool
+	memberLeased bool
+	sequence     int64
 }
 
 func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (*observation, error) {
@@ -150,6 +151,13 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 		defer cancel()
 		s := e.service
 		s.mu.Lock()
+		if e.memberLeased {
+			if s.memberActive[e.record.UserID] <= 1 {
+				delete(s.memberActive, e.record.UserID)
+			} else {
+				s.memberActive[e.record.UserID]--
+			}
+		}
 		if e.leased {
 			if state := s.health[e.record.AccountID]; state != nil {
 				changed := false
@@ -195,6 +203,15 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 			q := s.queries.WithTx(tx)
 			err = q.RecordRequest(ctx, e.record)
 			if err == nil {
+				err = recordStatistics(ctx, q, e.record)
+			}
+			if err == nil {
+				err = q.PruneStatistics(ctx, s.now().UTC().Truncate(24*time.Hour).Unix()-89*86400)
+			}
+			if err == nil {
+				err = q.PruneHourlyUsage(ctx, s.now().UTC().Truncate(24*time.Hour).Unix()-89*86400)
+			}
+			if err == nil {
 				err = q.PruneRequests(ctx, s.now().Add(-7*24*time.Hour).Unix())
 			}
 			if err == nil {
@@ -214,6 +231,10 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 		return "error", "timeout", "timeout"
 	}
 	switch {
+	case errors.Is(err, ErrMemberBusy):
+		return "rejected", "member_busy", ""
+	case errors.Is(err, ErrMemberRate):
+		return "rejected", "member_rate_limited", ""
 	case errors.Is(err, ErrAccountBusy):
 		return "rejected", "account_busy", ""
 	case errors.Is(err, ErrAccountCooling):

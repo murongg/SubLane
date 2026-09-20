@@ -1,0 +1,129 @@
+package gateway
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/groups"
+)
+
+func runtimeMember(t *testing.T, s *Service) int64 {
+	t.Helper()
+	a, err := auth.New(s.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := a.CreateMember(context.Background(), "limited-member", "synthetic-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m.ID
+}
+
+func TestMemberLimitsShareKeysGroupsAndSurviveRestart(t *testing.T) {
+	ctx := context.Background()
+	var calls atomic.Int64
+	s, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return syntheticStream(), nil }))
+	member := runtimeMember(t, s)
+	initial, err := s.MemberLimits(ctx, member)
+	if err != nil || initial.RequestsPerMinute != 0 || initial.MaxConcurrency != 0 {
+		t.Fatal("limits must default to unlimited", err)
+	}
+	if err := s.SetMemberLimits(ctx, member, 2, 1); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := groups.New(s.db).Save(ctx, 0, groups.Input{Name: "Second pool", Enabled: true, AccountIDs: []string{ids["codex"]}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := groups.New(s.db).SetMemberGroups(ctx, member, []int64{1, pool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Truncate(time.Minute).Add(10 * time.Second)
+	s.now = func() time.Time { return now }
+	raw := []byte(`{"model":"synthetic-model","input":"synthetic"}`)
+	first, err := s.Open(WithRequestIdentity(ctx, 11, "http"), member, 1, raw, nil, Responses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Open(WithRequestIdentity(ctx, 12, "websocket"), member, pool.ID, raw, nil, Responses); !errors.Is(err, ErrMemberBusy) {
+		t.Fatal("other key/group bypassed concurrency", err)
+	}
+	first.Body.Close()
+	first.Body.Close()
+	second, err := s.Open(WithRequestIdentity(ctx, 12, "websocket"), member, pool.ID, raw, nil, Responses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.Body.Close()
+	restarted := New(ctx, s.db, s.accounts, s.provider)
+	defer restarted.Close()
+	restarted.now = s.now
+	if _, err := restarted.Open(ctx, member, 1, raw, nil, Responses); !errors.Is(err, ErrMemberRate) {
+		t.Fatal("restart lost minute counter", err)
+	}
+	if calls.Load() != 2 {
+		t.Fatal("rejected requests reached upstream", calls.Load())
+	}
+	now = now.Add(time.Minute)
+	next, err := restarted.Open(ctx, member, 1, raw, nil, Responses)
+	if err != nil {
+		t.Fatal("next window remained blocked", err)
+	}
+	next.Body.Close()
+	if err := s.SetMemberLimits(ctx, 1, 1, 1); err == nil {
+		t.Fatal("member policy changed administrator")
+	}
+	for _, v := range [][2]int64{{-1, 1}, {6001, 1}, {1, -1}, {1, 9}} {
+		if err := s.SetMemberLimits(ctx, member, v[0], v[1]); err == nil {
+			t.Fatal("invalid limits accepted", v)
+		}
+	}
+}
+
+func TestMemberConcurrencyIsAtomicAndCancellationReleases(t *testing.T) {
+	ctx := context.Background()
+	s, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
+	member := runtimeMember(t, s)
+	if err := s.SetMemberLimits(ctx, member, 0, 1); err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte(`{"model":"synthetic-model","input":"synthetic"}`)
+	started := make(chan struct{})
+	results := make(chan *Exchange, 16)
+	var wg sync.WaitGroup
+	requestCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	for range 16 {
+		wg.Go(func() {
+			<-started
+			r, err := s.Open(requestCtx, member, 1, raw, nil, Responses)
+			if err != nil && !errors.Is(err, ErrMemberBusy) {
+				t.Error(err)
+			}
+			if r != nil {
+				results <- r
+			}
+		})
+	}
+	close(started)
+	wg.Wait()
+	close(results)
+	if len(results) != 1 {
+		t.Fatal("concurrent policy was exceeded", len(results))
+	}
+	cancel()
+	for r := range results {
+		r.Body.Close()
+	}
+	policy, err := s.MemberLimits(ctx, member)
+	if err != nil || policy.InFlight != 0 {
+		t.Fatal("member lease leaked", policy, err)
+	}
+}

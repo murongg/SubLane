@@ -16,6 +16,73 @@ const syntheticMember = {
 const response = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status })
 
+it('updates shared member limits and resets a member password', async () => {
+  const policy = {
+    user_id: 2,
+    requests_per_minute: 0,
+    max_concurrency: 0,
+    in_flight: 0,
+    requests_this_minute: 0,
+    reset_at: 1900000000,
+  }
+  const fetch = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url.endsWith('/limits')) return Promise.resolve(response(policy))
+      if (url.endsWith('/password') && init?.method === 'POST')
+        return Promise.resolve(new Response(null, { status: 204 }))
+      return Promise.resolve(
+        response({ members: [syntheticMember], next_cursor: 0 }),
+      )
+    })
+  vi.stubGlobal('fetch', fetch)
+  const user = userEvent.setup()
+  open()
+  await user.click(
+    await screen.findByRole('button', { name: 'More actions for member-test' }),
+  )
+  await user.click(screen.getByRole('menuitem', { name: 'Request limits' }))
+  const limits = await screen.findByRole('dialog', {
+    name: 'Request limits for member-test',
+  })
+  const rate = await within(limits).findByLabelText('Requests per minute')
+  await user.clear(rate)
+  await user.type(rate, '60')
+  const concurrency = within(limits).getByLabelText('Concurrent requests')
+  await user.clear(concurrency)
+  await user.type(concurrency, '2')
+  await user.click(within(limits).getByRole('button', { name: 'Save changes' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  const call = fetch.mock.calls.find(
+    ([url, init]) => url.endsWith('/limits') && init?.method === 'PATCH',
+  )
+  expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+    requests_per_minute: 60,
+    max_concurrency: 2,
+  })
+  await user.click(
+    screen.getByRole('button', { name: 'More actions for member-test' }),
+  )
+  await user.click(screen.getByRole('menuitem', { name: 'Reset password' }))
+  const reset = await screen.findByRole('dialog', {
+    name: 'Reset password for member-test',
+  })
+  expect(within(reset).queryByLabelText('Current password')).toBeNull()
+  await user.type(
+    within(reset).getByLabelText('New password'),
+    'synthetic-reset',
+  )
+  await user.type(
+    within(reset).getByLabelText('Confirm password'),
+    'synthetic-reset',
+  )
+  await user.click(within(reset).getByRole('button', { name: 'Save password' }))
+  await screen.findByText('Password reset for member-test.')
+  expect(screen.queryByDisplayValue('synthetic-reset')).toBeNull()
+})
+
 function open() {
   render(
     <App

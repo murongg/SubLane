@@ -123,7 +123,7 @@ func (s *Service) Setup(ctx context.Context, username, password string) (Session
 	if err := s.queries.WithTx(tx).AddDefaultGroupMember(ctx, 1); err != nil {
 		return Session{}, err
 	}
-	session, err := s.createSession(ctx, tx, User{ID: 1})
+	session, err := s.createSession(ctx, tx, User{ID: 1}, hash)
 	if err != nil {
 		return Session{}, err
 	}
@@ -162,7 +162,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (Session
 		return Session{}, err
 	}
 	defer tx.Rollback()
-	session, err := s.createSession(ctx, tx, User{ID: user.ID})
+	session, err := s.createSession(ctx, tx, User{ID: user.ID}, hash)
 	if err != nil {
 		return Session{}, err
 	}
@@ -172,7 +172,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (Session
 	return session, nil
 }
 
-func (s *Service) createSession(ctx context.Context, tx *sql.Tx, user User) (Session, error) {
+func (s *Service) createSession(ctx context.Context, tx *sql.Tx, user User, verifiedHash string) (Session, error) {
 	queries := s.queries.WithTx(tx)
 	// Recheck inside the transaction: a member may be disabled while password hashing is in progress.
 	stored, err := queries.GetEnabledUser(ctx, user.ID)
@@ -181,6 +181,10 @@ func (s *Service) createSession(ctx context.Context, tx *sql.Tx, user User) (Ses
 	}
 	if err != nil {
 		return Session{}, err
+	}
+	// A reset may commit after KDF verification but before this transaction acquires the database.
+	if stored.PasswordHash != verifiedHash {
+		return Session{}, ErrCredentials
 	}
 	user = User{ID: stored.ID, Username: stored.Username, Role: Role(stored.Role)}
 	now := s.now()
@@ -217,8 +221,12 @@ func (s *Service) acquire(ctx context.Context) error {
 }
 
 func validCredentials(username, password string, maxLength int) bool {
+	return usernamePattern.MatchString(username) && validPassword(password, maxLength)
+}
+
+func validPassword(password string, maxLength int) bool {
 	n := utf8.RuneCountInString(password)
-	return usernamePattern.MatchString(username) && utf8.ValidString(password) && n >= 8 && n <= maxLength
+	return utf8.ValidString(password) && n >= 8 && n <= maxLength
 }
 
 func newToken() string {

@@ -234,6 +234,10 @@ func gatewayFailure(err error) (int, string) {
 		return 503, "no_accounts_available"
 	case errors.Is(err, gateway.ErrAccountCooling):
 		return 429, "account_cooling"
+	case errors.Is(err, gateway.ErrMemberBusy):
+		return 429, "member_busy"
+	case errors.Is(err, gateway.ErrMemberRate):
+		return 429, "member_rate_limited"
 	case errors.Is(err, gateway.ErrAccountBusy):
 		return 429, "account_busy"
 	case errors.Is(err, gateway.ErrBusy), errors.Is(err, gateway.ErrAffinityLimit):
@@ -278,6 +282,10 @@ func gatewayError(w http.ResponseWriter, err error) {
 		var cooling *gateway.CoolingError
 		if errors.As(err, &cooling) {
 			value = strconv.FormatInt(cooling.RetryAfter, 10)
+		}
+		var memberRate *gateway.MemberRateError
+		if errors.As(err, &memberRate) {
+			value = strconv.FormatInt(memberRate.RetryAfter, 10)
 		}
 		retryAfter(w, value)
 	}

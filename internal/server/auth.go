@@ -231,6 +231,10 @@ func authError(w http.ResponseWriter, err error) {
 		status, code = 409, "already_initialized"
 	case errors.Is(err, auth.ErrCredentials):
 		status, code = 401, "invalid_credentials"
+	case errors.Is(err, auth.ErrCurrentPassword):
+		status, code = 400, "current_password_invalid"
+	case errors.Is(err, auth.ErrPasswordChanged):
+		status, code = 409, "password_changed"
 	case errors.Is(err, auth.ErrInput):
 		status, code = 400, "invalid_input"
 	case errors.Is(err, auth.ErrBusy):

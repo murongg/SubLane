@@ -71,7 +71,13 @@ it('groups common and administrator navigation separately for administrators', a
   ).toBeTruthy()
 })
 
-it.each(['/accounts', '/members', '/groups', '/admin/requests'])(
+it.each([
+  '/accounts',
+  '/members',
+  '/groups',
+  '/admin/requests',
+  '/admin/usage',
+])(
   'denies member direct access to %s before loading management data',
   async (path) => {
     const fetchMock = memberSession()

@@ -46,6 +46,8 @@ export function resumeAccount(id: string) {
   })
 }
 export const reasonKeys: Record<string, keyof typeof en> = {
+  member_busy: 'reasonMemberBusy',
+  member_rate_limited: 'reasonMemberRate',
   context_limit: 'reasonContextLimit',
   rate_limited: 'reasonRateLimited',
   timeout: 'reasonTimeout',

@@ -18,3 +18,18 @@ export const memberAuthenticated = {
 }
 
 export const anonymous = { initialized: true, user: null }
+
+export const hourlyActivity = {
+  tracking_since: 1900000000,
+  observed_until: 1900003600,
+  cells: Array.from({ length: 168 }, (_, index) => ({
+    weekday: Math.floor(index / 24),
+    hour: index % 24,
+    samples: index === 0 ? 1 : 0,
+    requests: index === 0 ? 2 : 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    input_reported: 0,
+    output_reported: 0,
+  })),
+}
