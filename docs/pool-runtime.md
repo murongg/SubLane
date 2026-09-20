@@ -34,6 +34,8 @@ Stored metadata is limited to user/key/group/account IDs, provider, a bounded mo
 
 Personal records are filtered by the authenticated session user in SQL before pagination; a client-supplied user ID or scope cannot expand access. Subscription account IDs and names are cleared in the personal API response. Users can filter their own history by outcome, including calls through keys that were subsequently revoked. Administrators can separately inspect all records and filter by account and outcome. Both views are paginated in batches of 50. At most 5,000 records are retained in a seven-day window. Cleanup runs atomically when recording, and on reading the history; idle data is reclaimed on the next such operation. Monotonic record IDs are not reused after retention cleanup. Deleted account names render as deleted, without deleting historical metadata.
 
+Personal and administrator request tables show an input-token cache hit rate beside the cached-token count: cached input tokens divided by total input tokens, formatted as a percentage with at most one decimal place. This measures the share of input tokens served from the upstream cache, not the share of requests that hit a cache. A reported zero cache count with positive input shows 0%; missing counts, zero input or a cache count exceeding total input show an em dash. The rate is derived from existing request metadata and adds no stored column or upstream request.
+
 ## API and storage
 
 - `GET /api/accounts/runtime`: current scheduling state and model-request counts.

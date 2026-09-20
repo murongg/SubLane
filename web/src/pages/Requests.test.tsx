@@ -113,6 +113,7 @@ it.each([memberAuthenticated, authenticated])(
     )
     await screen.findByRole('heading', { name: 'Your requests' })
     await screen.findByText('My synthetic client')
+    expect(screen.getByText('Hit rate: —')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Account filter' })).toBeNull()
     expect(screen.getByRole('columnheader', { name: 'API key' })).toBeTruthy()
     expect(screen.getByRole('columnheader', { name: 'Group' })).toBeTruthy()
@@ -134,5 +135,65 @@ it.each([memberAuthenticated, authenticated])(
           url === '/api/auth/state' || url.startsWith('/api/me/requests?'),
       ),
     ).toBe(true)
+  },
+)
+
+it.each([
+  ['/requests', memberAuthenticated, '/api/me/requests?'],
+  ['/admin/requests', authenticated, '/api/requests?'],
+] as const)(
+  'shows input-token cache hit rates in %s',
+  async (path, session, endpoint) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url === '/api/auth/state')
+          return Promise.resolve(new Response(JSON.stringify(session)))
+        if (url.startsWith(endpoint))
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                requests: [
+                  {
+                    id: 1,
+                    user_id: session.user.id,
+                    key_id: 1,
+                    group_id: 1,
+                    account_id: '',
+                    account_name: '',
+                    provider: 'codex',
+                    model: 'synthetic-model',
+                    transport: 'http',
+                    operation: 'responses',
+                    started_at: 1900000000,
+                    duration_ms: 125,
+                    outcome: 'success',
+                    error_code: '',
+                    upstream_status: 200,
+                    input_tokens: 1250,
+                    output_tokens: 50,
+                    cached_tokens: 1070,
+                    username: session.user.username,
+                    key_name: 'Synthetic cache client',
+                    group_name: 'Default',
+                  },
+                ],
+                next_cursor: 0,
+              }),
+            ),
+          )
+        return Promise.resolve(new Response(JSON.stringify({ accounts: [] })))
+      }),
+    )
+    render(
+      <App
+        router={createAppRouter(
+          createMemoryHistory({ initialEntries: [path] }),
+        )}
+      />,
+    )
+    expect(await screen.findByText('Cached: 1,070')).toBeTruthy()
+    expect(await screen.findByText('Hit rate: 85.6%')).toBeTruthy()
+    expect(screen.getByText('1,250 / 50')).toBeTruthy()
   },
 )

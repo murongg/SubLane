@@ -686,6 +686,9 @@ export const en = {
   requestDuration: 'Duration',
   requestTokens: 'Tokens (in / out)',
   requestCachedTokens: 'Cached: {{count}}',
+  requestCacheHitRate: 'Hit rate: {{rate}}',
+  requestCacheHitRateHint:
+    'Cached input tokens divided by total input tokens. — means usage is missing, inconsistent, or the input count is zero.',
   requestDeletedAccount: 'Deleted account',
   requestSuccess: 'Completed',
   requestIncomplete: 'Incomplete',

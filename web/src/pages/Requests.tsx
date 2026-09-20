@@ -3,7 +3,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { accountOptions, providerLabels } from '@/lib/accounts'
-import { requestOptions, outcomeKeys, outcomes } from '@/lib/requests'
+import {
+  requestOptions,
+  outcomeKeys,
+  outcomes,
+  cacheHitRate,
+} from '@/lib/requests'
 import { reasonKeys } from '@/lib/runtime'
 import { authKey, authOptions, type AuthState } from '@/lib/auth'
 import { Button } from '@/components/ui/Button'
@@ -71,6 +76,14 @@ function RequestTable({
   const numbers = new Intl.NumberFormat(i18n.resolvedLanguage ?? 'en')
   const count = (value: number | null) =>
     value === null ? '—' : numbers.format(value)
+  const percentages = new Intl.NumberFormat(i18n.resolvedLanguage ?? 'en', {
+    style: 'percent',
+    maximumFractionDigits: 1,
+  })
+  const hitRate = (input: number | null, cached: number | null) => {
+    const rate = cacheHitRate(input, cached)
+    return rate === null ? '—' : percentages.format(rate)
+  }
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -285,13 +298,23 @@ function RequestTable({
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 text-xs tabular-nums">
                     {count(item.input_tokens)} / {count(item.output_tokens)}
-                    {item.cached_tokens !== null && (
-                      <p className="mt-1 text-muted-foreground">
-                        {t('requestCachedTokens', {
-                          count: numbers.format(item.cached_tokens),
+                    <p className="mt-1 text-muted-foreground">
+                      {item.cached_tokens !== null && (
+                        <>
+                          <span>
+                            {t('requestCachedTokens', {
+                              count: numbers.format(item.cached_tokens),
+                            })}
+                          </span>
+                          {' · '}
+                        </>
+                      )}
+                      <span title={t('requestCacheHitRateHint')}>
+                        {t('requestCacheHitRate', {
+                          rate: hitRate(item.input_tokens, item.cached_tokens),
                         })}
-                      </p>
-                    )}
+                      </span>
+                    </p>
                   </td>
                 </tr>
               ))}

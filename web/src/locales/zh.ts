@@ -611,6 +611,9 @@ export const zh: Record<keyof typeof en, string> = {
   requestDuration: '耗时',
   requestTokens: 'Token（输入 / 输出）',
   requestCachedTokens: '缓存：{{count}}',
+  requestCacheHitRate: '命中率：{{rate}}',
+  requestCacheHitRateHint:
+    '缓存输入 Token ÷ 总输入 Token。数据未上报、数值异常或输入为零时显示 —。',
   requestDeletedAccount: '已删除账号',
   requestSuccess: '成功',
   requestIncomplete: '未完整结束',

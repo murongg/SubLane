@@ -4,6 +4,19 @@ import { authKey, type AuthState } from './auth'
 import { request } from './request'
 import { providers } from './accounts'
 
+export function cacheHitRate(input: number | null, cached: number | null) {
+  // Missing or inconsistent usage must not look like a cache miss or a 100% hit.
+  if (
+    input === null ||
+    cached === null ||
+    input <= 0 ||
+    cached < 0 ||
+    cached > input
+  )
+    return null
+  return cached / input
+}
+
 export const outcomes = [
   'success',
   'incomplete',
