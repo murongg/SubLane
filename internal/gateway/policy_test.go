@@ -13,7 +13,7 @@ import (
 
 func TestGroupModelPolicyEnforcesEveryOperationBeforeAdmission(t *testing.T) {
 	calls := 0
-	service, ids := providerGateway(t, transportFunc(func(r *http.Request) (*http.Response, error) {
+	service, ids := discoveryGateway(t, transportFunc(func(r *http.Request) (*http.Response, error) {
 		calls++
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"models":[{"slug":"synthetic-allowed"},{"slug":"synthetic-denied"}]}`))}, nil
 	}))

@@ -57,7 +57,8 @@ func New(connection *sql.DB) *Service {
 }
 
 var actions = map[string]string{
-	"key.reveal": "key", "key.create": "key", "key.update": "key", "key.revoke": "key",
+	"settings.update": "settings",
+	"key.reveal":      "key", "key.create": "key", "key.update": "key", "key.revoke": "key",
 	"group.create": "group", "group.update": "group",
 	"member.create": "member", "member.update": "member", "member.groups": "member", "member.limits": "member", "member.password": "member",
 	"user.password": "user", "user.recover": "user",
@@ -76,6 +77,9 @@ func ValidTarget(action, resource, id string) bool {
 	}
 	if resource == "account" {
 		return accountID.MatchString(id)
+	}
+	if resource == "settings" {
+		return id == "codex"
 	}
 	return numericID.MatchString(id)
 }
@@ -127,7 +131,7 @@ func (s *Service) List(ctx context.Context, f Filter) (Page, error) {
 		return page, ErrInput
 	}
 	switch f.Resource {
-	case "", "key", "group", "member", "user", "account":
+	case "", "key", "group", "member", "user", "account", "settings":
 	default:
 		return page, ErrInput
 	}

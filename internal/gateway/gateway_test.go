@@ -50,6 +50,9 @@ func TestGatewayKeepsAccountAffinityAndBoundsActiveRequests(t *testing.T) {
 			t.Fatal(err)
 		}
 		mapping[id] = row.ID
+		if err := service.SaveCatalog(ctx, row.ID, 0, []string{"synthetic-model"}, time.Now().Unix(), upstream.CatalogSource("codex")); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var mu sync.Mutex
 	var used []string

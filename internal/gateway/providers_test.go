@@ -19,6 +19,12 @@ import (
 )
 
 func providerGateway(t *testing.T, transport http.RoundTripper) (*Service, map[string]string) {
+	return providerFixture(t, transport, true)
+}
+func discoveryGateway(t *testing.T, transport http.RoundTripper) (*Service, map[string]string) {
+	return providerFixture(t, transport, false)
+}
+func providerFixture(t *testing.T, transport http.RoundTripper, known bool, version ...func() string) (*Service, map[string]string) {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -46,8 +52,13 @@ func providerGateway(t *testing.T, transport http.RoundTripper) (*Service, map[s
 			t.Fatal(err)
 		}
 		ids[provider] = row.ID
+		if known {
+			if err := service.SaveCatalog(ctx, row.ID, 0, []string{"synthetic-model"}, time.Now().Unix(), upstream.CatalogSource(provider)); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
-	client := upstream.NewWithTransport(transport)
+	client := upstream.NewWithTransport(transport, version...)
 	t.Cleanup(client.Close)
 	gateway := New(ctx, connection, service, client)
 	t.Cleanup(gateway.Close)
@@ -62,7 +73,7 @@ func TestAffinityIsPartitionedByProviderAndPersists(t *testing.T) {
 	ctx := context.Background()
 	for range 2 {
 		for provider, id := range ids {
-			actual, _, err := gateway.selectAccount(ctx, 1, 1, "same-session", provider)
+			actual, _, err := gateway.selectAccount(ctx, 1, 1, "same-session", provider, "")
 			if err != nil || actual != id {
 				t.Fatal("provider binding crossed", provider, actual, err)
 			}
@@ -77,14 +88,14 @@ func TestAffinityIsPartitionedByProviderAndPersists(t *testing.T) {
 	if !errors.Is(err, accounts.ErrDisabled) {
 		t.Fatal("disabled provider binding moved", err)
 	}
-	id, _, err := reopened.selectAccount(ctx, 1, 1, "same-session", "codex")
+	id, _, err := reopened.selectAccount(ctx, 1, 1, "same-session", "codex", "")
 	if err != nil || id != ids["codex"] {
 		t.Fatal("another provider affected", err)
 	}
 }
 
 func TestModelCatalogKeepsHealthyProvidersAndCodexAliases(t *testing.T) {
-	gateway, _ := providerGateway(t, transportFunc(func(r *http.Request) (*http.Response, error) {
+	gateway, _ := discoveryGateway(t, transportFunc(func(r *http.Request) (*http.Response, error) {
 		body := `{"models":[{"slug":"synthetic-codex"}]}`
 		status := 200
 		switch r.URL.Host {

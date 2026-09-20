@@ -33,6 +33,8 @@ func (h *accountHTTP) register(router chi.Router) {
 		accounts.Patch("/{id}", h.setEnabled)
 		accounts.Delete("/{id}", h.remove)
 		accounts.Post("/{id}/check", h.check)
+		accounts.Get("/{id}/models", h.catalog)
+		accounts.Post("/{id}/models/refresh", h.refreshCatalog)
 		accounts.Get("/{id}/usage", h.usage)
 		accounts.Post("/{id}/usage/refresh", h.refreshUsage)
 	})
@@ -73,6 +75,9 @@ func (h *accountHTTP) importCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 201, account)
+	if h.gateway != nil {
+		_, _ = h.gateway.AccountCatalog(r.Context(), account.ID, false)
+	}
 }
 
 func (h *accountHTTP) beginOAuth(w http.ResponseWriter, r *http.Request) {
@@ -114,6 +119,9 @@ func (h *accountHTTP) finishOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 201, account)
+	if h.gateway != nil {
+		_, _ = h.gateway.AccountCatalog(r.Context(), account.ID, false)
+	}
 }
 
 func (h *accountHTTP) cancelOAuth(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +157,9 @@ func (h *accountHTTP) setEnabled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, row)
+	if h.gateway != nil && row.Enabled {
+		_, _ = h.gateway.AccountCatalog(r.Context(), row.ID, false)
+	}
 }
 
 func (h *accountHTTP) remove(w http.ResponseWriter, r *http.Request) {
@@ -172,12 +183,6 @@ func (h *accountHTTP) check(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 503, map[string]string{"error": "unavailable"})
 		return
 	}
-	release, err := h.gateway.Acquire()
-	if err != nil {
-		accountError(w, err)
-		return
-	}
-	defer release()
 	id := chi.URLParam(r, "id")
 	models, err := h.gateway.Check(r.Context(), id)
 	if err != nil {

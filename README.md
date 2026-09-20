@@ -144,6 +144,8 @@ The repository keeps a small set of maintained brand assets. Run `make brand` to
 - [Member accounts and permissions](docs/members.md)
 - [Personal API keys](docs/api-keys.md)
 - [Management audit](docs/audit.md)
+- [System settings and Codex version synchronization](docs/settings.md)
+- [Account and group model catalogs](docs/models.md)
 - [Development guide](docs/development.md)
 - [Roadmap](docs/roadmap.md)
 - [Contributing](CONTRIBUTING.md)

@@ -1,4 +1,76 @@
 export const en = {
+  auditSettingsUpdate: 'Updated instance settings',
+  auditSettings: 'Instance settings',
+  systemSettings: 'System settings',
+  systemSettingsDescription: 'Manage instance-wide settings for your team.',
+  codexVersionTitle: 'Codex client version',
+  codexVersionDescription:
+    'Instance-wide settings for Codex model discovery and requests. Version checks read official release metadata; they do not install software.',
+  codexVersionManual: 'Manual version',
+  codexVersionManualHint:
+    'Leave blank to use the last synchronized stable version or the built-in default. A manual version always takes priority.',
+  codexVersionAuto: 'Automatically follow stable releases',
+  codexVersionAutoHint:
+    'Check official Codex releases on GitHub every 6 hours. Failed checks keep the last known version.',
+  codexVersionAutoOff:
+    'Automatic checks are off. The last synchronized version is kept.',
+  codexVersionEffective: 'Effective version',
+  codexVersionLatest: 'Last synchronized stable version',
+  codexVersionAutomatic: 'Automatic · built-in {{version}}',
+  codexVersionManualSource: 'Manual',
+  codexVersionSyncedSource: 'Synchronized',
+  codexVersionBuiltinSource: 'Built-in',
+  codexVersionSave: 'Save settings',
+  codexVersionCheck: 'Check now',
+  codexVersionChecking: 'Checking official releases…',
+  codexVersionChecked: 'Last check: {{time}}',
+  codexVersionNextCheck: 'Next automatic check: {{time}}',
+  codexVersionNeverChecked: 'No version check has completed yet.',
+  codexVersionInvalid: 'Enter a stable version in major.minor.patch format.',
+  codexVersionLoadFailed: 'Could not load Codex version settings.',
+  codexVersionSaveFailed:
+    'Could not save version settings. The current configuration is unchanged.',
+  codexVersionSyncFailed:
+    'The version check failed. The last known version is still active.',
+  codexVersionCooldown: 'Please wait before checking for another release.',
+  codexVersionSaved: 'Settings saved.',
+
+  reasonModelUnavailable: 'No account supports this model',
+  reasonCatalogUnavailable: 'Model catalog unavailable',
+
+  catalogModels: 'Models',
+  catalogFor: 'Models for {{name}}',
+  catalogAvailableModels: 'Available models',
+  catalogAccountDescription:
+    'Models discovered from this account. This catalog describes reported support, not remaining quota or a successful generation test.',
+  catalogGroupDescription:
+    'Automatically combined from enabled accounts and filtered by the group’s model policy.',
+  catalogCount_one: '{{count}} model',
+  catalogCount_other: '{{count}} models',
+  catalogUnknown: 'Unknown',
+  catalogUnknownHint:
+    'Model support is unknown. Refresh to retrieve the account catalog.',
+  catalogRefresh: 'Refresh models',
+  catalogReload: 'Refresh list',
+  catalogLoading: 'Loading models…',
+  catalogRefreshing: 'Synchronizing account catalogs…',
+  catalogRefreshFailed: 'Refresh failed. Showing the last saved catalog.',
+  catalogLoadFailed: 'Could not retrieve the model catalog. Try again later.',
+  catalogPartial:
+    'Some account catalogs are unavailable. This list may be incomplete.',
+  catalogStale: 'Showing a saved catalog while checking for updates.',
+  catalogExpired:
+    'This saved catalog is too old to use for routing. Refresh to restore model availability.',
+  catalogEmptyAccount: 'This account reported no visible models.',
+  catalogEmptyGroup: 'No models are currently available to this group.',
+  catalogSearch: 'Search models',
+  catalogNoMatch: 'No matching models.',
+  catalogNarrowSearch:
+    'Showing the first 200 matches. Refine your search to find a model.',
+  catalogUpdated: 'Updated {{time}}',
+  catalogPickerHint: 'Search and select a model available to this key’s group.',
+  catalogSelectionRequired: 'Choose a model from the available catalog.',
+
   ccSwitchImport: 'Import into CC Switch',
   ccSwitchImportNamed: 'Import {{name}} into CC Switch',
   ccSwitchDescription:

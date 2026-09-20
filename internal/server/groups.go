@@ -5,10 +5,14 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 )
 
-type groupHTTP struct{ service *groups.Service }
+type groupHTTP struct {
+	service *groups.Service
+	gateway *gateway.Service
+}
 
 func (h *groupHTTP) register(router chi.Router) {
 	router.Use(func(next http.Handler) http.Handler {
@@ -23,6 +27,7 @@ func (h *groupHTTP) register(router chi.Router) {
 	router.Get("/", h.list)
 	router.Post("/", h.create)
 	router.Get("/{id}", h.get)
+	router.Get("/{id}/models", h.catalog)
 	router.Patch("/{id}", h.update)
 	router.Get("/members/{id}", h.memberGroups)
 	router.Put("/members/{id}", h.setMemberGroups)

@@ -65,6 +65,8 @@ func auditTarget(r *http.Request) (string, string, string) {
 	path := strings.TrimSuffix(r.URL.Path, "/")
 	action, resource, id := "", "", ""
 	switch {
+	case path == "/api/settings/codex" && r.Method == "PATCH":
+		action, resource, id = "settings.update", "settings", "codex"
 	case path == "/api/keys" && r.Method == "POST":
 		action, resource = "key.create", "key"
 	case path == "/api/members" && r.Method == "POST":

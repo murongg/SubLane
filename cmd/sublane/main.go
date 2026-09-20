@@ -24,6 +24,7 @@ import (
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/upstream"
+	"github.com/murongg/SubLane/internal/versions"
 	"github.com/murongg/SubLane/web"
 )
 
@@ -84,7 +85,15 @@ func run() error {
 	if err := subscriptions.Verify(ctx); err != nil {
 		return fmt.Errorf("verify upstream credentials: %w", err)
 	}
-	provider := upstream.New()
+	releases := versions.NewReleases(nil)
+	defer releases.Close()
+	codexVersions, err := versions.New(ctx, db, upstream.DefaultCodexVersion, releases.Latest)
+	if err != nil {
+		return err
+	}
+	codexVersions.Start()
+	defer codexVersions.Close()
+	provider := upstream.NewWithVersion(codexVersions.Current)
 	defer provider.Close()
 	if err := provider.Start(ctx); err != nil {
 		return err
@@ -94,7 +103,7 @@ func run() error {
 	authorization := oauth.New(subscriptions, provider)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(server.Options{Audit: audit.New(db), Groups: groups.New(db), Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: keys, PublicURL: cfg.PublicURL, Accounts: subscriptions, OAuth: authorization, Gateway: forwarding}),
+		Handler:           server.New(server.Options{CodexVersions: codexVersions, Audit: audit.New(db), Groups: groups.New(db), Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: keys, PublicURL: cfg.PublicURL, Accounts: subscriptions, OAuth: authorization, Gateway: forwarding}),
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,

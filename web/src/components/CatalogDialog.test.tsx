@@ -1,0 +1,124 @@
+import { QueryClientProvider } from '@tanstack/react-query'
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { expect, it, vi } from 'vitest'
+import { createQueryClient } from '@/lib/query'
+import { authKey } from '@/lib/auth'
+import { authenticated } from '@/test/fixtures'
+import { CatalogDialog } from './CatalogDialog'
+
+const snapshot = {
+  models: ['synthetic-basic'],
+  updated_at: 1900000000,
+  server_time: 1900000010,
+  known: true,
+  usable: true,
+  stale: false,
+  refreshing: false,
+  refresh_failed: false,
+  retry_after_seconds: 0,
+}
+function mount() {
+  const client = createQueryClient()
+  client.setQueryData(authKey, authenticated)
+  render(
+    <QueryClientProvider client={client}>
+      <CatalogDialog
+        target={{ kind: 'account', id: 'synthetic-account' }}
+        name="Synthetic subscription"
+      />
+    </QueryClientProvider>,
+  )
+  return client
+}
+it('loads on demand and keeps the last successful catalog after a refresh failure', async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify(snapshot)))
+  vi.stubGlobal('fetch', fetch)
+  const user = userEvent.setup()
+  mount()
+  expect(fetch).not.toHaveBeenCalled()
+  await user.click(
+    screen.getByRole('button', { name: 'Models for Synthetic subscription' }),
+  )
+  expect(await screen.findByText('synthetic-basic')).toBeTruthy()
+  fetch.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({
+        ...snapshot,
+        stale: true,
+        refresh_failed: true,
+        retry_after_seconds: 30,
+      }),
+    ),
+  )
+  await user.click(screen.getByRole('button', { name: 'Refresh models' }))
+  expect(
+    await screen.findByText('Refresh failed. Showing the last saved catalog.'),
+  ).toBeTruthy()
+  expect(screen.getByText('synthetic-basic')).toBeTruthy()
+})
+it('shows unknown capability without claiming the account supports no models', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...snapshot,
+          models: [],
+          updated_at: 0,
+          known: false,
+          usable: false,
+          stale: true,
+          refresh_failed: true,
+        }),
+      ),
+    ),
+  )
+  const user = userEvent.setup()
+  mount()
+  await user.click(
+    screen.getByRole('button', { name: 'Models for Synthetic subscription' }),
+  )
+  expect(
+    await screen.findByText(
+      'Model support is unknown. Refresh to retrieve the account catalog.',
+    ),
+  ).toBeTruthy()
+  expect(
+    screen.queryByText('This account reported no visible models.'),
+  ).toBeNull()
+})
+
+it('ignores a late refresh failure after the active identity changes', async () => {
+  let resolve!: (value: Response) => void
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(snapshot)))
+    .mockImplementation(
+      () =>
+        new Promise<Response>((done) => {
+          resolve = done
+        }),
+    )
+  vi.stubGlobal('fetch', fetch)
+  const user = userEvent.setup()
+  const client = mount()
+  await user.click(
+    screen.getByRole('button', { name: 'Models for Synthetic subscription' }),
+  )
+  await screen.findByText('synthetic-basic')
+  await user.click(screen.getByRole('button', { name: 'Refresh models' }))
+  await act(async () => {
+    client.setQueryData(authKey, {
+      ...authenticated,
+      user: { ...authenticated.user, id: 42, role: 'member' },
+    })
+    resolve(
+      new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 }),
+    )
+  })
+  await waitFor(() => expect(client.isMutating()).toBe(0))
+  expect(client.getQueryData<typeof authenticated>(authKey)?.user?.id).toBe(42)
+})

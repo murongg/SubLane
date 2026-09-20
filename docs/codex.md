@@ -9,9 +9,11 @@ Sign in as the administrator, open **Accounts**, and choose **Add account**. Mem
 - **Browser authorization:** name the account, start authorization, and open the OpenAI link. After signing in, copy the complete `http://localhost:1455/auth/callback?...` address from the browser address bar and paste it into SubLane. A localhost connection error at this point is expected: SubLane intentionally does not open another callback listener. This manual-return flow works for local and remote deployments.
 - **Import auth.json:** choose a Codex subscription credential file or paste its JSON. Both the CLI's nested `tokens` structure and the flat Codex token format are accepted. Official API keys are rejected. SubLane never scans local client directories; it reads only the content explicitly submitted by the administrator. Imported endpoint/proxy settings are discarded.
 
-Use **Verify connection** to fetch the account's model catalog. Imported credentials show **Not verified** until successful use. The account menu provides enable/disable, reauthorization, and removal. Reauthorization must retain the same upstream account identity. Removing an account deletes its stored credentials from SubLane; it does not revoke the ChatGPT login itself.
+Account authorization/import starts model discovery automatically. Use **Verify connection** to refresh and persist the account's model catalog, or open **Models** to inspect it. Imported credentials show **Not verified** until successful use. The account menu provides enable/disable, reauthorization, and removal. Reauthorization must retain the same upstream account identity. Removing an account deletes its stored credentials from SubLane; it does not revoke the ChatGPT login itself.
 
-Codex model discovery sends the pinned client version `0.152.1` in the catalog query and User-Agent. The upstream catalog depends on that version: an obsolete version can return HTTP 200 with only hidden models, producing an empty `/v1/models` list after visibility filtering. Keep the pin aligned with a verified client release; changing group permissions does not resolve this compatibility issue.
+Codex model discovery sends the instance's effective client version in the catalog query and request headers. Administrators can configure it in **Administration → System settings**: an explicit version takes priority over the last synchronized official stable release, with `0.155.1` as the built-in fallback. Automatic release checks default to every six hours. This changes protocol metadata without installing Codex or updating the embedded SDK; see [system settings](settings.md).
+
+The upstream catalog depends on that version: an obsolete version can return HTTP 200 with only hidden models or a partial visible catalog, producing an empty or incomplete `/v1/models` list after visibility filtering. Persisted catalogs include the actual discovery version, so changing the effective version triggers refresh on the next catalog read or model request even when their timestamps remain fresh. Changing group permissions does not resolve this compatibility issue.
 
 OAuth attempts use PKCE, 256-bit random state, a ten-minute expiry, one active attempt per administrator browser session, and a maximum of eight pending attempts. The callback is bound to the session that started it and consumed before exchanging its code. Closing the form requests cancellation; expiry is the fallback after a lost connection. Pending OAuth state is held only in memory.
 
@@ -60,13 +62,15 @@ Use your instance's actual URL, with HTTPS for network deployments. For HTTP/SSE
 
 The API keys page provides a configuration snippet without embedding or retaining the secret. It also offers an optional [CC Switch import](api-keys.md#import-into-cc-switch) that passes the chosen key to the locally installed application after explicit preparation. CC Switch generates its own Codex authentication-file configuration; it does not preserve the environment-variable or WebSocket settings in the manual snippet above. See the official [advanced configuration](https://learn.chatgpt.com/docs/config-file/config-advanced) and [authentication](https://learn.chatgpt.com/docs/auth) guidance for client configuration and credential storage.
 
+Account catalogs are cached and survive restarts. Discovery, group aggregation and model-aware account selection are described in [model catalogs](models.md).
+
 ## Gateway contract
 
 All gateway routes require a SubLane bearer key, independently of browser cookies:
 
 | Route | Behavior |
 | --- | --- |
-| `GET /v1/models` | Aggregate configured providers with qualified IDs; retain unqualified Codex aliases |
+| `GET /v1/models` | Aggregate persisted per-account catalogs within the group and its policy; retain unqualified Codex aliases |
 | `POST /v1/responses` | Responses JSON or SSE using the requested `stream` setting |
 | `POST /v1/responses/compact` | Non-streaming Codex compaction |
 | `GET /v1/responses` with WebSocket upgrade | Responses turns, local prewarm, incremental input reconstruction, and compact transcript replacement |

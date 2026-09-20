@@ -1,4 +1,7 @@
 import { useState, type FormEvent } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { catalogOptions, catalogModelIDs } from '@/lib/catalog'
+import { ModelPicker } from './ModelPicker'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -100,6 +103,11 @@ function ImportForm({
   const [opened, setOpened] = useState(false)
   const [openFailed, setOpenFailed] = useState(false)
   const origin = window.location.origin
+  const client = useQueryClient()
+  const catalog = useQuery(
+    catalogOptions(client, { kind: 'key', id: value.id }, userID),
+  )
+  const modelAllowed = Boolean(catalog.data?.models.includes(model.trim()))
   const { mutation, isCurrentOwner } = useKeySecret<ImportSettings>(
     userID,
     value.id,
@@ -111,7 +119,7 @@ function ImportForm({
     event.preventDefault()
     if (mutation.isPending || prepared) return
     const input = { origin, name, model }
-    const valid = validImportSettings(input)
+    const valid = validImportSettings(input) && modelAllowed
     setInvalid(!valid)
     if (valid) mutation.mutate(input)
   }
@@ -164,26 +172,53 @@ function ImportForm({
           />
         </div>
         <div className="space-y-2">
-          <label htmlFor="cc-switch-model" className="text-sm font-medium">
-            {t('clientModel')}
-          </label>
-          <Input
+          <ModelPicker
             id="cc-switch-model"
             value={model}
-            maxLength={160}
-            autoComplete="off"
-            spellCheck={false}
+            onChange={setModel}
+            models={catalogModelIDs(catalog.data?.models ?? [])}
             disabled={mutation.isPending || prepared !== null}
-            onChange={(event) => setModel(event.target.value)}
-            aria-describedby="cc-switch-model-hint"
-            aria-invalid={invalid}
           />
-          <p
-            id="cc-switch-model-hint"
-            className="text-xs leading-5 text-muted-foreground"
-          >
-            {t('ccSwitchModelHint')}
-          </p>
+          {catalog.isPending && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {t('catalogLoading')}
+            </p>
+          )}
+          {(catalog.isError ||
+            catalog.data?.refresh_failed ||
+            catalog.data?.partial) && (
+            <div className="space-y-2">
+              <p role="status" className="text-xs text-warning">
+                {t(
+                  catalog.data?.models.length
+                    ? 'catalogPartial'
+                    : 'catalogLoadFailed',
+                )}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={catalog.isFetching}
+                onClick={() => catalog.refetch()}
+              >
+                {t('catalogReload')}
+              </Button>
+            </div>
+          )}
+          {catalog.data?.refreshing && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {t('catalogRefreshing')}
+            </p>
+          )}
+          {catalog.data &&
+            !catalog.data.refreshing &&
+            !catalog.isError &&
+            !catalog.data.models.length && (
+              <p className="text-xs text-muted-foreground">
+                {t('catalogEmptyGroup')}
+              </p>
+            )}
         </div>
         <dl className="space-y-3 text-sm">
           <div>
@@ -202,7 +237,11 @@ function ImportForm({
         </dl>
         {invalid && (
           <p role="alert" className="text-sm text-error">
-            {t('ccSwitchInputInvalid')}
+            {t(
+              modelAllowed
+                ? 'ccSwitchInputInvalid'
+                : 'catalogSelectionRequired',
+            )}
           </p>
         )}
         {mutation.isError && (

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { authOptions } from '@/lib/auth'
 import { keyOptions, keyState } from '@/lib/keys'
 import { CreateKey } from '@/components/CreateKey'
+import { CatalogDialog } from '@/components/CatalogDialog'
 import { CopyKey } from '@/components/CopyKey'
 import { ClientGuide } from '@/components/ClientGuide'
 import { CCSwitchImport } from '@/components/CCSwitchImport'
@@ -138,6 +139,13 @@ function KeyManager({ userID }: { userID: number }) {
                       value={key}
                       userID={userID}
                     />
+                    <div className="-ml-2 mt-1">
+                      <CatalogDialog
+                        target={{ kind: 'key', id: key.id }}
+                        name={key.name}
+                        disabled={keyState(key, now) !== 'active'}
+                      />
+                    </div>
                   </td>
                   <td className="px-5 py-4">
                     <Status

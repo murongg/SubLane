@@ -162,6 +162,26 @@ func (s *Service) List(ctx context.Context, userID, beforeID int64) (Page, error
 	return page, nil
 }
 
+var ErrInactive = errors.New("api_key_inactive")
+
+// CatalogGroup authorizes model discovery without decrypting the user's gateway key.
+func (s *Service) CatalogGroup(ctx context.Context, userID, keyID int64) (int64, error) {
+	row, err := s.queries.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, err
+	}
+	if row.RevokedAt != nil || !row.Enabled || (row.ExpiresAt != nil && *row.ExpiresAt <= s.now().Unix()) {
+		return 0, ErrInactive
+	}
+	if row.GroupAccess != "allowed" {
+		return 0, groups.ErrUnavailable
+	}
+	return row.GroupID, nil
+}
+
 func validExpiry(expiry *int64, now int64) bool {
 	return expiry == nil || (*expiry > now && *expiry <= 253402300799)
 }

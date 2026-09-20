@@ -113,6 +113,9 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 		if err := s.persist(ctx, q, replaceID, credential, status); err != nil {
 			return Account{}, err
 		}
+		if err := q.InvalidateAccountCatalog(ctx, replaceID); err != nil {
+			return Account{}, err
+		}
 		if err := audit.Record(ctx, q, "account.authorize", "account", replaceID); err != nil {
 			return Account{}, err
 		}

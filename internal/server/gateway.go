@@ -57,12 +57,7 @@ func (h *keyHTTP) models(w http.ResponseWriter, r *http.Request) {
 		gatewayUnavailable(w, r)
 		return
 	}
-	release, err := h.gateway.Acquire()
-	if err != nil {
-		gatewayError(w, err)
-		return
-	}
-	defer release()
+	// Shared discovery owns upstream admission; a cached list consumes no generation slot.
 	principal, _ := r.Context().Value(keyPrincipalKey{}).(apikey.Principal)
 	models, err := h.gateway.Models(r.Context(), principal.UserID, principal.GroupID)
 	if err != nil {
@@ -224,6 +219,10 @@ func gatewayFailure(err error) (int, string) {
 		return 400, "conversation_context_limit"
 	case errors.Is(err, gateway.ErrModelNotAllowed):
 		return 403, "model_not_allowed"
+	case errors.Is(err, gateway.ErrModelUnavailable):
+		return 404, "model_not_available"
+	case errors.Is(err, gateway.ErrCatalogUnavailable):
+		return 503, "model_catalog_unavailable"
 	case errors.Is(err, upstream.ErrInput):
 		return 400, "invalid_model_request"
 	case errors.Is(err, upstream.ErrContinuation):
@@ -272,6 +271,9 @@ func gatewayFailure(err error) (int, string) {
 
 func gatewayError(w http.ResponseWriter, err error) {
 	status, code := gatewayFailure(err)
+	if errors.Is(err, gateway.ErrCatalogUnavailable) {
+		w.Header().Set("Retry-After", "5")
+	}
 	if status == 401 {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 	}

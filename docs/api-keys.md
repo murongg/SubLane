@@ -22,6 +22,7 @@ These routes require a valid enabled-user session cookie. Mutations retain the e
 | --- | --- | --- |
 | `GET /api/keys?cursor=0` | Optional cursor | `keys` metadata, `next_cursor` and `server_time` |
 | `POST /api/keys` | `name` (1–64 characters), optional `group_id` and nullable `expires_at` | `key` metadata and `secret` |
+| `GET /api/keys/{id}/models` | No body | Authorized group model catalog for an active, owned key |
 | `POST /api/keys/{id}/secret` | Empty JSON object | Full `secret`, for the owning user only |
 | `PATCH /api/keys/{id}` | All three fields: `name`, `enabled`, nullable `expires_at` | Updated metadata; never a secret |
 | `POST /api/keys/{id}/revoke` | Empty JSON object | Revoked key metadata |
@@ -54,12 +55,12 @@ Back up `credentials.key` alongside SQLite even when there are no upstream accou
 
 Install [CC Switch](https://github.com/farion1231/cc-switch) on the computer running your browser. In **API keys**, choose the external-link icon on an active, recoverable key:
 
-1. Review the prefilled configuration name, key's group and instance URL. Enter an exact model ID available to that group, including its provider prefix when needed.
+1. Review the prefilled configuration name, key's group and instance URL. Search and select a discovered model available to that group. The picker uses the owner-only model endpoint and does not retrieve the key secret.
 2. Select **Prepare import** to retrieve your key through the same owner-only, audited endpoint used for copying.
 3. Select **Open CC Switch**, then review and confirm the configuration in that application. Enable it there when ready.
 
 This creates a **Codex** configuration using the current origin plus `/v1` and the Responses protocol. The [CC Switch V1 deep-link contract](https://github.com/farion1231/cc-switch/blob/main/docs/user-manual/zh/5-faq/5.3-deeplink.md) passes the configuration name, endpoint, model and full key through `ccswitch://v1/import`. No remote relay is used, and `enabled=false` avoids requesting an automatic provider switch. CC Switch manages the imported key in its own configuration/authentication storage; this differs from the environment-variable setup in [the manual client guide](codex.md#client-configuration).
 
-Preparation and opening use separate clicks so the external application launch retains a browser user gesture. The prepared URI exists only in the mounted dialog state, never in a rendered link or persisted browser cache. Closing or editing the dialog discards it. Legacy hash-only, paused, expired, revoked and group-inaccessible keys cannot use this action. Model availability is enforced by the gateway, not validated through a live model request during import.
+Preparation and opening use separate clicks so the external application launch retains a browser user gesture. The prepared URI exists only in the mounted dialog state, never in a rendered link or persisted browser cache. Closing or editing the dialog discards it. Legacy hash-only, paused, expired, revoked and group-inaccessible keys cannot use this action. The picker uses the [derived group catalog](models.md); the gateway checks policy and account support again on each inference request. Import does not perform model generation.
 
 SubLane cannot detect whether CC Switch is installed or whether its confirmation completed. Tests validate URI encoding, configuration fields, cancellation and identity isolation with synthetic keys; they do not establish an actual installed-app import or live model response. Other client targets are not offered because SubLane does not currently expose their native Claude Messages or Gemini APIs.
