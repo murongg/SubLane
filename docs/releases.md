@@ -30,9 +30,21 @@ For example, after choosing `v0.1.0`:
 ```sh
 git switch main
 git pull --ff-only
-git tag -a v0.1.0 -m 'Release v0.1.0'
-git push origin v0.1.0
+make publish-check TAG=v0.1.0
+make publish TAG=v0.1.0
 ```
+
+`make publish-check` runs the same preflight without creating or pushing a tag. `make publish` creates an annotated tag at the inspected commit and pushes only that tag. Both require a clean working tree (including untracked files), the `main` branch, an existing release workflow in that commit, and exactly one `origin` push destination whose `main` matches local HEAD. Local or remote duplicate tags are rejected. No branch is switched, merged or pushed automatically.
+
+The tag determines release type; no separate prerelease flag is needed:
+
+```sh
+make publish TAG=v0.1.0-rc.1
+```
+
+You can also run `node scripts/publish.mjs v0.1.0 --dry-run` or `node scripts/publish.mjs v0.1.0` directly from the repository. Node.js 24 and Git are required, with working Git push credentials (for example an SSH agent); Docker Hub credentials are not required. The script verifies the remote tag after pushing and prints the GitHub Actions workflow link when the configured remote uses a recognized GitHub URL.
+
+If a push fails or its result cannot be verified, the local tag is retained because the remote may already have accepted it. Inspect the remote and Actions first. If the remote tag is absent, use the single-tag retry command printed by the script. It never deletes tags or force-pushes. The script triggers the existing CI pipeline; it does not report builds or publication as complete merely because the tag push succeeded.
 
 The example version is illustrative. Publish one chosen version at a time and inspect the Actions result before announcing availability. Pushing a version tag is the publication trigger; the workflow creates the GitHub Release itself.
 

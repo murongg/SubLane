@@ -86,6 +86,19 @@ SUBLANE_ADDR=127.0.0.1:8080 SUBLANE_DATA_DIR=/srv/sublane/data ./sublane
 
 The archive contains the executable, AGPL and third-party license texts, the Compose file, an environment example and deployment/backup documentation. Keep the data directory outside the versioned executable directory, make it private and writable by the service user, and use a process supervisor for persistent operation. Do not run the gateway as root.
 
+## Runtime configuration
+
+The standalone service reads these process environment variables; `.env.example` lists examples. It does not load a `.env` file automatically. Compose reads `.env` for its own interpolation and passes the configured environment into the container.
+
+| Variable | Standalone default | Purpose |
+| --- | --- | --- |
+| `SUBLANE_ADDR` | `127.0.0.1:8080` | HTTP listening address |
+| `SUBLANE_DATA_DIR` | `./data` | SQLite database and encryption-key directory |
+| `SUBLANE_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+| `SUBLANE_PUBLIC_URL` | Unset | Exact external origin; HTTPS enables secure session cookies |
+
+The Docker image overrides the listen address to `0.0.0.0:8080` and data directory to `/data`. `SUBLANE_IMAGE`, `SUBLANE_BIND_ADDRESS` and `SUBLANE_PORT` configure Compose only. SQLite applies ordered migrations at startup and uses a single database connection.
+
 ## HTTPS reverse proxy
 
 Set `SUBLANE_PUBLIC_URL` to the exact external origin, such as `https://sublane.example.com`, and recreate the service so the environment changes take effect. This origin is used for browser request checks and secure session cookies. Forward the original Host header and preserve streaming and WebSocket upgrades.

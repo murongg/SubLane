@@ -119,6 +119,6 @@ jobs:
         run: |
           {
             printf '## SubLane %s\n\n' "$VERSION"
-            printf 'Image: `%s:%s` (linux/amd64, linux/arm64)\n\n' "$IMAGE" "$VERSION"
+            printf 'Image: %s:%s (linux/amd64, linux/arm64)\n\n' "$IMAGE" "$VERSION"
             printf 'Release: https://github.com/%s/releases/tag/%s\n' "$GH_REPO" "$TAG"
           } >> "$GITHUB_STEP_SUMMARY"

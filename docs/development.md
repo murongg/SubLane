@@ -17,6 +17,8 @@ Run all Make targets from the repository root.
 | `make dev` | Build the development backend and launch it with Vite |
 | `make dev-api` | Run only the Go backend |
 | `make dev-web` | Run only Vite |
+| `make publish-check TAG=v0.1.0` | Validate release preconditions without creating or pushing a tag |
+| `make publish TAG=v0.1.0` | Create and push one annotated release tag from synchronized, clean main |
 | `make release VERSION=0.0.0-test` | Build Linux amd64/arm64 archives and SHA-256 checksums locally |
 | `make build` | Build frontend and embed it into `bin/sublane` |
 | `make generate` | Regenerate typed database access using pinned sqlc |
@@ -103,4 +105,4 @@ Keep `go.sum` and `web/pnpm-lock.yaml` under version control. Run dependency upg
 
 ## Packaging and release checks
 
-See [deployment](deployment.md) for container smoke tests and [release operations](releases.md) for the tag-triggered pipeline. `make test` includes the built-in Node release metadata tests; `make lint` checks release/smoke script syntax. CI builds and tests containers on both native Linux architectures, then the release workflow publishes those exact tested images and extracts their binaries. No registry credentials are used in pull-request checks.
+See [deployment](deployment.md) for container smoke tests and [release operations](releases.md) for the tag-triggered pipeline. `make test` includes the built-in Node release metadata tests and temporary-repository publish tests; `make lint` checks release/smoke script syntax. CI builds and tests containers on both native Linux architectures, then the release workflow publishes those exact tested images and extracts their binaries. No registry credentials are used in pull-request checks.

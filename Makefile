@@ -1,4 +1,4 @@
-.PHONY: setup dev dev-api dev-web build generate generate-check test lint check clean brand release
+.PHONY: setup dev dev-api dev-web build generate generate-check test lint check clean brand release publish publish-check
 
 GO ?= go
 PNPM ?= pnpm
@@ -37,6 +37,7 @@ test:
 lint:
 	bash -n scripts/package.sh scripts/container-smoke.sh
 	node --check scripts/release.mjs
+	node --check scripts/publish.mjs
 	$(GO) vet ./...
 	@test -z "$$(gofmt -l cmd internal web/*.go)" || (echo 'Run gofmt before checking.'; exit 1)
 	$(PNPM) --dir web typecheck
@@ -63,3 +64,13 @@ release:
 		bash scripts/package.sh "$(VERSION)" "$$arch" "dist/release/linux-$$arch/sublane" dist/release || exit 1; \
 	done
 	@cd dist/release && shasum -a 256 sublane_$(VERSION)_linux_*.tar.gz > SHA256SUMS
+
+# Command-line variables are auto-exported by Make; keep TAG literal in the dedicated value.
+unexport TAG
+publish publish-check: export SUBLANE_PUBLISH_TAG = $(value TAG)
+
+publish:
+	node scripts/publish.mjs
+
+publish-check:
+	node scripts/publish.mjs --dry-run
