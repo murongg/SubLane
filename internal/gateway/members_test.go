@@ -29,7 +29,7 @@ func runtimeMember(t *testing.T, s *Service) int64 {
 func TestMemberLimitsShareKeysGroupsAndSurviveRestart(t *testing.T) {
 	ctx := context.Background()
 	var calls atomic.Int64
-	s, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return syntheticStream(), nil }))
+	s, ids := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { calls.Add(1); return syntheticStream(), nil }))
 	member := runtimeMember(t, s)
 	initial, err := s.MemberLimits(ctx, member)
 	if err != nil || initial.RequestsPerMinute != 0 || initial.MaxConcurrency != 0 {
@@ -89,7 +89,7 @@ func TestMemberLimitsShareKeysGroupsAndSurviveRestart(t *testing.T) {
 
 func TestMemberConcurrencyIsAtomicAndCancellationReleases(t *testing.T) {
 	ctx := context.Background()
-	s, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
+	s, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
 	member := runtimeMember(t, s)
 	if err := s.SetMemberLimits(ctx, member, 0, 1); err != nil {
 		t.Fatal(err)

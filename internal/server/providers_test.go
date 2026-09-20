@@ -30,10 +30,11 @@ func TestProviderRoutesUseBuiltInExecutors(t *testing.T) {
 			})
 
 			for _, test := range []struct{ path, body, want string }{
-				{"/v1/responses", `{"model":"` + provider + `/synthetic-model","input":"synthetic prompt"}`, `"output"`},
-				{"/v1/responses", `{"model":"` + provider + `/synthetic-model","input":"synthetic prompt","stream":true}`, "response.completed"},
-				{"/v1/chat/completions", `{"model":"` + provider + `/synthetic-model","messages":[{"role":"user","content":"synthetic prompt"}]}`, `"choices"`},
-				{"/v1/chat/completions", `{"model":"` + provider + `/synthetic-model","messages":[{"role":"user","content":"synthetic prompt"}],"stream":true}`, "[DONE]"},
+				{"/v1/responses", `{"model":"` + provider + `/synthetic-model","input":"synthetic legacy prompt"}`, `"output"`},
+				{"/v1/responses", `{"model":"synthetic-model","input":"synthetic prompt"}`, `"output"`},
+				{"/v1/responses", `{"model":"synthetic-model","input":"synthetic prompt","stream":true}`, "response.completed"},
+				{"/v1/chat/completions", `{"model":"synthetic-model","messages":[{"role":"user","content":"synthetic prompt"}]}`, `"choices"`},
+				{"/v1/chat/completions", `{"model":"synthetic-model","messages":[{"role":"user","content":"synthetic prompt"}],"stream":true}`, "[DONE]"},
 			} {
 				req, _ := http.NewRequest("POST", fixture.server.URL+test.path, strings.NewReader(test.body))
 				req.Header.Set("Authorization", "Bearer "+fixture.secret)
@@ -75,7 +76,7 @@ func TestProviderRoutesUseBuiltInExecutors(t *testing.T) {
 					}
 				}
 			}
-			turn := map[string]any{"type": "response.create", "model": provider + "/synthetic-model", "input": "synthetic prompt"}
+			turn := map[string]any{"type": "response.create", "model": "synthetic-model", "input": "synthetic prompt"}
 			if err := conn.WriteJSON(turn); err != nil {
 				t.Fatal(err)
 			}

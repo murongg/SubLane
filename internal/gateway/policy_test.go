@@ -24,7 +24,7 @@ func TestGroupModelPolicyEnforcesEveryOperationBeforeAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	models, err := service.Models(ctx, 1, 1)
-	if err != nil || len(models) != 2 || models[0].ID != "codex/synthetic-allowed" || models[1].ID != "synthetic-allowed" {
+	if err != nil || len(models) != 1 || models[0].ID != "synthetic-allowed" {
 		t.Fatal("catalog policy", models, err)
 	}
 	before := calls

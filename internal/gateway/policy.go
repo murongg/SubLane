@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/upstream"
@@ -28,7 +27,8 @@ func policyHasProvider(policy groups.ModelPolicy, provider string) bool {
 		return true
 	}
 	for _, model := range policy.Models {
-		if strings.HasPrefix(model, provider+"/") {
+		scope, _ := groups.SplitModel(model)
+		if scope == "" || scope == provider {
 			return true
 		}
 	}
@@ -37,8 +37,7 @@ func policyHasProvider(policy groups.ModelPolicy, provider string) bool {
 
 // AuthorizeModel also covers local WebSocket prewarm, which does not execute an upstream request.
 func (s *Service) AuthorizeModel(ctx context.Context, userID, groupID int64, model string) error {
-	canonical := groups.CanonicalModel(model)
-	_, native, _ := strings.Cut(canonical, "/")
+	_, native := groups.SplitModel(model)
 	if native == "" || len(native) > 128 {
 		return upstream.ErrInput
 	}
@@ -46,7 +45,7 @@ func (s *Service) AuthorizeModel(ctx context.Context, userID, groupID int64, mod
 	if err != nil {
 		return err
 	}
-	if !policy.Allows(canonical) {
+	if !policy.Allows(model) {
 		return ErrModelNotAllowed
 	}
 	return nil

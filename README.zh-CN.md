@@ -57,7 +57,7 @@ Docker 部署同样通过页面创建首个管理员。网络部署应使用 HTT
 
 ## 接入订阅账号
 
-管理员在「订阅账号」中选择 Codex、Claude 或 Antigravity，再选择浏览器授权或导入凭据 JSON，验证连接后，成员即可使用个人 API 密钥接入客户端。OAuth 授权后需将浏览器地址栏的 localhost 回调地址粘贴回页面；此时 localhost 页面无法打开是预期行为。密钥页面提供客户端配置。模型使用 `codex/…`、`claude/…`、`antigravity/…` 前缀，无前缀名称仍转发到 Codex。订阅额度目前仅支持 Codex。详细边界见 [多服务商说明](docs/providers.md) 和 [Codex 接入说明](docs/codex.md)。
+管理员在「订阅账号」中选择 Codex、Claude 或 Antigravity，再选择浏览器授权或导入凭据 JSON，验证连接后，成员即可使用个人 API 密钥接入客户端。OAuth 授权后需将浏览器地址栏的 localhost 回调地址粘贴回页面；此时 localhost 页面无法打开是预期行为。密钥页面提供客户端配置。模型列表直接返回原始模型名，无需添加服务商前缀；系统按分组权限和模型支持情况选择可用账号，同名模型只显示一次。历史带前缀的调用仍然兼容。订阅额度目前仅支持 Codex。详细边界见 [多服务商说明](docs/providers.md) 和 [Codex 接入说明](docs/codex.md)。
 
 ## 检查
 

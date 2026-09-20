@@ -13,6 +13,7 @@ import (
 
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/vault"
@@ -20,6 +21,16 @@ import (
 
 func providerGateway(t *testing.T, transport http.RoundTripper) (*Service, map[string]string) {
 	return providerFixture(t, transport, true)
+}
+
+// Codex protocol fixtures must not accidentally execute their synthetic SSE through another provider.
+func codexGateway(t *testing.T, transport http.RoundTripper) (*Service, map[string]string) {
+	t.Helper()
+	service, ids := providerGateway(t, transport)
+	if _, err := groups.New(service.db).Save(context.Background(), 1, groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{ids["codex"]}}); err != nil {
+		t.Fatal(err)
+	}
+	return service, ids
 }
 func discoveryGateway(t *testing.T, transport http.RoundTripper) (*Service, map[string]string) {
 	return providerFixture(t, transport, false)
@@ -73,7 +84,7 @@ func TestAffinityIsPartitionedByProviderAndPersists(t *testing.T) {
 	ctx := context.Background()
 	for range 2 {
 		for provider, id := range ids {
-			actual, _, err := gateway.selectAccount(ctx, 1, 1, "same-session", provider, "")
+			actual, _, err := gateway.selectAccount(ctx, 1, 1, "same-session", provider, "", Responses)
 			if err != nil || actual != id {
 				t.Fatal("provider binding crossed", provider, actual, err)
 			}
@@ -88,13 +99,13 @@ func TestAffinityIsPartitionedByProviderAndPersists(t *testing.T) {
 	if !errors.Is(err, accounts.ErrDisabled) {
 		t.Fatal("disabled provider binding moved", err)
 	}
-	id, _, err := reopened.selectAccount(ctx, 1, 1, "same-session", "codex", "")
+	id, _, err := reopened.selectAccount(ctx, 1, 1, "same-session", "codex", "", Responses)
 	if err != nil || id != ids["codex"] {
 		t.Fatal("another provider affected", err)
 	}
 }
 
-func TestModelCatalogKeepsHealthyProvidersAndCodexAliases(t *testing.T) {
+func TestModelCatalogKeepsHealthyProvidersWithNativeIDs(t *testing.T) {
 	gateway, _ := discoveryGateway(t, transportFunc(func(r *http.Request) (*http.Response, error) {
 		body := `{"models":[{"slug":"synthetic-codex"}]}`
 		status := 200
@@ -115,8 +126,8 @@ func TestModelCatalogKeepsHealthyProvidersAndCodexAliases(t *testing.T) {
 	for _, model := range models {
 		got = append(got, model.ID)
 	}
-	if strings.Join(got, ",") != "antigravity/synthetic-gemini,codex/synthetic-codex,synthetic-codex" {
-		t.Fatal("model namespaces missing", got)
+	if strings.Join(got, ",") != "synthetic-codex,synthetic-gemini" {
+		t.Fatal("unexpected native model catalog", got)
 	}
 }
 

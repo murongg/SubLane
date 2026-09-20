@@ -28,7 +28,7 @@ function open(value = key) {
   const client = createQueryClient()
   client.setQueryData(authKey, memberAuthenticated)
   client.setQueryData(['model-catalog', 2, 'key', 1], {
-    models: ['codex/synthetic-model'],
+    models: ['synthetic-model'],
     updated_at: 0,
     server_time: 1900000000,
     known: true,
@@ -66,10 +66,7 @@ it('prepares only after a valid submission and opens the local app from a second
   )
   expect(fetch).not.toHaveBeenCalled()
   expect(within(dialog).getByRole('alert')).toBeTruthy()
-  await user.type(
-    within(dialog).getByLabelText('Model ID'),
-    'codex/synthetic-model',
-  )
+  await user.type(within(dialog).getByLabelText('Model ID'), 'synthetic-model')
   await user.click(
     within(dialog).getByRole('button', { name: 'Prepare import' }),
   )
@@ -100,7 +97,7 @@ it('prepares only after a valid submission and opens the local app from a second
   expect(launch).toHaveBeenCalledTimes(1)
   const link = new URL(launch.mock.calls[0][0])
   expect(link.searchParams.get('apiKey')).toBe(secret)
-  expect(link.searchParams.get('model')).toBe('codex/synthetic-model')
+  expect(link.searchParams.get('model')).toBe('synthetic-model')
   expect(link.searchParams.get('enabled')).toBe('false')
   expect(
     within(dialog).getByText(
@@ -139,7 +136,7 @@ it.each([200, 401])(
         name: 'Import Synthetic laptop into CC Switch',
       }),
     )
-    await user.type(screen.getByLabelText('Model ID'), 'codex/synthetic-model')
+    await user.type(screen.getByLabelText('Model ID'), 'synthetic-model')
     await user.click(screen.getByRole('button', { name: 'Prepare import' }))
     await act(async () => {
       client.setQueryData(authKey, {
@@ -187,7 +184,7 @@ it('aborts disclosure when closed and does not retain a prepared link on reopeni
     name: 'Import Synthetic laptop into CC Switch',
   })
   await user.click(trigger)
-  await user.type(screen.getByLabelText('Model ID'), 'codex/synthetic-model')
+  await user.type(screen.getByLabelText('Model ID'), 'synthetic-model')
   await user.click(screen.getByRole('button', { name: 'Prepare import' }))
   await user.click(screen.getByRole('button', { name: 'Cancel' }))
   await waitFor(() => expect(signal?.aborted).toBe(true))
@@ -214,7 +211,7 @@ it('blocks legacy keys and clears prepared data if a key becomes unavailable', a
       name: 'Import Synthetic laptop into CC Switch',
     }),
   )
-  await user.type(screen.getByLabelText('Model ID'), 'codex/synthetic-model')
+  await user.type(screen.getByLabelText('Model ID'), 'synthetic-model')
   await user.click(screen.getByRole('button', { name: 'Prepare import' }))
   await screen.findByRole('button', { name: 'Open CC Switch' })
   view.rerender(

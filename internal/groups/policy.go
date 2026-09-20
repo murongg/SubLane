@@ -16,12 +16,12 @@ type ModelPolicy struct {
 
 var modelID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,127}$`)
 
-// Unqualified client model IDs are Codex aliases, including during policy comparison.
-func CanonicalModel(model string) string {
-	if provider, _, found := strings.Cut(model, "/"); found && accounts.ValidProvider(provider) {
-		return model
+// SplitModel recognizes legacy gateway prefixes while preserving slashes in native model IDs.
+func SplitModel(model string) (provider, native string) {
+	if provider, native, found := strings.Cut(model, "/"); found && accounts.ValidProvider(provider) {
+		return provider, native
 	}
-	return "codex/" + model
+	return "", model
 }
 func (p ModelPolicy) normalized() (ModelPolicy, error) {
 	if len(p.Models) > 100 {
@@ -30,8 +30,8 @@ func (p ModelPolicy) normalized() (ModelPolicy, error) {
 	result := ModelPolicy{Restricted: p.Restricted, Models: []string{}}
 	seen := map[string]bool{}
 	for _, id := range p.Models {
-		id = CanonicalModel(strings.TrimSpace(id))
-		_, native, _ := strings.Cut(id, "/")
+		id = strings.TrimSpace(id)
+		_, native := SplitModel(id)
 		if !modelID.MatchString(native) {
 			return ModelPolicy{}, ErrInput
 		}
@@ -46,9 +46,11 @@ func (p ModelPolicy) Allows(model string) bool {
 	if !p.Restricted {
 		return true
 	}
-	canonical := CanonicalModel(model)
+	provider, native := SplitModel(model)
 	for _, allowed := range p.Models {
-		if allowed == canonical {
+		scope, name := SplitModel(allowed)
+		// Bare requests may match any rule; selection must recheck the actual account provider.
+		if name == native && (provider == "" || scope == "" || provider == scope) {
 			return true
 		}
 	}

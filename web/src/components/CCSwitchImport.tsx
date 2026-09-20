@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { catalogOptions, catalogModelIDs } from '@/lib/catalog'
+import { catalogOptions } from '@/lib/catalog'
 import { ModelPicker } from './ModelPicker'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -176,7 +176,7 @@ function ImportForm({
             id="cc-switch-model"
             value={model}
             onChange={setModel}
-            models={catalogModelIDs(catalog.data?.models ?? [])}
+            models={catalog.data?.models ?? []}
             disabled={mutation.isPending || prepared !== null}
           />
           {catalog.isPending && (

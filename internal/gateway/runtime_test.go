@@ -17,16 +17,16 @@ import (
 
 func TestSessionlessRequestsRotateWithoutPersistingAffinity(t *testing.T) {
 	ctx := context.Background()
-	service, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return nil, nil }))
+	service, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return nil, nil }))
 	_, err := service.accounts.Authorize(ctx, "Second", accounts.Credential{AccountID: "synthetic-second", AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", ExpiresAt: time.Now().Add(time.Hour).Unix()}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, one, err := service.selectAccount(ctx, 1, 1, "", "codex", "")
+	first, one, err := service.selectAccount(ctx, 1, 1, "", "codex", "", Responses)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, two, err := service.selectAccount(ctx, 1, 1, "", "codex", "")
+	second, two, err := service.selectAccount(ctx, 1, 1, "", "codex", "", Responses)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func syntheticStream() *http.Response {
 
 func TestAccountLeaseCoversStreamAndRejectsStickyOverload(t *testing.T) {
 	ctx := context.Background()
-	service, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
+	service, ids := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
 	if err := service.SetConcurrency(ctx, ids["codex"], 1); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestRateLimitCooldownSurvivesRestartAndOnlyOneRecoveryProbe(t *testing.T) {
 	ctx := context.Background()
 	var rejected atomic.Bool
 	rejected.Store(true)
-	service, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
+	service, ids := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
 		if rejected.Load() {
 			return &http.Response{StatusCode: 429, Header: http.Header{"Retry-After": {"60"}}, Body: io.NopCloser(strings.NewReader(`{}`))}, nil
 		}
@@ -139,7 +139,7 @@ func TestRateLimitCooldownSurvivesRestartAndOnlyOneRecoveryProbe(t *testing.T) {
 func TestTransientFailuresCooldownAndResumeIgnoreOlderRequests(t *testing.T) {
 	ctx := context.Background()
 	var failing atomic.Bool
-	service, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
+	service, ids := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
 		if failing.Load() {
 			return &http.Response{StatusCode: 503, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"private":"synthetic-body"}`))}, nil
 		}
@@ -188,7 +188,7 @@ func TestTransientFailuresCooldownAndResumeIgnoreOlderRequests(t *testing.T) {
 }
 
 func TestCancellationAndShutdownReleaseAccountLease(t *testing.T) {
-	service, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
+	service, ids := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
 	ctx, cancel := context.WithCancel(context.Background())
 	r, err := service.Open(ctx, 1, 1, []byte(`{"model":"synthetic-model","input":"synthetic"}`), nil, Responses)
 	if err != nil {
@@ -223,7 +223,7 @@ func TestRetryAfterAndHistoryRetention(t *testing.T) {
 	if retryDelay("999999", now) != 3600 || retryDelay("invalid", now) != 60 || retryDelay(now.Add(2*time.Minute).UTC().Format(http.TimeFormat), now) < 119 {
 		t.Fatal("retry-after bounds/date ignored")
 	}
-	service, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return nil, nil }))
+	service, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return nil, nil }))
 	tx, err := service.db.Begin()
 	if err != nil {
 		t.Fatal(err)
@@ -268,7 +268,7 @@ func TestRetryAfterAndHistoryRetention(t *testing.T) {
 
 func TestLateSuccessCannotEraseFailureAtSameTimestamp(t *testing.T) {
 	var fail atomic.Bool
-	service, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
+	service, ids := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
 		if fail.Load() {
 			return &http.Response{StatusCode: 503, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
 		}
@@ -303,7 +303,7 @@ func TestLateSuccessCannotEraseFailureAtSameTimestamp(t *testing.T) {
 }
 
 func TestDownstreamContextLimitDoesNotPenalizeAccount(t *testing.T) {
-	service, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
+	service, ids := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
 	r, err := service.Open(context.Background(), 1, 1, []byte(`{"model":"synthetic-model","input":"synthetic"}`), nil, Responses)
 	if err != nil {
 		t.Fatal(err)
@@ -327,7 +327,7 @@ func TestDownstreamContextLimitDoesNotPenalizeAccount(t *testing.T) {
 	}
 }
 func TestManualResumeIgnoresPreviouslyStartedFailures(t *testing.T) {
-	service, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
+	service, ids := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 429, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
 	}))
 	r, err := service.Open(context.Background(), 1, 1, []byte(`{"model":"synthetic-model","input":"synthetic"}`), nil, Responses)

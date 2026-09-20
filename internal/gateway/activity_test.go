@@ -11,7 +11,7 @@ import (
 
 func TestActivityUsesUTCHoursAndSessionOwnershipAcrossWeeks(t *testing.T) {
 	ctx := context.Background()
-	s, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { t.Fatal("unexpected upstream"); return nil, nil }))
+	s, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { t.Fatal("unexpected upstream"); return nil, nil }))
 	member := runtimeMember(t, s)
 	now := time.Date(2026, 9, 21, 10, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return now }
@@ -70,7 +70,7 @@ func TestActivityUsesUTCHoursAndSessionOwnershipAcrossWeeks(t *testing.T) {
 
 func TestHourlyWriteFailureRollsBackHistoryAndDailyCounters(t *testing.T) {
 	ctx := context.Background()
-	s, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
+	s, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
 	if _, err := s.db.Exec("CREATE TRIGGER fail_hourly BEFORE INSERT ON usage_hourly BEGIN SELECT RAISE(ABORT,'synthetic failure'); END"); err != nil {
 		t.Fatal(err)
 	}

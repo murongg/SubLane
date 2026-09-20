@@ -127,7 +127,7 @@ export const en = {
   groupRestrictModels: 'Limit allowed models',
   groupAllowedModels: 'Allowed model IDs',
   groupModelsHint:
-    'One exact ID per line, up to 100. Use IDs from /v1/models. Unqualified IDs refer to Codex; wildcards are not supported.',
+    'One exact model ID per line, up to 100. Use IDs from /v1/models without a provider prefix. Existing provider-specific rules retain their scope; wildcards are not supported.',
   groupNoModels: 'No models are allowed while this list is empty.',
   groupAllModelsHint:
     'All models available through this group can be used, including models added later.',
@@ -362,7 +362,7 @@ export const en = {
   copyClientConfig: 'Copy configuration',
   clientModel: 'Model ID',
   clientModelHint:
-    'Use an ID from GET /v1/models, including its codex/, claude/, or antigravity/ prefix. Unqualified IDs use Codex.',
+    'Use the model ID returned by GET /v1/models directly. SubLane selects an available account in your group.',
   connectionNotConfigured:
     'Ask an administrator to connect and verify a subscription account first.',
   checkingSession: 'Checking your session…',
@@ -686,6 +686,9 @@ export const en = {
   requestDuration: 'Duration',
   requestTokens: 'Tokens (in / out)',
   requestCachedTokens: 'Cached: {{count}}',
+  requestCacheHitRate: 'Hit rate: {{rate}}',
+  requestCacheHitRateHint:
+    'Cached input tokens divided by total input tokens. — means usage is missing, inconsistent, or the input count is zero.',
   requestDeletedAccount: 'Deleted account',
   requestSuccess: 'Completed',
   requestIncomplete: 'Incomplete',

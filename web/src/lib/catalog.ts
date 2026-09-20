@@ -26,7 +26,7 @@ const groupSchema = z.object({
         owned_by: z.string(),
       }),
     )
-    .max(8192),
+    .max(4096),
   known_accounts: z.number().int().nonnegative(),
   unknown_accounts: z.number().int().nonnegative(),
   stale_accounts: z.number().int().nonnegative(),
@@ -94,9 +94,4 @@ export async function refreshCatalog(
     )),
     partial: false,
   }
-}
-export function catalogModelIDs(models: string[]) {
-  const set = new Set(models)
-  // Codex exposes a compatibility alias; show its qualified ID once in the picker/list.
-  return models.filter((id) => !set.has(`codex/${id}`))
 }

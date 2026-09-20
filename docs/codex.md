@@ -70,7 +70,7 @@ All gateway routes require a SubLane bearer key, independently of browser cookie
 
 | Route | Behavior |
 | --- | --- |
-| `GET /v1/models` | Aggregate persisted per-account catalogs within the group and its policy; retain unqualified Codex aliases |
+| `GET /v1/models` | Return deduplicated native model IDs from persisted account catalogs within the group and its policy |
 | `POST /v1/responses` | Responses JSON or SSE using the requested `stream` setting |
 | `POST /v1/responses/compact` | Non-streaming Codex compaction |
 | `GET /v1/responses` with WebSocket upgrade | Responses turns, local prewarm, incremental input reconstruction, and compact transcript replacement |
@@ -78,7 +78,7 @@ All gateway routes require a SubLane bearer key, independently of browser cookie
 
 HTTP requests must include complete input. HTTP `previous_response_id` is rejected instead of silently losing context because the Codex HTTP backend is stateless. WebSocket continuations use bounded, connection-local history; unknown continuation IDs require full transcript input. Every WebSocket turn rechecks the key and member enablement. A revoked key cannot start a new turn on an existing connection.
 
-Account affinity is scoped to the member, provider, and client session/prompt-cache key, retained for 24 hours of activity, and capped at 4,096 bindings. New sessions distribute across eligible accounts within their group, respecting per-account concurrency and cooldown. Sessionless requests select independently without creating affinity. Existing sessions fail when their account is disabled or removed instead of switching upstream identity. Restart the conversation after an intentional account change. Retrying a request never moves it to another account automatically.
+Account affinity is scoped to the member, group and client session/prompt-cache key, retained for 24 hours of activity, and capped at 4,096 bindings. Native requests use one binding across providers; explicit legacy-prefix requests retain provider-specific bindings. New sessions distribute across eligible accounts reporting the requested model within their group, respecting per-account concurrency and cooldown. Sessionless requests select independently without creating affinity. Existing sessions fail when their account is disabled or removed instead of switching upstream identity. Restart the conversation after an intentional account change. Retrying a request never moves it to another account automatically.
 
 The initial resource limits are 100 accounts, eight concurrent upstream operations, eight WebSocket connections, 8 MiB request/event/history bounds, 30-second request-body reads, 20-second upstream response-header/model-catalog deadlines, bounded 20–30-second token exchange deadlines, and ten-minute generation deadlines. WebSocket pings maintain a five-minute read deadline. These are safety bounds, not measured throughput or memory guarantees. Per-account concurrency, cooldown, and bounded request metadata are described in [pool runtime](pool-runtime.md). Member request limits and operational usage summaries are described in [team controls](team-controls.md). Token budgets, billing and advanced failover remain later work.
 
