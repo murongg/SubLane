@@ -5,6 +5,7 @@
 - Go 1.26 or newer; the module pins the minimum toolchain.
 - Node.js 24 (see `.node-version`).
 - pnpm 9.12.2, matching the frontend `packageManager` field.
+- jq for the installer's synthetic release-selection tests.
 - Docker is optional for local development and required only for container verification.
 
 Run all Make targets from the repository root.
@@ -26,7 +27,7 @@ Run all Make targets from the repository root.
 | `make build` | Build frontend and embed it into `bin/sublane` |
 | `make generate` | Regenerate typed database access using pinned sqlc |
 | `make generate-check` | Verify generated Go matches the SQL and sqlc configuration |
-| `make test` | Run Go race tests and frontend tests |
+| `make test` | Run script tests, Go race tests and frontend tests |
 | `make lint` | Vet, formatting, typecheck, and lint |
 | `make check` | Run all checks and the production build |
 | `make brand` | Export and check the complete brand kit under ignored `dist/brand/` |

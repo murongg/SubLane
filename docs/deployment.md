@@ -4,21 +4,57 @@ SubLane runs as one process with an embedded frontend and SQLite. Production doe
 
 ## Published Docker images
 
-Tagged releases publish `ghcr.io/murongg/sublane` for `linux/amd64` and `linux/arm64`. Docker selects the host architecture. Images become available after the first successful release workflow; before that, use the local source build below.
+Tagged releases publish `ghcr.io/murongg/sublane` for `linux/amd64` and `linux/arm64`. Docker selects the host architecture. Images are public and can be pulled without signing in to GHCR. Deployment requires Docker with Compose; no source checkout, Go, Node.js or local image build is needed.
 
-| Tag | Meaning |
-| --- | --- |
-| `0.1.0` | Example of a fixed stable version; use an actually published version |
-| `0.1.0-rc.1` | Example of a fixed prerelease; does not update `latest` |
-| `latest` | Newest successfully promoted stable version |
-| `0.1.0-amd64` / `0.1.0-arm64` | Per-architecture release images |
+The manual Compose examples below pin the published `0.1.0-rc.1` prerelease. Set `SUBLANE_IMAGE` explicitly for manual deployments: the Compose default is `latest`, which is only published with a stable release.
+
+| Tag                           | Meaning                                                              |
+| ----------------------------- | -------------------------------------------------------------------- |
+| `0.1.0`                       | Example of a fixed stable version; use an actually published version |
+| `0.1.0-rc.1`                  | Published prerelease; does not update `latest`                       |
+| `latest`                      | Newest successfully promoted stable version                          |
+| `0.1.0-amd64` / `0.1.0-arm64` | Per-architecture release images                                      |
 
 Use a fixed version or digest for repeatable deployments. A new image appearing in GHCR does not update a running container automatically.
 
-Download `docker.compose.yaml` from the selected [GitHub Release](https://github.com/murongg/SubLane/releases). In the directory containing it, create a Compose `.env` file with your chosen published version:
+### Install script
+
+With Docker, Compose, curl and jq installed:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh | bash
+```
+
+Without `--version`, the script selects GitHub's latest stable release. Only when no stable release exists does it select the most recently published prerelease, excluding drafts. The selected concrete image version is saved in `.env`, so restarts do not silently change versions. GitHub API errors stop installation instead of triggering a channel fallback.
+
+The script creates `./sublane`, verifies the release Compose file against `SHA256SUMS`, pulls the published image and waits for the container to become healthy. Bash, curl and either `sha256sum` or `shasum` are required; automatic version selection additionally requires jq. It does not install Docker or build from source.
+
+To choose a published version, a new directory and a host port:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh | bash -s -- \
+  --version 0.1.0-rc.1 --dir ./team-gateway --port 8088
+```
+
+Version tags may include the leading `v`. The port stays bound to `127.0.0.1`. For a remote server, use an SSH tunnel for initial setup or configure the [HTTPS reverse proxy](#https-reverse-proxy).
+
+The installer writes the selected image, port and a unique Compose project name to `.env`. Keep this file with `docker.compose.yaml`; it identifies the deployment's data volume. Existing target directories, including symlinks, are refused without changes. If startup fails, the configuration and any container data are retained for inspection. Use the [upgrade procedure](#upgrade) for existing installations.
+
+To review the script before running it, download it with `curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh -o install.sh`, then run `bash install.sh --help` or `bash install.sh` after reviewing it.
+
+### Manual Compose deployment
+
+Create a deployment directory and download `docker.compose.yaml` from the selected [GitHub Release](https://github.com/murongg/SubLane/releases):
+
+```sh
+mkdir sublane && cd sublane
+curl -fsSL https://github.com/murongg/SubLane/releases/download/v0.1.0-rc.1/docker.compose.yaml -o docker.compose.yaml
+```
+
+In that directory, create a Compose `.env` file to keep the selected image version across restarts and upgrades:
 
 ```dotenv
-SUBLANE_IMAGE=ghcr.io/murongg/sublane:0.1.0
+SUBLANE_IMAGE=ghcr.io/murongg/sublane:0.1.0-rc.1
 SUBLANE_BIND_ADDRESS=127.0.0.1
 SUBLANE_PORT=8080
 SUBLANE_LOG_LEVEL=info
@@ -26,7 +62,7 @@ SUBLANE_LOG_LEVEL=info
 # SUBLANE_PUBLIC_URL=https://sublane.example.com
 ```
 
-Here `0.1.0` is an example, not a claim that the release already exists. Compose reads `.env` for interpolation; the standalone Go application does not load `.env` itself. An immutable digest can be used as the entire `SUBLANE_IMAGE` value instead of a tag.
+Compose reads `.env` for interpolation; the standalone Go application does not load `.env` itself. An immutable digest can be used as the entire `SUBLANE_IMAGE` value instead of a tag.
 
 ```sh
 docker compose -f docker.compose.yaml pull
@@ -47,9 +83,11 @@ Keep the Compose project name/directory consistent. Changing it creates a differ
 
 ### Build from source
 
-The source-build override keeps local builds separate from the published image selection:
+To build locally instead, clone the repository and use the source-build override:
 
 ```sh
+git clone https://github.com/murongg/SubLane.git
+cd SubLane
 docker compose -f docker.compose.yaml -f docker.compose.build.yaml up --build -d
 ```
 
@@ -90,12 +128,12 @@ The archive contains the executable, AGPL and third-party license texts, the Com
 
 The standalone service reads these process environment variables; `.env.example` lists examples. It does not load a `.env` file automatically. Compose reads `.env` for its own interpolation and passes the configured environment into the container.
 
-| Variable | Standalone default | Purpose |
-| --- | --- | --- |
-| `SUBLANE_ADDR` | `127.0.0.1:8080` | HTTP listening address |
-| `SUBLANE_DATA_DIR` | `./data` | SQLite database and encryption-key directory |
-| `SUBLANE_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
-| `SUBLANE_PUBLIC_URL` | Unset | Exact external origin; HTTPS enables secure session cookies |
+| Variable             | Standalone default | Purpose                                                     |
+| -------------------- | ------------------ | ----------------------------------------------------------- |
+| `SUBLANE_ADDR`       | `127.0.0.1:8080`   | HTTP listening address                                      |
+| `SUBLANE_DATA_DIR`   | `./data`           | SQLite database and encryption-key directory                |
+| `SUBLANE_LOG_LEVEL`  | `info`             | `debug`, `info`, `warn` or `error`                          |
+| `SUBLANE_PUBLIC_URL` | Unset              | Exact external origin; HTTPS enables secure session cookies |
 
 The Docker image overrides the listen address to `0.0.0.0:8080` and data directory to `/data`. `SUBLANE_IMAGE`, `SUBLANE_BIND_ADDRESS` and `SUBLANE_PORT` configure Compose only. SQLite applies ordered migrations at startup and uses a single database connection.
 
@@ -164,6 +202,7 @@ Configure the HTTPS certificate in the parent Nginx server. The [Nginx WebSocket
    ```
 
    Use a new filename for each upgrade; existing backups are never overwritten. The archive includes the encryption key and belongs in private storage.
+
 3. Change `SUBLANE_IMAGE` in `.env` to the selected version, then pull and recreate:
 
    ```sh
