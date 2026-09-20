@@ -1,6 +1,11 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, LoaderCircle, RefreshCw } from 'lucide-react'
+import {
+  ChevronDown,
+  LoaderCircle,
+  RefreshCw,
+  SlidersHorizontal,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { accountOptions, providerLabels } from '@/lib/accounts'
 import {
@@ -8,10 +13,15 @@ import {
   outcomeKeys,
   outcomes,
   cacheHitRate,
+  type RequestFilters,
+  type RequestRecord,
 } from '@/lib/requests'
 import { reasonKeys } from '@/lib/runtime'
 import { authKey, authOptions, type AuthState } from '@/lib/auth'
 import { Button } from '@/components/ui/Button'
+import { RequestFilterForm } from '@/components/RequestFilters'
+import { RequestID } from '@/components/RequestID'
+import { RequestDetails } from '@/components/RequestDetails'
 import { Status } from '@/components/Status'
 import {
   DropdownMenu,
@@ -49,17 +59,22 @@ function RequestTable({
   const client = useQueryClient()
   const personal = scope === 'personal'
   const [cursors, setCursors] = useState([0])
-  const [account, setAccount] = useState('')
-  const [outcome, setOutcome] = useState('')
+  const [filters, setFilters] = useState<RequestFilters>({})
+  const [expanded, setExpanded] = useState(false)
+  const [selected, setSelected] = useState<RequestRecord | null>(null)
+  const filterID = useId()
+  const detailTrigger = useRef<HTMLButtonElement | null>(null)
+  const account = filters.account_id ?? ''
+  const outcome = filters.outcome ?? ''
+  const apply = (value: RequestFilters) => {
+    setFilters(value)
+    setCursors([0])
+  }
+  const active = Object.values(filters).some(
+    (value) => value !== undefined && value !== '',
+  )
   const query = useQuery(
-    requestOptions(
-      client,
-      userID,
-      scope,
-      cursors[cursors.length - 1],
-      account,
-      outcome,
-    ),
+    requestOptions(client, userID, scope, cursors[cursors.length - 1], filters),
   )
   const accounts = useQuery({
     ...accountOptions,
@@ -125,8 +140,7 @@ function RequestTable({
               <DropdownMenuRadioGroup
                 value={account}
                 onValueChange={(value) => {
-                  setAccount(value)
-                  setCursors([0])
+                  apply({ ...filters, account_id: value })
                 }}
               >
                 <DropdownMenuRadioItem value="">
@@ -154,8 +168,7 @@ function RequestTable({
             <DropdownMenuRadioGroup
               value={outcome}
               onValueChange={(value) => {
-                setOutcome(value)
-                setCursors([0])
+                apply({ ...filters, outcome: value })
               }}
             >
               <DropdownMenuRadioItem value="">
@@ -169,7 +182,37 @@ function RequestTable({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          variant="outline"
+          aria-expanded={expanded}
+          aria-controls={filterID}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          <SlidersHorizontal aria-hidden="true" />
+          {t('requestFilters')}
+        </Button>
+        {active && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              apply({})
+              setExpanded(false)
+            }}
+          >
+            {t('requestClearFilters')}
+          </Button>
+        )}
       </div>
+      {expanded && (
+        <RequestFilterForm
+          key={JSON.stringify(filters)}
+          id={filterID}
+          value={filters}
+          scope={scope}
+          userID={userID}
+          onApply={apply}
+        />
+      )}
       {query.isPending ? (
         <p
           role="status"
@@ -225,16 +268,32 @@ function RequestTable({
               {query.data.requests.map((item) => (
                 <tr key={item.id}>
                   <td className="whitespace-nowrap px-4 py-4 text-xs text-muted-foreground">
-                    <time
-                      dateTime={new Date(item.started_at * 1000).toISOString()}
+                    <button
+                      type="button"
+                      className="rounded-sm text-left text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                      aria-label={t('requestViewDetails')}
+                      title={t('requestViewDetails')}
+                      onClick={(event) => {
+                        detailTrigger.current = event.currentTarget
+                        setSelected(item)
+                      }}
                     >
-                      <span className="block">
-                        {dates.format(item.started_at * 1000)}
-                      </span>
-                      <span className="mt-1 block">
-                        {clock.format(item.started_at * 1000)}
-                      </span>
-                    </time>
+                      <time
+                        dateTime={new Date(
+                          item.started_at * 1000,
+                        ).toISOString()}
+                      >
+                        <span className="block">
+                          {dates.format(item.started_at * 1000)}
+                        </span>
+                        <span className="mt-1 block">
+                          {clock.format(item.started_at * 1000)}
+                        </span>
+                      </time>
+                    </button>
+                    <div className="mt-1">
+                      <RequestID value={item.request_id} compact />
+                    </div>
                   </td>
                   <td className="px-4 py-4">
                     {!personal && (
@@ -295,6 +354,17 @@ function RequestTable({
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 tabular-nums">
                     {numbers.format(item.duration_ms)} ms
+                    <p
+                      className="mt-1 text-xs text-muted-foreground"
+                      title={t('requestFirstTokenHint')}
+                    >
+                      {t('requestFirstTokenValue', {
+                        value:
+                          item.first_token_ms === null
+                            ? '—'
+                            : `${numbers.format(item.first_token_ms)} ms`,
+                      })}
+                    </p>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 text-xs tabular-nums">
                     {count(item.input_tokens)} / {count(item.output_tokens)}
@@ -322,6 +392,12 @@ function RequestTable({
           </table>
         </div>
       )}
+      <RequestDetails
+        key={selected?.id ?? 'closed'}
+        value={selected}
+        onClose={() => setSelected(null)}
+        onRestoreFocus={() => detailTrigger.current?.focus()}
+      />
       {query.data && (cursors.length > 1 || query.data.next_cursor !== 0) && (
         <div className="flex justify-end gap-2">
           <Button

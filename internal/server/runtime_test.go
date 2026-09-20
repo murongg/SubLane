@@ -68,6 +68,28 @@ func TestPersonalRequestsEnforceOwnershipBeforePagination(t *testing.T) {
 		}
 		return page
 	}
+	for _, test := range []struct {
+		path   string
+		cookie *http.Cookie
+		count  int
+	}{{"/api/me/requests/filters", memberCookie, 1}, {"/api/requests/filters", ownerCookie, 2}} {
+		response := request(h, "GET", test.path, "", nil, test.cookie)
+		var value struct {
+			Callers []struct {
+				UserID int64 `json:"user_id"`
+				KeyID  int64 `json:"key_id"`
+			} `json:"callers"`
+		}
+		if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &value) != nil || len(value.Callers) != test.count {
+			t.Fatal("filter choices unavailable", response.Code, response.Body.String())
+		}
+		if test.count == 1 && value.Callers[0].UserID != member.ID {
+			t.Fatal("personal choices leaked other members")
+		}
+	}
+	if got := request(h, "GET", "/api/requests/filters", "", nil, memberCookie).Code; got != 403 {
+		t.Fatal("member read operator filter metadata", got)
+	}
 	first := read(fmt.Sprintf("/api/me/requests?user_id=%d&scope=all&account_id=private-subscription", other.ID), memberCookie)
 	if len(first.Requests) != 50 || first.NextCursor == 0 {
 		t.Fatal("ownership was not applied before pagination", len(first.Requests))
@@ -101,7 +123,7 @@ func TestPersonalRequestsEnforceOwnershipBeforePagination(t *testing.T) {
 	if got := request(h, "GET", "/api/requests", "", nil, memberCookie).Code; got != 403 {
 		t.Fatal("member accessed all history", got)
 	}
-	if _, err := service.UserRequests(ctx, 0, 0, ""); err == nil {
+	if _, err := service.UserRequests(ctx, 0, gateway.RequestFilter{}); err == nil {
 		t.Fatal("missing personal identity became an administrator query")
 	}
 	if _, err := identity.SetMemberEnabled(ctx, member.ID, false); err != nil {

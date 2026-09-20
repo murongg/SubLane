@@ -107,7 +107,9 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
 	principal, _ := r.Context().Value(keyPrincipalKey{}).(apikey.Principal)
-	result, err := h.gateway.Open(gateway.WithRequestIdentity(ctx, principal.KeyID, "http"), principal.UserID, principal.GroupID, raw, r.Header, kind)
+	ctx = gateway.WithRequestIdentity(ctx, principal.KeyID, "http")
+	w.Header().Set("X-Request-ID", gateway.RequestID(ctx))
+	result, err := h.gateway.Open(ctx, principal.UserID, principal.GroupID, raw, r.Header, kind)
 	if err != nil {
 		gatewayError(w, err)
 		return
@@ -233,6 +235,8 @@ func gatewayFailure(err error) (int, string) {
 		return 409, "conversation_account_unavailable"
 	case errors.Is(err, gateway.ErrNoAccount):
 		return 503, "no_accounts_available"
+	case errors.Is(err, gateway.ErrQuotaExhausted):
+		return 429, "quota_exhausted"
 	case errors.Is(err, gateway.ErrAccountCooling):
 		return 429, "account_cooling"
 	case errors.Is(err, gateway.ErrMemberBusy):
@@ -286,6 +290,10 @@ func gatewayError(w http.ResponseWriter, err error) {
 		var cooling *gateway.CoolingError
 		if errors.As(err, &cooling) {
 			value = strconv.FormatInt(cooling.RetryAfter, 10)
+		}
+		var quota *gateway.QuotaError
+		if errors.As(err, &quota) {
+			value = strconv.FormatInt(quota.RetryAfter, 10)
 		}
 		var memberRate *gateway.MemberRateError
 		if errors.As(err, &memberRate) {

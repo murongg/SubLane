@@ -103,10 +103,11 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 		}
 		return conn.WriteMessage(websocket.TextMessage, data)
 	}
+	turnID := ""
 	writeError := func(err error) error {
 		status, code := gatewayFailure(err)
 		raw, _ := json.Marshal(map[string]any{"type": "error", "status": status, "error": gatewayErrorBody(code)})
-		return write(raw)
+		return write(correlateEvent(raw, turnID))
 	}
 	_, secret, _ := strings.Cut(r.Header.Get("Authorization"), " ")
 	initial, _ := r.Context().Value(keyPrincipalKey{}).(apikey.Principal)
@@ -120,6 +121,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case message := <-messages:
+			turnID = ""
 			// A successful handshake does not authorize later turns after member suspension or key revocation.
 			principal, err := h.service.Authenticate(ctx, strings.TrimSpace(secret))
 			if err != nil || principal.UserID != initial.UserID || principal.KeyID != initial.KeyID || principal.GroupID != initial.GroupID {
@@ -169,7 +171,9 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			turnCtx, turnCancel := context.WithTimeout(ctx, 10*time.Minute)
-			err = h.websocketTurn(gateway.WithRequestIdentity(turnCtx, principal.KeyID, "websocket"), principal.UserID, principal.GroupID, normalized, headers, &conversation, write)
+			turnCtx = gateway.WithRequestIdentity(turnCtx, principal.KeyID, "websocket")
+			turnID = gateway.RequestID(turnCtx)
+			err = h.websocketTurn(turnCtx, principal.UserID, principal.GroupID, normalized, headers, &conversation, write)
 			turnCancel()
 			release()
 			if err != nil && ctx.Err() == nil {
@@ -211,6 +215,9 @@ func (h *keyHTTP) websocketTurn(ctx context.Context, userID, groupID int64, requ
 				chunk = bytes.TrimSpace(chunk[5:])
 			}
 			if len(chunk) > 0 {
+				if metadata.Type == "response.created" || metadata.Type == "response.completed" || metadata.Type == "response.incomplete" {
+					chunk = correlateEvent(chunk, gateway.RequestID(ctx))
+				}
 				if err := write(chunk); err != nil {
 					return err
 				}
@@ -238,4 +245,21 @@ func randomID() string {
 	value := make([]byte, 16)
 	_, _ = rand.Read(value)
 	return hex.EncodeToString(value)
+}
+
+// Add gateway correlation beside the protocol payload; never replace the upstream response ID.
+func correlateEvent(raw []byte, id string) []byte {
+	if id == "" {
+		return raw
+	}
+	var event map[string]json.RawMessage
+	if json.Unmarshal(raw, &event) != nil || event == nil {
+		return raw
+	}
+	event["request_id"], _ = json.Marshal(id)
+	value, err := json.Marshal(event)
+	if err != nil {
+		return raw
+	}
+	return value
 }

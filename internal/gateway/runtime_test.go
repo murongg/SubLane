@@ -76,7 +76,7 @@ func TestAccountLeaseCoversStreamAndRejectsStickyOverload(t *testing.T) {
 		t.Fatal("lease was not released", err)
 	}
 	again.Body.Close()
-	history, err := service.Requests(ctx, 0, "", "")
+	history, err := service.Requests(ctx, RequestFilter{})
 	if err != nil || len(history.Requests) != 4 {
 		t.Fatal("missing bounded history", err)
 	}
@@ -177,7 +177,7 @@ func TestTransientFailuresCooldownAndResumeIgnoreOlderRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.Body.Close()
-	page, err := service.Requests(ctx, 0, "", "")
+	page, err := service.Requests(ctx, RequestFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestRetryAfterAndHistoryRetention(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	page, err := service.Requests(context.Background(), 0, "", "")
+	page, err := service.Requests(context.Background(), RequestFilter{})
 	if err != nil || len(page.Requests) != 50 || page.NextCursor == 0 {
 		t.Fatal("history page invalid", err)
 	}
@@ -253,13 +253,13 @@ func TestRetryAfterAndHistoryRetention(t *testing.T) {
 	if _, err := service.db.Exec("UPDATE request_records SET started_at=1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Requests(context.Background(), 0, "", ""); err != nil {
+	if _, err := service.Requests(context.Background(), RequestFilter{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.queries.RecordRequest(context.Background(), db.RecordRequestParams{UserID: 1, GroupID: 1, Transport: "http", Operation: "responses", Outcome: "success", StartedAt: now.Unix()}); err != nil {
 		t.Fatal(err)
 	}
-	page, err = service.Requests(context.Background(), 0, "", "")
+	page, err = service.Requests(context.Background(), RequestFilter{})
 	if err != nil || page.Requests[0].ID <= previous {
 		t.Fatal("history cursor reused after retention cleanup", err)
 	}
@@ -312,7 +312,7 @@ func TestDownstreamContextLimitDoesNotPenalizeAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.Body.Close()
-	page, err := service.Requests(context.Background(), 0, "", "")
+	page, err := service.Requests(context.Background(), RequestFilter{})
 	if err != nil || page.Requests[0].Outcome != "rejected" || page.Requests[0].ErrorCode != "context_limit" {
 		t.Fatal("local context rejection mislabeled", err)
 	}

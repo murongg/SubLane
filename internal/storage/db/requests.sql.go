@@ -9,10 +9,64 @@ import (
 	"context"
 )
 
+const listRequestCallers = `-- name: ListRequestCallers :many
+SELECT r.user_id, r.key_id, COALESCE(u.username,'') AS username, COALESCE(k.name,'') AS key_name
+FROM request_records r
+LEFT JOIN users u ON u.id=r.user_id
+LEFT JOIN api_keys k ON k.id=r.key_id
+WHERE (r.user_id=?1 OR ?1=0) AND r.started_at>=?2
+GROUP BY r.user_id,r.key_id ORDER BY username,key_name,r.key_id LIMIT 5000
+`
+
+type ListRequestCallersParams struct {
+	UserID int64
+	Since  int64
+}
+
+type ListRequestCallersRow struct {
+	UserID   int64
+	KeyID    int64
+	Username string
+	KeyName  string
+}
+
+func (q *Queries) ListRequestCallers(ctx context.Context, arg ListRequestCallersParams) ([]ListRequestCallersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRequestCallers, arg.UserID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRequestCallersRow{}
+	for rows.Next() {
+		var i ListRequestCallersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.KeyID,
+			&i.Username,
+			&i.KeyName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRequests = `-- name: ListRequests :many
-SELECT r.id, r.user_id, r.key_id, r.group_id, r.account_id, r.provider, r.model, r.transport, r.operation, r.started_at, r.duration_ms, r.outcome, r.error_code, r.upstream_status, r.input_tokens, r.output_tokens, r.cached_tokens,COALESCE(u.username,'') AS username,COALESCE(k.name,'') AS key_name,COALESCE(g.name,'') AS group_name,COALESCE(a.name,'') AS account_name
+SELECT r.id, r.user_id, r.key_id, r.group_id, r.account_id, r.provider, r.model, r.transport, r.operation, r.started_at, r.duration_ms, r.outcome, r.error_code, r.upstream_status, r.input_tokens, r.output_tokens, r.cached_tokens, r.request_id, r.first_token_ms,COALESCE(u.username,'') AS username,COALESCE(k.name,'') AS key_name,COALESCE(g.name,'') AS group_name,COALESCE(a.name,'') AS account_name
 FROM request_records r LEFT JOIN users u ON u.id=r.user_id LEFT JOIN api_keys k ON k.id=r.key_id LEFT JOIN account_groups g ON g.id=r.group_id LEFT JOIN accounts a ON a.id=r.account_id
 WHERE (r.user_id=?1 OR ?1=0) AND (r.id<?2 OR ?2=0) AND (r.account_id=?3 OR ?3='') AND (r.outcome=?4 OR ?4='') AND r.started_at>=?5
+ AND (r.started_at<?6 OR ?6=0)
+ AND (r.user_id=?7 OR ?7=0)
+ AND (r.key_id=?8 OR ?8=0)
+ AND (r.model=?9 OR ?9='')
+ AND (r.request_id=?10 OR ?10='')
 ORDER BY r.id DESC LIMIT 51
 `
 
@@ -22,6 +76,11 @@ type ListRequestsParams struct {
 	AccountID string
 	Outcome   string
 	Since     int64
+	UntilTime int64
+	MemberID  int64
+	KeyID     int64
+	Model     string
+	RequestID string
 }
 
 type ListRequestsRow struct {
@@ -42,6 +101,8 @@ type ListRequestsRow struct {
 	InputTokens    *int64
 	OutputTokens   *int64
 	CachedTokens   *int64
+	RequestID      string
+	FirstTokenMs   *int64
 	Username       string
 	KeyName        string
 	GroupName      string
@@ -55,6 +116,11 @@ func (q *Queries) ListRequests(ctx context.Context, arg ListRequestsParams) ([]L
 		arg.AccountID,
 		arg.Outcome,
 		arg.Since,
+		arg.UntilTime,
+		arg.MemberID,
+		arg.KeyID,
+		arg.Model,
+		arg.RequestID,
 	)
 	if err != nil {
 		return nil, err
@@ -81,6 +147,8 @@ func (q *Queries) ListRequests(ctx context.Context, arg ListRequestsParams) ([]L
 			&i.InputTokens,
 			&i.OutputTokens,
 			&i.CachedTokens,
+			&i.RequestID,
+			&i.FirstTokenMs,
 			&i.Username,
 			&i.KeyName,
 			&i.GroupName,
@@ -109,8 +177,8 @@ func (q *Queries) PruneRequests(ctx context.Context, beforeTime int64) error {
 }
 
 const recordRequest = `-- name: RecordRequest :exec
-INSERT INTO request_records(user_id,key_id,group_id,account_id,provider,model,transport,operation,started_at,duration_ms,outcome,error_code,upstream_status,input_tokens,output_tokens,cached_tokens)
-VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)
+INSERT INTO request_records(user_id,key_id,group_id,account_id,provider,model,transport,operation,started_at,duration_ms,outcome,error_code,upstream_status,input_tokens,output_tokens,cached_tokens,request_id,first_token_ms)
+VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
 `
 
 type RecordRequestParams struct {
@@ -130,6 +198,8 @@ type RecordRequestParams struct {
 	InputTokens    *int64
 	OutputTokens   *int64
 	CachedTokens   *int64
+	RequestID      string
+	FirstTokenMs   *int64
 }
 
 func (q *Queries) RecordRequest(ctx context.Context, arg RecordRequestParams) error {
@@ -150,6 +220,8 @@ func (q *Queries) RecordRequest(ctx context.Context, arg RecordRequestParams) er
 		arg.InputTokens,
 		arg.OutputTokens,
 		arg.CachedTokens,
+		arg.RequestID,
+		arg.FirstTokenMs,
 	)
 	return err
 }

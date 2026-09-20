@@ -44,6 +44,8 @@ const recordSchema = z.object({
   operation: z.enum(['responses', 'chat', 'compact']),
   started_at: z.number().int(),
   duration_ms: z.number().int().nonnegative(),
+  request_id: z.string().max(64),
+  first_token_ms: tokens,
   outcome: z.enum(outcomes),
   error_code: z.string(),
   upstream_status: z.number().int().nullable(),
@@ -55,30 +57,47 @@ const recordSchema = z.object({
   group_name: z.string(),
   account_name: z.string(),
 })
+export type RequestRecord = z.infer<typeof recordSchema>
+export type RequestFilters = {
+  account_id?: string
+  outcome?: string
+  model?: string
+  request_id?: string
+  from?: number
+  until?: number
+  key_id?: number
+  user_id?: number
+}
+
+function currentScope(
+  client: QueryClient,
+  userID: number | undefined,
+  scope: 'personal' | 'all',
+) {
+  const user = client.getQueryData<AuthState>(authKey)?.user
+  return (
+    userID !== undefined &&
+    user?.id === userID &&
+    (scope === 'personal' || user.role === 'admin')
+  )
+}
+
 export function requestOptions(
   client: QueryClient,
   userID: number | undefined,
   scope: 'personal' | 'all',
   cursor: number,
-  accountID: string,
-  outcome: string,
+  filters: RequestFilters,
 ) {
-  const query = new URLSearchParams({
-    cursor: String(cursor),
-    outcome,
-  })
-  if (scope === 'all') query.set('account_id', accountID)
+  const query = new URLSearchParams({ cursor: String(cursor) })
+  for (const [key, value] of Object.entries(filters)) {
+    if (scope === 'personal' && (key === 'account_id' || key === 'user_id'))
+      continue
+    if (value !== undefined && value !== '') query.set(key, String(value))
+  }
   return queryOptions({
-    queryKey: ['request-history', userID, scope, cursor, accountID, outcome],
-    // An old observer must stop before a role/identity change finishes rerendering the route.
-    enabled: () => {
-      const user = client.getQueryData<AuthState>(authKey)?.user
-      return (
-        userID !== undefined &&
-        user?.id === userID &&
-        (scope === 'personal' || user.role === 'admin')
-      )
-    },
+    queryKey: ['request-history', userID, scope, cursor, filters],
+    enabled: () => currentScope(client, userID, scope),
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       request(
         `${scope === 'personal' ? '/api/me/requests' : '/api/requests'}?${query}`,
@@ -88,5 +107,34 @@ export function requestOptions(
         }),
         { signal },
       ),
+  })
+}
+
+export function requestCallerOptions(
+  client: QueryClient,
+  userID: number,
+  scope: 'personal' | 'all',
+) {
+  return queryOptions({
+    queryKey: ['request-callers', userID, scope],
+    enabled: () => currentScope(client, userID, scope),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      request(
+        `${scope === 'personal' ? '/api/me/requests' : '/api/requests'}/filters`,
+        z.object({
+          callers: z
+            .array(
+              z.object({
+                user_id: z.number().int(),
+                key_id: z.number().int(),
+                username: z.string(),
+                key_name: z.string(),
+              }),
+            )
+            .max(5000),
+        }),
+        { signal },
+      ),
+    staleTime: 30000,
   })
 }

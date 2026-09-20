@@ -13,7 +13,7 @@ import (
 
 func TestAccountUsageRequiresAdminAndRefreshesRejectedCredential(t *testing.T) {
 	var calls, refreshes atomic.Int32
-	fixture := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {
+	fixture := newQuotaForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth/token" {
 			refreshes.Add(1)
 			io.WriteString(w, `{"access_token":"synthetic-rotated","expires_in":3600}`)

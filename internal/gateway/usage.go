@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"math"
@@ -18,6 +17,8 @@ import (
 const usageTTL = 2 * time.Minute
 const usageCooldown = 5 * time.Second
 
+var errUsageChanged = errors.New("account_usage_changed")
+
 // UsageSnapshot separates the observation time from the response clock and refresh state.
 type UsageSnapshot struct {
 	upstream.Usage
@@ -30,6 +31,7 @@ type UsageSnapshot struct {
 }
 
 type usageEntry struct {
+	revision int64
 	snapshot *upstream.Usage
 	flight   chan struct{}
 	retryAt  time.Time
@@ -45,11 +47,12 @@ type usageCache struct {
 	now     func() time.Time
 	workers sync.WaitGroup
 	closed  bool
+	slots   chan struct{}
 }
 
 func newUsageCache(parent context.Context) *usageCache {
 	ctx, cancel := context.WithCancel(parent)
-	return &usageCache{entries: make(map[string]*usageEntry), ctx: ctx, cancel: cancel, now: time.Now}
+	return &usageCache{entries: make(map[string]*usageEntry), slots: make(chan struct{}, 2), ctx: ctx, cancel: cancel, now: time.Now}
 }
 
 func (s *Service) Close() {
@@ -69,11 +72,11 @@ func (s *Service) Close() {
 }
 
 func (s *Service) Usage(ctx context.Context, id string) (UsageSnapshot, error) {
-	return s.usageSnapshot(ctx, id, false)
+	return s.usageSnapshot(ctx, id, false, true)
 }
 
 func (s *Service) RefreshUsage(ctx context.Context, id string) (UsageSnapshot, error) {
-	return s.usageSnapshot(ctx, id, true)
+	return s.usageSnapshot(ctx, id, true, true)
 }
 
 func (s *Service) usageAccount(ctx context.Context, id string) error {
@@ -84,13 +87,16 @@ func (s *Service) usageAccount(ctx context.Context, id string) error {
 	if !account.Enabled {
 		return accounts.ErrDisabled
 	}
+	if account.Status == "reauth_required" {
+		return accounts.ErrReauthorize
+	}
 	if account.Provider != "codex" {
 		return upstream.ErrUsageUnsupported
 	}
 	return nil
 }
 
-func (s *Service) usageSnapshot(ctx context.Context, id string, force bool) (UsageSnapshot, error) {
+func (s *Service) usageSnapshot(ctx context.Context, id string, force, wait bool) (UsageSnapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return UsageSnapshot{}, err
 	}
@@ -112,7 +118,7 @@ func (s *Service) usageSnapshot(ctx context.Context, id string, force bool) (Usa
 	}
 	current := snapshotState(e, now)
 	if e.flight == nil && (force || e.snapshot == nil || current.Stale) && !now.Before(e.retryAt) {
-		release, admissionErr := s.Acquire()
+		release, admissionErr := s.acquireUsage()
 		if admissionErr != nil {
 			e.err = admissionErr
 			e.retryAt = now.Add(usageCooldown)
@@ -124,7 +130,7 @@ func (s *Service) usageSnapshot(ctx context.Context, id string, force bool) (Usa
 		}
 	}
 	flight := e.flight
-	if e.snapshot != nil && (!force || flight == nil) {
+	if !wait || e.snapshot != nil && (!force || flight == nil) {
 		current = snapshotState(e, now)
 		c.mu.Unlock()
 		return current, nil
@@ -148,8 +154,15 @@ func (s *Service) usageSnapshot(ctx context.Context, id string, force bool) (Usa
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	e, err = s.loadUsage(ctx, id, c.now())
+	if err != nil {
+		return UsageSnapshot{}, err
+	}
 	if e.snapshot != nil {
 		return snapshotState(e, c.now()), nil
+	}
+	if e.err == nil {
+		return UsageSnapshot{}, errUsageChanged
 	}
 	return UsageSnapshot{}, e.err
 }
@@ -157,7 +170,11 @@ func (s *Service) usageSnapshot(ctx context.Context, id string, force bool) (Usa
 // Called under the cache lock; only small SQLite reads occur here, never provider IO.
 func (s *Service) loadUsage(ctx context.Context, id string, now time.Time) (*usageEntry, error) {
 	c := s.usage
-	if entry := c.entries[id]; entry != nil {
+	row, err := s.queries.GetAccountUsage(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if entry := c.entries[id]; entry != nil && entry.revision == row.Revision {
 		entry.accessed = now
 		return entry, nil
 	}
@@ -174,17 +191,9 @@ func (s *Service) loadUsage(ctx context.Context, id string, now time.Time) (*usa
 		}
 		delete(c.entries, oldestID)
 	}
-	entry := &usageEntry{accessed: now}
-	row, err := s.queries.GetAccountUsage(ctx, id)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
-	}
-	if err == nil {
-		var saved upstream.Usage
-		if len(row.Snapshot) <= 128<<10 && json.Unmarshal(row.Snapshot, &saved) == nil && saved.Limits != nil && saved.UpdatedAt == row.UpdatedAt && saved.UpdatedAt > 0 {
-			entry.snapshot = &saved
-			entry.retryAt = time.Unix(saved.UpdatedAt, 0).Add(usageCooldown)
-		}
+	entry := &usageEntry{accessed: now, revision: row.Revision, snapshot: savedUsage(row)}
+	if entry.snapshot != nil {
+		entry.retryAt = time.Unix(entry.snapshot.UpdatedAt, 0).Add(usageCooldown)
 	}
 	c.entries[id] = entry
 	return entry, nil
@@ -207,7 +216,11 @@ func (s *Service) fetchUsage(id string, e *usageEntry, release func()) {
 		var raw []byte
 		raw, err = json.Marshal(value)
 		if err == nil {
-			err = s.queries.SaveAccountUsage(ctx, storedb.SaveAccountUsageParams{AccountID: id, Snapshot: raw, UpdatedAt: value.UpdatedAt})
+			var n int64
+			n, err = s.queries.SaveAccountUsage(ctx, storedb.SaveAccountUsageParams{AccountID: id, Snapshot: raw, UpdatedAt: value.UpdatedAt, Revision: e.revision})
+			if err == nil && n == 0 {
+				err = errUsageChanged
+			}
 		}
 	}
 	c.mu.Lock()
@@ -247,4 +260,18 @@ func snapshotState(e *usageEntry, now time.Time) UsageSnapshot {
 	}
 	result.Stale = e.err != nil || now.Unix() >= result.ExpiresAt || now.Unix() < result.UpdatedAt
 	return result
+}
+
+func (s *Service) acquireUsage() (func(), error) {
+	select {
+	case s.usage.slots <- struct{}{}:
+		release, err := s.Acquire()
+		if err != nil {
+			<-s.usage.slots
+			return nil, err
+		}
+		return func() { release(); <-s.usage.slots }, nil
+	default:
+		return nil, ErrBusy
+	}
 }

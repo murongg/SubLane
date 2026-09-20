@@ -197,3 +197,7 @@ Model catalogs use compact **Models** actions on accounts, groups and personal k
 ### Backup and restore
 
 Keep export and restore in two flat sections under System settings. State that archives contain credentials. Verification shows creation time, SubLane version and database size; restoration prepares a new directory and shows the path with explicit stop/configure/restart steps. An existing target blocks overwriting. Disable dependent actions until verification succeeds, clear verification when the file changes or is checked again, and retain honest error/permission/loading states in both languages.
+
+### Request diagnostics
+
+Keep account/result filters in the compact request toolbar. Additional model, request ID, caller and local-time filters expand inline and use the existing custom dropdowns. Show first-output latency as secondary text under total duration; null measurements remain an em dash. Show a compact, selectable request ID with a copy action below each start time; use an em dash when older records have no ID. The start-time button opens a focused request details dialog with a selectable/copyable correlation ID. On narrow screens, filters stack and the data table scrolls inside its own container. Quota exhaustion uses a warning status with a short explanation that existing conversations retain their account.

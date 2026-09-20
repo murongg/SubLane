@@ -1,4 +1,41 @@
 export const en = {
+  requestFilters: 'Filters',
+  requestClearFilters: 'Clear filters',
+  requestApplyFilters: 'Apply filters',
+  requestModelFilter: 'Model name',
+  requestExactModel: 'Exact model name',
+  requestIDMissing: 'No request ID was recorded for this call.',
+  requestID: 'Request ID',
+  requestKeyFilter: 'API key filter',
+  requestAllKeys: 'All API keys',
+  requestMember: 'Member',
+  requestMemberFilter: 'Member filter',
+  requestAllMembers: 'All members',
+  requestFrom: 'From (local time)',
+  requestUntil: 'Until (local time)',
+  requestInvalidRange: 'The end time must be later than the start time.',
+  requestFiltersFailed: 'Could not load member and key options.',
+  requestFilterHint:
+    'Search retained requests from the last 7 days. Names match exactly.',
+  requestFirstTokenValue: 'First output: {{value}}',
+  requestFirstToken: 'First output latency',
+  requestFirstTokenHint:
+    'Time from gateway processing to the first text, reasoning, or tool argument delta. Not measured when no output delta is observed.',
+  requestViewDetails: 'View request details',
+  requestDetails: 'Request details',
+  requestDetailsHint:
+    'Use the request ID to locate this call. Prompt and response content are not recorded.',
+  requestTransport: 'Connection',
+  requestReason: 'Reason',
+  requestUpstreamStatus: 'Upstream HTTP status',
+  requestCopyID: 'Copy request ID',
+  requestCopyFailed: 'Copy failed. Select the ID to copy it manually.',
+  accountQuotaExhausted: 'Quota exhausted',
+  reasonQuotaExhausted:
+    'Subscription quota exhausted; retry after the next quota check.',
+  accountQuotaRoutingHint:
+    'Fresh quota confirms exhaustion. New sessions use another available account; existing sessions keep their account.',
+
   auditSettingsUpdate: 'Updated instance settings',
   auditSettings: 'Instance settings',
   backupTitle: 'Backup and restore',

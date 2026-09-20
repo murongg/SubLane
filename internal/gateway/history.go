@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -17,6 +18,7 @@ import (
 
 type requestKey struct{}
 type requestIdentity struct {
+	RequestID string
 	KeyID     int64
 	Transport string
 }
@@ -25,83 +27,17 @@ func WithRequestIdentity(ctx context.Context, keyID int64, transport string) con
 	if transport != "websocket" {
 		transport = "http"
 	}
-	return context.WithValue(ctx, requestKey{}, requestIdentity{KeyID: keyID, Transport: transport})
+	return context.WithValue(ctx, requestKey{}, requestIdentity{RequestID: "req_" + rand.Text(), KeyID: keyID, Transport: transport})
+}
+
+var safeRequestID = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+
+func RequestID(ctx context.Context) string {
+	identity, _ := ctx.Value(requestKey{}).(requestIdentity)
+	return identity.RequestID
 }
 
 var safeModel = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,159}$`)
-
-type RequestRecord struct {
-	ID             int64  `json:"id"`
-	UserID         int64  `json:"user_id"`
-	KeyID          int64  `json:"key_id"`
-	GroupID        int64  `json:"group_id"`
-	AccountID      string `json:"account_id"`
-	Provider       string `json:"provider"`
-	Model          string `json:"model"`
-	Transport      string `json:"transport"`
-	Operation      string `json:"operation"`
-	StartedAt      int64  `json:"started_at"`
-	DurationMs     int64  `json:"duration_ms"`
-	Outcome        string `json:"outcome"`
-	ErrorCode      string `json:"error_code"`
-	UpstreamStatus *int64 `json:"upstream_status"`
-	InputTokens    *int64 `json:"input_tokens"`
-	OutputTokens   *int64 `json:"output_tokens"`
-	CachedTokens   *int64 `json:"cached_tokens"`
-	Username       string `json:"username"`
-	KeyName        string `json:"key_name"`
-	GroupName      string `json:"group_name"`
-	AccountName    string `json:"account_name"`
-}
-type RequestPage struct {
-	Requests   []RequestRecord `json:"requests"`
-	NextCursor int64           `json:"next_cursor"`
-}
-
-func (s *Service) Requests(ctx context.Context, cursor int64, accountID, outcome string) (RequestPage, error) {
-	return s.requests(ctx, 0, cursor, accountID, outcome)
-}
-
-func (s *Service) UserRequests(ctx context.Context, userID, cursor int64, outcome string) (RequestPage, error) {
-	// Zero is reserved for the administrator query, never for an absent personal identity.
-	if userID <= 0 {
-		return RequestPage{}, accounts.ErrInput
-	}
-	return s.requests(ctx, userID, cursor, "", outcome)
-}
-
-func (s *Service) requests(ctx context.Context, userID, cursor int64, accountID, outcome string) (RequestPage, error) {
-	page := RequestPage{Requests: []RequestRecord{}}
-	if cursor < 0 || len(accountID) > 64 {
-		return page, accounts.ErrInput
-	}
-	switch outcome {
-	case "", "success", "incomplete", "error", "canceled", "rejected":
-	default:
-		return page, accounts.ErrInput
-	}
-	since := s.now().Add(-7 * 24 * time.Hour).Unix()
-	if err := s.queries.PruneRequests(ctx, since); err != nil {
-		return page, err
-	}
-	rows, err := s.queries.ListRequests(ctx, db.ListRequestsParams{UserID: userID, Cursor: cursor, AccountID: accountID, Outcome: outcome, Since: since})
-	if err != nil {
-		return page, err
-	}
-	for _, row := range rows {
-		record := RequestRecord(row)
-		if userID != 0 {
-			// Subscription identities belong to the operator even when they served this user's request.
-			record.AccountID, record.AccountName = "", ""
-		}
-		page.Requests = append(page.Requests, record)
-	}
-	if len(page.Requests) > 50 {
-		page.Requests = page.Requests[:50]
-		page.NextCursor = page.Requests[49].ID
-	}
-	return page, nil
-}
 
 type observation struct {
 	service      *Service
@@ -127,6 +63,9 @@ func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (
 	s.sequence++
 	operation, cancel := context.WithCancel(ctx)
 	identity, _ := ctx.Value(requestKey{}).(requestIdentity)
+	if identity.RequestID == "" {
+		identity.RequestID = "req_" + rand.Text()
+	}
 	if identity.Transport == "" {
 		identity.Transport = "http"
 	}
@@ -137,7 +76,7 @@ func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (
 		name = "compact"
 	}
 	started := s.now()
-	return &observation{sequence: s.sequence, service: s, ctx: operation, cancel: cancel, stopParent: context.AfterFunc(s.runContext, cancel), started: started, record: db.RecordRequestParams{UserID: userID, GroupID: groupID, KeyID: identity.KeyID, Transport: identity.Transport, Operation: name, StartedAt: started.Unix()}}, nil
+	return &observation{sequence: s.sequence, service: s, ctx: operation, cancel: cancel, stopParent: context.AfterFunc(s.runContext, cancel), started: started, record: db.RecordRequestParams{RequestID: identity.RequestID, UserID: userID, GroupID: groupID, KeyID: identity.KeyID, Transport: identity.Transport, Operation: name, StartedAt: started.Unix()}}, nil
 }
 func (e *observation) finish(outcome, code, penalty, retry string) {
 	e.once.Do(func() {
@@ -146,7 +85,7 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 		defer e.stopParent()
 		e.record.Outcome = outcome
 		e.record.ErrorCode = code
-		e.record.DurationMs = max(0, time.Since(e.started).Milliseconds())
+		e.record.DurationMs = max(0, e.service.now().Sub(e.started).Milliseconds())
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		s := e.service
@@ -235,6 +174,8 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 		return "rejected", "member_busy", ""
 	case errors.Is(err, ErrMemberRate):
 		return "rejected", "member_rate_limited", ""
+	case errors.Is(err, ErrQuotaExhausted):
+		return "rejected", "quota_exhausted", ""
 	case errors.Is(err, ErrAccountBusy):
 		return "rejected", "account_busy", ""
 	case errors.Is(err, ErrAccountCooling):

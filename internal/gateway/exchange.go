@@ -62,17 +62,27 @@ func (x *Exchange) Events(yield func([]byte) error) error {
 	consumerError := false
 	err := x.Stream.Events(func(raw []byte) error {
 		var event struct {
-			Type string `json:"type"`
+			Type  string `json:"type"`
+			Delta string `json:"delta"`
 		}
 		_ = json.Unmarshal(raw, &event)
-		if event.Type == "response.completed" || event.Type == "response.incomplete" {
-			terminal = event.Type
-			x.mu.Lock()
-			if !x.closed {
+		x.mu.Lock()
+		if !x.closed {
+			// Lifecycle events and empty deltas are not generated output. Missing observations
+			// stay null, including compact or buffered responses without a measurable delta.
+			if event.Delta != "" && x.entry.record.FirstTokenMs == nil {
+				switch event.Type {
+				case "response.output_text.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta", "response.function_call_arguments.delta":
+					elapsed := max(0, x.entry.service.now().Sub(x.entry.started).Milliseconds())
+					x.entry.record.FirstTokenMs = &elapsed
+				}
+			}
+			if event.Type == "response.completed" || event.Type == "response.incomplete" {
+				terminal = event.Type
 				x.entry.observe(raw)
 			}
-			x.mu.Unlock()
 		}
+		x.mu.Unlock()
 		err := yield(raw)
 		if err != nil {
 			consumerError = true
