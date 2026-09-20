@@ -45,3 +45,10 @@ The Radix dropdown menu is pinned to 2.1.16 alongside Dialog 1.1.15 so they shar
 - License: MIT; full text in `licenses/lobe-icons.txt`.
 - Adapted files: `packages/static-svg/icons/codex-color.svg`, `claude-color.svg`, and `antigravity-color.svg`. They are bundled under `web/src/assets/providers/` and displayed by `ProviderLogo.tsx` with decorative accessibility semantics, retaining their original brand colors. No icon package or remote asset request is required at runtime.
 - Provider names and marks remain the property of their respective owners.
+
+## git-cliff
+
+- Project: https://github.com/orhun/git-cliff, version `2.14.2`.
+- License for the adapted template: MIT; full text in `licenses/git-cliff.txt` (upstream also offers Apache-2.0).
+- Adapted file: `cliff.toml`, based on the upstream Keep a Changelog example, with SubLane-specific Conventional Commit categories, breaking-change visibility and comparison links.
+- The generator is a development/CI tool and is not included in the application binary or container runtime.

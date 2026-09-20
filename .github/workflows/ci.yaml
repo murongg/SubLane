@@ -2,27 +2,121 @@ name: CI
 
 on:
   push:
+    branches: ['**']
   pull_request:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: 0.1.0-dev
+      release:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 9.12.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install changelog generator
+        uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2
+        with:
+          tool: git-cliff@2.14.2
       - run: make setup
       - run: make check
-      - run: docker build -t sublane:ci .
+        env:
+          SUBLANE_TEST_CHANGELOG: '1'
+      - name: Validate workflow and shell scripts
+        run: |
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          shellcheck scripts/container-smoke.sh scripts/package.sh
+      - name: Validate Compose configurations
+        run: |
+          docker compose -f docker.compose.yaml config --quiet
+          docker compose -f docker.compose.yaml -f docker.compose.build.yaml config --quiet
+
+  containers:
+    name: Container (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      BUILD_VERSION: ${{ inputs.version || '0.1.0-dev' }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build image for the native runner
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          platforms: linux/${{ matrix.arch }}
+          tags: sublane:ci-${{ matrix.arch }}
+          build-args: |
+            VERSION=${{ env.BUILD_VERSION }}
+            REVISION=${{ github.sha }}
+            SOURCE_URL=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=container-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=container-${{ matrix.arch }}
+          # The tested image is transported through docker save/load before publication.
+          provenance: false
+      - name: Test runtime, persistence and maintenance commands
+        run: bash scripts/container-smoke.sh "sublane:ci-$ARCH" "$BUILD_VERSION"
+      - name: Package and verify the tested binary
+        run: |
+          mkdir -p release-assets extracted
+          container=$(docker create "sublane:ci-$ARCH")
+          trap 'docker rm --volumes "$container" >/dev/null' EXIT
+          docker cp "$container:/usr/local/bin/sublane" extracted/sublane
+          bash scripts/package.sh "$BUILD_VERSION" "$ARCH" extracted/sublane release-assets
+          mkdir unpacked
+          tar -xzf "release-assets/sublane_${BUILD_VERSION}_linux_${ARCH}.tar.gz" -C unpacked
+          test "$(unpacked/sublane --version)" = "$BUILD_VERSION"
+          test -s unpacked/LICENSE
+          test -s unpacked/THIRD_PARTY_NOTICES.md
+          test -s unpacked/docker.compose.yaml
+          test -s unpacked/docs/deployment.md
+      - name: Export the tested image for publication
+        if: inputs.release
+        run: docker save "sublane:ci-$ARCH" | gzip -1 > "release-assets/image-$ARCH.tar.gz"
+      - name: Save release artifacts
+        if: inputs.release
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.arch }}
+          path: release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+          # Re-running all jobs uses the same workflow run and artifact names.
+          overwrite: true
+          retention-days: 7

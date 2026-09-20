@@ -62,19 +62,19 @@ Exports and prepared restores are audited without recording archive contents, fi
 To export and verify within the running container:
 
 ```sh
-docker compose exec sublane sh -c 'mkdir -p /data/backups'
-docker compose exec sublane sublane backup --output /data/backups/team.sublane-backup.tar.gz
-docker compose exec sublane sublane backup verify --input /data/backups/team.sublane-backup.tar.gz
-docker compose cp sublane:/data/backups/team.sublane-backup.tar.gz ./team.sublane-backup.tar.gz
+docker compose -f docker.compose.yaml exec sublane sh -c 'mkdir -p /data/backups'
+docker compose -f docker.compose.yaml exec sublane sublane backup --output /data/backups/team.sublane-backup.tar.gz
+docker compose -f docker.compose.yaml exec sublane sublane backup verify --input /data/backups/team.sublane-backup.tar.gz
+docker compose -f docker.compose.yaml cp sublane:/data/backups/team.sublane-backup.tar.gz ./team.sublane-backup.tar.gz
 ```
 
 For recovery, copy a backup into a private writable location visible inside the container, then prepare a separate directory:
 
 ```sh
-docker compose exec sublane sublane restore --input /data/backups/team.sublane-backup.tar.gz --data-dir /data/restore-ready
+docker compose -f docker.compose.yaml exec sublane sublane restore --input /data/backups/team.sublane-backup.tar.gz --data-dir /data/restore-ready
 ```
 
-The web restore action produces the same target. To activate it, create a local Compose override, for example `compose.restore.yaml`:
+The web restore action produces the same target. To activate it, create a local Compose override, for example `docker.compose.restore.yaml`:
 
 ```yaml
 services:
@@ -86,11 +86,11 @@ services:
 Then stop the original process and start with the override:
 
 ```sh
-docker compose stop sublane
-docker compose -f compose.yaml -f compose.restore.yaml up -d
+docker compose -f docker.compose.yaml stop sublane
+docker compose -f docker.compose.yaml -f docker.compose.restore.yaml up -d
 ```
 
-For an already stopped container, use `docker compose run --rm --no-deps sublane ...` instead of `exec` to run maintenance commands against its named data volume. Keep the selected override in subsequent deployment commands. Do not remove the named volume during this procedure.
+For an already stopped container, use `docker compose -f docker.compose.yaml run --rm --no-deps sublane ...` instead of `exec` to run maintenance commands against its named data volume. Keep the selected override in subsequent deployment commands. Do not remove the named volume during this procedure.
 
 ## Validation and failure behavior
 

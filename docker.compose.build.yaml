@@ -1,0 +1,10 @@
+# Local source build: docker compose -f docker.compose.yaml -f docker.compose.build.yaml up --build -d
+services:
+  sublane:
+    image: sublane:local
+    pull_policy: never
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-0.1.0-dev}
+        REVISION: ${REVISION:-unknown}

@@ -17,6 +17,12 @@ Run all Make targets from the repository root.
 | `make dev` | Build the development backend and launch it with Vite |
 | `make dev-api` | Run only the Go backend |
 | `make dev-web` | Run only Vite |
+| `make changelog` | Generate `CHANGELOG.md` with git-cliff 2.14.2 |
+| `make changelog-check` | Verify changelog formatting and release ranges with synthetic Git history |
+| `make release-notes TAG=v0.1.0` | Generate notes for an existing tag at HEAD |
+| `make publish-check TAG=v0.1.0` | Validate release preconditions without creating or pushing a tag |
+| `make publish TAG=v0.1.0` | Create and push one annotated release tag from synchronized, clean main |
+| `make release VERSION=0.0.0-test` | Build Linux amd64/arm64 archives and SHA-256 checksums locally |
 | `make build` | Build frontend and embed it into `bin/sublane` |
 | `make generate` | Regenerate typed database access using pinned sqlc |
 | `make generate-check` | Verify generated Go matches the SQL and sqlc configuration |
@@ -93,9 +99,13 @@ Create the next numbered `.sql` file in `internal/storage/migrations/`. Never al
 - **Frontend shows a connection failure:** confirm the Go process is running and Vite's proxy points to the configured address.
 - **Port already in use:** stop the previous local process or change the configured port and proxy together. Do not terminate unrelated processes.
 - **Go downloads a toolchain:** this is expected when the installed Go is older than `go.mod` requires.
-- **Docker build cannot connect:** start your Docker engine, then run `docker compose config --quiet` and `docker build -t sublane:local .`.
+- **Docker build cannot connect:** start your Docker engine, then run `docker compose -f docker.compose.yaml config --quiet` and `docker compose -f docker.compose.yaml -f docker.compose.build.yaml build`.
 - **Language or theme stays changed:** preferences are deliberately stored in browser local storage. Change them in Preferences to restore defaults.
 
 ## Maintenance
 
 Keep `go.sum` and `web/pnpm-lock.yaml` under version control. Run dependency upgrades as separate changes and preserve third-party license notices. Do not copy a newer Shadcn Admin tree over local components without reviewing localization, naming, and accessibility changes.
+
+## Packaging and release checks
+
+See [deployment](deployment.md) for container smoke tests and [release operations](releases.md) for the tag-triggered pipeline. `make test` includes the built-in Node release metadata tests and temporary-repository publish tests; `make lint` checks release/smoke script syntax. CI builds and tests containers on both native Linux architectures, then the release workflow publishes those exact tested images and extracts their binaries. No registry credentials are used in pull-request checks.
