@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -34,6 +35,8 @@ func (h *keyHTTP) register(router chi.Router) {
 		keys.Get("/groups", h.groupChoices)
 		keys.Post("/", h.create)
 		keys.Post("/{id}/revoke", h.revoke)
+		keys.Post("/{id}/secret", h.reveal)
+		keys.Patch("/{id}", h.update)
 	})
 }
 
@@ -65,8 +68,9 @@ func (h *keyHTTP) list(w http.ResponseWriter, r *http.Request) {
 
 func (h *keyHTTP) create(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Name    string `json:"name"`
-		GroupID *int64 `json:"group_id"`
+		Name      string `json:"name"`
+		GroupID   *int64 `json:"group_id"`
+		ExpiresAt *int64 `json:"expires_at"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -75,7 +79,7 @@ func (h *keyHTTP) create(w http.ResponseWriter, r *http.Request) {
 	if input.GroupID != nil {
 		groupID = *input.GroupID
 	}
-	created, err := h.service.CreateInGroup(r.Context(), sessionUser(r).ID, groupID, input.Name)
+	created, err := h.service.CreateWithExpiry(r.Context(), sessionUser(r).ID, groupID, input.Name, input.ExpiresAt)
 	if err != nil {
 		keyError(w, err)
 		return
@@ -108,6 +112,10 @@ func keyError(w http.ResponseWriter, err error) {
 		status, code = 403, "group_unavailable"
 	case errors.Is(err, apikey.ErrInput):
 		status, code = 400, "invalid_input"
+	case errors.Is(err, apikey.ErrNotCopyable):
+		status, code = 409, "api_key_not_copyable"
+	case errors.Is(err, apikey.ErrRevoked):
+		status, code = 409, "api_key_revoked"
 	case errors.Is(err, apikey.ErrLimit):
 		status, code = 409, "api_key_limit"
 	case errors.Is(err, apikey.ErrNotFound):
@@ -119,4 +127,49 @@ func keyError(w http.ResponseWriter, err error) {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 	}
 	writeJSON(w, status, map[string]string{"error": code})
+}
+
+func (h *keyHTTP) update(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil || id <= 0 {
+		keyError(w, apikey.ErrInput)
+		return
+	}
+	var input struct {
+		Name      string          `json:"name"`
+		Enabled   *bool           `json:"enabled"`
+		ExpiresAt json.RawMessage `json:"expires_at"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	var expiry *int64
+	if input.Enabled == nil || len(input.ExpiresAt) == 0 || json.Unmarshal(input.ExpiresAt, &expiry) != nil {
+		keyError(w, apikey.ErrInput)
+		return
+	}
+	key, err := h.service.Update(r.Context(), sessionUser(r).ID, id, apikey.UpdateInput{Name: input.Name, Enabled: *input.Enabled, ExpiresAt: expiry})
+	if err != nil {
+		keyError(w, err)
+		return
+	}
+	writeJSON(w, 200, key)
+}
+
+func (h *keyHTTP) reveal(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil || id <= 0 {
+		keyError(w, apikey.ErrInput)
+		return
+	}
+	var input struct{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	secret, err := h.service.Reveal(r.Context(), sessionUser(r).ID, id)
+	if err != nil {
+		keyError(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]string{"secret": secret})
 }

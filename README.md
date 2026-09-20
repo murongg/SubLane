@@ -71,11 +71,11 @@ Open **Accounts** as the administrator, select **Codex**, **Claude**, or **Antig
 
 ## Account groups
 
-Administrators can organize accounts into pools and grant member access. Each personal key is bound to one group; only accounts in that pool can serve its requests. Existing accounts and keys migrate to the default group. See [account groups](docs/groups.md) for isolation, shared accounts, and permission changes.
+Administrators can organize accounts into pools and grant member access. Each personal key is bound to one group; only accounts in that pool can serve its requests. Existing accounts and keys migrate to the default group. Groups can optionally restrict exact model IDs. Keys support rename, reversible pause, optional expiry and owner-only copying of newly created keys, with encrypted storage. See [account groups](docs/groups.md) and [personal keys](docs/api-keys.md) for access behavior.
 
 ## Pool operation
 
-Accounts expose current concurrency and durable cooldown state, with administrator-configurable limits. Each user can inspect their own model-call metadata under **Requests**; administrators can inspect **All requests**. Neither view records prompt or response bodies. See [pool runtime](docs/pool-runtime.md) for recovery behavior and request history. [Team controls](docs/team-controls.md) cover password management, member request limits and independent usage summaries.
+Accounts expose current concurrency and durable cooldown state, with administrator-configurable limits. Each user can inspect their own model-call metadata under **Requests**; administrators can inspect **All requests**. Neither view records prompt or response bodies. See [pool runtime](docs/pool-runtime.md) for recovery behavior and request history. [Team controls](docs/team-controls.md) cover password management, member request limits and independent usage summaries. Administrators can inspect manual changes through the bounded [management audit](docs/audit.md).
 
 ## Configuration
 
@@ -143,6 +143,7 @@ The repository keeps a small set of maintained brand assets. Run `make brand` to
 - [Administrator authentication](docs/authentication.md)
 - [Member accounts and permissions](docs/members.md)
 - [Personal API keys](docs/api-keys.md)
+- [Management audit](docs/audit.md)
 - [Development guide](docs/development.md)
 - [Roadmap](docs/roadmap.md)
 - [Contributing](CONTRIBUTING.md)

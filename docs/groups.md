@@ -16,7 +16,7 @@ New subscription accounts and local users join the default group within their cr
 
 Accounts may belong to several groups. Adding an account to a new group does not remove it from the default or any other pool. For exclusive access, remove the account from every pool that should no longer expose it. Account credentials and upstream subscription quota remain shared when an account is intentionally shared.
 
-The first implementation supports up to 32 groups and 100 account associations per group. Groups can be renamed, edited, and disabled. Disabling preserves keys and history; there is no deletion action in this iteration. Per-group billing, quotas, model allowlists, and routing priorities are not implemented.
+The first implementation supports up to 32 groups and 100 account associations per group. Groups can be renamed, edited, and disabled. Disabling preserves keys and history; there is no deletion action in this iteration. Per-group billing, quotas, and routing priorities are not implemented.
 
 ## Request and conversation behavior
 
@@ -45,3 +45,11 @@ All management endpoints require an enabled administrator browser session. Mutat
 `POST /api/keys` accepts `name` and `group_id`. Omitting `group_id` selects group 1 for compatibility, but still checks permission. An explicit invalid ID is rejected. All accounts and groups must exist; unknown or duplicate IDs reject an entire pool/grant update, leaving the previous state intact.
 
 Back up SQLite and `credentials.key` together before upgrades. Restoring a pre-groups executable requires the matching database backup. Automated verification uses synthetic identities and temporary databases, including migration preservation, defaults, key/grant enforcement, model isolation, atomic edits, and WebSocket permission changes.
+
+## Model access
+
+An administrator can enable **Limit allowed models** in the group editor. Enter up to 100 exact IDs, one per line, using the IDs returned by `/v1/models`. Qualified IDs select a provider; an unqualified ID is normalized to `codex/<id>`. Wildcards are not supported, and model variants must be listed explicitly.
+
+Groups remain unrestricted by default, including newly discovered models. Enabling the allowlist with no entries denies all models. The API accepts an optional `model_policy: {"restricted": true, "models": ["codex/synthetic-model"]}` on create/update. Omission preserves an existing policy; it does not reset access. Group responses include `restricted_models`; detail responses also include `allowed_models`.
+
+Model discovery filters out models outside the allowlist and does not contact providers excluded entirely by the policy. Responses, Chat Completions, compaction, and every WebSocket turn (including local prewarm) check current policy before account selection or upstream work. A denied model returns `403 model_not_allowed`; it consumes no member rate/concurrency allowance and creates no affinity. Already admitted requests may finish. Migration `015_model_policy.sql` preserves existing unrestricted groups.

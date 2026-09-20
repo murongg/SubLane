@@ -17,7 +17,7 @@ output_reported=usage_daily.output_reported+excluded.output_reported,
 cached_reported=usage_daily.cached_reported+excluded.cached_reported;
 
 -- name: GetStatisticsCoverage :one
-SELECT started_at FROM usage_coverage WHERE id=1;
+SELECT value FROM settings WHERE key='usage.daily.started_at';
 
 -- name: CanTrackStatisticsModel :one
 SELECT CAST(

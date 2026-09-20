@@ -9,6 +9,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/storage/db"
 
 	"golang.org/x/crypto/argon2"
@@ -40,7 +41,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, current, pas
 	if !verifyPassword(user.PasswordHash, current) {
 		return ErrCurrentPassword
 	}
-	return s.replacePassword(ctx, user, password)
+	return s.replacePassword(ctx, user, password, "user.password", "user")
 }
 
 func (s *Service) ResetMemberPassword(ctx context.Context, id int64, password string) error {
@@ -49,6 +50,7 @@ func (s *Service) ResetMemberPassword(ctx context.Context, id int64, password st
 
 // RecoverAdministrator is only exposed by the local maintenance command, never an HTTP route.
 func (s *Service) RecoverAdministrator(ctx context.Context, password string) error {
+	ctx = audit.WithActor(ctx, audit.Actor{ID: 0, Username: "local-cli", Role: "admin", Source: "local"})
 	return s.resetPassword(ctx, 1, RoleAdmin, password)
 }
 
@@ -67,10 +69,14 @@ func (s *Service) resetPassword(ctx context.Context, id int64, role Role, passwo
 	if err != nil {
 		return err
 	}
-	return s.replacePassword(ctx, user, password)
+	action, resource := "member.password", "member"
+	if role == RoleAdmin {
+		action, resource = "user.recover", "user"
+	}
+	return s.replacePassword(ctx, user, password, action, resource)
 }
 
-func (s *Service) replacePassword(ctx context.Context, user db.GetPasswordUserRow, password string) error {
+func (s *Service) replacePassword(ctx context.Context, user db.GetPasswordUserRow, password, action, resource string) error {
 	hash := hashPassword(password)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -87,6 +93,9 @@ func (s *Service) replacePassword(ctx context.Context, user db.GetPasswordUserRo
 	}
 	// Hash replacement and all-session revocation must either both commit or neither happen.
 	if err := q.DeleteUserSessions(ctx, user.ID); err != nil {
+		return err
+	}
+	if err := audit.Record(ctx, q, action, resource, audit.ID(user.ID)); err != nil {
 		return err
 	}
 	return tx.Commit()

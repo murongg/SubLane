@@ -1,11 +1,9 @@
 -- name: GetMemberLimits :one
-SELECT u.id,u.role,u.enabled,CAST(COALESCE(l.requests_per_minute,0) AS INTEGER) AS requests_per_minute,CAST(COALESCE(l.max_concurrency,0) AS INTEGER) AS max_concurrency
-FROM users u LEFT JOIN member_limits l ON l.user_id=u.id WHERE u.id=sqlc.arg(user_id);
+SELECT id,role,enabled,requests_per_minute,max_concurrency FROM users WHERE id=sqlc.arg(user_id);
 
 -- name: SetMemberLimits :execrows
-INSERT INTO member_limits(user_id,requests_per_minute,max_concurrency)
-SELECT id,sqlc.arg(requests_per_minute),sqlc.arg(max_concurrency) FROM users WHERE id=sqlc.arg(user_id) AND role='member'
-ON CONFLICT(user_id) DO UPDATE SET requests_per_minute=excluded.requests_per_minute,max_concurrency=excluded.max_concurrency;
+UPDATE users SET requests_per_minute=sqlc.arg(requests_per_minute),max_concurrency=sqlc.arg(max_concurrency)
+WHERE id=sqlc.arg(user_id) AND role='member';
 
 -- name: GetMemberWindow :one
 SELECT window_start,requests FROM member_rate WHERE user_id=sqlc.arg(user_id);

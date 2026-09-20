@@ -134,6 +134,22 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if prewarm {
+				var input struct {
+					Model string `json:"model"`
+				}
+				if err := json.Unmarshal(normalized, &input); err != nil {
+					if writeError(upstream.ErrInput) != nil {
+						return
+					}
+					continue
+				}
+				if err := h.gateway.AuthorizeModel(ctx, principal.UserID, principal.GroupID, input.Model); err != nil {
+					if writeError(err) != nil {
+						return
+					}
+					continue
+				}
+
 				created, completed := prewarmEvents(normalized)
 				if write(created) != nil || write(completed) != nil {
 					return

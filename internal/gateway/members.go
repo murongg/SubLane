@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage/db"
@@ -58,14 +59,23 @@ func (s *Service) SetMemberLimits(ctx context.Context, userID, rpm, concurrency 
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	n, err := s.queries.SetMemberLimits(ctx, db.SetMemberLimitsParams{UserID: userID, RequestsPerMinute: rpm, MaxConcurrency: concurrency})
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	n, err := q.SetMemberLimits(ctx, db.SetMemberLimitsParams{UserID: userID, RequestsPerMinute: rpm, MaxConcurrency: concurrency})
 	if err != nil {
 		return err
 	}
 	if n != 1 {
 		return auth.ErrMemberNotFound
 	}
-	return nil
+	if err := audit.Record(ctx, q, "member.limits", "member", audit.ID(userID)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Called with s.mu held. All keys, transports and groups consume the same member lease.

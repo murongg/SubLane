@@ -1,4 +1,105 @@
 export const en = {
+  ccSwitchImport: 'Import into CC Switch',
+  ccSwitchImportNamed: 'Import {{name}} into CC Switch',
+  ccSwitchDescription:
+    'Prepare a Codex connection using this API key, then confirm the import in CC Switch.',
+  ccSwitchName: 'Configuration name',
+  ccSwitchModelHint:
+    'Enter an exact model ID allowed by this key’s group. Use the provider prefix when required.',
+  ccSwitchInputInvalid:
+    'Use a configuration name of 1–128 characters without control characters and a valid model ID.',
+  ccSwitchPrivacy:
+    'The selected key and connection details will be passed to CC Switch on this device. The imported provider will not be activated automatically.',
+  ccSwitchReady:
+    'Ready to open CC Switch. Confirm the configuration there, then enable it when needed.',
+  ccSwitchOpened:
+    'Confirm the import in CC Switch. If it did not open, check that the app is installed and try again.',
+  ccSwitchOpenFailed:
+    'Could not open CC Switch. Check that it is installed, then try again.',
+  ccSwitchKeyUnavailable:
+    'Use an enabled, unexpired key with access to its group.',
+  ccSwitchPrepare: 'Prepare import',
+  ccSwitchOpen: 'Open CC Switch',
+  ccSwitchEdit: 'Edit configuration',
+
+  copyKeyNamed: 'Copy {{name}}',
+  keyLegacyCopy:
+    'This older key cannot be copied again. Create a new key if you need its full value.',
+  retrievingKey: 'Retrieving key…',
+  keyRetrieveFailed: 'Could not retrieve this key. Try again.',
+  copyKeyTitle: 'Copy API key',
+  keyManualCopy:
+    'Clipboard access is unavailable. Select and copy the key below.',
+  auditKeyReveal: 'Retrieved API key',
+
+  keyPaused: 'Paused',
+  editKey: 'Edit API key',
+  editKeyNamed: 'Edit {{name}}',
+  editKeyDescription:
+    'Update access without changing the key or its account group.',
+  keyEnabled: 'Key enabled',
+  keyPauseHint:
+    'Pausing blocks new requests. You can enable this key again later.',
+  keyExpiry: 'Expires',
+  keyNeverExpires: 'Never expires',
+  keyKeepExpiry: 'Keep current expiry',
+  keyExpiryDays: 'In {{count}} days',
+  keyExpiryDays_one: 'In {{count}} day',
+  keyExpiryDays_other: 'In {{count}} days',
+  keyExpiresOn: 'Expires {{date}}',
+  keyExpired: 'Expired',
+  keyUpdateFailed: 'Could not update the key. Check the values and try again.',
+  keyAlreadyRevoked:
+    'This key has already been revoked. Refresh the list to see its latest state.',
+  groupModelPolicy: 'Model access',
+  groupRestrictModels: 'Limit allowed models',
+  groupAllowedModels: 'Allowed model IDs',
+  groupModelsHint:
+    'One exact ID per line, up to 100. Use IDs from /v1/models. Unqualified IDs refer to Codex; wildcards are not supported.',
+  groupNoModels: 'No models are allowed while this list is empty.',
+  groupAllModelsHint:
+    'All models available through this group can be used, including models added later.',
+  groupAllModels: 'All models',
+  groupRestrictedModels: 'Model allowlist',
+  reasonModelNotAllowed: 'Model not allowed by this group',
+  auditLog: 'Audit log',
+  auditDescription: 'Track changes to accounts, members and access policies.',
+  auditResourceFilter: 'Resource type',
+  auditAllResources: 'All resources',
+  auditMember: 'Member',
+  auditUser: 'User',
+  auditAccount: 'Subscription account',
+  auditActor: 'Performed by',
+  auditAction: 'Action',
+  auditTarget: 'Target',
+  auditSuccess: 'Succeeded',
+  auditFailure: 'Failed',
+  auditLocal: 'Local maintenance',
+  auditLoading: 'Loading audit records…',
+  auditLoadFailed: 'Could not load audit records. Try again.',
+  auditEmpty: 'No audit records',
+  auditEmptyHint: 'Management actions matching these filters will appear here.',
+  auditRetention:
+    'Retained for 90 days, up to 10,000 records. Passwords, credentials and request content are never recorded.',
+  auditKeyCreate: 'Created API key',
+  auditKeyUpdate: 'Updated API key',
+  auditKeyRevoke: 'Revoked API key',
+  auditGroupCreate: 'Created account group',
+  auditGroupUpdate: 'Updated account group',
+  auditMemberCreate: 'Created member',
+  auditMemberUpdate: 'Changed member status',
+  auditMemberGroups: 'Changed group access',
+  auditMemberLimits: 'Changed member limits',
+  auditMemberPassword: 'Reset member password',
+  auditUserPassword: 'Changed password',
+  auditUserRecover: 'Recovered administrator',
+  auditAccountCreate: 'Added subscription account',
+  auditAccountAuthorize: 'Authorized subscription account',
+  auditAccountUpdate: 'Changed account status',
+  auditAccountDelete: 'Deleted subscription account',
+  auditAccountConcurrency: 'Changed account concurrency',
+  auditAccountResume: 'Cleared account cooldown',
+
   activityTitle: 'Activity by time',
   activityGrid: 'Weekday and hour activity',
   activityNotCollected: 'Not collected',
@@ -237,11 +338,11 @@ export const en = {
   keyName: 'Name',
   keyNameHint: 'Use 1–64 characters without control characters.',
   keyLimitReached:
-    'You have reached the limit of 20 active keys. Revoke an existing key before creating another.',
+    'You can keep up to 20 non-revoked keys, including paused or expired keys. Revoke one before creating another.',
   keyCreateFailed: 'Could not create the key. Please try again.',
   saveKeyTitle: 'Save your API key',
   saveKeyDescription:
-    'Copy this key and keep it somewhere safe. The full key will not be shown again.',
+    'Copy this key now, or use the copy button in your key list later.',
   copyKey: 'Copy key',
   copied: 'Copied',
   copyKeyFailed:
@@ -445,9 +546,9 @@ export const en = {
   groupNameTaken: 'A group with this name already exists.',
   groupLimitReached: 'This instance supports up to 32 groups.',
   defaultGroupProtected:
-    'The default group stays enabled and keeps its name. You can edit its accounts and member access.',
+    'The default group stays enabled and keeps its name. You can edit its accounts, model policy and member access.',
   groupInputInvalid:
-    'Use a group name of 1–64 characters and select existing accounts.',
+    'Check the group name (1–64 characters), selected accounts and exact model IDs (up to 100).',
   groupSaveFailed: 'Could not save group changes. Try again.',
   groupAccess: 'Group access',
   memberGroupsNamed: 'Manage groups for {{username}}',

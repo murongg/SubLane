@@ -1,0 +1,155 @@
+// Package audit stores bounded management metadata. It never accepts request bodies or credentials.
+package audit
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/murongg/SubLane/internal/storage/db"
+)
+
+var ErrInput = errors.New("invalid_audit_input")
+
+type Actor struct {
+	ID                     int64
+	Username, Role, Source string
+}
+type actorKey struct{}
+
+func WithActor(ctx context.Context, actor Actor) context.Context {
+	return context.WithValue(ctx, actorKey{}, actor)
+}
+func ID(id int64) string { return strconv.FormatInt(id, 10) }
+
+type Event struct {
+	ID         int64  `json:"id"`
+	ActorID    int64  `json:"actor_id"`
+	ActorName  string `json:"actor_name"`
+	ActorRole  string `json:"actor_role"`
+	Source     string `json:"source"`
+	Action     string `json:"action"`
+	Resource   string `json:"resource"`
+	ResourceID string `json:"resource_id"`
+	Outcome    string `json:"outcome"`
+	HTTPStatus *int64 `json:"http_status"`
+	CreatedAt  int64  `json:"created_at"`
+}
+type Filter struct {
+	BeforeID          int64
+	Resource, Outcome string
+}
+type Page struct {
+	Events     []Event `json:"events"`
+	NextCursor int64   `json:"next_cursor"`
+}
+type Service struct {
+	connection *sql.DB
+	queries    *db.Queries
+}
+
+func New(connection *sql.DB) *Service {
+	return &Service{connection: connection, queries: db.New(connection)}
+}
+
+var actions = map[string]string{
+	"key.reveal": "key", "key.create": "key", "key.update": "key", "key.revoke": "key",
+	"group.create": "group", "group.update": "group",
+	"member.create": "member", "member.update": "member", "member.groups": "member", "member.limits": "member", "member.password": "member",
+	"user.password": "user", "user.recover": "user",
+	"account.create": "account", "account.authorize": "account", "account.update": "account", "account.delete": "account", "account.concurrency": "account", "account.resume": "account",
+}
+var numericID = regexp.MustCompile(`^[1-9][0-9]{0,18}$`)
+var accountID = regexp.MustCompile(`^[a-f0-9]{32}$`)
+
+func ValidTarget(action, resource, id string) bool {
+	expected, ok := actions[action]
+	if !ok || expected != resource {
+		return false
+	}
+	if id == "" {
+		return true
+	}
+	if resource == "account" {
+		return accountID.MatchString(id)
+	}
+	return numericID.MatchString(id)
+}
+
+// Record must use the caller's transaction so a successful mutation cannot outlive its audit record.
+// Background refreshes have no actor and are intentionally outside the management audit.
+func Record(ctx context.Context, q *db.Queries, action, resource, id string) error {
+	return record(ctx, q, action, resource, id, nil)
+}
+func record(ctx context.Context, q *db.Queries, action, resource, id string, status *int64) error {
+	if !ValidTarget(action, resource, id) {
+		return ErrInput
+	}
+	actor, ok := ctx.Value(actorKey{}).(Actor)
+	if !ok {
+		return nil
+	}
+	if actor.ID < 0 || len(actor.Username) > 64 || actor.Username == "" || strings.ContainsAny(actor.Username, "\r\n") || (actor.Source != "user" && actor.Source != "local") || (actor.Role != "admin" && actor.Role != "member") {
+		return ErrInput
+	}
+	outcome := "success"
+	if status != nil {
+		outcome = "failure"
+	}
+	now := time.Now().Unix()
+	if err := q.CreateAuditEvent(ctx, db.CreateAuditEventParams{ActorID: actor.ID, ActorName: actor.Username, ActorRole: actor.Role, Source: actor.Source, Action: action, Resource: resource, ResourceID: id, Outcome: outcome, HttpStatus: status, CreatedAt: now}); err != nil {
+		return err
+	}
+	return q.PruneAuditEvents(ctx, now-int64((90*24*time.Hour)/time.Second))
+}
+func (s *Service) Failure(ctx context.Context, action, resource, id string, status int) error {
+	if status < 400 || status > 599 {
+		return ErrInput
+	}
+	tx, err := s.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	code := int64(status)
+	if err := record(ctx, s.queries.WithTx(tx), action, resource, id, &code); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+func (s *Service) List(ctx context.Context, f Filter) (Page, error) {
+	page := Page{Events: []Event{}}
+	if f.BeforeID < 0 || (f.Outcome != "" && f.Outcome != "success" && f.Outcome != "failure") {
+		return page, ErrInput
+	}
+	switch f.Resource {
+	case "", "key", "group", "member", "user", "account":
+	default:
+		return page, ErrInput
+	}
+	tx, err := s.connection.BeginTx(ctx, nil)
+	if err != nil {
+		return page, err
+	}
+	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	if err := q.PruneAuditEvents(ctx, time.Now().Add(-90*24*time.Hour).Unix()); err != nil {
+		return page, err
+	}
+	rows, err := q.ListAuditEvents(ctx, db.ListAuditEventsParams{BeforeID: f.BeforeID, Resource: f.Resource, Outcome: f.Outcome})
+	if err != nil {
+		return page, err
+	}
+	for _, row := range rows {
+		page.Events = append(page.Events, Event{ID: row.ID, ActorID: row.ActorID, ActorName: row.ActorName, ActorRole: row.ActorRole, Source: row.Source, Action: row.Action, Resource: row.Resource, ResourceID: row.ResourceID, Outcome: row.Outcome, HTTPStatus: row.HttpStatus, CreatedAt: row.CreatedAt})
+	}
+	if len(page.Events) > 50 {
+		page.Events = page.Events[:50]
+		page.NextCursor = page.Events[49].ID
+	}
+	return page, tx.Commit()
+}

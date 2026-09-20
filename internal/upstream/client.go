@@ -19,9 +19,11 @@ import (
 
 // Public Codex OAuth identifiers. Protocol headers are owned by this adapter.
 const (
-	clientID      = "app_EMoamEEZ73f0CkXaXp7hrann"
-	redirectURI   = "http://localhost:1455/auth/callback"
-	clientVersion = "0.118.0"
+	clientID    = "app_EMoamEEZ73f0CkXaXp7hrann"
+	redirectURI = "http://localhost:1455/auth/callback"
+	// The catalog is version-gated: obsolete clients can receive HTTP 200 with only hidden models.
+	// Keep discovery and its User-Agent aligned with a verified Codex client release.
+	clientVersion = "0.152.1"
 	MaxBody       = 8 << 20
 )
 

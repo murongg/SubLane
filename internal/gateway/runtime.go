@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
@@ -89,12 +90,24 @@ func (s *Service) SetConcurrency(ctx context.Context, id string, limit int64) er
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	n, err := s.queries.SetAccountConcurrency(ctx, db.SetAccountConcurrencyParams{ID: id, MaxConcurrency: limit, Now: s.now().Unix()})
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	n, err := q.SetAccountConcurrency(ctx, db.SetAccountConcurrencyParams{ID: id, MaxConcurrency: limit, Now: s.now().Unix()})
 	if err != nil {
 		return err
 	}
 	if n == 0 {
 		return accounts.ErrNotFound
+	}
+	if err := audit.Record(ctx, q, "account.concurrency", "account", id); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 	if state := s.health[id]; state != nil {
 		state.MaxConcurrency = limit
@@ -118,14 +131,29 @@ func (s *Service) Resume(ctx context.Context, id string) error {
 	next.lastFailureAt = 0
 	next.lastFailureSequence = 0
 	next.revision++
-	if err := s.persistRuntime(ctx, &next); err != nil {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	if err := q.SaveAccountRuntime(ctx, runtimeParams(&next)); err != nil {
+		return err
+	}
+	if err := audit.Record(ctx, q, "account.resume", "account", id); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	*state = next
 	return nil
 }
 func (s *Service) persistRuntime(ctx context.Context, state *Runtime) error {
-	return s.queries.SaveAccountRuntime(ctx, db.SaveAccountRuntimeParams{AccountID: state.ID, CooldownUntil: state.CooldownUntil, Reason: state.Reason, Failures: state.Failures, LastFailureAt: state.lastFailureAt, Revision: state.revision})
+	return s.queries.SaveAccountRuntime(ctx, runtimeParams(state))
+}
+func runtimeParams(state *Runtime) db.SaveAccountRuntimeParams {
+	return db.SaveAccountRuntimeParams{AccountID: state.ID, CooldownUntil: state.CooldownUntil, Reason: state.Reason, Failures: state.Failures, LastFailureAt: state.lastFailureAt, Revision: state.revision}
 }
 func (s *Service) accountAdmission(account accounts.Account) error {
 	if !account.Enabled {

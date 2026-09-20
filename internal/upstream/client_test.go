@@ -118,3 +118,28 @@ func TestTokenErrorsDoNotExposeProviderBody(t *testing.T) {
 		t.Fatal("unsafe provider error", err)
 	}
 }
+
+func TestModelsRequestsVersionGatedCatalog(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/models" {
+			t.Error("unexpected catalog request")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		// Model discovery can succeed with only hidden entries for an obsolete client.
+		if r.URL.Query().Get("client_version") != "0.152.1" || r.Header.Get("User-Agent") != "codex_cli_rs/0.152.1" {
+			io.WriteString(w, `{"models":[{"slug":"synthetic-hidden","visibility":"hide"}]}`)
+			return
+		}
+		io.WriteString(w, `{"models":[{"slug":"synthetic-current","visibility":"list"},{"slug":"synthetic-hidden","visibility":"hide"},{"slug":"synthetic-internal","visibility":"hidden"}]}`)
+	}))
+	defer server.Close()
+	client := New()
+	client.baseURL = server.URL
+	models, err := client.Models(context.Background(), accounts.Credential{AccessToken: "synthetic-access", AccountID: "synthetic-account"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 || models[0].ID != "synthetic-current" || models[0].Object != "model" || models[0].OwnedBy != "openai" {
+		t.Fatalf("visible catalog missing or hidden models exposed: %+v", models)
+	}
+}

@@ -30,14 +30,14 @@ func (q *Queries) CanTrackStatisticsModel(ctx context.Context, arg CanTrackStati
 }
 
 const getStatisticsCoverage = `-- name: GetStatisticsCoverage :one
-SELECT started_at FROM usage_coverage WHERE id=1
+SELECT value FROM settings WHERE key='usage.daily.started_at'
 `
 
-func (q *Queries) GetStatisticsCoverage(ctx context.Context) (int64, error) {
+func (q *Queries) GetStatisticsCoverage(ctx context.Context) (string, error) {
 	row := q.db.QueryRowContext(ctx, getStatisticsCoverage)
-	var started_at int64
-	err := row.Scan(&started_at)
-	return started_at, err
+	var value string
+	err := row.Scan(&value)
+	return value, err
 }
 
 const getStatisticsTotals = `-- name: GetStatisticsTotals :one

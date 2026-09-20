@@ -13,6 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/vault"
 )
@@ -103,7 +104,19 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 		if row.AccountID != credential.AccountID || row.Provider != credential.Kind() {
 			return Account{}, ErrIdentity
 		}
-		if err := s.persist(ctx, replaceID, credential, status); err != nil {
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return Account{}, err
+		}
+		defer tx.Rollback()
+		q := s.queries.WithTx(tx)
+		if err := s.persist(ctx, q, replaceID, credential, status); err != nil {
+			return Account{}, err
+		}
+		if err := audit.Record(ctx, q, "account.authorize", "account", replaceID); err != nil {
+			return Account{}, err
+		}
+		if err := tx.Commit(); err != nil {
 			return Account{}, err
 		}
 		row.Email, row.Plan, row.Status, row.ExpiresAt, row.UpdatedAt = credential.Email, credential.Plan, status, credential.ExpiresAt, now
@@ -143,6 +156,9 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	if err := queries.AddDefaultGroupAccount(ctx, id); err != nil {
 		return Account{}, err
 	}
+	if err := audit.Record(ctx, queries, "account.create", "account", id); err != nil {
+		return Account{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return Account{}, err
 	}
@@ -158,23 +174,41 @@ func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) (Acco
 	}
 	row.Enabled = enabled
 	row.UpdatedAt = s.now().Unix()
-	if err := s.queries.SetAccountEnabled(ctx, db.SetAccountEnabledParams{ID: id, Enabled: enabled, UpdatedAt: row.UpdatedAt}); err != nil {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
 		return Account{}, err
 	}
-	return metadata(row), nil
+	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	if err := q.SetAccountEnabled(ctx, db.SetAccountEnabledParams{ID: id, Enabled: enabled, UpdatedAt: row.UpdatedAt}); err != nil {
+		return Account{}, err
+	}
+	if err := audit.Record(ctx, q, "account.update", "account", id); err != nil {
+		return Account{}, err
+	}
+	return metadata(row), tx.Commit()
 }
 
 func (s *Service) Delete(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	n, err := s.queries.DeleteAccount(ctx, id)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	n, err := q.DeleteAccount(ctx, id)
 	if err != nil {
 		return err
 	}
 	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if err := audit.Record(ctx, q, "account.delete", "account", id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Service) Prepare(ctx context.Context, id string, refresh func(context.Context, Credential) (Credential, error)) (Credential, error) {
@@ -246,13 +280,13 @@ func (s *Service) prepare(ctx context.Context, id, rejectedToken string, refresh
 	if updated.ExpiresAt <= s.now().Add(minimumValidity).Unix() {
 		return Credential{}, ErrRefresh
 	}
-	if err := s.persist(ctx, id, updated, "ready"); err != nil {
+	if err := s.persist(ctx, s.queries, id, updated, "ready"); err != nil {
 		return Credential{}, err
 	}
 	return updated, nil
 }
 
-func (s *Service) persist(ctx context.Context, id string, c Credential, status string) error {
+func (s *Service) persist(ctx context.Context, q *db.Queries, id string, c Credential, status string) error {
 	raw, err := json.Marshal(c)
 	if err != nil {
 		return err
@@ -261,7 +295,7 @@ func (s *Service) persist(ctx context.Context, id string, c Credential, status s
 	if err != nil {
 		return err
 	}
-	return s.queries.UpdateAccountCredential(ctx, db.UpdateAccountCredentialParams{ID: id, Credential: encrypted, Email: c.Email, Plan: c.Plan, Status: status, ExpiresAt: c.ExpiresAt, UpdatedAt: s.now().Unix()})
+	return q.UpdateAccountCredential(ctx, db.UpdateAccountCredentialParams{ID: id, Credential: encrypted, Email: c.Email, Plan: c.Plan, Status: status, ExpiresAt: c.ExpiresAt, UpdatedAt: s.now().Unix()})
 }
 
 func (s *Service) get(ctx context.Context, id string) (db.Account, error) {

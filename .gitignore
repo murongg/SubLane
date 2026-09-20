@@ -20,5 +20,5 @@ setup.key
 /docs/specs/
 /.impeccable/review/
 
-# Instance-local upstream credential encryption key.
+# Instance-local credential and API-key encryption key.
 credentials.key

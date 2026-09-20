@@ -9,7 +9,7 @@ input_reported=usage_hourly.input_reported+excluded.input_reported,
 output_reported=usage_hourly.output_reported+excluded.output_reported;
 
 -- name: GetHourlyCoverage :one
-SELECT started_at FROM usage_hourly_coverage WHERE id=1;
+SELECT value FROM settings WHERE key='usage.hourly.started_at';
 
 -- name: PruneHourlyUsage :exec
 DELETE FROM usage_hourly WHERE hour<sqlc.arg(before_hour);

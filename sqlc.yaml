@@ -18,3 +18,7 @@ sql:
             go_type: "bool"
           - column: "account_groups.enabled"
             go_type: "bool"
+          - column: "api_keys.enabled"
+            go_type: "bool"
+          - column: "account_groups.restricted_models"
+            go_type: "bool"

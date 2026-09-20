@@ -32,7 +32,7 @@ func TestKeyOwnershipHashingAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys := New(db)
+	keys := newTestKeys(t, db)
 	created, err := keys.Create(ctx, member.ID, "Laptop test")
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +105,7 @@ func TestKeyLimitAndInvalidInput(t *testing.T) {
 	if _, err := identity.Setup(ctx, "owner-test", "owner pass 42"); err != nil {
 		t.Fatal(err)
 	}
-	keys := New(db)
+	keys := newTestKeys(t, db)
 	for _, name := range []string{"", "   ", strings.Repeat("x", 65)} {
 		if _, err := keys.Create(ctx, 1, name); !errors.Is(err, ErrInput) {
 			t.Fatal("invalid key name accepted")
@@ -160,7 +160,7 @@ func TestKeysEnforceGroupGrantsOnCreationAndEveryAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys := New(connection)
+	keys := newTestKeys(t, connection)
 	if _, err := keys.CreateInGroup(ctx, member.ID, pool.ID, "Denied"); !errors.Is(err, groups.ErrUnavailable) {
 		t.Fatal("unauthorized group accepted", err)
 	}

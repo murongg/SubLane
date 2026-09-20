@@ -10,8 +10,7 @@ import (
 )
 
 const getMemberLimits = `-- name: GetMemberLimits :one
-SELECT u.id,u.role,u.enabled,CAST(COALESCE(l.requests_per_minute,0) AS INTEGER) AS requests_per_minute,CAST(COALESCE(l.max_concurrency,0) AS INTEGER) AS max_concurrency
-FROM users u LEFT JOIN member_limits l ON l.user_id=u.id WHERE u.id=?1
+SELECT id,role,enabled,requests_per_minute,max_concurrency FROM users WHERE id=?1
 `
 
 type GetMemberLimitsRow struct {
@@ -52,9 +51,8 @@ func (q *Queries) GetMemberWindow(ctx context.Context, userID int64) (GetMemberW
 }
 
 const setMemberLimits = `-- name: SetMemberLimits :execrows
-INSERT INTO member_limits(user_id,requests_per_minute,max_concurrency)
-SELECT id,?1,?2 FROM users WHERE id=?3 AND role='member'
-ON CONFLICT(user_id) DO UPDATE SET requests_per_minute=excluded.requests_per_minute,max_concurrency=excluded.max_concurrency
+UPDATE users SET requests_per_minute=?1,max_concurrency=?2
+WHERE id=?3 AND role='member'
 `
 
 type SetMemberLimitsParams struct {

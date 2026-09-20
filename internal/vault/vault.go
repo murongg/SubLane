@@ -1,4 +1,4 @@
-// Package vault encrypts upstream credentials with an instance-local key.
+// Package vault encrypts credentials and recoverable API keys with an instance-local key.
 package vault
 
 import (
@@ -74,21 +74,45 @@ func (v *Vault) Seal(accountID string, plaintext []byte) ([]byte, error) {
 	if accountID == "" {
 		return nil, errors.New("account ID is required for encryption")
 	}
+	return v.seal("sublane:account:"+accountID, plaintext)
+}
+
+func (v *Vault) seal(binding string, plaintext []byte) ([]byte, error) {
 	nonce := make([]byte, v.aead.NonceSize())
 	_, _ = rand.Read(nonce)
 	envelope := append([]byte{1}, nonce...)
-	// Binding the ciphertext to its row prevents copying credentials between account records.
-	return v.aead.Seal(envelope, nonce, plaintext, []byte("sublane:account:"+accountID)), nil
+	// Bind ciphertext to its resource domain, owner (when applicable), and record.
+	return v.aead.Seal(envelope, nonce, plaintext, []byte(binding)), nil
 }
 
 func (v *Vault) Open(accountID string, encrypted []byte) ([]byte, error) {
-	nonceSize := v.aead.NonceSize()
-	if accountID == "" || len(encrypted) < 1+nonceSize+v.aead.Overhead() || encrypted[0] != 1 {
+	if accountID == "" {
 		return nil, ErrDecrypt
 	}
-	plain, err := v.aead.Open(nil, encrypted[1:1+nonceSize], encrypted[1+nonceSize:], []byte("sublane:account:"+accountID))
+	return v.open("sublane:account:"+accountID, encrypted)
+}
+
+func (v *Vault) open(binding string, encrypted []byte) ([]byte, error) {
+	nonceSize := v.aead.NonceSize()
+	if len(encrypted) < 1+nonceSize+v.aead.Overhead() || encrypted[0] != 1 {
+		return nil, ErrDecrypt
+	}
+	plain, err := v.aead.Open(nil, encrypted[1:1+nonceSize], encrypted[1+nonceSize:], []byte(binding))
 	if err != nil {
 		return nil, ErrDecrypt
 	}
 	return plain, nil
+}
+
+func (v *Vault) SealAPIKey(ownerID, keyID int64, plaintext []byte) ([]byte, error) {
+	if ownerID <= 0 || keyID <= 0 {
+		return nil, errors.New("API key owner and record IDs must be positive")
+	}
+	return v.seal(fmt.Sprintf("sublane:api-key:%d:%d", ownerID, keyID), plaintext)
+}
+func (v *Vault) OpenAPIKey(ownerID, keyID int64, encrypted []byte) ([]byte, error) {
+	if ownerID <= 0 || keyID <= 0 {
+		return nil, ErrDecrypt
+	}
+	return v.open(fmt.Sprintf("sublane:api-key:%d:%d", ownerID, keyID), encrypted)
 }

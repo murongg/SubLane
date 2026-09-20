@@ -10,14 +10,14 @@ import (
 )
 
 const getHourlyCoverage = `-- name: GetHourlyCoverage :one
-SELECT started_at FROM usage_hourly_coverage WHERE id=1
+SELECT value FROM settings WHERE key='usage.hourly.started_at'
 `
 
-func (q *Queries) GetHourlyCoverage(ctx context.Context) (int64, error) {
+func (q *Queries) GetHourlyCoverage(ctx context.Context) (string, error) {
 	row := q.db.QueryRowContext(ctx, getHourlyCoverage)
-	var started_at int64
-	err := row.Scan(&started_at)
-	return started_at, err
+	var value string
+	err := row.Scan(&value)
+	return value, err
 }
 
 const listHourlyActivity = `-- name: ListHourlyActivity :many

@@ -141,3 +141,19 @@ func TestStatisticsBoundsModelCardinalityWithoutLosingCounts(t *testing.T) {
 		t.Fatal("overflow lost totals", stats, err)
 	}
 }
+
+func TestStatisticsRejectsInvalidCoverageSettings(t *testing.T) {
+	for _, key := range []string{"usage.daily.started_at", "usage.hourly.started_at"} {
+		for _, value := range []string{"not-a-time", "9223372036854775808"} {
+			t.Run(key+"/"+value, func(t *testing.T) {
+				service, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { t.Fatal("unexpected upstream"); return nil, nil }))
+				if _, err := service.db.Exec("UPDATE settings SET value=? WHERE key=?", value, key); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := service.Statistics(context.Background(), 7); err == nil {
+					t.Fatal("corrupt coverage silently treated as a timestamp")
+				}
+			})
+		}
+	}
+}

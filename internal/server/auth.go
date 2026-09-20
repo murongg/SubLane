@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
 )
 
 const sessionCookie = "sublane_session"
 
 type authHTTP struct {
+	audit     *audit.Service
 	service   *auth.Service
 	publicURL string
 	limiter   *loginLimiter
@@ -220,7 +222,9 @@ func (h *authHTTP) requireUser(next http.Handler) http.Handler {
 			writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), sessionUserKey{}, *state.User)))
+		ctx := context.WithValue(r.Context(), sessionUserKey{}, *state.User)
+		ctx = audit.WithActor(ctx, audit.Actor{ID: state.User.ID, Username: state.User.Username, Role: string(state.User.Role), Source: "user"})
+		h.auditRequest(next, w, r.WithContext(ctx))
 	})
 }
 

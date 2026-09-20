@@ -29,7 +29,7 @@ func TestGroupHTTPManagementAndPersonalChoices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := New(Options{Auth: identity, Keys: apikey.New(connection), Groups: groups.New(connection), Ping: connection.PingContext})
+	h := New(Options{Auth: identity, Keys: newTestKeyService(t, connection), Groups: groups.New(connection), Ping: connection.PingContext})
 	origin := "http://example.test"
 	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "synthetic-admin", "password": "synthetic-pass"}, nil)
 	owner := setup.Result().Cookies()[0]
@@ -87,7 +87,7 @@ func TestGroupHTTPManagementAndPersonalChoices(t *testing.T) {
 }
 
 func TestWebSocketRechecksPoolAndMemberAccessOnEveryTurn(t *testing.T) {
-	for _, change := range []string{"grant", "disable", "account"} {
+	for _, change := range []string{"grant", "disable", "account", "model", "prewarm-model", "paused"} {
 		t.Run(change, func(t *testing.T) {
 			var calls atomic.Int32
 			fixture := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +145,11 @@ func TestWebSocketRechecksPoolAndMemberAccessOnEveryTurn(t *testing.T) {
 			read("response.completed")
 			want := "invalid_api_key"
 			switch change {
+			case "model", "prewarm-model":
+				_, err = fixture.groups.Save(ctx, pool.ID, groups.Input{Name: pool.Name, Enabled: true, AccountIDs: ids, ModelPolicy: &groups.ModelPolicy{Restricted: true, Models: []string{"another-model"}}})
+				want = "model_not_allowed"
+			case "paused":
+				_, err = fixture.keys.Update(ctx, fixture.userID, key.Key.ID, apikey.UpdateInput{Name: key.Key.Name, Enabled: false})
 			case "grant":
 				err = fixture.groups.SetMemberGroups(ctx, fixture.userID, []int64{})
 			case "disable":
@@ -155,6 +160,9 @@ func TestWebSocketRechecksPoolAndMemberAccessOnEveryTurn(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatal(err)
+			}
+			if change == "prewarm-model" {
+				turn["generate"] = false
 			}
 			if err := conn.WriteJSON(turn); err != nil {
 				t.Fatal(err)

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import {
   FolderClosed,
+  ShieldCheck,
   ChartNoAxesCombined,
   ListChecks,
   KeyRound,
@@ -54,6 +55,7 @@ const navigation = [
       { to: '/admin/requests', label: 'allRequests', icon: ListChecks },
       { to: '/admin/usage', label: 'teamUsage', icon: ChartNoAxesCombined },
       { to: '/members', label: 'members', icon: Users },
+      { to: '/admin/audit', label: 'auditLog', icon: ShieldCheck },
     ],
   },
 ] as const
