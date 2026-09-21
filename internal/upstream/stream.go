@@ -5,25 +5,28 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/translator"
 	"io"
 	"sort"
 )
 
 var ErrInterrupted = errors.New("upstream_stream_interrupted")
+var errSSEEOF = errors.New("sse_end_of_stream")
 
-func (s *Stream) Events(yield func([]byte) error) error { return readEvents(s.Body, yield) }
+func (s *Stream) Events(yield func([]byte) error) error {
+	if s.format == translator.FormatClaude {
+		return readMessageEvents(s.Body, yield)
+	}
+	if s.format == translator.FormatGemini {
+		return readGeminiEvents(s.Body, yield)
+	}
+	return readEvents(s.Body, yield)
+}
 
 func readEvents(reader io.Reader, yield func([]byte) error) error {
-	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 64<<10), MaxBody)
-	var data bytes.Buffer
 	output := make(map[int]json.RawMessage)
 	outputBytes := 0
-	emit := func() (bool, error) {
-		if data.Len() == 0 {
-			return false, nil
-		}
-		raw := bytes.TrimSpace(data.Bytes())
+	err := readSSE(reader, func(raw []byte) (bool, error) {
 		if bytes.Equal(raw, []byte("[DONE]")) {
 			return false, ErrInterrupted
 		}
@@ -92,8 +95,30 @@ func readEvents(reader io.Reader, yield func([]byte) error) error {
 		if err := yield(raw); err != nil {
 			return false, err
 		}
-		data.Reset()
 		return terminal, nil
+	})
+	return requireTerminal(err)
+}
+
+func requireTerminal(err error) error {
+	if errors.Is(err, errSSEEOF) {
+		return ErrInterrupted
+	}
+	return err
+}
+
+// Each protocol owns its terminal/error semantics; framing and memory limits are shared.
+func readSSE(reader io.Reader, consume func([]byte) (bool, error)) error {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 64<<10), MaxBody)
+	var data bytes.Buffer
+	emit := func() (bool, error) {
+		if data.Len() == 0 {
+			return false, nil
+		}
+		done, err := consume(bytes.TrimSpace(data.Bytes()))
+		data.Reset()
+		return done, err
 	}
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -122,6 +147,10 @@ func readEvents(reader io.Reader, yield func([]byte) error) error {
 		}
 	}
 	if scanner.Err() != nil {
+		var rejected *UpstreamError
+		if errors.As(scanner.Err(), &rejected) {
+			return rejected
+		}
 		return ErrResponse
 	}
 	if data.Len() > 0 {
@@ -133,5 +162,5 @@ func readEvents(reader io.Reader, yield func([]byte) error) error {
 			return nil
 		}
 	}
-	return ErrInterrupted
+	return errSSEEOF
 }

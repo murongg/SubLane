@@ -30,7 +30,12 @@ const (
 	Responses Kind = iota
 	Chat
 	Compact
+	Messages
+	Gemini
+	GeminiStream
 )
+
+func (k Kind) IsGemini() bool { return k == Gemini || k == GeminiStream }
 
 type Service struct {
 	db           *sql.DB
@@ -77,6 +82,16 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 			entry.fail(failure)
 		}
 	}()
+	if kind == Messages {
+		if err := upstream.ValidateMessages(raw); err != nil {
+			return nil, err
+		}
+	}
+	if kind.IsGemini() {
+		if err := upstream.ValidateGemini(raw); err != nil {
+			return nil, err
+		}
+	}
 	var input map[string]json.RawMessage
 	if json.Unmarshal(raw, &input) != nil || input == nil {
 		return nil, upstream.ErrInput
@@ -104,6 +119,15 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		if json.Unmarshal(input["prompt_cache_key"], &session) != nil {
 			return nil, upstream.ErrInput
 		}
+	}
+	if kind == Messages && session == "" && len(input["metadata"]) > 0 {
+		var metadata struct {
+			UserID string `json:"user_id"`
+		}
+		if json.Unmarshal(input["metadata"], &metadata) != nil {
+			return nil, upstream.ErrInput
+		}
+		session = metadata.UserID
 	}
 	if len(session) > 1024 {
 		return nil, upstream.ErrInput
@@ -152,7 +176,11 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	}
 	// Isolate provider-side session and prompt-cache identifiers between SubLane members.
 	outgoing.Set("Session_id", fmt.Sprintf("%x-%x-%x-%x-%x", digest[:4], digest[4:6], digest[6:8], digest[8:10], digest[10:16]))
-	input["prompt_cache_key"], _ = json.Marshal(hex.EncodeToString(digest[:]))
+	if kind == Messages || kind.IsGemini() {
+		delete(input, "prompt_cache_key")
+	} else {
+		input["prompt_cache_key"], _ = json.Marshal(hex.EncodeToString(digest[:]))
+	}
 	raw, err = json.Marshal(input)
 	if err != nil {
 		return nil, upstream.ErrInput
@@ -162,6 +190,12 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		return nil, err
 	}
 	execute := func(c accounts.Credential) (*upstream.Stream, error) {
+		if kind.IsGemini() {
+			return s.provider.Gemini(ctx, c, raw, outgoing, kind == GeminiStream)
+		}
+		if kind == Messages {
+			return s.provider.Messages(ctx, c, raw, outgoing)
+		}
 		if kind == Chat {
 			return s.provider.Chat(ctx, c, raw, outgoing)
 		}

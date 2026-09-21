@@ -150,6 +150,7 @@ func New(o Options) http.Handler {
 	})
 	router.HandleFunc("/api", notFound)
 	router.Route("/v1", keys.registerGateway)
+	router.Route("/v1beta", keys.registerGemini)
 	router.Route("/v0", func(legacy chi.Router) { routeErrors(legacy) })
 
 	spa := assets(o.Assets)

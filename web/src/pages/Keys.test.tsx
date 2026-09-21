@@ -229,6 +229,52 @@ it('opens client setup on demand, copies the model config, and restores focus on
   ).toBe('codex/synthetic-model')
 })
 
+it('switches client protocols and copies matching request examples', async () => {
+  const fetch = vi.fn().mockImplementation((url: string) => {
+    if (url === '/api/auth/state')
+      return Promise.resolve(response(memberAuthenticated))
+    if (url === '/api/connection')
+      return Promise.resolve(response({ status: 'ready' }))
+    return Promise.resolve(response({ keys: [], next_cursor: 0 }))
+  })
+  vi.stubGlobal('fetch', fetch)
+  const user = userEvent.setup()
+  const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+  open()
+  await user.click(await screen.findByRole('button', { name: 'Setup guide' }))
+  const guide = await screen.findByRole('dialog', {
+    name: 'Connect your client',
+  })
+  await user.type(within(guide).getByLabelText('Model ID'), 'synthetic-model')
+  for (const [label, endpoint, header] of [
+    ['Claude Messages', '/v1/messages', 'x-api-key'],
+    [
+      'Gemini API',
+      '/v1beta/models/synthetic-model:generateContent',
+      'x-goog-api-key',
+    ],
+  ]) {
+    await user.click(
+      within(guide).getByRole('button', { name: 'Client protocol' }),
+    )
+    await user.click(await screen.findByRole('menuitemradio', { name: label }))
+    expect(
+      (within(guide).getByLabelText('API base URL') as HTMLInputElement).value,
+    ).toBe(window.location.origin)
+    await user.click(
+      within(guide).getByRole('button', { name: 'Copy configuration' }),
+    )
+    await waitFor(() =>
+      expect(copy).toHaveBeenLastCalledWith(expect.stringContaining(endpoint)),
+    )
+    expect(copy.mock.calls.at(-1)?.[0]).toContain(header)
+    expect(copy.mock.calls.at(-1)?.[0]).toContain('$SUBLANE_API_KEY')
+  }
+  expect(
+    fetch.mock.calls.some(([url]) => String(url).endsWith('/secret')),
+  ).toBe(false)
+})
+
 it('renames and pauses a key without replacing its secret or group', async () => {
   let value = { ...metadata, enabled: true, expires_at: null }
   const fetch = vi

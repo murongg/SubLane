@@ -136,6 +136,8 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 		}
 	}
 	candidates := make([]string, 0, len(available))
+	preferred := preferredProvider(kind)
+	bestRank := 2
 	busy, unknown, eligible := false, false, false
 	var cooling, quotaWait int64
 	for _, account := range available {
@@ -179,7 +181,19 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 			}
 			continue
 		}
-		candidates = append(candidates, account.ID)
+		// Preference only ranks accounts that passed every policy and availability check.
+		// Existing affinities returned above must never move to a more direct provider.
+		rank := 1
+		if account.Provider == preferred {
+			rank = 0
+		}
+		if rank < bestRank {
+			candidates = candidates[:0]
+			bestRank = rank
+		}
+		if rank == bestRank {
+			candidates = append(candidates, account.ID)
+		}
 	}
 	if len(candidates) == 0 {
 		if busy {
@@ -199,7 +213,8 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 		}
 		return "", digest, ErrNoAccount
 	}
-	cursor := fmt.Sprintf("%d:%s", groupID, scope)
+	// Isolate rotation across preference tiers so traffic using another protocol cannot starve this pool.
+	cursor := fmt.Sprintf("%d:%s:%s:%d", groupID, scope, preferred, bestRank)
 	id := candidates[s.next[cursor]%len(candidates)]
 	s.next[cursor] = (s.next[cursor] + 1) % len(candidates)
 	if session != "" {
@@ -211,6 +226,17 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 		return "", digest, err
 	}
 	return id, digest, nil
+}
+
+func preferredProvider(kind Kind) string {
+	switch kind {
+	case Messages:
+		return "claude"
+	case Gemini, GeminiStream:
+		return "antigravity"
+	default:
+		return "codex"
+	}
 }
 
 func rememberAffinity(ctx context.Context, q *db.Queries, userID, groupID int64, digest [32]byte, scope, id string, now, expires int64) error {

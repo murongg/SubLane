@@ -26,7 +26,7 @@ SubLane brings your team's AI subscriptions into one self-hosted gateway. It run
 ## Features
 
 - Codex, Claude and Antigravity accounts through OAuth or credential import.
-- OpenAI-compatible APIs with HTTP, SSE and WebSocket support.
+- OpenAI-compatible APIs, [native Claude Messages and Gemini generation](docs/protocols.md), with HTTP/SSE and Responses WebSocket support.
 - Team members, personal API keys and account-group permissions.
 - Account pooling, concurrency limits, cooldowns and Codex quota awareness.
 - Request diagnostics, usage charts, and backup and restore.

@@ -24,7 +24,7 @@ Use a personal SubLane key to request `GET /v1/models`, then use an exact native
 
 Existing explicitly prefixed requests remain compatible and select their named provider. Prefixes are removed before upstream execution. Models from healthy providers remain visible when another provider is unavailable. Native conversations keep one account across providers and never switch after account saturation, disablement or deletion. See [model catalogs](models.md) for legacy conversation migration and ambiguity handling.
 
-All three channels expose OpenAI-compatible `POST /v1/responses` and `POST /v1/chat/completions`, with JSON or SSE, plus the existing Responses WebSocket endpoint. This does not add a native Anthropic `/v1/messages` endpoint. Clients requiring that endpoint need a compatible Responses/Chat adapter. `/v1/responses/compact` remains Codex-only; clients using Claude or Antigravity must manage compaction locally or send a complete transcript.
+All three channels expose OpenAI-compatible `POST /v1/responses` and `POST /v1/chat/completions`, with JSON or SSE, plus the existing Responses WebSocket endpoint. Native Claude `/v1/messages` and Gemini `generateContent`/`streamGenerateContent` entry points are also available; see [native client protocols](protocols.md) for authentication, examples and verification limits. `/v1/responses/compact` remains Codex-only; clients using Claude or Antigravity must manage compaction locally or send a complete transcript.
 
 The API keys page’s Codex configuration remains a starting point for Codex clients. Replace `model` with the native ID returned by the model catalog. Arbitrary upstream models do not automatically inherit Codex-specific tools or capabilities.
 

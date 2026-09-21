@@ -11,6 +11,18 @@ import (
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
+func TestRequestIdentityAttachesAuthenticationButDoesNotReuseCompletedIdentity(t *testing.T) {
+	pending := WithRequestIdentity(context.Background(), 0, "http")
+	admitted := WithRequestIdentity(pending, 42, "http")
+	if RequestID(pending) != RequestID(admitted) {
+		t.Fatal("native header and record IDs diverged")
+	}
+	next := WithRequestIdentity(admitted, 42, "http")
+	if RequestID(admitted) == RequestID(next) {
+		t.Fatal("new request reused an admitted request ID")
+	}
+}
+
 func TestDiagnosticsMeasuresFirstOutputNotCreatedOrCompletion(t *testing.T) {
 	for _, delta := range []string{"response.output_text.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta", "response.function_call_arguments.delta", ""} {
 		t.Run(delta, func(t *testing.T) {

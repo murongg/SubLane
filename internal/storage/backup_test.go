@@ -44,7 +44,7 @@ func TestSnapshotIncludesCommittedWALWithoutChangingSource(t *testing.T) {
 		t.Fatal("read-only database accepted writes")
 	}
 	schema, err := ValidateSnapshot(ctx, restored)
-	if err != nil || schema != 19 {
+	if err != nil || schema != 20 {
 		t.Fatal("schema validation", schema, err)
 	}
 	if err := Snapshot(ctx, source, target, 4<<20); err == nil {

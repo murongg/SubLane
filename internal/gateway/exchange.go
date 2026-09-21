@@ -68,18 +68,48 @@ func (x *Exchange) Events(yield func([]byte) error) error {
 		_ = json.Unmarshal(raw, &event)
 		x.mu.Lock()
 		if !x.closed {
-			// Lifecycle events and empty deltas are not generated output. Missing observations
-			// stay null, including compact or buffered responses without a measurable delta.
-			if event.Delta != "" && x.entry.record.FirstTokenMs == nil {
-				switch event.Type {
-				case "response.output_text.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta", "response.function_call_arguments.delta":
+			if x.entry.kind == Messages {
+				var message struct {
+					Type  string `json:"type"`
+					Delta struct {
+						Text, Thinking string
+						PartialJSON    string `json:"partial_json"`
+						StopReason     string `json:"stop_reason"`
+					} `json:"delta"`
+				}
+				_ = json.Unmarshal(raw, &message)
+				if message.Type == "content_block_delta" && (message.Delta.Text != "" || message.Delta.Thinking != "" || message.Delta.PartialJSON != "") && x.entry.record.FirstTokenMs == nil {
 					elapsed := max(0, x.entry.service.now().Sub(x.entry.started).Milliseconds())
 					x.entry.record.FirstTokenMs = &elapsed
 				}
-			}
-			if event.Type == "response.completed" || event.Type == "response.incomplete" {
-				terminal = event.Type
-				x.entry.observe(raw)
+				x.entry.record.InputTokens, x.entry.record.OutputTokens, x.entry.record.CachedTokens = x.Stream.MessageUsage(raw)
+				if message.Delta.StopReason == "max_tokens" {
+					terminal = "response.incomplete"
+				}
+			} else if x.entry.kind.IsGemini() {
+				output, incomplete := upstream.GeminiEventInfo(raw)
+				if output && x.entry.record.FirstTokenMs == nil {
+					elapsed := max(0, x.entry.service.now().Sub(x.entry.started).Milliseconds())
+					x.entry.record.FirstTokenMs = &elapsed
+				}
+				x.entry.record.InputTokens, x.entry.record.OutputTokens, x.entry.record.CachedTokens = x.Stream.GeminiUsage(raw)
+				if incomplete {
+					terminal = "response.incomplete"
+				}
+			} else {
+				// Lifecycle events and empty deltas are not generated output. Missing observations
+				// stay null, including compact or buffered responses without a measurable delta.
+				if event.Delta != "" && x.entry.record.FirstTokenMs == nil {
+					switch event.Type {
+					case "response.output_text.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta", "response.function_call_arguments.delta":
+						elapsed := max(0, x.entry.service.now().Sub(x.entry.started).Milliseconds())
+						x.entry.record.FirstTokenMs = &elapsed
+					}
+				}
+				if event.Type == "response.completed" || event.Type == "response.incomplete" {
+					terminal = event.Type
+					x.entry.observe(raw)
+				}
 			}
 		}
 		x.mu.Unlock()
@@ -112,6 +142,44 @@ func (x *Exchange) Events(yield func([]byte) error) error {
 		}
 	}
 	return err
+}
+
+func (x *Exchange) AcceptMessage(raw []byte) error {
+	if err := upstream.ValidateMessageResponse(raw); err != nil {
+		x.Fail(err)
+		return err
+	}
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if !x.closed {
+		x.entry.record.InputTokens, x.entry.record.OutputTokens, x.entry.record.CachedTokens = x.Stream.MessageUsage(raw)
+		var message struct {
+			StopReason string `json:"stop_reason"`
+		}
+		_ = json.Unmarshal(raw, &message)
+		x.outcome, x.code, x.penalty = "success", "", ""
+		if message.StopReason == "max_tokens" {
+			x.outcome = "incomplete"
+		}
+	}
+	return nil
+}
+
+func (x *Exchange) AcceptGemini(raw []byte) error {
+	if err := upstream.ValidateGeminiResponse(raw); err != nil {
+		x.Fail(err)
+		return err
+	}
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if !x.closed {
+		x.entry.record.InputTokens, x.entry.record.OutputTokens, x.entry.record.CachedTokens = x.Stream.GeminiUsage(raw)
+		x.outcome, x.code, x.penalty = "success", "", ""
+		if _, incomplete := upstream.GeminiEventInfo(raw); incomplete {
+			x.outcome = "incomplete"
+		}
+	}
+	return nil
 }
 func (x *Exchange) Fail(err error) {
 	x.mu.Lock()

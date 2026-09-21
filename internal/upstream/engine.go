@@ -208,6 +208,16 @@ func sdkError(err error) error {
 	if err == nil {
 		return nil
 	}
+	var rejected *UpstreamError
+	if errors.As(err, &rejected) {
+		return rejected
+	}
+	if errors.Is(err, ErrInterrupted) {
+		return ErrInterrupted
+	}
+	if errors.Is(err, ErrResponse) {
+		return ErrResponse
+	}
 	var status exec.StatusError
 	if errors.As(err, &status) {
 		result := &UpstreamError{Status: status.StatusCode()}
@@ -221,13 +231,17 @@ func sdkError(err error) error {
 	}
 	return ErrUpstream
 }
-func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, body []byte, headers http.Header, compact bool) (*http.Response, error) {
+func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, body []byte, headers http.Header, opts exec.Options) (*http.Response, error) {
 	executor, err := c.executor(credential.Kind())
 	if err != nil {
 		return nil, err
 	}
 	version := c.codexVersion()
 	transport := &engineTransport{base: c.http.Transport, codexVersion: version}
+	transport.validateGeminiStream = credential.Kind() == "antigravity" && (opts.SourceFormat == translator.FormatClaude || opts.SourceFormat == translator.FormatGemini)
+	if !opts.Stream {
+		transport.maxResponseBytes = MaxBody
+	}
 	ctx = context.WithValue(ctx, "cliproxy.roundtripper", transport)
 	auth := sdkAuth(credential)
 	if credential.Kind() == "codex" {
@@ -239,8 +253,20 @@ func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, bod
 	if json.Unmarshal(body, &request) != nil {
 		return nil, ErrInput
 	}
+	if opts.SourceFormat == translator.FormatGemini {
+		var native map[string]json.RawMessage
+		if json.Unmarshal(body, &native) != nil || native == nil {
+			return nil, ErrInput
+		}
+		delete(native, "model")
+		delete(native, "stream")
+		body, err = json.Marshal(native)
+		if err != nil {
+			return nil, ErrInput
+		}
+	}
 	clean := make(http.Header)
-	for _, key := range []string{"Version", "X-Codex-Turn-Metadata", "X-Client-Request-Id", "Session_id", "X-Codex-Beta-Features"} {
+	for _, key := range []string{"Version", "X-Codex-Turn-Metadata", "X-Client-Request-Id", "Session_id", "X-Codex-Beta-Features", "Anthropic-Version", "Anthropic-Beta"} {
 		if value := headers.Get(key); len(value) > 0 && len(value) <= 1024 {
 			clean.Set(key, value)
 		}
@@ -248,17 +274,18 @@ func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, bod
 	if credential.Kind() == "codex" {
 		clean.Set("Version", version)
 	}
-	opts := exec.Options{Stream: true, SourceFormat: translator.FormatOpenAIResponse, ResponseFormat: translator.FormatOpenAIResponse, Headers: clean, OriginalRequest: body}
+	opts.Headers, opts.OriginalRequest = clean, body
 	req := exec.Request{Model: request.Model, Payload: body}
-	if compact {
-		if credential.Kind() != "codex" {
+	if !opts.Stream {
+		if opts.Alt == "responses/compact" && credential.Kind() != "codex" {
 			return nil, ErrInput
 		}
-		opts.Stream = false
-		opts.Alt = "responses/compact"
 		result, err := executor.Execute(ctx, auth, req, opts)
 		if err != nil {
-			return nil, sdkError(err)
+			return sdkFailureResponse(err, transport)
+		}
+		if len(result.Payload) > MaxBody {
+			return nil, ErrResponse
 		}
 		return &http.Response{StatusCode: 200, Header: result.Headers, Body: io.NopCloser(bytes.NewReader(result.Payload))}, nil
 	}
@@ -266,16 +293,7 @@ func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, bod
 	result, err := executor.ExecuteStream(operation, auth, req, opts)
 	if err != nil {
 		cancel()
-		if failure, ok := sdkError(err).(*UpstreamError); ok {
-			headers := make(http.Header)
-			wait := transport.retry()
-			if wait == "" {
-				wait = failure.RetryAfter
-			}
-			headers.Set("Retry-After", wait)
-			return &http.Response{StatusCode: failure.Status, Header: headers, Body: io.NopCloser(bytes.NewReader(nil))}, nil
-		}
-		return nil, sdkError(err)
+		return sdkFailureResponse(err, transport)
 	}
 	reader, writer := io.Pipe()
 	go func() {
@@ -305,6 +323,19 @@ func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, bod
 	return &http.Response{StatusCode: 200, Header: result.Headers, Body: &cancelBody{ReadCloser: reader, cancel: cancel}}, nil
 }
 
+func sdkFailureResponse(err error, transport *engineTransport) (*http.Response, error) {
+	if failure, ok := sdkError(err).(*UpstreamError); ok {
+		headers := make(http.Header)
+		wait := transport.retry()
+		if wait == "" {
+			wait = failure.RetryAfter
+		}
+		headers.Set("Retry-After", wait)
+		return &http.Response{StatusCode: failure.Status, Header: headers, Body: io.NopCloser(bytes.NewReader(nil))}, nil
+	}
+	return nil, sdkError(err)
+}
+
 type cancelBody struct {
 	io.ReadCloser
 	cancel context.CancelFunc
@@ -314,10 +345,12 @@ func (b *cancelBody) Close() error { b.cancel(); return b.ReadCloser.Close() }
 
 // The SDK may discard Retry-After when converting HTTP failures to errors. Keep the header at the transport boundary.
 type engineTransport struct {
-	codexVersion string
-	base         http.RoundTripper
-	mu           sync.Mutex
-	retryAfter   string
+	validateGeminiStream bool
+	maxResponseBytes     int64
+	codexVersion         string
+	base                 http.RoundTripper
+	mu                   sync.Mutex
+	retryAfter           string
 }
 
 func (t *engineTransport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -339,7 +372,42 @@ func (t *engineTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		t.retryAfter = response.Header.Get("Retry-After")
 		t.mu.Unlock()
 	}
+	limit := t.maxResponseBytes
+	if limit == 0 && response.StatusCode >= 400 {
+		limit = MaxBody
+	}
+	if limit > 0 {
+		response.Body = &responseLimitBody{ReadCloser: response.Body, remaining: limit}
+	}
+	if t.validateGeminiStream && response.StatusCode >= 200 && response.StatusCode < 300 && strings.HasPrefix(response.Header.Get("Content-Type"), "text/event-stream") {
+		response.Body = guardGeminiStream(response.Body)
+	}
 	return response, nil
+}
+
+type responseLimitBody struct {
+	io.ReadCloser
+	remaining int64
+}
+
+func (b *responseLimitBody) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if b.remaining == 0 {
+		var probe [1]byte
+		n, err := b.ReadCloser.Read(probe[:])
+		if n > 0 {
+			return 0, ErrResponse
+		}
+		return 0, err
+	}
+	if int64(len(p)) > b.remaining {
+		p = p[:b.remaining]
+	}
+	n, err := b.ReadCloser.Read(p)
+	b.remaining -= int64(n)
+	return n, err
 }
 func (t *engineTransport) retry() string { t.mu.Lock(); defer t.mu.Unlock(); return t.retryAfter }
 

@@ -26,7 +26,7 @@ SubLane 将团队的 AI 订阅账号整合为统一、自托管的网关，采�
 ## 功能
 
 - 支持 Codex、Claude、Antigravity 账号，通过 OAuth 授权或导入凭据接入。
-- 提供 OpenAI 兼容 API，支持 HTTP、SSE 和 WebSocket。
+- 提供 OpenAI 兼容 API、[Claude Messages 和 Gemini 原生生成接口](docs/protocols.md)，支持 HTTP/SSE 及 Responses WebSocket。
 - 成员管理、个人 API 密钥和账号分组权限。
 - 账号池调度、并发限制、冷却恢复和 Codex 额度感知。
 - 请求诊断、用量图表及备份恢复。
