@@ -24,20 +24,37 @@ import (
 type keyPrincipalKey struct{}
 
 func (h *keyHTTP) registerGateway(router chi.Router) {
-	routeErrors(router)
-	router.Use(h.requireKey)
-	router.Get("/models", h.models)
-	router.Get("/responses", h.websocket)
-	router.Post("/responses", func(w http.ResponseWriter, r *http.Request) { h.proxy(w, r, gateway.Responses) })
-	router.Post("/responses/compact", func(w http.ResponseWriter, r *http.Request) { h.proxy(w, r, gateway.Compact) })
-	router.Post("/chat/completions", func(w http.ResponseWriter, r *http.Request) { h.proxy(w, r, gateway.Chat) })
+	router.Group(func(openai chi.Router) {
+		openai.Use(h.requireKey)
+		// Inline chi groups also wrap fallback handlers, preserving authentication on unknown paths and methods.
+		routeErrors(openai)
+		openai.Get("/models", h.models)
+		openai.Get("/responses", h.websocket)
+		openai.Post("/responses", func(w http.ResponseWriter, r *http.Request) { h.proxy(w, r, gateway.Responses) })
+		openai.Post("/responses/compact", func(w http.ResponseWriter, r *http.Request) { h.proxy(w, r, gateway.Compact) })
+		openai.Post("/chat/completions", func(w http.ResponseWriter, r *http.Request) { h.proxy(w, r, gateway.Chat) })
+	})
+	router.Route("/messages", func(messages chi.Router) {
+		messages.Use(nativeIdentity, h.requireMessagesKey)
+		routeErrorsWith(messages, writeMessagesError)
+		messages.Post("/", func(w http.ResponseWriter, r *http.Request) { h.proxy(w, r, gateway.Messages) })
+	})
 }
 
 func (h *keyHTTP) requireKey(next http.Handler) http.Handler {
+	return h.authenticateKey(next, gateway.Responses)
+}
+
+func (h *keyHTTP) authenticateKey(next http.Handler, kind gateway.Kind) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		scheme, secret, ok := strings.Cut(r.Header.Get("Authorization"), " ")
-		if !ok || !strings.EqualFold(scheme, "Bearer") {
-			gatewayError(w, apikey.ErrInvalidKey)
+		fail, writeError := gatewayWriters(kind)
+		secret, valid := gatewaySecret(r, kind)
+		if !valid {
+			fail(w, apikey.ErrInvalidKey)
+			return
+		}
+		if (kind == gateway.Messages || kind.IsGemini()) && h.service == nil {
+			writeError(w, 503, "unavailable")
 			return
 		}
 		if !h.available(w) {
@@ -45,7 +62,7 @@ func (h *keyHTTP) requireKey(next http.Handler) http.Handler {
 		}
 		principal, err := h.service.Authenticate(r.Context(), strings.TrimSpace(secret))
 		if err != nil {
-			gatewayError(w, err)
+			fail(w, err)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), keyPrincipalKey{}, principal)))
@@ -68,19 +85,20 @@ func (h *keyHTTP) models(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kind) {
+	fail, writeError := gatewayWriters(kind)
 	if h.gateway == nil {
-		gatewayUnavailable(w, r)
+		writeError(w, 501, "gateway_not_configured")
 		return
 	}
 	release, err := h.gateway.Acquire()
 	if err != nil {
-		gatewayError(w, err)
+		fail(w, err)
 		return
 	}
 	defer release()
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" {
-		writeGatewayError(w, 415, "json_required")
+		writeError(w, 415, "json_required")
 		return
 	}
 	controller := http.NewResponseController(w)
@@ -91,18 +109,32 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	if err != nil {
 		var limit *http.MaxBytesError
 		if errors.As(err, &limit) {
-			writeGatewayError(w, 413, "request_too_large")
+			writeError(w, 413, "request_too_large")
 		} else {
-			gatewayError(w, upstream.ErrInput)
+			fail(w, upstream.ErrInput)
 		}
 		return
 	}
 	var flags struct {
 		Stream bool `json:"stream"`
 	}
+	if kind.IsGemini() {
+		if alt := r.URL.Query().Get("alt"); kind == gateway.GeminiStream && alt != "" && alt != "sse" {
+			fail(w, upstream.ErrInput)
+			return
+		}
+		raw, err = upstream.GeminiRequest(raw, chi.URLParam(r, "model"))
+		if err != nil {
+			fail(w, err)
+			return
+		}
+	}
 	if json.Unmarshal(raw, &flags) != nil || kind == gateway.Compact && flags.Stream {
-		gatewayError(w, upstream.ErrInput)
+		fail(w, upstream.ErrInput)
 		return
+	}
+	if kind.IsGemini() {
+		flags.Stream = kind == gateway.GeminiStream
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
@@ -111,22 +143,34 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	w.Header().Set("X-Request-ID", gateway.RequestID(ctx))
 	result, err := h.gateway.Open(ctx, principal.UserID, principal.GroupID, raw, r.Header, kind)
 	if err != nil {
-		gatewayError(w, err)
+		fail(w, err)
 		return
 	}
 	defer result.Body.Close()
 	if result.StatusCode < 200 || result.StatusCode >= 300 {
-		gatewayError(w, &upstream.UpstreamError{Status: result.StatusCode, RetryAfter: result.Header.Get("Retry-After")})
+		fail(w, &upstream.UpstreamError{Status: result.StatusCode, RetryAfter: result.Header.Get("Retry-After")})
 		return
 	}
-	if kind == gateway.Compact {
+	if kind == gateway.Compact || (kind == gateway.Messages || kind.IsGemini()) && !flags.Stream {
 		data, err := io.ReadAll(io.LimitReader(result.Body, upstream.MaxBody+1))
 		if err != nil || len(data) > upstream.MaxBody || !json.Valid(data) {
 			result.Fail(upstream.ErrResponse)
-			gatewayError(w, upstream.ErrResponse)
+			fail(w, upstream.ErrResponse)
 			return
 		}
-		result.AcceptCompact(data)
+		if kind == gateway.Messages {
+			if err := result.AcceptMessage(data); err != nil {
+				fail(w, err)
+				return
+			}
+		} else if kind.IsGemini() {
+			if err := result.AcceptGemini(data); err != nil {
+				fail(w, err)
+				return
+			}
+		} else {
+			result.AcceptCompact(data)
+		}
 		writeRawJSON(w, data)
 		return
 	}
@@ -155,7 +199,7 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 			if bytes.HasPrefix(chunk, []byte("data:")) {
 				chunk = bytes.TrimSpace(chunk[5:])
 			}
-			if err := writeSSE(w, chunk, kind == gateway.Responses); err != nil {
+			if err := writeSSE(w, chunk, kind == gateway.Responses || kind == gateway.Messages); err != nil {
 				return err
 			}
 		}
@@ -166,12 +210,17 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 			return
 		}
 		if !started {
-			gatewayError(w, err)
+			fail(w, err)
 			return
 		}
 		status, code := gatewayFailure(err)
 		payload, _ := json.Marshal(map[string]any{"type": "error", "status": status, "error": gatewayErrorBody(code)})
-		_ = writeSSE(w, payload, kind == gateway.Responses)
+		if kind == gateway.Messages {
+			payload, _ = json.Marshal(messagesErrorBody(w, status, code))
+		} else if kind.IsGemini() {
+			payload, _ = json.Marshal(geminiErrorBody(status, code))
+		}
+		_ = writeSSE(w, payload, kind == gateway.Responses || kind == gateway.Messages)
 		_ = controller.Flush()
 		return
 	}
@@ -184,7 +233,7 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	}
 	output := result.Complete(ctx, completed)
 	if !json.Valid(output) {
-		gatewayError(w, upstream.ErrResponse)
+		fail(w, upstream.ErrResponse)
 		return
 	}
 	writeRawJSON(w, output)
@@ -198,6 +247,11 @@ func writeRawJSON(w http.ResponseWriter, data []byte) {
 }
 
 func writeSSE(w io.Writer, data []byte, named bool) error {
+	// Native upstream events may contain multi-line JSON; keep the SSE data field on one line.
+	var compact bytes.Buffer
+	if json.Compact(&compact, data) == nil {
+		data = compact.Bytes()
+	}
 	if named {
 		var event struct {
 			Type string `json:"type"`
@@ -274,6 +328,10 @@ func gatewayFailure(err error) (int, string) {
 }
 
 func gatewayError(w http.ResponseWriter, err error) {
+	writeGatewayFailure(w, err, writeGatewayError)
+}
+
+func writeGatewayFailure(w http.ResponseWriter, err error, writeError func(http.ResponseWriter, int, string)) {
 	status, code := gatewayFailure(err)
 	if errors.Is(err, gateway.ErrCatalogUnavailable) {
 		w.Header().Set("Retry-After", "5")
@@ -301,7 +359,7 @@ func gatewayError(w http.ResponseWriter, err error) {
 		}
 		retryAfter(w, value)
 	}
-	writeGatewayError(w, status, code)
+	writeError(w, status, code)
 }
 
 func gatewayErrorBody(code string) map[string]string {

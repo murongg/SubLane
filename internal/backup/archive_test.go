@@ -222,7 +222,7 @@ func TestRestoreMigratesKnownOlderSchemaOnlyInStaging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := connection.Exec("DROP INDEX request_records_request_id; ALTER TABLE request_records DROP COLUMN request_id; ALTER TABLE request_records DROP COLUMN first_token_ms; ALTER TABLE account_usage DROP COLUMN revision; DELETE FROM schema_migrations WHERE name='019_request_diagnostics.sql'"); err != nil {
+	if _, err := connection.Exec("DROP INDEX request_records_request_id; ALTER TABLE request_records DROP COLUMN request_id; ALTER TABLE request_records DROP COLUMN first_token_ms; ALTER TABLE account_usage DROP COLUMN revision; DELETE FROM schema_migrations WHERE name IN ('019_request_diagnostics.sql','020_native_protocols.sql')"); err != nil {
 		t.Fatal(err)
 	}
 	if err := connection.Close(); err != nil {
@@ -255,7 +255,7 @@ func TestRestoreMigratesKnownOlderSchemaOnlyInStaging(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer restored.Close()
-	if schema, err := storage.ValidateSnapshot(context.Background(), restored); err != nil || schema != 19 {
+	if schema, err := storage.ValidateSnapshot(context.Background(), restored); err != nil || schema != 20 {
 		t.Fatal("older backup not migrated", schema, err)
 	}
 	actual, err := os.ReadFile(archive)

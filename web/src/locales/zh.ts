@@ -387,7 +387,16 @@ export const zh: Record<keyof typeof en, string> = {
   gatewayReadyDescription: '网关已就绪，可使用个人 API 密钥接入客户端。',
   clientGuideTitle: '接入客户端',
   clientGuideDescription:
-    '使用你的 SubLane API 密钥和下方地址接入。Codex CLI 与桌面端使用同一份用户级提供方配置。',
+    '选择客户端支持的 API 协议，使用个人 SubLane API 密钥接入。',
+  clientProtocol: '客户端协议',
+  clientProtocolCodex: 'Codex（Responses）',
+  clientProtocolClaude: 'Claude Messages',
+  clientProtocolGemini: 'Gemini API',
+  clientRequestExample: '请求示例',
+  clientRequestInstructions:
+    '在终端设置 SUBLANE_API_KEY，选择该密钥分组内的模型后运行示例。',
+  clientNativeGuideNote:
+    '工具调用、思考和缓存能力取决于模型及服务商。这里提供原生 API 请求示例，不涉及服务商桌面应用的配置。',
   clientEndpoint: 'API 基础地址',
   clientConfig: 'Codex 配置',
   clientGuideNote:

@@ -31,7 +31,7 @@ Unknown or other-user key IDs return `404 api_key_not_found`. Editing a revoked 
 
 ## Gateway authentication
 
-Clients supply `Authorization: Bearer <api-key>` to `/v1/*`. Browser session cookies alone do not authenticate gateway requests. Conversely, API keys cannot access `/api/system`, `/api/members`, or `/api/keys`.
+Clients supply `Authorization: Bearer <api-key>` to `/v1/*`. Native `/v1/messages` additionally accepts `x-api-key`; Gemini `/v1beta` accepts `x-goog-api-key`, Bearer authentication, or a `key` query parameter. Conflicting credentials are rejected. See [native client protocols](protocols.md). Browser session cookies alone do not authenticate gateway requests. Conversely, API keys cannot access `/api/system`, `/api/members`, or `/api/keys`.
 
 Missing, invalid, paused, expired, revoked, and suspended-owner keys return `401 invalid_api_key`. Valid keys can discover models and forward Responses HTTP/SSE/WebSocket, compaction, and Chat Completions requests through configured Codex subscriptions. Every WebSocket turn rechecks the key, expiry, member enablement, current group grants and model policy. In-flight admitted calls may finish after a change; new requests and turns must pass the current policy. Unknown gateway paths return JSON 404 responses after authentication. See [Codex gateway](codex.md) for configuration, limits, and remaining live-client validation.
 
@@ -63,4 +63,4 @@ This creates a **Codex** configuration using the current origin plus `/v1` and t
 
 Preparation and opening use separate clicks so the external application launch retains a browser user gesture. The prepared URI exists only in the mounted dialog state, never in a rendered link or persisted browser cache. Closing or editing the dialog discards it. Legacy hash-only, paused, expired, revoked and group-inaccessible keys cannot use this action. The picker uses the [derived group catalog](models.md); the gateway checks policy and account support again on each inference request. Import does not perform model generation.
 
-SubLane cannot detect whether CC Switch is installed or whether its confirmation completed. Tests validate URI encoding, configuration fields, cancellation and identity isolation with synthetic keys; they do not establish an actual installed-app import or live model response. Other client targets are not offered because SubLane does not currently expose their native Claude Messages or Gemini APIs.
+SubLane cannot detect whether CC Switch is installed or whether its confirmation completed. Tests validate URI encoding, configuration fields, cancellation and identity isolation with synthetic keys; they do not establish an actual installed-app import or live model response. CC Switch import currently prepares Codex configurations only. For native Claude Messages or Gemini requests, use **Setup guide**, which selects the matching protocol, base URL and request example without retrieving a key secret.

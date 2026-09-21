@@ -27,7 +27,13 @@ func WithRequestIdentity(ctx context.Context, keyID int64, transport string) con
 	if transport != "websocket" {
 		transport = "http"
 	}
-	return context.WithValue(ctx, requestKey{}, requestIdentity{RequestID: "req_" + rand.Text(), KeyID: keyID, Transport: transport})
+	identity, _ := ctx.Value(requestKey{}).(requestIdentity)
+	// Native routes reserve an ID before authentication. Only that pending identity may be reused.
+	if identity.RequestID == "" || identity.KeyID != 0 || identity.Transport != transport {
+		identity.RequestID = "req_" + rand.Text()
+	}
+	identity.KeyID, identity.Transport = keyID, transport
+	return context.WithValue(ctx, requestKey{}, identity)
 }
 
 var safeRequestID = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
@@ -40,6 +46,7 @@ func RequestID(ctx context.Context) string {
 var safeModel = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,159}$`)
 
 type observation struct {
+	kind         Kind
 	service      *Service
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -74,9 +81,13 @@ func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (
 		name = "chat"
 	} else if kind == Compact {
 		name = "compact"
+	} else if kind == Messages {
+		name = "messages"
+	} else if kind.IsGemini() {
+		name = "gemini"
 	}
 	started := s.now()
-	return &observation{sequence: s.sequence, service: s, ctx: operation, cancel: cancel, stopParent: context.AfterFunc(s.runContext, cancel), started: started, record: db.RecordRequestParams{RequestID: identity.RequestID, UserID: userID, GroupID: groupID, KeyID: identity.KeyID, Transport: identity.Transport, Operation: name, StartedAt: started.Unix()}}, nil
+	return &observation{kind: kind, sequence: s.sequence, service: s, ctx: operation, cancel: cancel, stopParent: context.AfterFunc(s.runContext, cancel), started: started, record: db.RecordRequestParams{RequestID: identity.RequestID, UserID: userID, GroupID: groupID, KeyID: identity.KeyID, Transport: identity.Transport, Operation: name, StartedAt: started.Unix()}}, nil
 }
 func (e *observation) finish(outcome, code, penalty, retry string) {
 	e.once.Do(func() {
@@ -168,6 +179,10 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
 		return "error", "timeout", "timeout"
+	}
+	var rejected *upstream.UpstreamError
+	if errors.As(err, &rejected) {
+		return statusOutcome(rejected.Status)
 	}
 	switch {
 	case errors.Is(err, ErrMemberBusy):

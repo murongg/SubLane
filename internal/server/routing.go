@@ -14,7 +14,13 @@ func notFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func routeErrors(router chi.Router) {
-	router.NotFound(notFound)
+	routeErrorsWith(router, func(w http.ResponseWriter, status int, code string) {
+		writeJSON(w, status, map[string]string{"error": code})
+	})
+}
+
+func routeErrorsWith(router chi.Router, writeError func(http.ResponseWriter, int, string)) {
+	router.NotFound(func(w http.ResponseWriter, r *http.Request) { writeError(w, 404, "not_found") })
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		path := chi.RouteContext(r.Context()).RoutePath
 		if path == "" {
@@ -33,7 +39,7 @@ func routeErrors(router chi.Router) {
 		if len(allowed) > 0 {
 			w.Header().Set("Allow", strings.Join(allowed, ", "))
 		}
-		writeJSON(w, 405, map[string]string{"error": "method_not_allowed"})
+		writeError(w, 405, "method_not_allowed")
 	})
 }
 

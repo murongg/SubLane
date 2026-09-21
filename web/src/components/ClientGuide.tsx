@@ -1,11 +1,23 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Copy } from 'lucide-react'
+import { BookOpen, ChevronDown, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { connectionOptions } from '@/lib/connection'
+import {
+  clientConfiguration,
+  clientProtocols,
+  type ClientProtocol,
+} from '@/lib/client'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Status } from './Status'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from './ui/DropdownMenu'
 import {
   Sheet,
   SheetContent,
@@ -19,6 +31,7 @@ export function ClientGuide({ userID }: { userID: number }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [model, setModel] = useState('')
+  const [protocol, setProtocol] = useState<ClientProtocol>('codex')
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
@@ -40,6 +53,8 @@ export function ClientGuide({ userID }: { userID: number }) {
               userID={userID}
               model={model}
               onModelChange={setModel}
+              protocol={protocol}
+              onProtocolChange={setProtocol}
             />
           </div>
         </SheetContent>
@@ -52,26 +67,41 @@ function GuideContent({
   userID,
   model,
   onModelChange,
+  protocol,
+  onProtocolChange,
 }: {
   userID: number
   model: string
   onModelChange: (value: string) => void
+  protocol: ClientProtocol
+  onProtocolChange: (value: ClientProtocol) => void
 }) {
   const { t } = useTranslation()
   const client = useQueryClient()
   const query = useQuery(connectionOptions(client, userID))
-  const [copied, setCopied] = useState(false)
+  const [copiedConfiguration, setCopiedConfiguration] = useState<string | null>(
+    null,
+  )
   const [copyFailed, setCopyFailed] = useState(false)
-  const endpoint = `${window.location.origin}/v1`
-  const configuration = `${model.trim() ? `model = ${JSON.stringify(model.trim())}\n` : ''}model_provider = "sublane"\n\n[model_providers.sublane]\nname = "SubLane"\nbase_url = ${JSON.stringify(endpoint)}\nenv_key = "SUBLANE_API_KEY"\nwire_api = "responses"\nrequires_openai_auth = false\nsupports_websockets = true`
+  const { baseURL: endpoint, configuration } = clientConfiguration(
+    protocol,
+    window.location.origin,
+    model,
+  )
+  const copied = copiedConfiguration === configuration
+  const protocolLabels = {
+    codex: 'clientProtocolCodex',
+    claude: 'clientProtocolClaude',
+    gemini: 'clientProtocolGemini',
+  } as const
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(configuration)
-      setCopied(true)
+      setCopiedConfiguration(configuration)
       setCopyFailed(false)
     } catch {
       setCopyFailed(true)
-      setCopied(false)
+      setCopiedConfiguration(null)
     }
   }
   return (
@@ -108,6 +138,48 @@ function GuideContent({
           {t('connectionNotConfigured')}
         </p>
       ) : null}
+      <div className="space-y-2">
+        <label htmlFor="client-protocol" className="text-sm font-medium">
+          {t('clientProtocol')}
+        </label>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              id="client-protocol"
+              variant="outline"
+              aria-label={t('clientProtocol')}
+              className="w-full justify-between font-normal"
+            >
+              {t(protocolLabels[protocol])}
+              <ChevronDown
+                aria-hidden="true"
+                className="text-muted-foreground"
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="w-(--radix-dropdown-menu-trigger-width)"
+          >
+            <DropdownMenuRadioGroup
+              value={protocol}
+              onValueChange={(value) => {
+                const selected = clientProtocols.find((item) => item === value)
+                if (selected) {
+                  onProtocolChange(selected)
+                  setCopyFailed(false)
+                }
+              }}
+            >
+              {clientProtocols.map((item) => (
+                <DropdownMenuRadioItem key={item} value={item}>
+                  {t(protocolLabels[item])}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <label htmlFor="client-endpoint" className="text-sm font-medium">
@@ -129,7 +201,7 @@ function GuideContent({
             value={model}
             onChange={(event) => {
               onModelChange(event.target.value)
-              setCopied(false)
+              setCopyFailed(false)
             }}
             maxLength={128}
             aria-describedby="client-model-hint"
@@ -141,14 +213,20 @@ function GuideContent({
       </div>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-medium">{t('clientConfig')}</h3>
+          <h3 className="text-sm font-medium">
+            {t(protocol === 'codex' ? 'clientConfig' : 'clientRequestExample')}
+          </h3>
           <Button variant="ghost" size="sm" onClick={copy}>
             <Copy aria-hidden="true" />
             {t(copied ? 'copied' : 'copyClientConfig')}
           </Button>
         </div>
         <p className="text-sm text-muted-foreground">
-          {t('clientConfigLocation')}
+          {t(
+            protocol === 'codex'
+              ? 'clientConfigLocation'
+              : 'clientRequestInstructions',
+          )}
         </p>
         <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-xs leading-6">
           <code>{configuration}</code>
@@ -160,7 +238,7 @@ function GuideContent({
         </p>
       )}
       <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-        {t('clientGuideNote')}
+        {t(protocol === 'codex' ? 'clientGuideNote' : 'clientNativeGuideNote')}
       </p>
     </div>
   )

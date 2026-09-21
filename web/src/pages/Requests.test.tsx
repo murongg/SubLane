@@ -6,63 +6,66 @@ import { App } from '@/App'
 import { createAppRouter } from '@/router'
 import { authenticated, memberAuthenticated } from '@/test/fixtures'
 
-it('shows request metadata and filters failed calls', async () => {
-  const fetch = vi.fn().mockImplementation((url: string) => {
-    let data: unknown = { accounts: [] }
-    if (url === '/api/auth/state') data = authenticated
-    if (url.startsWith('/api/requests?'))
-      data = {
-        requests: [
-          {
-            id: 1,
-            user_id: 2,
-            key_id: 1,
-            group_id: 1,
-            account_id: 'synthetic-account',
-            provider: 'codex',
-            model: 'codex/synthetic-model',
-            transport: 'http',
-            operation: 'responses',
-            started_at: 1900000000,
-            duration_ms: 125,
-            request_id: 'req_synthetic',
-            first_token_ms: 42,
-            outcome: 'error',
-            error_code: 'rate_limited',
-            upstream_status: 429,
-            input_tokens: null,
-            output_tokens: null,
-            cached_tokens: null,
-            username: 'member-test',
-            key_name: 'Synthetic client',
-            group_name: 'Default',
-            account_name: 'Synthetic account',
-          },
-        ],
-        next_cursor: 0,
-      }
-    return Promise.resolve(new Response(JSON.stringify(data)))
-  })
-  vi.stubGlobal('fetch', fetch)
-  render(
-    <App
-      router={createAppRouter(
-        createMemoryHistory({ initialEntries: ['/admin/requests'] }),
-      )}
-    />,
-  )
-  await screen.findByRole('heading', { name: 'All requests' })
-  await screen.findByText('Synthetic account')
-  expect(screen.getByText(/^Rate limited/)).toBeTruthy()
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Result filter' }))
-  await user.click(screen.getByRole('menuitemradio', { name: 'Failed' }))
-  await waitFor(() =>
-    expect(
-      fetch.mock.calls.some(([url]) => url.includes('outcome=error')),
-    ).toBe(true),
-  )
-})
+it.each(['responses', 'messages', 'gemini'])(
+  'shows %s request metadata and filters failed calls',
+  async (operation) => {
+    const fetch = vi.fn().mockImplementation((url: string) => {
+      let data: unknown = { accounts: [] }
+      if (url === '/api/auth/state') data = authenticated
+      if (url.startsWith('/api/requests?'))
+        data = {
+          requests: [
+            {
+              id: 1,
+              user_id: 2,
+              key_id: 1,
+              group_id: 1,
+              account_id: 'synthetic-account',
+              provider: 'codex',
+              model: 'codex/synthetic-model',
+              transport: 'http',
+              operation,
+              started_at: 1900000000,
+              duration_ms: 125,
+              request_id: 'req_synthetic',
+              first_token_ms: 42,
+              outcome: 'error',
+              error_code: 'rate_limited',
+              upstream_status: 429,
+              input_tokens: null,
+              output_tokens: null,
+              cached_tokens: null,
+              username: 'member-test',
+              key_name: 'Synthetic client',
+              group_name: 'Default',
+              account_name: 'Synthetic account',
+            },
+          ],
+          next_cursor: 0,
+        }
+      return Promise.resolve(new Response(JSON.stringify(data)))
+    })
+    vi.stubGlobal('fetch', fetch)
+    render(
+      <App
+        router={createAppRouter(
+          createMemoryHistory({ initialEntries: ['/admin/requests'] }),
+        )}
+      />,
+    )
+    await screen.findByRole('heading', { name: 'All requests' })
+    await screen.findByText('Synthetic account')
+    expect(screen.getByText(/^Rate limited/)).toBeTruthy()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Result filter' }))
+    await user.click(screen.getByRole('menuitemradio', { name: 'Failed' }))
+    await waitFor(() =>
+      expect(
+        fetch.mock.calls.some(([url]) => url.includes('outcome=error')),
+      ).toBe(true),
+    )
+  },
+)
 
 it.each([memberAuthenticated, authenticated])(
   'shows only the personal history endpoint for $user.role',

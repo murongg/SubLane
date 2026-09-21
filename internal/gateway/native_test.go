@@ -38,12 +38,15 @@ func TestNativeCatalogDeduplicatesAcrossProvidersAndHonorsScopedRules(t *testing
 	}
 }
 
-func TestNativeRoutingRotatesAndKeepsItsAccountAcrossRestart(t *testing.T) {
-	s, _ := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
+func TestNativeRoutingRotatesFallbacksAndKeepsItsAccountAcrossRestart(t *testing.T) {
+	s, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
 		t.Error("unexpected network")
 		return nil, errors.New("synthetic")
 	}))
 	ctx := context.Background()
+	if _, err := s.accounts.SetEnabled(ctx, ids["codex"], false); err != nil {
+		t.Fatal(err)
+	}
 	seen := map[string]bool{}
 	for range 3 {
 		id, _, err := s.selectAccount(ctx, 1, 1, "", "", "synthetic-model", Responses)
@@ -52,8 +55,8 @@ func TestNativeRoutingRotatesAndKeepsItsAccountAcrossRestart(t *testing.T) {
 		}
 		seen[id] = true
 	}
-	if len(seen) != 3 {
-		t.Fatal("native routing did not use each provider", seen)
+	if len(seen) != 2 {
+		t.Fatal("native routing did not rotate available fallback providers", seen)
 	}
 	id, _, err := s.selectAccount(ctx, 1, 1, "synthetic-auto-session", "", "synthetic-model", Responses)
 	if err != nil {

@@ -435,7 +435,16 @@ export const en = {
     'Your gateway is ready. Connect a client using a personal API key.',
   clientGuideTitle: 'Connect your client',
   clientGuideDescription:
-    'Use your SubLane API key with this endpoint. Codex CLI and desktop use the same user-level provider configuration.',
+    'Choose the API format your client supports and connect with a personal SubLane API key.',
+  clientProtocol: 'Client protocol',
+  clientProtocolCodex: 'Codex (Responses)',
+  clientProtocolClaude: 'Claude Messages',
+  clientProtocolGemini: 'Gemini API',
+  clientRequestExample: 'Request example',
+  clientRequestInstructions:
+    'Set SUBLANE_API_KEY in your shell, then run this request with a model from your key’s group.',
+  clientNativeGuideNote:
+    'Tool, thinking and cache features depend on the model and provider. These examples use the native API; they do not configure the provider’s desktop app.',
   clientEndpoint: 'API base URL',
   clientConfig: 'Codex configuration',
   clientGuideNote:

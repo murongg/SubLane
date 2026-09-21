@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	exec "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/translator"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/translator/builtin"
 )
@@ -232,6 +233,8 @@ type Stream struct {
 	model             string
 	original, request []byte
 	state             any
+	messageUsage      messageUsage
+	geminiUsage       geminiUsage
 }
 
 func (c *Client) Responses(ctx context.Context, credential accounts.Credential, raw []byte, headers http.Header, compact bool) (*Stream, error) {
@@ -282,7 +285,11 @@ func (c *Client) execute(ctx context.Context, credential accounts.Credential, ra
 	if err != nil || len(encoded) > MaxBody {
 		return nil, ErrInput
 	}
-	response, err := c.runSDK(ctx, credential, encoded, headers, compact)
+	opts := exec.Options{Stream: !compact, SourceFormat: translator.FormatOpenAIResponse, ResponseFormat: translator.FormatOpenAIResponse}
+	if compact {
+		opts.Alt = "responses/compact"
+	}
+	response, err := c.runSDK(ctx, credential, encoded, headers, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -290,6 +297,9 @@ func (c *Client) execute(ctx context.Context, credential accounts.Credential, ra
 }
 
 func (s *Stream) Translate(ctx context.Context, event []byte) [][]byte {
+	if s.format == translator.FormatClaude || s.format == translator.FormatGemini {
+		return [][]byte{event}
+	}
 	return s.registry.TranslateStream(ctx, translator.FormatCodex, s.format, s.model, s.original, s.request, append([]byte("data: "), event...), &s.state)
 }
 
