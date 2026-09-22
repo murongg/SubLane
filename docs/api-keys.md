@@ -1,5 +1,22 @@
 # Personal API keys
 
+Start here if you already have a login and an authorized account pool. You do not need subscription credentials or knowledge of quota accounting.
+
+## Create and use a key
+
+1. Sign in and open **API keys**, then create a key.
+2. Give it a recognizable name and select an authorized pool. Set an expiry only if needed.
+3. Copy the key and configure your client with it, the instance address and a model ID available in that pool. Codex users can follow [client configuration](codex.md#client-configuration).
+4. Send a message and confirm the result in **Requests**.
+
+**Finished:** the client receives a response. Keep using this key; creating an allocation scheme is not required.
+
+No pool to select? Ask the administrator to check [team access](members.md). Administrators setting up their first account should [create a pool first](quickstart.md#3-put-the-account-in-a-pool).
+
+Next, see [Everyday use](usage.md). The sections below are for copying, changing, disabling or integrating keys when needed.
+
+## Reference
+
 Administrators and members open **API keys** in the General navigation group to manage their own gateway credentials. Each key has a name and a visible prefix. New keys can be copied immediately after creation or later using the copy icon beside their prefix. Metadata lists never return the secret, ciphertext or hash.
 
 Keys use a `sl_` prefix followed by 32 cryptographically random bytes encoded as unpadded base64url. SQLite stores a SHA-256 digest for authentication alongside owner ID, name, display prefix, lifecycle times, enablement and optional expiry. New keys also have an AES-256-GCM encrypted full value in `api_keys.encrypted_secret`, using the existing instance-local `credentials.key`. Ciphertext is bound to the API-key domain, owner and record ID, and decrypted values must match their authentication hash. Gateway requests continue using hashes; they do not decrypt secrets.
@@ -21,7 +38,7 @@ These routes require a valid enabled-user session cookie. Mutations retain the e
 | Endpoint | Request | Response |
 | --- | --- | --- |
 | `GET /api/keys?cursor=0` | Optional cursor | `keys` metadata, `next_cursor` and `server_time` |
-| `POST /api/keys` | `name` (1–64 characters), optional `group_id` and nullable `expires_at` | `key` metadata and `secret` |
+| `POST /api/keys` | `name` (1–64 characters), explicit `group_id` (or resource `scheme_id`) and nullable `expires_at` | `key` metadata and `secret` |
 | `GET /api/keys/{id}/models` | No body | Authorized group model catalog for an active, owned key |
 | `POST /api/keys/{id}/secret` | Empty JSON object | Full `secret`, for the owning user only |
 | `PATCH /api/keys/{id}` | All three fields: `name`, `enabled`, nullable `expires_at` | Updated metadata; never a secret |
@@ -64,3 +81,7 @@ This creates a **Codex** configuration using the current origin plus `/v1` and t
 Preparation and opening use separate clicks so the external application launch retains a browser user gesture. The prepared URI exists only in the mounted dialog state, never in a rendered link or persisted browser cache. Closing or editing the dialog discards it. Legacy hash-only, paused, expired, revoked and group-inaccessible keys cannot use this action. The picker uses the [derived group catalog](models.md); the gateway checks policy and account support again on each inference request. Import does not perform model generation.
 
 SubLane cannot detect whether CC Switch is installed or whether its confirmation completed. Tests validate URI encoding, configuration fields, cancellation and identity isolation with synthetic keys; they do not establish an actual installed-app import or live model response. CC Switch import currently prepares Codex configurations only. For native Claude Messages or Gemini requests, use **Setup guide**, which selects the matching protocol, base URL and request example without retrieving a key secret.
+
+## Allocation schemes
+
+For a managed pool, select its team resource when creating a Key. The resource binding is immutable. Usage is shared per member and resource across keys and transports; joining several personnel teams gives separate resource balances. Team membership and resource availability are rechecked on every request and WebSocket turn. Existing unbound keys cannot access managed pools. See [team resources](allocations.md).

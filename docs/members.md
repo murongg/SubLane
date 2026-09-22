@@ -1,5 +1,27 @@
 # Member accounts and access
 
+First complete a [request as the administrator](quickstart.md), then share that working pool with a member. Usage allowances are optional.
+
+## Get one member connected
+
+1. Open **Members**, create a member login, and share its initial credentials privately through your team's existing channel.
+2. Open **Personnel teams**, create a team, name it and select that member.
+3. Under **Account pools for free use**, select the pool you already tested and save the team. Leave **Advanced settings: usage limits** collapsed.
+4. The member signs in with their own account and follows [Personal keys](api-keys.md) to create a key for that pool and configure their client.
+5. Ask the member to send a message and check the result in their own **Requests** page.
+
+**Finished:** the member can select the authorized pool and make a request. No resource allowance or percentage setup is required.
+
+If the pool is missing, check that the member belongs to an enabled team and that the team grants the enabled pool.
+
+## Adjust later, if needed
+
+Add more people by editing the same team. For separate subscriptions, see [Organize account pools](groups.md). Only open advanced settings and read [usage allowances](allocations.md) when you need limits. Members see the union of pools authorized by their enabled teams.
+
+Sharing is now set up. The remaining sections explain permissions, disabling access and API behavior for later reference.
+
+## Reference
+
 SubLane supports one administrator and local member accounts. The administrator opens **Members** to create accounts and enable or disable them. New members use the same login page and the same username/password rules as the administrator. Creation assigns the `member` role on the server; clients cannot choose or change a role.
 
 The member list is ordered newest first and paginated in batches of 50. Passwords and hashes are never returned. Share the initial credentials with the intended member privately. Public registration, invitation links, role promotion and account deletion are not implemented. Password changes, administrator member resets and local administrator recovery are described in [team controls](team-controls.md).

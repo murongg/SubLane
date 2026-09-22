@@ -40,7 +40,7 @@ SubLane 将团队的 AI 订阅账号整合为统一、自托管的网关，采�
 curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh | bash
 ```
 
-打开 http://127.0.0.1:8080，创建管理员、添加订阅账号，再创建 API 密钥接入客户端。
+打开 http://127.0.0.1:8080，创建管理员、接入订阅账号，并将账号加入账号池，再创建个人密钥接入客户端。先按[第一次使用](docs/quickstart.md)跑通一次调用；默认自由使用，团队共享和额度限制之后再按需设置。
 
 脚本会在 `./sublane` 安装最新正式版，没有正式版时使用最新预发布版。数据保存在 Docker 数据卷中，不会覆盖已有目录。自定义参数、手动 Compose 部署、HTTPS 和升级步骤见[部署文档](docs/deployment.md)。
 
