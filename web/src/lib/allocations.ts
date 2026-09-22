@@ -36,6 +36,7 @@ const configSchema = z.object({
   period: z.enum(['upstream', 'day', 'month']),
   members: z.array(z.object({ user_id: integer, limit: integer })).max(100),
   rates: z.array(rateSchema).max(128),
+  allow_idle_borrow: z.boolean().optional(),
 })
 const revisionSchema = z.object({ effective_at: integer, config: configSchema })
 export const schemeSchema = revisionSchema.extend({
@@ -55,12 +56,16 @@ const balanceSchema = z.object({
   mode: modeSchema,
   limit: integer,
   used: integer,
+  borrowed: integer.optional(),
   tokens: integer,
   pending: integer,
   reset_at: integer,
   window_id: integer,
   window_kind: z.string(),
   account_id: z.string().optional(),
+  account_label: z.string().optional(),
+  syncing: integer.optional(),
+  sync_paused: z.boolean().optional(),
 })
 const pendingSchema = z.object({
   request_id: z.string(),
@@ -68,6 +73,7 @@ const pendingSchema = z.object({
   mode: modeSchema,
   model: z.string(),
   state: z.string(),
+  automatic: z.boolean().optional(),
   input: integer,
   output: integer,
   cached: integer,
@@ -228,6 +234,7 @@ export function allocationErrorKey(error: Error) {
       return 'allocationPoolConflict'
     if (error.code === 'allocation_snapshot_required')
       return 'allocationSnapshotRequired'
+    if (error.code === 'allocation_syncing') return 'allocationSyncPaused'
     if (error.code === 'invalid_allocation_input') return 'allocationInvalid'
     if (error.code === 'invalid_allocation_settlement')
       return 'allocationSettlementConflict'

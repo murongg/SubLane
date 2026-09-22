@@ -185,6 +185,9 @@ export function SchemeForm({
     initial?.period === 'day' ? 'day' : 'month',
   )
   const [enabled, setEnabled] = useState(scheme?.enabled ?? true)
+  const [allowIdleBorrow, setAllowIdleBorrow] = useState(
+    initial?.allow_idle_borrow ?? false,
+  )
   const [startNext, setStartNext] = useState(false)
   const [values, setValues] = useState<Record<number, string>>(
     Object.fromEntries(
@@ -317,6 +320,9 @@ export function SchemeForm({
         period: mode === 'ratio' ? 'upstream' : (period as 'day' | 'month'),
         members,
         rates: parsedRates,
+        ...(mode === 'ratio' && allowIdleBorrow
+          ? { allow_idle_borrow: true }
+          : {}),
       },
     })
   }
@@ -526,6 +532,24 @@ export function SchemeForm({
             <p className="text-sm leading-6 text-muted-foreground">
               {t('allocationAutoRatesHint')}
             </p>
+            <label
+              htmlFor="allow-idle-borrow"
+              className="flex items-start gap-2 pt-2 text-sm leading-6"
+            >
+              <input
+                id="allow-idle-borrow"
+                type="checkbox"
+                className="mt-1 size-4 shrink-0 accent-primary"
+                checked={allowIdleBorrow}
+                onChange={(e) => setAllowIdleBorrow(e.target.checked)}
+              />
+              <span>
+                <span className="block">{t('allocationAllowIdleBorrow')}</span>
+                <span className="block text-muted-foreground">
+                  {t('allocationAllowIdleBorrowHint')}
+                </span>
+              </span>
+            </label>
           </div>
         )}
         {scheme && (

@@ -29,6 +29,12 @@ func trackExchange(stream *upstream.Stream, entry *observation) *Exchange {
 	x := &Exchange{Stream: stream, entry: entry, raw: stream.Body, outcome: "canceled", code: "client_disconnected"}
 	status := int64(stream.StatusCode)
 	entry.record.UpstreamStatus = &status
+	if entry.record.Provider == "codex" && status >= 200 && status < 300 {
+		if value, ok := upstream.QuotaHeaders(stream.Header, entry.service.now()); ok {
+			value.ReadStartedAt = entry.quotaReadStartedAt
+			entry.quota = &value
+		}
+	}
 	if status < 200 || status >= 300 {
 		x.outcome, x.code, x.penalty = statusOutcome(int(status))
 		x.retry = stream.Header.Get("Retry-After")
@@ -68,6 +74,14 @@ func (x *Exchange) Events(yield func([]byte) error) error {
 		_ = json.Unmarshal(raw, &event)
 		x.mu.Lock()
 		if !x.closed {
+			if x.entry.record.Provider == "codex" && event.Type == "codex.rate_limits" {
+				if value, ok := upstream.QuotaEvent(raw, x.entry.service.now()); ok {
+					// Stream events can describe pre-request usage. Never advance the
+					// accounting read boundary to completion just because the frame arrived late.
+					value.ReadStartedAt = x.entry.quotaReadStartedAt
+					x.entry.quota = &value
+				}
+			}
 			if x.entry.kind == Messages {
 				var message struct {
 					Type  string `json:"type"`

@@ -290,7 +290,7 @@ func gatewayFailure(err error) (int, string) {
 		return 409, "conversation_account_unavailable"
 	case errors.Is(err, gateway.ErrNoAccount):
 		return 503, "no_accounts_available"
-	case errors.Is(err, allocations.ErrQuota), errors.Is(err, allocations.ErrPending):
+	case errors.Is(err, allocations.ErrQuota), errors.Is(err, allocations.ErrPending), errors.Is(err, allocations.ErrSync):
 		return 429, err.Error()
 	case errors.Is(err, allocations.ErrUnavailable):
 		return 403, err.Error()
@@ -369,7 +369,7 @@ func writeGatewayFailure(w http.ResponseWriter, err error, writeError func(http.
 			}
 		}
 	}
-	if status == 429 && !errors.Is(err, gateway.ErrTokenPending) && !errors.Is(err, allocations.ErrPending) && !errors.Is(err, allocations.ErrQuota) {
+	if status == 429 && !errors.Is(err, gateway.ErrTokenPending) && !errors.Is(err, allocations.ErrPending) && !errors.Is(err, allocations.ErrSync) && !errors.Is(err, allocations.ErrQuota) {
 		value := "1"
 		var rejected *upstream.UpstreamError
 		if errors.As(err, &rejected) {

@@ -72,6 +72,55 @@ it('splits shares exactly and preserves saved price weights while editing', asyn
   )
 })
 
+it('distinguishes account windows updating normally from blocked reconciliation', async () => {
+  const { AllocationBalances } = await import('./AllocationBalances')
+  const balance = {
+    user_id: 2,
+    username: 'synthetic-member',
+    mode: 'ratio' as const,
+    limit: 5000,
+    used: 1200,
+    tokens: 100,
+    pending: 0,
+    reset_at: 2000000000,
+    window_kind: 'primary',
+    syncing: 1,
+  }
+  render(
+    <AllocationBalances
+      detail={{
+        id: 1,
+        name: 'Synthetic',
+        team_id: 1,
+        team_name: 'Synthetic',
+        group_id: 2,
+        group_name: 'Synthetic',
+        enabled: true,
+        created_at: 1,
+        effective_at: 1,
+        next: null,
+        config: {
+          mode: 'ratio',
+          period: 'upstream',
+          members: [{ user_id: 2, limit: 5000 }],
+          rates: [],
+        },
+        available: true,
+        unassigned: 0,
+        pending: [],
+        balances: [
+          { ...balance, window_id: 1, account_label: '1', sync_paused: false },
+          { ...balance, window_id: 2, account_label: '2', sync_paused: true },
+        ],
+      }}
+    />,
+  )
+  expect(screen.getByText('Usage updating')).toBeTruthy()
+  expect(screen.getByText('Waiting for quota sync')).toBeTruthy()
+  expect(screen.getByText(/Subscription 1/)).toBeTruthy()
+  expect(screen.getByText(/Subscription 2/)).toBeTruthy()
+})
+
 it('converts the three units without losing small values', () => {
   expect(parseAllocationValue('50.25', 'ratio')).toBe(5025)
   expect(parseAllocationValue('1.000001', 'tokens')).toBe(1000001)
@@ -159,6 +208,42 @@ it('keeps automatic ratio pricing out of the default form', () => {
     screen.getByRole('button', { name: 'Advanced: customize model weights' }),
   ).toBeTruthy()
   expect(screen.queryByLabelText('模型 ID')).toBeNull()
+})
+
+it('makes idle share borrowing an explicit ratio option', async () => {
+  const submit = vi.fn()
+  const user = userEvent.setup()
+  const team = {
+    id: 1,
+    name: 'Synthetic team',
+    enabled: true,
+    member_ids: [2],
+    members: [{ id: 2, username: 'synthetic-member', enabled: true }],
+    created_at: 1,
+  }
+  render(
+    <SchemeForm
+      teams={[team]}
+      fixedTeam={team}
+      resourceMode
+      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      pending={false}
+      onCancel={() => {}}
+      onSubmit={submit}
+    />,
+  )
+  await user.type(screen.getByLabelText('Allowance for synthetic-member'), '50')
+  await user.click(
+    screen.getByRole('checkbox', { name: /Allow idle share borrowing/ }),
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: expect.objectContaining({ allow_idle_borrow: true }),
+    }),
+  )
 })
 
 it('offers only enabled, nonempty, dedicated pools without a scheme', async () => {

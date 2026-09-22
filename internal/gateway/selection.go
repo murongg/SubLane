@@ -193,7 +193,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 		}
 		if scheme != 0 {
 			if _, err := allocations.Check(ctx, q, scheme, userID, groupID, account.ID, model, now); err != nil {
-				if !errors.Is(err, allocations.ErrQuota) && !errors.Is(err, allocations.ErrPending) && !errors.Is(err, allocations.ErrSnapshot) && !errors.Is(err, allocations.ErrUnpriced) && !errors.Is(err, allocations.ErrUnavailable) {
+				if !errors.Is(err, allocations.ErrQuota) && !errors.Is(err, allocations.ErrPending) && !errors.Is(err, allocations.ErrSync) && !errors.Is(err, allocations.ErrSnapshot) && !errors.Is(err, allocations.ErrUnpriced) && !errors.Is(err, allocations.ErrUnavailable) {
 					return "", digest, err
 				}
 				allocationErr = err

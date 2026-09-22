@@ -213,6 +213,16 @@ func (s *Service) fetchUsage(id string, e *usageEntry, release func()) {
 		err = s.usageAccount(ctx, id)
 	}
 	now := c.now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// A poll started before a response observation must not overwrite it when
+	// network latency makes the older poll finish last.
+	if err == nil && e.snapshot != nil && e.snapshot.ReadStartedAt > value.ReadStartedAt {
+		e.retryAt = now.Add(usageCooldown)
+		close(e.flight)
+		e.flight = nil
+		return
+	}
 	if err == nil {
 		value.UpdatedAt = now.Unix()
 		var raw []byte
@@ -225,8 +235,6 @@ func (s *Service) fetchUsage(id string, e *usageEntry, release func()) {
 			}
 		}
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	e.err = err
 	e.retryAt = now.Add(usageCooldown)
 	if err == nil {

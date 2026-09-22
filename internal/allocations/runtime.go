@@ -102,12 +102,12 @@ func Check(ctx context.Context, q *db.Queries, scheme, user, group int64, accoun
 		if n > 0 {
 			return rev, ErrPending
 		}
-		n, err = q.AllocationAccountObserved(ctx, db.AllocationAccountObservedParams{SchemeID: scheme, AccountID: account})
+		waiting, err := q.AllocationAccountAwaiting(ctx, db.AllocationAccountAwaitingParams{SchemeID: scheme, AccountID: account})
 		if err != nil {
 			return rev, err
 		}
-		if n >= 8 {
-			return rev, ErrPending
+		if syncPaused(waiting, now) {
+			return rev, ErrSync
 		}
 		for _, w := range windows {
 			matches := false
@@ -119,16 +119,26 @@ func Check(ctx context.Context, q *db.Queries, scheme, user, group int64, accoun
 			if !matches {
 				return rev, ErrSnapshot
 			}
-			usage, err := q.AllocationWindowUsage(ctx, db.AllocationWindowUsageParams{WindowID: w.ID, UserID: user})
+			usage, err := q.AllocationWindowUsage(ctx, db.AllocationWindowUsageParams{WindowID: w.ID, UserID: 0})
 			if err != nil {
 				return rev, err
+			}
+			totalUsed, totalAllowance := int64(0), int64(0)
+			for _, u := range usage {
+				totalUsed += u.Used
+				totalAllowance += u.Allowance
 			}
 			found := false
 			for _, u := range usage {
 				if u.UserID == user {
 					found = true
 					if u.Used >= u.Allowance {
-						return rev, ErrQuota
+						// Borrowing is deliberately pool-local: it can use only the
+						// same physical account and window's unused member allowance.
+						// Sticky conversations remain bound to this account.
+						if !rev.Config.AllowIdleBorrow || totalUsed >= totalAllowance {
+							return rev, ErrQuota
+						}
 					}
 				}
 			}
@@ -149,6 +159,17 @@ func Check(ctx context.Context, q *db.Queries, scheme, user, group int64, accoun
 		}
 	}
 	return rev, nil
+}
+
+const (
+	ratioSyncGrace               = int64(120)
+	ratioProvisionalRequestLimit = 32
+)
+
+func syncPaused(waiting db.AllocationAccountAwaitingRow, now int64) bool {
+	// Bound both burst size and elapsed time; rounded or delayed percentages
+	// never authorize unlimited uncharged traffic or erase existing debt.
+	return waiting.Count >= ratioProvisionalRequestLimit || waiting.Count > 0 && now*1000-waiting.Oldest >= ratioSyncGrace*1000
 }
 
 type Request struct {

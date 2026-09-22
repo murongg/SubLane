@@ -4,12 +4,10 @@ export const zh: Record<keyof typeof en, string> = {
   allocationChooseModel: '请选择模型',
   allocationPriceMissing: '目录中暂无此模型的价格，请手动填写。',
   allocationPriceFailed: '暂时无法获取模型价格，请手动填写。',
-  allocationShares: '成员份额',
-  allocationSplitEqually: '平均分配',
-  allocationSettings: '计量与生效设置',
-  allocationShareRules:
-    '池内每个订阅账号都使用这组比例，各额度窗口独立重置。暂不借用其他成员的空闲份额。',
-  allocationStartNextRatio: '等所有账号的当前窗口均到达下次重置时间后再生效',
+  allocationAllowIdleBorrow: '允许借用空闲份额',
+  allocationAllowIdleBorrowHint:
+    '成员可以使用同一账号窗口内其他成员未用的份额。会话仍保持原账号，借用量会单独记录，最终以额度同步结算为准。',
+  allocationBorrowed: '已从成员空闲份额借用 {{points}} 点。',
   allocationPause: '暂停资源额度',
   allocationResume: '启用资源额度',
   personnelTeams: '人员组',
@@ -57,6 +55,22 @@ export const zh: Record<keyof typeof en, string> = {
   allocationName: '资源额度名称',
   allocationMode: '限制方式',
   allocationRatio: '按比例',
+  allocationShares: '成员份额',
+  allocationSplitEqually: '平均分配',
+  allocationSettings: '计量与生效设置',
+  allocationShareRules:
+    '池内每个订阅账号都使用这组比例，各额度窗口独立重置。只有打开下方选项后，才会借用空闲份额。',
+  allocationSubscription: '订阅账号 {{label}}',
+  allocationUpdating: '用量更新中',
+  allocationSyncPaused: '等待额度同步',
+  allocationSyncPausedHint:
+    '暂时无法确认此账号的额度，已暂停接收新请求。请稍后重试；持续未恢复时联系管理员。',
+  allocationAutomaticHint:
+    '{{count}} 条已完成请求正在等待上游额度更新，系统会自动重试，正常同步期间无需手动填写。',
+  allocationEstimatedUsed: '已用（估算）',
+  allocationEstimatedRemaining: '剩余（估算）',
+  allocationAccountExhausted:
+    '你在此账号、此窗口的份额已用完，不代表整个账号池都没有额度。已有会话会继续保持原账号。',
   allocationAmount: '按金额',
   allocationTokens: '按 Token',
   allocationSave: '保存资源额度',
@@ -95,6 +109,7 @@ export const zh: Record<keyof typeof en, string> = {
   allocationNextHint:
     '额度、价格或计量方式的修改在下周期生效。暂停或启用访问立即生效，当前用量与待结算记录保留。',
   allocationStartNext: '从下个周期开始',
+  allocationStartNextRatio: '等所有账号的当前窗口均到达下次重置时间后再生效',
   allocationImmediateHint:
     '立即生效：固定额度从现在开始；比例额度按首次有效观测的上游剩余容量分配。不补记此前用量。',
   allocationScheduled: '{{mode}} 将于 {{date}} 生效',
@@ -113,7 +128,7 @@ export const zh: Record<keyof typeof en, string> = {
   allocationUnavailable: '此资源额度已暂停、尚未生效或你已无权使用。',
   allocationUnpriced: '模型价格尚未配置',
   allocationEstimateHint:
-    '估算份额：1 点等于一个账号完整窗口额度的 1%。各窗口独立记账。未确认的消耗保持待对账状态，进行中的请求可能超出剩余额度。',
+    '估算份额：1 点等于一个账号完整窗口额度的 1%。各窗口独立记账。近期用量会自动更新；长时间未确认时暂停新请求。进行中的请求可能超出剩余额度。',
   allocationNoBalances:
     '暂无余额记录。比例模式请在资源额度生效后同步上游用量。',
   allocationPoints: '点',

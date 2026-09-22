@@ -40,26 +40,27 @@ const (
 func (k Kind) IsGemini() bool { return k == Gemini || k == GeminiStream }
 
 type Service struct {
-	db            *sql.DB
-	queries       *db.Queries
-	accounts      *accounts.Service
-	provider      *upstream.Client
-	slots         chan struct{}
-	mu            sync.Mutex
-	next          map[string]int
-	health        map[string]*Runtime
-	memberActive  map[int64]int64
-	now           func() time.Time
-	runContext    context.Context
-	stopRuntime   context.CancelFunc
-	workers       sync.WaitGroup
-	closed        bool
-	budgetsReady  bool
-	budgetFailure bool
-	sequence      int64
-	usage         *usageCache
-	catalog       *catalogCache
-	pricing       *pricing.Service
+	db             *sql.DB
+	queries        *db.Queries
+	accounts       *accounts.Service
+	provider       *upstream.Client
+	slots          chan struct{}
+	mu             sync.Mutex
+	next           map[string]int
+	health         map[string]*Runtime
+	memberActive   map[int64]int64
+	now            func() time.Time
+	runContext     context.Context
+	stopRuntime    context.CancelFunc
+	workers        sync.WaitGroup
+	closed         bool
+	budgetsReady   bool
+	budgetFailure  bool
+	sequence       int64
+	usage          *usageCache
+	catalog        *catalogCache
+	pricing        *pricing.Service
+	allocationSync map[string]uint64
 }
 
 func New(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *upstream.Client, catalogs ...*pricing.Service) *Service {
@@ -229,6 +230,14 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		}
 		return s.provider.Responses(ctx, c, raw, outgoing, kind == Compact)
 	}
+	if entry.record.Provider == "codex" {
+		row, err := s.queries.GetAccountUsage(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		entry.quotaRevision = row.Revision
+	}
+	entry.quotaReadStartedAt = s.now().UnixMilli()
 	entry.budgetDispatched = true
 	result, err := execute(credential)
 	if err != nil {

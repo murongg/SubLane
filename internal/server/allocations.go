@@ -54,7 +54,7 @@ func allocationError(w http.ResponseWriter, err error) {
 		status, code = 404, err.Error()
 	case errors.Is(err, allocations.ErrUnavailable):
 		status, code = 403, err.Error()
-	case errors.Is(err, allocations.ErrPoolConflict), errors.Is(err, allocations.ErrSettlement), errors.Is(err, allocations.ErrPending), errors.Is(err, allocations.ErrUnpriced):
+	case errors.Is(err, allocations.ErrPoolConflict), errors.Is(err, allocations.ErrSettlement), errors.Is(err, allocations.ErrPending), errors.Is(err, allocations.ErrSync), errors.Is(err, allocations.ErrUnpriced):
 		status, code = 409, err.Error()
 	case errors.Is(err, allocations.ErrSnapshot):
 		status, code = 409, err.Error()

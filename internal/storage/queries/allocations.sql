@@ -103,6 +103,9 @@ AND EXISTS(SELECT 1 FROM allocation_debits d JOIN allocation_windows w ON w.id=d
 WHERE d.request_id=allocation_entries.request_id AND d.reconciled=0 AND w.reset_at<=sqlc.arg(reset_at));
 -- name: AllocationAccountObserved :one
 SELECT count(*) FROM allocation_entries WHERE scheme_id=? AND account_id=? AND state IN ('active','observed');
+-- name: AllocationAccountAwaiting :one
+SELECT count(*) AS count, CAST(COALESCE(min(finished_at),0) AS INTEGER) AS oldest
+FROM allocation_entries WHERE scheme_id=? AND account_id=? AND state='observed';
 -- name: PruneAllocations :exec
 DELETE FROM allocation_entries WHERE state='settled' AND (
  (mode<>'ratio' AND allocation_entries.reset_at<sqlc.arg(before)) OR

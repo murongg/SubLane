@@ -54,6 +54,7 @@ export function resumeAccount(id: string) {
 export const reasonKeys: Record<string, keyof typeof en> = {
   allocation_exhausted: 'allocationExhausted',
   allocation_pending: 'allocationPending',
+  allocation_syncing: 'allocationSyncPaused',
   allocation_unavailable: 'allocationUnavailable',
   allocation_model_unpriced: 'allocationUnpriced',
   allocation_snapshot_required: 'allocationSnapshotRequired',

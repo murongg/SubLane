@@ -77,6 +77,28 @@ func (q *Queries) AdvanceManualAllocationWindow(ctx context.Context, arg Advance
 	return err
 }
 
+const allocationAccountAwaiting = `-- name: AllocationAccountAwaiting :one
+SELECT count(*) AS count, CAST(COALESCE(min(finished_at),0) AS INTEGER) AS oldest
+FROM allocation_entries WHERE scheme_id=? AND account_id=? AND state='observed'
+`
+
+type AllocationAccountAwaitingParams struct {
+	SchemeID  int64
+	AccountID string
+}
+
+type AllocationAccountAwaitingRow struct {
+	Count  int64
+	Oldest int64
+}
+
+func (q *Queries) AllocationAccountAwaiting(ctx context.Context, arg AllocationAccountAwaitingParams) (AllocationAccountAwaitingRow, error) {
+	row := q.db.QueryRowContext(ctx, allocationAccountAwaiting, arg.SchemeID, arg.AccountID)
+	var i AllocationAccountAwaitingRow
+	err := row.Scan(&i.Count, &i.Oldest)
+	return i, err
+}
+
 const allocationAccountObserved = `-- name: AllocationAccountObserved :one
 SELECT count(*) FROM allocation_entries WHERE scheme_id=? AND account_id=? AND state IN ('active','observed')
 `

@@ -3,13 +3,10 @@ export const en = {
   allocationPriceMissing:
     'No catalog price for this model. Enter prices manually.',
   allocationPriceFailed: 'Could not load model prices. Enter prices manually.',
-  allocationShares: 'Member shares',
-  allocationSplitEqually: 'Split equally',
-  allocationSettings: 'Metering and activation settings',
-  allocationShareRules:
-    'The same shares apply to every subscription in this pool. Each window resets separately. Unused shares are not borrowed.',
-  allocationStartNextRatio:
-    'Wait until all current account windows reach their next reset before starting',
+  allocationAllowIdleBorrow: 'Allow idle share borrowing',
+  allocationAllowIdleBorrowHint:
+    'A member may use another member’s unused share on this account window. Sessions stay on their current subscription; borrowing is recorded separately and confirmed when quota sync settles.',
+  allocationBorrowed: 'Borrowed {{points}} points from idle member share.',
   allocationPause: 'Pause resource allowance',
   allocationResume: 'Enable resource allowance',
   personnelTeams: 'Personnel teams',
@@ -62,6 +59,22 @@ export const en = {
   allocationName: 'Resource allowance name',
   allocationMode: 'Allowance type',
   allocationRatio: 'By share',
+  allocationShares: 'Member shares',
+  allocationSplitEqually: 'Split equally',
+  allocationSettings: 'Metering and activation settings',
+  allocationShareRules:
+    'The same shares apply to every subscription in this pool. Each window resets separately. Idle shares can be borrowed only when enabled below.',
+  allocationSubscription: 'Subscription {{label}}',
+  allocationUpdating: 'Usage updating',
+  allocationSyncPaused: 'Waiting for quota sync',
+  allocationSyncPausedHint:
+    'New requests on this subscription are paused until its quota can be confirmed. Retry shortly; contact the administrator if this persists.',
+  allocationAutomaticHint:
+    '{{count}} completed requests are waiting for upstream quota updates. SubLane retries automatically; no manual entry is needed during normal syncing.',
+  allocationEstimatedUsed: 'Estimated used',
+  allocationEstimatedRemaining: 'Estimated remaining',
+  allocationAccountExhausted:
+    'Your share on this subscription window is exhausted. This does not mean every subscription in the pool is exhausted. Existing conversations keep their subscription.',
   allocationAmount: 'By amount',
   allocationTokens: 'By tokens',
   allocationSave: 'Save resource allowance',
@@ -102,6 +115,8 @@ export const en = {
   allocationNextHint:
     'Changes to allowances, prices or type take effect next period. Pausing or enabling access takes effect immediately. Current usage and unsettled entries remain recorded.',
   allocationStartNext: 'Start next period',
+  allocationStartNextRatio:
+    'Wait until all current account windows reach their next reset before starting',
   allocationImmediateHint:
     'Start immediately: fixed allowances begin now; share allowances divide the remaining upstream capacity at the first fresh observation. Earlier usage is not backfilled.',
   allocationScheduled: '{{mode}} takes effect {{date}}',
@@ -121,7 +136,7 @@ export const en = {
     'This resource allowance is paused, scheduled, or no longer available to you.',
   allocationUnpriced: 'Model price is not configured',
   allocationEstimateHint:
-    'Estimated shares: 1 point = 1% of one account’s full window. Windows are tracked separately. Unconfirmed requests remain pending; active requests may exceed the remaining allowance.',
+    'Estimated shares: 1 point = 1% of one account’s full window. Windows are tracked separately. Recent usage updates automatically. Prolonged delays pause new requests; in-flight requests may exceed the remaining allowance.',
   allocationNoBalances:
     'No balances yet. For share mode, sync fresh upstream usage after the resource allowance starts.',
   allocationPoints: 'points',

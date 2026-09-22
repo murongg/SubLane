@@ -24,6 +24,17 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
       ) : (
         <div className="divide-y divide-border">
           {detail.balances.map((b) => {
+            const state = !detail.available
+              ? 'allocationUnavailableShort'
+              : b.pending > 0 || detail.unassigned > 0
+                ? 'allocationPending'
+                : b.sync_paused
+                  ? 'allocationSyncPaused'
+                  : b.used >= b.limit
+                    ? 'allocationExhausted'
+                    : (b.syncing ?? 0) > 0
+                      ? 'allocationUpdating'
+                      : 'active'
             const unit =
               b.mode === 'ratio'
                 ? t('allocationPoints')
@@ -38,6 +49,8 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="break-words text-sm font-medium">
                     {b.username}
+                    {b.account_label &&
+                      ` · ${t('allocationSubscription', { label: b.account_label })}`}
                     {b.window_kind &&
                       ` · ${b.window_kind === 'primary' ? t('allocationPrimary') : t('allocationSecondary')}`}
                     {b.account_id && (
@@ -48,24 +61,19 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                   </h3>
                   <Status
                     kind={
-                      !detail.available
+                      state === 'allocationUnavailableShort'
                         ? 'neutral'
-                        : b.pending > 0
+                        : state === 'allocationPending' ||
+                            state === 'allocationSyncPaused'
                           ? 'warning'
-                          : b.used >= b.limit
+                          : state === 'allocationExhausted'
                             ? 'error'
-                            : 'success'
+                            : state === 'allocationUpdating'
+                              ? 'info'
+                              : 'success'
                     }
                   >
-                    {t(
-                      !detail.available
-                        ? 'allocationUnavailableShort'
-                        : b.pending > 0
-                          ? 'allocationPending'
-                          : b.used >= b.limit
-                            ? 'allocationExhausted'
-                            : 'active',
-                    )}
+                    {t(state)}
                   </Status>
                 </div>
                 <dl className="grid grid-cols-3 gap-3 text-sm">
@@ -79,7 +87,11 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                   </div>
                   <div>
                     <dt className="text-muted-foreground">
-                      {t('allocationUsed')}
+                      {t(
+                        b.mode === 'ratio'
+                          ? 'allocationEstimatedUsed'
+                          : 'allocationUsed',
+                      )}
                     </dt>
                     <dd className="mt-1 tabular-nums">
                       {allocationValue(b.used, b.mode)} {unit}
@@ -87,7 +99,11 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                   </div>
                   <div>
                     <dt className="text-muted-foreground">
-                      {t('allocationRemaining')}
+                      {t(
+                        b.mode === 'ratio'
+                          ? 'allocationEstimatedRemaining'
+                          : 'allocationRemaining',
+                      )}
                     </dt>
                     <dd className="mt-1 tabular-nums">
                       {allocationValue(Math.max(0, b.limit - b.used), b.mode)}{' '}
@@ -95,6 +111,23 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                     </dd>
                   </div>
                 </dl>
+                {b.mode === 'ratio' && (b.borrowed ?? 0) > 0 && (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {t('allocationBorrowed', {
+                      points: allocationValue(b.borrowed ?? 0, 'ratio'),
+                    })}
+                  </p>
+                )}
+                {b.mode === 'ratio' && state === 'allocationExhausted' && (
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {t('allocationAccountExhausted')}
+                  </p>
+                )}
+                {state === 'allocationSyncPaused' && (
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {t('allocationSyncPausedHint')}
+                  </p>
+                )}
                 <p className="text-xs leading-5 text-muted-foreground">
                   {detail.config.period !== 'upstream' &&
                     `${t(detail.config.period === 'day' ? 'budgetDaily' : 'budgetMonthly')} · `}

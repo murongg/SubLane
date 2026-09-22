@@ -37,6 +37,8 @@ export function AllocationReport({ id }: { id: number }) {
       </div>
     )
   const d = query.data
+  const automatic = d.pending.filter((p) => p.automatic)
+  const exceptions = d.pending.filter((p) => !p.automatic)
   return (
     <section className="max-w-4xl space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -81,13 +83,18 @@ export function AllocationReport({ id }: { id: number }) {
           )}
         </div>
       )}
-      {d.pending.length > 0 && (
+      {automatic.length > 0 && (
+        <p role="status" className="text-sm leading-6 text-muted-foreground">
+          {t('allocationAutomaticHint', { count: automatic.length })}
+        </p>
+      )}
+      {exceptions.length > 0 && (
         <section className="space-y-4 border-t border-border pt-5">
           <h3 className="font-medium">{t('allocationPending')}</h3>
           <p className="text-sm leading-6 text-muted-foreground">
             {t('allocationSettlementHint')}
           </p>
-          {d.pending.map((p) => (
+          {exceptions.map((p) => (
             <AllocationSettlement
               key={p.request_id}
               id={id}

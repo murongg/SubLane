@@ -28,6 +28,7 @@ var (
 	ErrUnavailable  = errors.New("allocation_unavailable")
 	ErrQuota        = errors.New("allocation_exhausted")
 	ErrPending      = errors.New("allocation_pending")
+	ErrSync         = errors.New("allocation_syncing")
 	ErrUnpriced     = errors.New("allocation_model_unpriced")
 	ErrSnapshot     = errors.New("allocation_snapshot_required")
 	ErrSettlement   = errors.New("invalid_allocation_settlement")
@@ -63,10 +64,11 @@ type Rate struct {
 	Output int64  `json:"output"`
 }
 type Config struct {
-	Mode    string  `json:"mode"`
-	Period  string  `json:"period"`
-	Members []Share `json:"members"`
-	Rates   []Rate  `json:"rates"`
+	Mode            string  `json:"mode"`
+	Period          string  `json:"period"`
+	Members         []Share `json:"members"`
+	Rates           []Rate  `json:"rates"`
+	AllowIdleBorrow bool    `json:"allow_idle_borrow,omitempty"`
 }
 type SchemeInput struct {
 	Name      string `json:"name"`
@@ -370,6 +372,8 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 		if total > 10000 {
 			return Scheme{}, ErrInput
 		}
+	} else if in.Config.AllowIdleBorrow {
+		return Scheme{}, ErrInput
 	}
 	// Default receives newly imported accounts; reserving it would block all future imports.
 	if in.GroupID == 1 {

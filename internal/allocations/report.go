@@ -3,23 +3,28 @@ package allocations
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
 type Balance struct {
-	UserID     int64  `json:"user_id"`
-	Username   string `json:"username"`
-	Mode       string `json:"mode"`
-	Limit      int64  `json:"limit"`
-	Used       int64  `json:"used"`
-	Tokens     int64  `json:"tokens"`
-	Pending    int64  `json:"pending"`
-	ResetAt    int64  `json:"reset_at"`
-	WindowID   int64  `json:"window_id"`
-	WindowKind string `json:"window_kind"`
-	AccountID  string `json:"account_id,omitempty"`
+	UserID       int64  `json:"user_id"`
+	Username     string `json:"username"`
+	Mode         string `json:"mode"`
+	Limit        int64  `json:"limit"`
+	Used         int64  `json:"used"`
+	Borrowed     int64  `json:"borrowed"`
+	Tokens       int64  `json:"tokens"`
+	Pending      int64  `json:"pending"`
+	ResetAt      int64  `json:"reset_at"`
+	WindowID     int64  `json:"window_id"`
+	WindowKind   string `json:"window_kind"`
+	AccountID    string `json:"account_id,omitempty"`
+	AccountLabel string `json:"account_label,omitempty"`
+	Syncing      int64  `json:"syncing"`
+	SyncPaused   bool   `json:"sync_paused"`
 }
 type Debit struct {
 	WindowID   int64  `json:"window_id"`
@@ -38,6 +43,7 @@ type Pending struct {
 	Output    int64   `json:"output"`
 	Cached    int64   `json:"cached"`
 	Debits    []Debit `json:"debits"`
+	Automatic bool    `json:"automatic"`
 }
 type Detail struct {
 	Scheme
@@ -85,11 +91,15 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 			continue
 		}
 		p := Pending{RequestID: e.RequestID, UserID: e.UserID, Mode: e.Mode, Model: e.Model, State: e.State, Input: e.InputTokens, Output: e.OutputTokens, Cached: e.CachedTokens, Debits: []Debit{}}
+		p.Automatic = e.State == "observed" && e.FinishedAt > (now-ratioSyncGrace)*1000
 		ds, err := q.GetRequestAllocationDebits(ctx, e.RequestID)
 		if err != nil {
 			return out, err
 		}
 		for _, d := range ds {
+			if d.Reconciled == 0 && d.ResetAt <= now {
+				p.Automatic = false
+			}
 			p.Debits = append(p.Debits, Debit{WindowID: d.WindowID, Kind: d.Kind, ResetAt: d.ResetAt, Points: d.Points, Reconciled: d.Reconciled == 1})
 		}
 		out.Pending = append(out.Pending, p)
@@ -99,11 +109,26 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 		if err != nil {
 			return out, err
 		}
+		labels := map[string]string{}
+		for _, w := range windows {
+			if labels[w.AccountID] == "" {
+				labels[w.AccountID] = strconv.Itoa(len(labels) + 1)
+			}
+		}
 		for _, w := range windows {
 			if w.ResetAt <= now {
 				continue
 			}
 			usage, err := q.AllocationWindowUsage(ctx, db.AllocationWindowUsageParams{WindowID: w.ID, UserID: user})
+			if err != nil {
+				return out, err
+			}
+			waiting, err := q.AllocationAccountAwaiting(ctx, db.AllocationAccountAwaitingParams{SchemeID: id, AccountID: w.AccountID})
+			if err != nil {
+				return out, err
+			}
+			_, _, _, snapshotErr := readSnapshot(ctx, q, w.AccountID, now)
+			debits, err := q.ListAllocationDebits(ctx, w.ID)
 			if err != nil {
 				return out, err
 			}
@@ -115,17 +140,26 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 				if err != nil {
 					return out, err
 				}
-				n := int64(0)
-				for _, p := range out.Pending {
-					if p.UserID == u.UserID {
-						n++
+				n, err := q.AllocationMemberUnresolved(ctx, db.AllocationMemberUnresolvedParams{SchemeID: id, UserID: u.UserID, ResetAt: now})
+				if err != nil {
+					return out, err
+				}
+				syncing := int64(0)
+				for _, d := range debits {
+					if d.UserID == u.UserID && d.State == "observed" {
+						syncing++
 					}
 				}
 				tokens, e := q.AllocationWindowTokens(ctx, db.AllocationWindowTokensParams{WindowID: w.ID, UserID: u.UserID})
 				if e != nil {
 					return out, e
 				}
-				balance := Balance{Tokens: tokens, UserID: u.UserID, Username: member.Username, Mode: "ratio", Limit: u.Allowance, Used: u.Used, Pending: n, ResetAt: w.ResetAt, WindowID: w.ID, WindowKind: w.Kind}
+				borrowed := int64(0)
+				if u.Used > u.Allowance {
+					borrowed = u.Used - u.Allowance
+				}
+				balance := Balance{Tokens: tokens, UserID: u.UserID, Username: member.Username, Mode: "ratio", Limit: u.Allowance, Used: u.Used, Borrowed: borrowed, Pending: n, ResetAt: w.ResetAt, WindowID: w.ID, WindowKind: w.Kind}
+				balance.AccountLabel, balance.Syncing, balance.SyncPaused = labels[w.AccountID], syncing, syncPaused(waiting, now) || snapshotErr != nil || w.Unassigned > 0
 				if user == 0 {
 					balance.AccountID = w.AccountID
 				}

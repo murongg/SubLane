@@ -47,22 +47,25 @@ func RequestID(ctx context.Context) string {
 var safeModel = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,159}$`)
 
 type observation struct {
-	kind              Kind
-	service           *Service
-	ctx               context.Context
-	cancel            context.CancelFunc
-	stopParent        func() bool
-	once              sync.Once
-	started           time.Time
-	record            db.RecordRequestParams
-	revision          int64
-	leased            bool
-	memberLeased      bool
-	schemeID          int64
-	allocationTracked bool
-	budgetTracked     bool
-	budgetDispatched  bool
-	sequence          int64
+	kind               Kind
+	service            *Service
+	ctx                context.Context
+	cancel             context.CancelFunc
+	stopParent         func() bool
+	once               sync.Once
+	started            time.Time
+	record             db.RecordRequestParams
+	revision           int64
+	leased             bool
+	memberLeased       bool
+	schemeID           int64
+	allocationTracked  bool
+	budgetTracked      bool
+	budgetDispatched   bool
+	sequence           int64
+	quotaReadStartedAt int64
+	quotaRevision      int64
+	quota              *upstream.Usage
 }
 
 func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (*observation, error) {
@@ -105,6 +108,11 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		s := e.service
+		if e.quota != nil && (outcome == "success" || outcome == "incomplete") {
+			if err := s.observeUsage(ctx, e.record.AccountID, e.quotaRevision, *e.quota); err != nil {
+				slog.Warn("Unable to persist response quota")
+			}
+		}
 		s.mu.Lock()
 		if e.memberLeased {
 			if s.memberActive[e.record.UserID] <= 1 {
@@ -188,6 +196,8 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 				s.budgetFailure = true
 			}
 			slog.Error("Unable to persist request metadata")
+		} else if e.allocationTracked {
+			s.scheduleAllocationSync(e.schemeID, e.record.AccountID)
 		}
 	})
 }
@@ -203,7 +213,7 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 		return statusOutcome(rejected.Status)
 	}
 	switch {
-	case errors.Is(err, allocations.ErrQuota), errors.Is(err, allocations.ErrPending), errors.Is(err, allocations.ErrUnavailable), errors.Is(err, allocations.ErrUnpriced), errors.Is(err, allocations.ErrSnapshot):
+	case errors.Is(err, allocations.ErrQuota), errors.Is(err, allocations.ErrPending), errors.Is(err, allocations.ErrSync), errors.Is(err, allocations.ErrUnavailable), errors.Is(err, allocations.ErrUnpriced), errors.Is(err, allocations.ErrSnapshot):
 		return "rejected", err.Error(), ""
 	case errors.Is(err, ErrMemberBusy):
 		return "rejected", "member_busy", ""
