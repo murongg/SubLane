@@ -14,7 +14,7 @@
   <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26%2B-171717?style=flat-square&amp;logo=go&amp;logoColor=white&amp;labelColor=555555" alt="Go 1.26+" height="20"></a>
   <a href="web/package.json"><img src="https://img.shields.io/badge/React-19-171717?style=flat-square&amp;logo=react&amp;logoColor=white&amp;labelColor=555555" alt="React 19" height="20"></a>
   <a href="internal/storage/storage.go"><img src="https://img.shields.io/badge/SQLite-embedded-171717?style=flat-square&amp;logo=sqlite&amp;logoColor=white&amp;labelColor=555555" alt="SQLite embedded" height="20"></a>
-  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/stage-internal%20testing-92400E?style=flat-square&amp;labelColor=555555" alt="Stage: internal testing" height="20"></a>
+  <a href="https://sublane.dev/docs/roadmap"><img src="https://img.shields.io/badge/stage-internal%20testing-92400E?style=flat-square&amp;labelColor=555555" alt="Stage: internal testing" height="20"></a>
 </p>
 
 <p align="center">
@@ -26,7 +26,7 @@ SubLane brings your team's AI subscriptions into one self-hosted gateway. It run
 ## Features
 
 - Codex, Claude and Antigravity accounts through OAuth or credential import.
-- OpenAI-compatible APIs, [native Claude Messages and Gemini generation](docs/protocols.md), with HTTP/SSE and Responses WebSocket support.
+- OpenAI-compatible APIs, [native Claude Messages and Gemini generation](https://sublane.dev/docs/protocols), with HTTP/SSE and Responses WebSocket support.
 - Team members, personal API keys and account-group permissions.
 - Account pooling, concurrency limits, cooldowns and Codex quota awareness.
 - Request diagnostics, usage charts, and backup and restore.
@@ -40,9 +40,9 @@ With Docker, Compose, curl and jq installed, run:
 curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh | bash
 ```
 
-Open http://127.0.0.1:8080, create the administrator, connect a subscription and add it to an account pool, then create a personal key. Follow [First request](docs/quickstart.md) to complete the connection; team sharing and usage limits can wait until you need them.
+Open http://127.0.0.1:8080, create the administrator, connect a subscription and add it to an account pool, then create a personal key. Follow [First request](https://sublane.dev/docs/quickstart) to complete the connection; team sharing and usage limits can wait until you need them.
 
-The script installs the latest stable release, or the newest prerelease if no stable release exists, in `./sublane`. Data stays in a Docker volume; existing directories are left unchanged. For options, manual Compose deployment, HTTPS and upgrades, see the [deployment guide](docs/deployment.md).
+The script installs the latest stable release, or the newest prerelease if no stable release exists, in `./sublane`. Data stays in a Docker volume; existing directories are left unchanged. For options, manual Compose deployment, HTTPS and upgrades, see the [deployment guide](https://sublane.dev/docs/deployment).
 
 ## Development
 
@@ -59,10 +59,12 @@ Open http://127.0.0.1:5173. Run `make check` to test and build the project.
 
 ## Documentation
 
-- [Deployment](docs/deployment.md) · [Backup and restore](docs/backup.md)
-- [Providers](docs/providers.md) · [API keys](docs/api-keys.md) · [Account groups](docs/groups.md)
-- [Development](docs/development.md) · [Architecture](docs/architecture.md)
-- [Releases](docs/releases.md) · [Changelog](CHANGELOG.md)
+Follow the [step-by-step tutorial](https://sublane.dev/docs/guide/installation). Guides are maintained in the [documentation repository](https://github.com/murongg/sublane-website).
+
+- [Deployment](https://sublane.dev/docs/deployment) · [Backup and restore](https://sublane.dev/docs/backup)
+- [Providers](https://sublane.dev/docs/providers) · [API keys](https://sublane.dev/docs/api-keys) · [Account groups](https://sublane.dev/docs/groups)
+- [Development](https://sublane.dev/docs/development) · [Architecture](https://sublane.dev/docs/architecture)
+- [Releases](https://sublane.dev/docs/releases) · [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ## License

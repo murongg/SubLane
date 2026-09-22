@@ -1,6 +1,6 @@
 # Contributing to SubLane
 
-SubLane is at the foundation stage. Read [PRODUCT.md](PRODUCT.md) and [the roadmap](docs/roadmap.md) before expanding scope. Small improvements to a reliable Codex-first workflow are more useful than broad provider coverage at this stage.
+SubLane is at the foundation stage. Read [PRODUCT.md](PRODUCT.md) and [the roadmap](https://sublane.dev/docs/roadmap) before expanding scope. Small improvements to a reliable Codex-first workflow are more useful than broad provider coverage at this stage.
 
 ## Local workflow
 
@@ -10,7 +10,7 @@ SubLane is at the foundation stage. Read [PRODUCT.md](PRODUCT.md) and [the roadm
 4. Run `make check` before submitting your work.
 5. Update relevant documentation and both UI languages when behavior changes.
 
-See [development notes](docs/development.md) for commands and troubleshooting.
+See [development notes](https://sublane.dev/docs/development) for commands and troubleshooting.
 
 ## Change boundaries
 
@@ -30,3 +30,7 @@ Follow [DESIGN.md](DESIGN.md). Check loading, empty, error, and success states w
 Explain the problem, resulting behavior, relevant tradeoffs, and verification. Include UI screenshots for visible changes and migration notes when persisted data changes. Do not include unrelated cleanup or local planning documents.
 
 No contribution agreement or public support process is configured yet. Contributions must be compatible with the project's AGPL-3.0-only license and preserve third-party attribution.
+
+## Documentation changes
+
+Usage, operations, and architecture guides are maintained in [sublane-website](https://github.com/murongg/sublane-website), under `content/docs/` and `content/zh/`. Update those guides with application behavior changes instead of adding duplicate copies here. Repository policies, the changelog, and references not yet covered by the website stay in this repository. See [the documentation index](docs/README.md).

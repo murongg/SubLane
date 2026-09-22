@@ -24,7 +24,7 @@ chmod 755 "$staging/sublane"
 cp LICENSE THIRD_PARTY_NOTICES.md .env.example docker.compose.yaml "$staging/"
 cp -R licenses "$staging/licenses"
 mkdir "$staging/docs"
-cp docs/deployment.md docs/backup.md "$staging/docs/"
+cp docs/README.md "$staging/docs/"
 # The tar archive retains the executable bit that Actions artifact ZIPs do not preserve.
 tar -czf "$archive" -C "$staging" sublane LICENSE THIRD_PARTY_NOTICES.md licenses .env.example docker.compose.yaml docs
 printf '%s\n' "$archive"
