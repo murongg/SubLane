@@ -58,6 +58,9 @@ func (f *quotaFixture) open(t *testing.T) {
 	}
 	f.accounts = accounts.New(f.connection, cipher)
 	client := upstream.NewWithTransport(transportFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/backend-api/wham/rate-limit-reset-credits" {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"available_count":2}`))}, nil
+		}
 		f.calls.Add(1)
 		if f.started != nil {
 			select {
@@ -100,7 +103,7 @@ func TestUsageSnapshotSurvivesDatabaseReopen(t *testing.T) {
 	f.connection.Close()
 	f.open(t)
 	next, err := f.service.Usage(context.Background(), f.id)
-	if err != nil || next.UpdatedAt != first.UpdatedAt || f.calls.Load() != 1 || len(next.Limits) != 1 {
+	if err != nil || next.UpdatedAt != first.UpdatedAt || f.calls.Load() != 1 || len(next.Limits) != 1 || next.ResetCredits == nil || *next.ResetCredits != 2 {
 		t.Fatalf("restart lost snapshot: %+v %v calls=%d", next, err, f.calls.Load())
 	}
 	if *next.Limits[0].Windows[0].UsedPercent != 25 {

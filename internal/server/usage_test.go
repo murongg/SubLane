@@ -12,11 +12,16 @@ import (
 )
 
 func TestAccountUsageRequiresAdminAndRefreshesRejectedCredential(t *testing.T) {
-	var calls, refreshes atomic.Int32
+	var calls, refreshes, resetCreditCalls atomic.Int32
 	fixture := newQuotaForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth/token" {
 			refreshes.Add(1)
 			io.WriteString(w, `{"access_token":"synthetic-rotated","expires_in":3600}`)
+			return
+		}
+		if r.URL.Path == "/backend-api/wham/rate-limit-reset-credits" {
+			resetCreditCalls.Add(1)
+			io.WriteString(w, `{"available_count":2}`)
 			return
 		}
 		if r.URL.Path != "/backend-api/wham/usage" {
@@ -46,7 +51,7 @@ func TestAccountUsageRequiresAdminAndRefreshesRejectedCredential(t *testing.T) {
 		t.Fatal("usage authorization failed")
 	}
 	result := request(h, "GET", path, "", nil, owner)
-	if result.Code != 200 || calls.Load() != 2 || refreshes.Load() != 1 || !strings.Contains(result.Body.String(), `"used_percent":35`) || strings.Contains(result.Body.String(), "synthetic-private") || result.Header().Get("Cache-Control") != "no-store" {
+	if result.Code != 200 || calls.Load() != 2 || resetCreditCalls.Load() != 1 || refreshes.Load() != 1 || !strings.Contains(result.Body.String(), `"used_percent":35`) || !strings.Contains(result.Body.String(), `"reset_credits":2`) || strings.Contains(result.Body.String(), "synthetic-private") || result.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("usage: status=%d calls=%d refresh=%d body=%s", result.Code, calls.Load(), refreshes.Load(), result.Body)
 	}
 	if result := request(h, "POST", path+"/refresh", origin, map[string]string{}, member); result.Code != 403 {

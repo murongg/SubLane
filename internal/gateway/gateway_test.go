@@ -62,6 +62,10 @@ func TestGatewayKeepsAccountAffinityAndBoundsActiveRequests(t *testing.T) {
 			io.WriteString(w, `{"rate_limit":{}}`)
 			return
 		}
+		if r.URL.Path == "/backend-api/wham/rate-limit-reset-credits" {
+			http.NotFound(w, r)
+			return
+		}
 		mu.Lock()
 		used = append(used, r.Header.Get("Chatgpt-Account-Id"))
 		mu.Unlock()

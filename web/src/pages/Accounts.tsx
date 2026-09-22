@@ -21,7 +21,6 @@ import {
   type Account,
   providerLabels,
 } from '@/lib/accounts'
-import { cn } from '@/lib/cn'
 import { CatalogDialog } from '@/components/CatalogDialog'
 import { AccountUsage } from '@/components/AccountUsage'
 import { ConnectAccount } from '@/components/ConnectAccount'
@@ -38,9 +37,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu'
-
-const accountColumns =
-  '@3xl:grid-cols-[minmax(0,1fr)_minmax(0,16rem)_minmax(8.5rem,0.7fr)_6rem]'
 
 export function Accounts() {
   const { t, i18n } = useTranslation()
@@ -155,159 +151,43 @@ export function Accounts() {
           </p>
         </section>
       ) : (
-        <div className="@container overflow-hidden rounded-xl border border-border bg-card">
-          <div
-            aria-hidden="true"
-            className={cn(
-              'hidden gap-x-6 border-b border-border px-5 py-3 text-xs text-muted-foreground @3xl:grid',
-              accountColumns,
-            )}
-          >
-            <span>{t('accountName')}</span>
-            <span>{t('accountUsage')}</span>
-            <span>{t('memberStatus')}</span>
-            <span className="text-right">{t('actions')}</span>
-          </div>
-          <ul
-            className="divide-y divide-border"
-            aria-label={t('accountsTitle')}
-          >
-            {query.data.accounts.map((account) => (
-              <li key={account.id}>
-                <article
-                  aria-labelledby={`account-${account.id}`}
-                  className={cn(
-                    'grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-6 gap-y-5 p-5',
-                    accountColumns,
-                  )}
-                >
-                  <div className="col-span-2 min-w-0 @3xl:col-span-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                      <h2
-                        id={`account-${account.id}`}
-                        className="break-words text-sm font-medium"
-                      >
-                        {account.name}
-                      </h2>
-                      {account.plan && (
-                        <span className="rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
-                          {account.plan}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2 text-xs leading-5 text-muted-foreground">
-                      <ProviderLogo
-                        provider={account.provider}
-                        alt={providerLabels[account.provider]}
-                        className="size-5"
-                      />
-                      {account.email && (
-                        <span className="min-w-0 break-all">
-                          {account.email}
-                        </span>
-                      )}
-                    </div>
-                    <div className="-ml-2 mt-1">
-                      <CatalogDialog
-                        target={{ kind: 'account', id: account.id }}
-                        name={account.name}
-                        disabled={
-                          !account.enabled ||
-                          account.status === 'reauth_required'
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="col-span-2 min-w-0 @3xl:col-span-1">
-                    {account.enabled &&
-                    account.status !== 'reauth_required' &&
-                    account.provider === 'codex' ? (
-                      <AccountUsage id={account.id} name={account.name} />
-                    ) : (
-                      <p className="text-xs leading-5 text-muted-foreground">
-                        {t(
-                          account.enabled
-                            ? account.status === 'reauth_required'
-                              ? 'accountReauthorizeHint'
-                              : 'providerQuotaUnsupported'
-                            : 'accountDisabledHint',
+        <ul className="space-y-3" aria-label={t('accountsTitle')}>
+          {query.data.accounts.map((account) => (
+            <li key={account.id}>
+              <article
+                aria-labelledby={`account-${account.id}`}
+                className="@container overflow-hidden rounded-xl border border-border bg-card"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <ProviderLogo
+                      provider={account.provider}
+                      alt={providerLabels[account.provider]}
+                      className="mt-0.5 size-6 shrink-0"
+                    />
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2
+                          id={`account-${account.id}`}
+                          className="break-words text-sm font-semibold"
+                        >
+                          {account.name}
+                        </h2>
+                        {account.plan && (
+                          <span className="rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
+                            {account.plan}
+                          </span>
                         )}
-                      </p>
-                    )}
-                  </div>
-                  <div className="min-w-0 space-y-2.5">
-                    <AccountStatus account={account} />
-                    {account.group_count === 0 && (
-                      <div className="space-y-1">
-                        <Status kind="neutral">{t('accountUnassigned')}</Status>
-                        <Link
-                          to="/groups"
-                          className="block text-xs underline underline-offset-4"
-                        >
-                          {t('accountAssignGroup')}
-                        </Link>
                       </div>
-                    )}
-                    {runtime.data?.accounts
-                      .filter((state) => state.id === account.id)
-                      .map((state) => (
-                        <div
-                          key={state.id}
-                          className="space-y-1.5 text-xs text-muted-foreground"
-                        >
-                          <p>
-                            {t('accountInFlight', {
-                              active: state.in_flight,
-                              limit: state.max_concurrency,
-                            })}
-                          </p>
-                          {account.enabled &&
-                            account.status !== 'reauth_required' &&
-                            state.state !== 'available' && (
-                              <>
-                                <Status kind="warning">
-                                  {t(
-                                    state.state === 'quota_exhausted'
-                                      ? 'accountQuotaExhausted'
-                                      : state.state === 'cooling'
-                                        ? 'accountCooling'
-                                        : state.state === 'probing'
-                                          ? 'accountProbing'
-                                          : 'accountRetryReady',
-                                  )}
-                                </Status>
-                                {state.state === 'quota_exhausted' && (
-                                  <p>{t('accountQuotaRoutingHint')}</p>
-                                )}
-                                {state.state === 'cooling' && (
-                                  <p>
-                                    {t('accountRetryAt', {
-                                      time: dates.format(
-                                        state.cooldown_until * 1000,
-                                      ),
-                                    })}
-                                  </p>
-                                )}
-                              </>
-                            )}
-                        </div>
-                      ))}
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      <span className="block">{t('accountExpires')}</span>
-                      {account.expires_at ? (
-                        <time
-                          dateTime={new Date(
-                            account.expires_at * 1000,
-                          ).toISOString()}
-                        >
-                          {dates.format(account.expires_at * 1000)}
-                        </time>
-                      ) : (
-                        t('accountUnknownExpiry')
+                      {account.email && (
+                        <p className="break-all text-xs text-muted-foreground">
+                          {account.email}
+                        </p>
                       )}
-                    </p>
+                    </div>
                   </div>
-                  <div className="flex justify-end gap-1">
+                  <div className="flex items-center gap-1">
+                    <AccountStatus account={account} />
                     <Button
                       variant="ghost"
                       size="icon"
@@ -395,11 +275,122 @@ export function Accounts() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                </article>
-              </li>
-            ))}
-          </ul>
-        </div>
+                </div>
+                <div className="grid gap-5 border-t border-border px-5 py-4 @2xl:grid-cols-[minmax(0,1fr)_minmax(14rem,0.65fr)]">
+                  <div className="min-w-0">
+                    {account.enabled &&
+                    account.status !== 'reauth_required' &&
+                    account.provider === 'codex' ? (
+                      <AccountUsage id={account.id} name={account.name} />
+                    ) : (
+                      <div className="space-y-2">
+                        <h3 className="text-xs font-medium text-muted-foreground">
+                          {t('accountUsage')}
+                        </h3>
+                        <p className="text-sm leading-5 text-muted-foreground">
+                          {t(
+                            account.enabled
+                              ? account.status === 'reauth_required'
+                                ? 'accountReauthorizeHint'
+                                : 'providerQuotaUnsupported'
+                              : 'accountDisabledHint',
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 space-y-4 border-t border-border pt-4 @2xl:border-l @2xl:border-t-0 @2xl:pl-5 @2xl:pt-0">
+                    {runtime.data?.accounts
+                      .filter((state) => state.id === account.id)
+                      .map((state) => (
+                        <div
+                          key={state.id}
+                          className="space-y-2 text-sm text-muted-foreground"
+                        >
+                          <p className="tabular-nums">
+                            {t('accountInFlight', {
+                              active: state.in_flight,
+                              limit: state.max_concurrency,
+                            })}
+                          </p>
+                          {account.enabled &&
+                            account.status !== 'reauth_required' &&
+                            state.state !== 'available' && (
+                              <>
+                                <Status kind="warning">
+                                  {t(
+                                    state.state === 'quota_exhausted'
+                                      ? 'accountQuotaExhausted'
+                                      : state.state === 'cooling'
+                                        ? 'accountCooling'
+                                        : state.state === 'probing'
+                                          ? 'accountProbing'
+                                          : 'accountRetryReady',
+                                  )}
+                                </Status>
+                                {state.state === 'quota_exhausted' && (
+                                  <p className="text-xs leading-5">
+                                    {t('accountQuotaRoutingHint')}
+                                  </p>
+                                )}
+                                {state.state === 'cooling' && (
+                                  <p className="text-xs leading-5">
+                                    {t('accountRetryAt', {
+                                      time: dates.format(
+                                        state.cooldown_until * 1000,
+                                      ),
+                                    })}
+                                  </p>
+                                )}
+                              </>
+                            )}
+                        </div>
+                      ))}
+                    {account.group_count === 0 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Status kind="neutral">{t('accountUnassigned')}</Status>
+                        <Link
+                          to="/groups"
+                          className="text-xs underline underline-offset-4"
+                        >
+                          {t('accountAssignGroup')}
+                        </Link>
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        {t('accountExpires')}
+                      </p>
+                      <p className="text-sm tabular-nums">
+                        {account.expires_at ? (
+                          <time
+                            dateTime={new Date(
+                              account.expires_at * 1000,
+                            ).toISOString()}
+                          >
+                            {dates.format(account.expires_at * 1000)}
+                          </time>
+                        ) : (
+                          t('accountUnknownExpiry')
+                        )}
+                      </p>
+                    </div>
+                    <div className="-ml-2">
+                      <CatalogDialog
+                        target={{ kind: 'account', id: account.id }}
+                        name={account.name}
+                        disabled={
+                          !account.enabled ||
+                          account.status === 'reauth_required'
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </li>
+          ))}
+        </ul>
       )}
       {limits && (
         <AccountLimits

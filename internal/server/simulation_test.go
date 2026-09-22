@@ -93,6 +93,10 @@ func runHTTPSimulation(t *testing.T, dir string, seed int64, mismatch bool) {
 				"secondary_window": map[string]any{"used_percent": v[1] / 100, "limit_window_seconds": 604800, "reset_at": reset + 586800}}})
 			return
 		}
+		if r.URL.Path == "/backend-api/wham/rate-limit-reset-credits" {
+			http.NotFound(w, r)
+			return
+		}
 		if r.Method != "POST" || !strings.HasSuffix(r.URL.Path, "/responses") {
 			http.Error(w, "unexpected mock route", 500)
 			return

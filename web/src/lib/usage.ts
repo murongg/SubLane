@@ -9,6 +9,13 @@ const windowSchema = z.object({
   reset_at: z.number().int().nonnegative().nullable(),
 })
 const usageSchema = z.object({
+  reset_credits: z
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
   limits: z
     .array(
       z.object({
