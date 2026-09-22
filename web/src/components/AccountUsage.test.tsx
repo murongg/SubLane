@@ -76,6 +76,34 @@ it('loads actual quota windows and refreshes without confusing failure with exha
   )
   expect(fetch.mock.calls[1][1].method).toBe('POST')
 })
+it('shows reset cards separately and keeps missing counts unknown', async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ ...snapshot, reset_credits: 2 })),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ ...snapshot, reset_credits: 0 })),
+    )
+  vi.stubGlobal('fetch', fetch)
+  mount()
+  await screen.findByText('Reset cards: 2')
+  await userEvent.setup().click(
+    screen.getByRole('button', {
+      name: 'Refresh usage for Test subscription',
+    }),
+  )
+  await screen.findByText('Reset cards: 0')
+  expect(screen.queryByText('Reset cards: 2')).toBeNull()
+})
+it('shows an unknown reset card count when the provider omits it', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot))),
+  )
+  mount()
+  await screen.findByText('Reset cards: Unknown')
+})
 it('does not invent quota when no window or percentage is available', async () => {
   const fetch = vi
     .fn()

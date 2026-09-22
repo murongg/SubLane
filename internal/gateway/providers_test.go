@@ -75,6 +75,9 @@ func providerFixture(t *testing.T, transport http.RoundTripper, known bool, vers
 		if r.URL.Path == "/backend-api/wham/usage" {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"rate_limit":{}}`))}, nil
 		}
+		if r.URL.Path == "/backend-api/wham/rate-limit-reset-credits" {
+			return &http.Response{StatusCode: 404, Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+		}
 		return transport.RoundTrip(r)
 	}), version...)
 	t.Cleanup(client.Close)

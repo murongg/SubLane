@@ -93,6 +93,9 @@ func newForwardingFixture(t *testing.T, provider string, handler http.HandlerFun
 		if !quota && r.URL.Path == "/backend-api/wham/usage" {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"rate_limit":{}}`))}, nil
 		}
+		if !quota && r.URL.Path == "/backend-api/wham/rate-limit-reset-credits" {
+			return &http.Response{StatusCode: 404, Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+		}
 		copy := r.Clone(r.Context())
 		copy.URL.Scheme = target.Scheme
 		copy.URL.Host = target.Host

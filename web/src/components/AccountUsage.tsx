@@ -44,8 +44,25 @@ export function AccountUsage({ id, name }: { id: string; name: string }) {
   return (
     <section
       aria-label={t('accountUsageLabel', { name })}
-      className="min-w-0 space-y-2"
+      className="min-w-0 space-y-3"
     >
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <h3 className="text-xs font-medium text-muted-foreground">
+          {t('accountUsage')}
+        </h3>
+        {query.data && (
+          <p className="text-xs tabular-nums text-muted-foreground">
+            {t('usageResetCredits', {
+              count:
+                query.data.reset_credits === null
+                  ? t('usageResetCreditsUnknown')
+                  : new Intl.NumberFormat(locale).format(
+                      query.data.reset_credits,
+                    ),
+            })}
+          </p>
+        )}
+      </div>
       {query.isPending && (
         <p role="status" className="text-xs text-muted-foreground">
           {t('usageLoading')}

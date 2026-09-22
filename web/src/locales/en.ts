@@ -900,6 +900,8 @@ export const en = {
   usageStale: 'Unable to refresh. Showing the last known usage.',
   usageLoadFailed: 'Unable to load usage. Try refreshing later.',
   usageNotReported: 'No usage limits reported',
+  usageResetCredits: 'Reset cards: {{count}}',
+  usageResetCreditsUnknown: 'Unknown',
   usageLimited: 'Currently limited',
   usagePrimary: 'Primary limit',
   usageSecondary: 'Secondary limit',

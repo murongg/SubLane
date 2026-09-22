@@ -814,6 +814,8 @@ export const zh: Record<keyof typeof en, string> = {
   usageStale: '刷新失败，当前显示上次获取的额度。',
   usageLoadFailed: '暂时无法获取额度，请稍后刷新。',
   usageNotReported: '上游未提供额度信息',
+  usageResetCredits: '重置卡：{{count}}',
+  usageResetCreditsUnknown: '未知',
   usageLimited: '当前使用受限',
   usagePrimary: '主要额度',
   usageSecondary: '次要额度',

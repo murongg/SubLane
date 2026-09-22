@@ -15,6 +15,7 @@ var ErrUsageUnsupported = errors.New("provider_usage_unsupported")
 type Usage struct {
 	ReadStartedAt int64        `json:"read_started_at,omitempty"`
 	Limits        []UsageLimit `json:"limits"`
+	ResetCredits  *int64       `json:"reset_credits"`
 	UpdatedAt     int64        `json:"updated_at"`
 }
 
@@ -71,8 +72,9 @@ func (c *Client) Usage(ctx context.Context, credential accounts.Credential) (Usa
 		return Usage{}, ErrResponse
 	}
 	var payload struct {
-		RateLimit  json.RawMessage `json:"rate_limit"`
-		Additional []struct {
+		RateLimit    json.RawMessage `json:"rate_limit"`
+		ResetCredits json.RawMessage `json:"rate_limit_reset_credits"`
+		Additional   []struct {
 			Name      string        `json:"limit_name"`
 			RateLimit *usageDetails `json:"rate_limit"`
 		} `json:"additional_rate_limits"`
@@ -85,6 +87,14 @@ func (c *Client) Usage(ctx context.Context, credential accounts.Credential) (Usa
 		return Usage{}, ErrResponse
 	}
 	result := Usage{Limits: []UsageLimit{}, UpdatedAt: time.Now().Unix()}
+	var embeddedCredits struct {
+		AvailableCount *int64 `json:"available_count"`
+	}
+	// Optional reset-card metadata must not invalidate a usable quota snapshot.
+	if json.Unmarshal(payload.ResetCredits, &embeddedCredits) == nil &&
+		embeddedCredits.AvailableCount != nil && *embeddedCredits.AvailableCount >= 0 {
+		result.ResetCredits = embeddedCredits.AvailableCount
+	}
 	appendLimit := func(name string, details *usageDetails) error {
 		if details == nil {
 			return nil
@@ -126,5 +136,35 @@ func (c *Client) Usage(ctx context.Context, credential accounts.Credential) (Usa
 			return Usage{}, err
 		}
 	}
+	if count := c.resetCredits(ctx, credential); count != nil {
+		result.ResetCredits = count
+	}
 	return result, nil
+}
+
+func (c *Client) resetCredits(ctx context.Context, credential accounts.Credential) *int64 {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", nil)
+	if err != nil {
+		return nil
+	}
+	upstreamHeaders(request, credential, nil, false, c.codexVersion())
+	response, err := c.http.Do(request)
+	if err != nil {
+		return nil
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil
+	}
+	raw, err := readBounded(response.Body, 128<<10)
+	if err != nil {
+		return nil
+	}
+	var details struct {
+		AvailableCount *int64 `json:"available_count"`
+	}
+	if json.Unmarshal(raw, &details) != nil || details.AvailableCount != nil && *details.AvailableCount < 0 {
+		return nil
+	}
+	return details.AvailableCount
 }
