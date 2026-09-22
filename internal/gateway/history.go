@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/upstream"
@@ -46,20 +47,22 @@ func RequestID(ctx context.Context) string {
 var safeModel = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,159}$`)
 
 type observation struct {
-	kind             Kind
-	service          *Service
-	ctx              context.Context
-	cancel           context.CancelFunc
-	stopParent       func() bool
-	once             sync.Once
-	started          time.Time
-	record           db.RecordRequestParams
-	revision         int64
-	leased           bool
-	memberLeased     bool
-	budgetTracked    bool
-	budgetDispatched bool
-	sequence         int64
+	kind              Kind
+	service           *Service
+	ctx               context.Context
+	cancel            context.CancelFunc
+	stopParent        func() bool
+	once              sync.Once
+	started           time.Time
+	record            db.RecordRequestParams
+	revision          int64
+	leased            bool
+	memberLeased      bool
+	schemeID          int64
+	allocationTracked bool
+	budgetTracked     bool
+	budgetDispatched  bool
+	sequence          int64
 }
 
 func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (*observation, error) {
@@ -154,12 +157,18 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 		if err == nil {
 			defer tx.Rollback()
 			q := s.queries.WithTx(tx)
-			err = e.settleBudget(ctx, q)
+			err = e.settleAllocation(ctx, q)
+			if err == nil {
+				err = e.settleBudget(ctx, q)
+			}
 			if err == nil {
 				err = q.RecordRequest(ctx, e.record)
 			}
 			if err == nil {
 				err = recordStatistics(ctx, q, e.record)
+			}
+			if err == nil {
+				err = allocations.Prune(ctx, q, s.now().Add(-90*24*time.Hour).Unix())
 			}
 			if err == nil {
 				err = q.PruneStatistics(ctx, s.now().UTC().Truncate(24*time.Hour).Unix()-89*86400)
@@ -175,7 +184,7 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 			}
 		}
 		if err != nil {
-			if e.budgetTracked {
+			if e.budgetTracked || e.allocationTracked {
 				s.budgetFailure = true
 			}
 			slog.Error("Unable to persist request metadata")
@@ -194,6 +203,8 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 		return statusOutcome(rejected.Status)
 	}
 	switch {
+	case errors.Is(err, allocations.ErrQuota), errors.Is(err, allocations.ErrPending), errors.Is(err, allocations.ErrUnavailable), errors.Is(err, allocations.ErrUnpriced), errors.Is(err, allocations.ErrSnapshot):
+		return "rejected", err.Error(), ""
 	case errors.Is(err, ErrMemberBusy):
 		return "rejected", "member_busy", ""
 	case errors.Is(err, ErrMemberRate):

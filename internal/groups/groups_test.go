@@ -12,6 +12,7 @@ import (
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage"
+	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/vault"
 )
 
@@ -122,5 +123,29 @@ func TestConnectionReadinessOnlyUsesAuthorizedGroups(t *testing.T) {
 	status, err = service.Connection(ctx, member.ID)
 	if err != nil || status != "not_configured" {
 		t.Fatal("another pool leaked readiness", status, err)
+	}
+}
+
+func TestMembersRequireTeamAccessInsteadOfDirectGrants(t *testing.T) {
+	connection, service, member, _ := fixture(t)
+	ctx := context.Background()
+	if _, err := connection.Exec("INSERT INTO allocation_teams(name,enabled,created_at) VALUES('Synthetic configured team',1,1)"); err != nil {
+		t.Fatal(err)
+	}
+	// The legacy default grant exists but must no longer authorize a member.
+	choices, err := service.Available(ctx, member.ID)
+	if err != nil || len(choices) != 0 {
+		t.Fatalf("member without a team saw groups: %+v, %v", choices, err)
+	}
+	if _, err := groups.ReadPolicy(ctx, db.New(connection), member.ID, groups.DefaultID); !errors.Is(err, groups.ErrUnavailable) {
+		t.Fatalf("default grant bypassed team policy: %v", err)
+	}
+	status, err := service.Connection(ctx, member.ID)
+	if err != nil || status != "not_configured" {
+		t.Fatalf("unauthorized account leaked readiness: %s, %v", status, err)
+	}
+	choices, err = service.Available(ctx, 1)
+	if err != nil || len(choices) != 1 {
+		t.Fatalf("administrator lost management access: %+v, %v", choices, err)
 	}
 }

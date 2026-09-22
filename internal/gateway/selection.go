@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/upstream"
@@ -15,6 +16,9 @@ import (
 
 // Called under s.mu by Open, keeping policy, selection and account reservation atomic.
 func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, session, provider, model string, kind Kind) (string, [32]byte, error) {
+	return s.selectAllocationAccount(ctx, userID, groupID, session, provider, model, kind, 0)
+}
+func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID int64, session, provider, model string, kind Kind, scheme int64) (string, [32]byte, error) {
 	digest := sha256.Sum256([]byte(fmt.Sprintf("%d:%s", userID, session)))
 	// Preserve upstream session/cache IDs for existing conversations in the default group.
 	if groupID != groups.DefaultID {
@@ -121,6 +125,11 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 			if err := s.quotaAdmission(ctx, q, *bound); err != nil {
 				return id, digest, err
 			}
+			if scheme != 0 {
+				if _, err := allocations.Check(ctx, q, scheme, userID, groupID, id, model, now); err != nil {
+					return id, digest, err
+				}
+			}
 			if existing.Provider != scope {
 				if err := rememberAffinity(ctx, q, userID, groupID, digest, scope, id, now, expires); err != nil {
 					return "", digest, err
@@ -140,6 +149,7 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 	bestRank := 2
 	busy, unknown, eligible := false, false, false
 	var cooling, quotaWait int64
+	var allocationErr error
 	for _, account := range available {
 		if !allowed[account.ID] || !account.Enabled || account.Status == "reauth_required" || (provider != "" && account.Provider != provider) || (kind == Compact && account.Provider != "codex") {
 			continue
@@ -181,6 +191,15 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 			}
 			continue
 		}
+		if scheme != 0 {
+			if _, err := allocations.Check(ctx, q, scheme, userID, groupID, account.ID, model, now); err != nil {
+				if !errors.Is(err, allocations.ErrQuota) && !errors.Is(err, allocations.ErrPending) && !errors.Is(err, allocations.ErrSnapshot) && !errors.Is(err, allocations.ErrUnpriced) && !errors.Is(err, allocations.ErrUnavailable) {
+					return "", digest, err
+				}
+				allocationErr = err
+				continue
+			}
+		}
 		// Preference only ranks accounts that passed every policy and availability check.
 		// Existing affinities returned above must never move to a more direct provider.
 		rank := 1
@@ -196,6 +215,9 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 		}
 	}
 	if len(candidates) == 0 {
+		if allocationErr != nil {
+			return "", digest, allocationErr
+		}
 		if busy {
 			return "", digest, ErrAccountBusy
 		}

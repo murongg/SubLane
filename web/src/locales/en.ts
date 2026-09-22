@@ -1,4 +1,138 @@
 export const en = {
+  allocationPause: 'Pause scheme',
+  allocationResume: 'Resume scheme',
+  personnelTeams: 'Personnel teams',
+  personnelTeam: 'Personnel team',
+  teamsDescription:
+    'Put people in teams, connect each team to account pools, and set one allowance rule per pool.',
+  teamCreate: 'Create team',
+  teamEdit: 'Edit team',
+  teamEditNamed: 'Edit {{name}}',
+  teamSave: 'Save team',
+  teamName: 'Team name',
+  teamEnabled: 'Enable this team',
+  teamsEmpty:
+    'Create a team, add members, then connect an account pool from the team editor.',
+  teamMemberCount: '{{count}} members',
+  teamResourceCount: '{{count}} account pool resources',
+  teamMembershipHint:
+    'Removing a member immediately blocks their scheme keys. Rejoining never resets their usage. Up to 100 members per team.',
+  teamAllowedGroups: 'Allowed account groups',
+  teamAllowedGroupsHint:
+    'Members can see and use only these shared groups. Dedicated pools are added below as team resources.',
+  teamResources: 'Team resources',
+  teamResourcesHint:
+    'Connect a dedicated account pool and choose one limit type. Each pool can belong to one team.',
+  teamResourceAdd: 'Add team resource',
+  teamResourceEdit: 'Edit resource',
+  teamResourcesEmpty: 'No account pool resources configured yet.',
+  teamResourceNoPools:
+    'No available account pools. Create an enabled, nonempty pool first.',
+  allocationAccountLocked:
+    'This account is reserved by an allocation scheme and cannot be deleted. Disable it to stop routing requests.',
+  allocationUnavailableShort: 'Unavailable',
+  allocationWaiting: 'Scheduled',
+  allocationPrerequisite:
+    'Create an enabled team with members and an enabled, nonempty dedicated pool. Each pool can belong to one scheme; Default remains available for new imports.',
+  allocationSchemes: 'Allocation schemes',
+  allocationsDescription:
+    'Connect a personnel team to an exclusive account pool and choose one allowance type.',
+  allocationCreate: 'Create allocation scheme',
+  allocationEdit: 'Edit scheme',
+  allocationEditNamed: 'Edit scheme {{name}}',
+  allocationName: 'Scheme name',
+  allocationMode: 'Allowance type',
+  allocationRatio: 'By share',
+  allocationAmount: 'By amount',
+  allocationTokens: 'By tokens',
+  allocationSave: 'Save allocation scheme',
+  allocationView: 'View usage',
+  allocationBack: 'Back to schemes',
+  allocationsEmpty:
+    'Create a personnel team and an exclusive account pool to start allocating usage.',
+  allocationRatioHint:
+    'Assign a share of each Codex subscription window. Model-weighted accounting estimates consumption from upstream percentages.',
+  allocationAmountHint:
+    'Charge usage at your configured model prices in USD. This is an internal allowance, not an upstream cash balance.',
+  allocationTokensHint:
+    'Count input plus output tokens. 1 M = 1,000,000 tokens. Cached input is not counted twice.',
+  allocationExclusiveHint:
+    'Use a dedicated pool and remove its accounts from every other group first. After creation, the team, pool and account membership stay fixed, including while paused. Existing unbound keys for this pool stop working.',
+  allocationMembers: 'Member allowances',
+  allocationBlankHint: 'Leave a member blank to exclude them from this scheme.',
+  allocationFor: 'Allowance for {{name}}',
+  allocationTotal: 'Allocated {{total}}% · Reserved {{remaining}}%',
+  allocationPeriod: 'Reset period',
+  allocationUpstreamReset: 'Follows each upstream quota window',
+  allocationRates: 'Model prices and weights',
+  allocationRatesHint:
+    'Enter USD per 1 M tokens for each native model ID (maximum 1,000 USD per category). Share mode uses these as relative weights. Models without a configured rate are blocked; no price is guessed.',
+  allocationRateInput: 'Input · USD / M',
+  allocationRateCached: 'Cached input · USD / M',
+  allocationRateOutput: 'Output · USD / M',
+  allocationAddRate: 'Add model price',
+  allocationRemoveRate: 'Remove model price {{index}}',
+  allocationRemove: 'Remove',
+  allocationModelID: 'Model ID',
+  allocationEnabled: 'Enable this scheme',
+  allocationNextHint:
+    'Changes to allowances, prices or type take effect next period. Pausing or enabling access takes effect immediately. Current usage and unsettled entries remain recorded.',
+  allocationStartNext: 'Start at the next reset (recommended)',
+  allocationImmediateHint:
+    'Start immediately: fixed allowances begin now; share allowances divide the remaining upstream capacity at the first fresh observation. Earlier usage is not backfilled.',
+  allocationScheduled: '{{mode}} takes effect {{date}}',
+  allocationLoading: 'Loading allocations…',
+  allocationFailed: 'Unable to load or save allocations. Please retry.',
+  allocationInvalid:
+    'Check the name, members, positive allowances and model prices. Shares must total at most 100%; percentages allow two decimal places and M / USD allow six.',
+  allocationPoolConflict:
+    'These accounts are reserved by a scheme or shared with another pool. Use a separate pool; a managed pool’s account list is fixed.',
+  allocationSnapshotRequired:
+    'Fresh Codex quota data is required. Refresh account usage and retry. Unknown or reset data is never treated as full capacity.',
+  allocationSettlementConflict:
+    'Usage changed or the correction conflicts with a previous settlement. Refresh before retrying.',
+  allocationPending: 'Usage pending reconciliation',
+  allocationExhausted: 'Allowance exhausted',
+  allocationUnavailable:
+    'This scheme is paused, scheduled, or no longer available to you.',
+  allocationUnpriced: 'Model price is not configured',
+  allocationEstimateHint:
+    'Estimated shares: 1 point = 1% of one account’s full window. Windows are tracked separately. Unconfirmed requests remain pending; active requests may exceed the remaining allowance.',
+  allocationNoBalances:
+    'No balances yet. For share mode, sync fresh upstream usage after the scheme starts.',
+  allocationPoints: 'points',
+  allocationPrimary: 'Primary window',
+  allocationSecondary: 'Secondary window',
+  allocationLimit: 'Allowance',
+  allocationUsed: 'Used',
+  allocationRemaining: 'Remaining',
+  allocationResetAt: 'Resets {{date}}',
+  allocationActualTokens: '{{tokens}} M tokens',
+  allocationSync: 'Sync upstream usage',
+  allocationAwaitingSync: 'Awaiting upstream change',
+  allocationCorrect: 'Correct usage',
+  allocationSettle: 'Confirm settlement',
+  allocationSettlementHint:
+    'Sync upstream data first. Correct only with evidence: enter total input/output/cache tokens, or the request’s total percentage points for each original window. Corrections are audited and cannot be undone here.',
+  allocationInputM: 'Input tokens · M',
+  allocationOutputM: 'Output tokens · M',
+  allocationCachedM: 'Cached input · M',
+  allocationUnassignedHint:
+    'Some upstream usage cannot be attributed to a member. Confirm it as external usage; it reduces upstream capacity and is not charged to any member.',
+  allocationReserve: 'Confirm external usage',
+  allocationMoreMembers: 'Load more members',
+  allocationMine: 'My allocation schemes',
+  allocationRefreshMine: 'Refresh my allocation schemes',
+  allocationMineEmpty:
+    'No allocation schemes assigned. Existing personal token rules apply to unmanaged pools.',
+  allocationKeyChoice: 'Team resource: {{scheme}} · {{pool}}',
+  allocationLegacyHint:
+    'These personal rules apply only to keys outside allocation schemes. A scheme key uses exactly its scheme’s allowance type.',
+  auditTeamSave: 'Saved personnel team',
+  auditAllocationSave: 'Saved allocation scheme',
+  auditAllocationSettle: 'Settled scheme usage',
+  auditAllocationReconcile: 'Confirmed external quota usage',
+
   budgetSaving: 'Saving…',
   budgetRefresh: 'Refresh token budgets',
   budgetUnitHint: '1 M = 1,000,000 tokens. Up to 6 decimal places (1 token).',
@@ -10,7 +144,7 @@ export const en = {
     'All matching budgets apply across API keys. Input and output tokens count together. Limits stop new requests; active requests may finish above the limit.',
   budgetsLoading: 'Loading token budgets…',
   budgetsLoadFailed: 'Unable to load token budgets.',
-  budgetsEmpty: 'No token budgets. Usage is unlimited.',
+  budgetsEmpty: 'No token budgets for keys outside allocation schemes.',
   budgetAllGroups: 'All groups',
   budgetAllModels: 'All models',
   budgetDisabled: 'Limit disabled',

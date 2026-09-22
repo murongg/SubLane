@@ -57,6 +57,7 @@ func New(connection *sql.DB) *Service {
 }
 
 var actions = map[string]string{
+	"team.save": "team", "allocation.save": "allocation", "allocation.settle": "allocation", "allocation.reconcile": "allocation",
 	"backup.export": "backup", "backup.prepare": "backup", "backup.verify": "backup",
 	"settings.update": "settings",
 	"key.reveal":      "key", "key.create": "key", "key.update": "key", "key.revoke": "key",
@@ -146,7 +147,7 @@ func (s *Service) List(ctx context.Context, f Filter) (Page, error) {
 		return page, ErrInput
 	}
 	switch f.Resource {
-	case "", "key", "group", "member", "user", "account", "settings", "backup":
+	case "", "team", "allocation", "key", "group", "member", "user", "account", "settings", "backup":
 	default:
 		return page, ErrInput
 	}

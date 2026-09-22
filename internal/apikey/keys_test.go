@@ -198,3 +198,50 @@ func TestKeysEnforceGroupGrantsOnCreationAndEveryAuthentication(t *testing.T) {
 		t.Fatal("disabled group key worked", err)
 	}
 }
+
+func TestManagedPoolRequiresSchemeBinding(t *testing.T) {
+	ctx := context.Background()
+	conn, err := storage.Open(ctx, filepath.Join(t.TempDir(), "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	identity, err := auth.New(conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+		t.Fatal(err)
+	}
+	member, err := identity.CreateMember(ctx, "synthetic-user", "synthetic-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := newTestKeys(t, conn)
+	legacy, err := keys.Create(ctx, member.ID, "Legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Minimal synthetic scheme fixture deliberately exercises authentication independent of management validation.
+	for _, stmt := range []string{"INSERT INTO allocation_teams(id,name,enabled,created_at) VALUES(1,'Synthetic',1,1)", "INSERT INTO allocation_team_members(team_id,user_id) VALUES(1,2)", "INSERT INTO allocation_schemes(id,name,team_id,group_id,enabled,created_at) VALUES(1,'Synthetic',1,1,1,1)", `INSERT INTO allocation_revisions(scheme_id,effective_at,config) VALUES(1,1,'{"mode":"tokens","period":"day","members":[{"user_id":2,"limit":100}],"rates":[] }')`} {
+		if _, err = conn.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = keys.Authenticate(ctx, legacy.Secret); !errors.Is(err, ErrInvalidKey) {
+		t.Fatal("legacy key bypassed managed pool", err)
+	}
+	bound, err := keys.CreateInScheme(ctx, member.ID, 1, "Bound", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = keys.Authenticate(ctx, bound.Secret); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = conn.Exec("DELETE FROM allocation_team_members WHERE user_id=2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = keys.Authenticate(ctx, bound.Secret); !errors.Is(err, ErrInvalidKey) {
+		t.Fatal("removed member retained access", err)
+	}
+}

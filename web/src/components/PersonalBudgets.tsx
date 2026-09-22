@@ -28,7 +28,7 @@ export function PersonalBudgets({ userID }: { userID: number }) {
         </Button>
       </div>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        {t('budgetsPersonalHint')}
+        {t('budgetsPersonalHint')} {t('allocationLegacyHint')}
       </p>
       {query.isPending ? (
         <p role="status" className="py-4 text-sm text-muted-foreground">

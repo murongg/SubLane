@@ -50,6 +50,7 @@ func New(o Options) http.Handler {
 	keys := &keyHTTP{groups: o.Groups, service: o.Keys, gateway: o.Gateway, publicURL: o.PublicURL, sockets: make(chan struct{}, 8)}
 	accountManagement := &accountHTTP{service: o.Accounts, oauth: o.OAuth, gateway: o.Gateway}
 	memberManagement := &memberHTTP{gateway: o.Gateway}
+	allocationManagement := &allocationHTTP{gateway: o.Gateway}
 
 	health := func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]string{"status": "ok"})
@@ -125,6 +126,7 @@ func New(o Options) http.Handler {
 			personal.Get("/requests/filters", accountManagement.personalRequestFilters)
 			personal.With(login.throttleLogin).Post("/password", login.changePassword)
 			personal.Get("/budgets", memberManagement.ownBudgets)
+			personal.Get("/allocations", allocationManagement.own)
 			personal.Get("/limits", memberManagement.ownLimits)
 			personal.Get("/usage", memberManagement.ownUsage)
 		})
@@ -149,6 +151,8 @@ func New(o Options) http.Handler {
 		management.Route("/accounts", accountManagement.register)
 		management.Get("/requests", accountManagement.requests)
 		management.Get("/requests/filters", accountManagement.requestFilters)
+		management.Route("/teams", allocationManagement.registerTeams)
+		management.Route("/allocations", allocationManagement.register)
 		management.Route("/groups", (&groupHTTP{service: o.Groups, gateway: o.Gateway}).register)
 		api.Mount("/", management)
 	})

@@ -48,6 +48,8 @@ it.each([
     const fetch = vi.fn().mockImplementation((url: string) => {
       if (url === '/api/auth/state')
         return Promise.resolve(new Response(JSON.stringify(session)))
+      if (url === '/api/me/allocations')
+        return Promise.resolve(new Response(JSON.stringify({ schemes: [] })))
       if (url === '/api/me/budgets')
         return Promise.resolve(
           new Response(JSON.stringify({ rules: [], pending: [] })),
@@ -88,7 +90,9 @@ it.each([
     await screen.findByRole('region', { name: 'Activity by time' })
     expect(screen.getAllByRole('gridcell')).toHaveLength(168)
     if (path === '/usage')
-      await screen.findByText('No token budgets. Usage is unlimited.')
+      await screen.findByText(
+        'No token budgets for keys outside allocation schemes.',
+      )
     else
       expect(
         screen.queryByRole('heading', { name: 'Token budgets' }),
@@ -127,6 +131,7 @@ it.each([
           url === '/api/auth/state' ||
           url === '/api/me/limits' ||
           url === '/api/me/budgets' ||
+          url === '/api/me/allocations' ||
           url.startsWith(endpoint + '?'),
       ),
     ).toBe(true)

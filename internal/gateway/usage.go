@@ -206,7 +206,9 @@ func (s *Service) fetchUsage(id string, e *usageEntry, release func()) {
 	// One browser leaving must not cancel a refresh shared by other readers. Process shutdown still cancels it.
 	ctx, cancel := context.WithTimeout(c.ctx, 45*time.Second)
 	defer cancel()
+	readStartedAt := c.now().UnixMilli()
 	value, err := readAccount(ctx, s, id, s.provider.Usage)
+	value.ReadStartedAt = readStartedAt
 	if err == nil {
 		err = s.usageAccount(ctx, id)
 	}

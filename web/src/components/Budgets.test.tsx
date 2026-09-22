@@ -68,7 +68,9 @@ it('creates a scoped budget and edits its limit without changing its scope', asy
   const dialog = await screen.findByRole('dialog', {
     name: 'Token budgets for member-test',
   })
-  await within(dialog).findByText('No token budgets. Usage is unlimited.')
+  await within(dialog).findByText(
+    'No token budgets for keys outside allocation schemes.',
+  )
   await user.click(within(dialog).getByRole('button', { name: 'Add budget' }))
   await user.type(within(dialog).getByLabelText('Model ID'), 'synthetic-model')
   await user.type(within(dialog).getByLabelText('Token limit (M)'), '1.25')

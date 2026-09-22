@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/upstream"
@@ -147,6 +148,9 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if err := s.warmUsage(ctx, userID, groupID, discoveryProvider); err != nil {
 		return nil, err
 	}
+	if err := s.refreshAllocation(ctx, entry); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	if err := s.admitBudget(ctx, entry, model); err != nil {
 		s.mu.Unlock()
@@ -157,8 +161,20 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		return nil, err
 	}
 	entry.memberLeased = true
-	id, digest, err := s.selectAccount(ctx, userID, groupID, session, provider, model, kind)
+	id, digest, err := s.selectAllocationAccount(ctx, userID, groupID, session, provider, model, kind, entry.schemeID)
 	entry.record.AccountID = id
+	if err == nil && entry.schemeID != 0 {
+		tx, beginErr := s.db.BeginTx(ctx, nil)
+		err = beginErr
+		if err == nil {
+			err = allocations.Begin(ctx, s.queries.WithTx(tx), allocations.Request{ID: entry.record.RequestID, SchemeID: entry.schemeID, UserID: userID, GroupID: groupID, AccountID: id, Model: model, StartedAt: entry.started.Unix()}, s.now().Unix())
+			if err == nil {
+				err = tx.Commit()
+			}
+			tx.Rollback()
+		}
+		entry.allocationTracked = err == nil
+	}
 	if err == nil {
 		state := s.health[id]
 		state.InFlight++

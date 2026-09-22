@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -18,6 +19,7 @@ const MaxGroups = 32
 
 var (
 	ErrInput       = errors.New("invalid_group_input")
+	ErrAllocated   = errors.New("allocation_pool_locked")
 	ErrNotFound    = errors.New("group_not_found")
 	ErrDuplicate   = errors.New("group_exists")
 	ErrDefault     = errors.New("default_group_protected")
@@ -42,8 +44,10 @@ type Detail struct {
 	AllowedModels []string `json:"allowed_models"`
 }
 type Choice struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	SchemeID   int64  `json:"scheme_id,omitempty"`
+	SchemeName string `json:"scheme_name,omitempty"`
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
 }
 type Input struct {
 	ModelPolicy *ModelPolicy `json:"model_policy,omitempty"`
@@ -169,13 +173,33 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 	} else if err := q.UpdateGroup(ctx, db.UpdateGroupParams{ID: id, Name: name, Enabled: input.Enabled, Now: now}); err != nil {
 		return Detail{}, err
 	}
-	// Membership replacement commits atomically: no request can observe a half-edited pool.
-	if err := q.ClearGroupAccounts(ctx, id); err != nil {
-		return Detail{}, err
+	managed := false
+	if _, e := q.GetPoolAllocation(ctx, id); e == nil {
+		managed = true
+		old, e := q.ListGroupAccounts(ctx, id)
+		if e != nil {
+			return Detail{}, e
+		}
+		next := slices.Clone(input.AccountIDs)
+		slices.Sort(next)
+		if !slices.Equal(old, next) {
+			return Detail{}, ErrAllocated
+		}
+	} else if !errors.Is(e, sql.ErrNoRows) {
+		return Detail{}, e
 	}
-	for _, accountID := range input.AccountIDs {
-		if err := q.AddGroupAccount(ctx, db.AddGroupAccountParams{GroupID: id, AccountID: accountID}); err != nil {
+	if !managed {
+		// Membership replacement commits atomically: no request can observe a half-edited pool.
+		if err := q.ClearGroupAccounts(ctx, id); err != nil {
 			return Detail{}, err
+		}
+		for _, accountID := range input.AccountIDs {
+			if err := q.AddGroupAccount(ctx, db.AddGroupAccountParams{GroupID: id, AccountID: accountID}); err != nil {
+				if strings.Contains(err.Error(), "allocation_") {
+					return Detail{}, ErrAllocated
+				}
+				return Detail{}, err
+			}
 		}
 	}
 	if input.ModelPolicy != nil {

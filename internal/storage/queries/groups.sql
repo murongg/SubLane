@@ -1,6 +1,6 @@
 -- name: ListGroups :many
 SELECT g.*, (SELECT count(*) FROM group_accounts a WHERE a.group_id=g.id) AS account_count,
-(SELECT count(*) FROM group_members m JOIN users u ON u.id=m.user_id WHERE m.group_id=g.id AND u.role='member') AS member_count
+(SELECT count(*) FROM effective_group_access m JOIN users u ON u.id=m.user_id WHERE m.group_id=g.id AND u.role='member') AS member_count
 FROM account_groups g ORDER BY g.id;
 
 -- name: GetGroup :one
@@ -49,24 +49,24 @@ INSERT INTO group_members(group_id,user_id) VALUES(sqlc.arg(group_id),sqlc.arg(u
 -- name: CanUseGroup :one
 SELECT EXISTS(SELECT 1 FROM account_groups g JOIN users u ON u.id=sqlc.arg(user_id)
 WHERE g.id=sqlc.arg(group_id) AND g.enabled=1 AND u.enabled=1
-AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id)));
+AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id));
 
 -- name: ListAvailableGroups :many
 SELECT g.id,g.name FROM account_groups g JOIN users u ON u.id=sqlc.arg(user_id)
 WHERE g.enabled=1 AND u.enabled=1
-AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id)) ORDER BY g.id;
+AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) ORDER BY g.id;
 
 -- name: GroupConnectionStatus :one
 SELECT CASE WHEN EXISTS(
  SELECT 1 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id JOIN account_groups g ON g.id=ga.group_id JOIN users u ON u.id=sqlc.arg(user_id)
- WHERE g.enabled=1 AND a.enabled=1 AND a.status='ready' AND u.enabled=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id))
+ WHERE g.enabled=1 AND a.enabled=1 AND a.status='ready' AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
 ) THEN 'ready' WHEN EXISTS(
  SELECT 1 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id JOIN account_groups g ON g.id=ga.group_id JOIN users u ON u.id=sqlc.arg(user_id)
- WHERE g.enabled=1 AND a.enabled=1 AND u.enabled=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id))
+ WHERE g.enabled=1 AND a.enabled=1 AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
 ) THEN 'needs_attention' ELSE 'not_configured' END AS status;
 
 -- name: CountGroupMembers :one
-SELECT count(*) FROM group_members m JOIN users u ON u.id=m.user_id WHERE m.group_id=sqlc.arg(group_id) AND u.role='member';
+SELECT count(*) FROM effective_group_access m JOIN users u ON u.id=m.user_id WHERE m.group_id=sqlc.arg(group_id) AND u.role='member';
 
 -- name: SetGroupModelPolicy :exec
 UPDATE account_groups SET restricted_models=sqlc.arg(restricted) WHERE id=sqlc.arg(id);

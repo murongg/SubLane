@@ -1,6 +1,134 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  allocationPause: '暂停方案',
+  allocationResume: '启用方案',
+  personnelTeams: '人员小组',
+  personnelTeam: '人员小组',
+  teamsDescription: '先把成员放进小组，再为小组连接号池并设置一种额度限制。',
+  teamCreate: '创建小组',
+  teamEdit: '编辑小组',
+  teamEditNamed: '编辑 {{name}}',
+  teamSave: '保存小组',
+  teamName: '小组名称',
+  teamEnabled: '启用此小组',
+  teamsEmpty: '先创建小组并添加成员，再直接在小组编辑页连接账号池。',
+  teamMemberCount: '{{count}} 位成员',
+  teamResourceCount: '{{count}} 个账号池资源',
+  teamMembershipHint:
+    '移出成员会立即停用其方案访问权限；重新加入不会重置用量。每组最多 100 人。',
+  teamAllowedGroups: '允许使用的账号分组',
+  teamAllowedGroupsHint:
+    '成员只能看到并使用这里选择的共享分组。专属号池请在下方作为团队资源添加。',
+  teamResources: '团队资源',
+  teamResourcesHint:
+    '连接一个专属号池并选择一种限制方式。每个号池只能归属一个小组。',
+  teamResourceAdd: '添加团队资源',
+  teamResourceEdit: '编辑资源',
+  teamResourcesEmpty: '还没有配置账号池资源。',
+  teamResourceNoPools: '没有可用账号池，请先创建已启用且有账号的账号池。',
+  allocationAccountLocked:
+    '该账号已被额度方案独占，无法删除。如需停止使用，请停用账号。',
+  allocationUnavailableShort: '不可用',
+  allocationWaiting: '待生效',
+  allocationPrerequisite:
+    '请先创建包含成员的已启用小组，以及非空、已启用的专用号池。一个号池只能绑定一个方案；默认分组保留用于接收新导入账号。',
+  allocationSchemes: '额度方案',
+  allocationsDescription:
+    '将人员小组与独立账号池关联，并选择一种额度限制方式。',
+  allocationCreate: '创建额度方案',
+  allocationEdit: '编辑方案',
+  allocationEditNamed: '编辑方案 {{name}}',
+  allocationName: '方案名称',
+  allocationMode: '限制方式',
+  allocationRatio: '按比例',
+  allocationAmount: '按金额',
+  allocationTokens: '按 Token',
+  allocationSave: '保存额度方案',
+  allocationView: '查看用量',
+  allocationBack: '返回方案列表',
+  allocationsEmpty: '创建人员小组和独立账号池后，即可开始分配额度。',
+  allocationRatioHint:
+    '为成员分配每个 Codex 订阅窗口的份额，根据模型权重和上游百分比估算消耗。',
+  allocationAmountHint:
+    '按配置的模型价格扣减美元额度。这是内部使用额度，不代表上游现金余额。',
+  allocationTokensHint:
+    '累计输入与输出 Token。1 M = 1,000,000 Token，缓存输入不重复计算。',
+  allocationExclusiveHint:
+    '请使用专用号池，并先将其账号从其他所有分组移除。创建后小组、号池和池内账号均固定，暂停也不会解除绑定；该号池原有的未绑定方案 Key 将停止工作。',
+  allocationMembers: '成员分配',
+  allocationBlankHint: '留空表示该成员不参与此方案。',
+  allocationFor: '{{name}} 的额度',
+  allocationTotal: '已分配 {{total}}% · 预留 {{remaining}}%',
+  allocationPeriod: '重置周期',
+  allocationUpstreamReset: '跟随各账号的上游额度窗口',
+  allocationRates: '模型价格与权重',
+  allocationRatesHint:
+    '为原生模型 ID 配置每 1 M Token 的美元价格（每类上限 1,000 USD）。比例模式将其用作相对权重。未配置价格的模型会被阻止，不会自动猜测价格。',
+  allocationRateInput: '输入 · USD / M',
+  allocationRateCached: '缓存输入 · USD / M',
+  allocationRateOutput: '输出 · USD / M',
+  allocationAddRate: '添加模型价格',
+  allocationRemoveRate: '移除第 {{index}} 项模型价格',
+  allocationRemove: '移除',
+  allocationModelID: '模型 ID',
+  allocationEnabled: '启用此方案',
+  allocationNextHint:
+    '额度、价格或计量方式的修改在下周期生效。暂停或启用访问立即生效，当前用量与待结算记录保留。',
+  allocationStartNext: '下次重置时生效（推荐）',
+  allocationImmediateHint:
+    '立即生效：固定额度从现在开始；比例额度按首次有效观测的上游剩余容量分配。不补记此前用量。',
+  allocationScheduled: '{{mode}} 将于 {{date}} 生效',
+  allocationLoading: '正在加载额度…',
+  allocationFailed: '无法加载或保存额度，请重试。',
+  allocationInvalid:
+    '请检查名称、成员、正数额度与模型价格。比例总和不得超过 100%；百分比最多两位小数，M／USD 最多六位。',
+  allocationPoolConflict:
+    '账号已被方案占用或与其他池共享。请使用独立账号池；已绑定方案的池不能修改账号列表。',
+  allocationSnapshotRequired:
+    '需要有效的 Codex 额度数据，请刷新账号用量后重试。未知或已过重置时间的数据不会被视为满额。',
+  allocationSettlementConflict:
+    '用量已变化，或修正与此前结算冲突，请刷新后重试。',
+  allocationPending: '用量待对账',
+  allocationExhausted: '额度已耗尽',
+  allocationUnavailable: '此方案已暂停、尚未生效或你已无权使用。',
+  allocationUnpriced: '模型价格尚未配置',
+  allocationEstimateHint:
+    '估算份额：1 点等于一个账号完整窗口额度的 1%。各窗口独立记账。未确认的消耗保持待对账状态，进行中的请求可能超出剩余额度。',
+  allocationNoBalances: '暂无余额记录。比例模式请在方案生效后同步上游用量。',
+  allocationPoints: '点',
+  allocationPrimary: '主额度窗口',
+  allocationSecondary: '次额度窗口',
+  allocationLimit: '分配额度',
+  allocationUsed: '已用',
+  allocationRemaining: '剩余',
+  allocationResetAt: '重置时间：{{date}}',
+  allocationActualTokens: '{{tokens}} M Token',
+  allocationSync: '同步上游用量',
+  allocationAwaitingSync: '等待上游额度变化',
+  allocationCorrect: '修正用量',
+  allocationSettle: '确认结算',
+  allocationSettlementHint:
+    '请先同步上游数据。仅依据实际证据修正：填写请求的输入／输出／缓存 Token 总数，或各原始窗口的消耗点数。修正将被审计，且不能在此撤销。',
+  allocationInputM: '输入 Token · M',
+  allocationOutputM: '输出 Token · M',
+  allocationCachedM: '缓存输入 · M',
+  allocationUnassignedHint:
+    '检测到无法归属成员的上游用量。确认按外部用量处理后，它不会记入任何成员，但仍会减少上游可用额度。',
+  allocationReserve: '确认外部消耗',
+  allocationMoreMembers: '加载更多成员',
+  allocationMine: '我的额度方案',
+  allocationRefreshMine: '刷新我的额度方案',
+  allocationMineEmpty:
+    '尚未分配额度方案。未托管账号池仍遵循已有的个人 Token 规则。',
+  allocationKeyChoice: '团队资源：{{scheme}} · {{pool}}',
+  allocationLegacyHint:
+    '这些个人规则仅用于未绑定额度方案的 Key。方案 Key 只执行该方案选定的额度限制。',
+  auditTeamSave: '保存人员小组',
+  auditAllocationSave: '保存额度方案',
+  auditAllocationSettle: '结算方案用量',
+  auditAllocationReconcile: '确认外部额度消耗',
+
   budgetSaving: '正在保存…',
   budgetRefresh: '刷新 Token 额度',
   budgetUnitHint: '1 M = 100 万 tokens，最多 6 位小数（精确到 1 token）。',
@@ -12,7 +140,7 @@ export const zh: Record<keyof typeof en, string> = {
     '所有命中的额度规则同时生效，同一用户的 API Key 共用额度。按输入与输出 token 总量计数；达到上限后拒绝新请求，进行中的请求可能造成超额。',
   budgetsLoading: '正在加载 Token 额度…',
   budgetsLoadFailed: '无法加载 Token 额度。',
-  budgetsEmpty: '未设置 Token 额度，用量不限。',
+  budgetsEmpty: '方案以外的 Key 未设置 Token 额度。',
   budgetAllGroups: '所有分组',
   budgetAllModels: '所有模型',
   budgetDisabled: '限制已停用',

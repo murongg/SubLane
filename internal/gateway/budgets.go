@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/groups"
@@ -81,6 +82,9 @@ func (s *Service) recoverBudgets(ctx context.Context) error {
 		return nil
 	}
 	if err := s.queries.RecoverTokenBudgetEntries(ctx); err != nil {
+		return ErrTokenAccounting
+	}
+	if err := s.queries.RecoverAllocationEntries(ctx); err != nil {
 		return ErrTokenAccounting
 	}
 	s.budgetsReady = true
@@ -234,6 +238,14 @@ func (s *Service) admitBudget(ctx context.Context, e *observation, model string)
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
+	scheme, err := allocations.KeyScheme(ctx, q, e.record.KeyID, e.record.UserID, e.record.GroupID, s.now().Unix())
+	if err != nil {
+		return err
+	}
+	e.schemeID = scheme
+	if scheme != 0 {
+		return tx.Commit()
+	}
 	rules, err := readBudgets(ctx, q, e.record.UserID, e.started)
 	if err != nil {
 		return ErrTokenAccounting

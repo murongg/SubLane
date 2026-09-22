@@ -65,6 +65,10 @@ func auditTarget(r *http.Request) (string, string, string) {
 	path := strings.TrimSuffix(r.URL.Path, "/")
 	action, resource, id := "", "", ""
 	switch {
+	case path == "/api/teams" && r.Method == "POST":
+		action, resource = "team.save", "team"
+	case path == "/api/allocations" && r.Method == "POST":
+		action, resource = "allocation.save", "allocation"
 	case r.Method == "POST" && path == "/api/settings/backup/export":
 		action, resource = "backup.export", "backup"
 	case r.Method == "POST" && path == "/api/settings/backup/verify":
@@ -97,6 +101,23 @@ func auditTarget(r *http.Request) (string, string, string) {
 			tail = parts[2]
 		}
 		switch parts[0] {
+		case "teams":
+			if r.Method == "PATCH" && tail == "" {
+				action, resource = "team.save", "team"
+			}
+		case "allocations":
+			if r.Method == "PATCH" && tail == "" {
+				action, resource = "allocation.save", "allocation"
+			}
+			if r.Method == "POST" && tail == "enabled" {
+				action, resource = "allocation.save", "allocation"
+			}
+			if r.Method == "POST" && tail == "settle" {
+				action, resource = "allocation.settle", "allocation"
+			}
+			if r.Method == "POST" && tail == "reserve" {
+				action, resource = "allocation.reconcile", "allocation"
+			}
 		case "keys":
 			resource = "key"
 			if tail == "" && r.Method == "PATCH" {

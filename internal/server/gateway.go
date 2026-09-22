@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
@@ -289,6 +290,14 @@ func gatewayFailure(err error) (int, string) {
 		return 409, "conversation_account_unavailable"
 	case errors.Is(err, gateway.ErrNoAccount):
 		return 503, "no_accounts_available"
+	case errors.Is(err, allocations.ErrQuota), errors.Is(err, allocations.ErrPending):
+		return 429, err.Error()
+	case errors.Is(err, allocations.ErrUnavailable):
+		return 403, err.Error()
+	case errors.Is(err, allocations.ErrSnapshot):
+		return 503, err.Error()
+	case errors.Is(err, allocations.ErrUnpriced):
+		return 403, err.Error()
 	case errors.Is(err, gateway.ErrTokenQuota):
 		return 429, "token_quota_exceeded"
 	case errors.Is(err, gateway.ErrTokenPending):
@@ -360,7 +369,7 @@ func writeGatewayFailure(w http.ResponseWriter, err error, writeError func(http.
 			}
 		}
 	}
-	if status == 429 && !errors.Is(err, gateway.ErrTokenPending) {
+	if status == 429 && !errors.Is(err, gateway.ErrTokenPending) && !errors.Is(err, allocations.ErrPending) && !errors.Is(err, allocations.ErrQuota) {
 		value := "1"
 		var rejected *upstream.UpstreamError
 		if errors.As(err, &rejected) {

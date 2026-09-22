@@ -10,6 +10,7 @@ import {
 } from '@/lib/statistics'
 import { Button } from '@/components/ui/Button'
 import { UsageChart } from '@/components/UsageChart'
+import { PersonalAllocations } from '@/components/PersonalAllocations'
 import { PersonalBudgets } from '@/components/PersonalBudgets'
 import { ActivityMap } from '@/components/ActivityMap'
 import {
@@ -128,7 +129,12 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
           {t('refresh')}
         </Button>
       </div>
-      {scope === 'personal' && <PersonalBudgets userID={userID} />}
+      {scope === 'personal' && (
+        <>
+          <PersonalAllocations userID={userID} />
+          <PersonalBudgets userID={userID} />
+        </>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

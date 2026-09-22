@@ -19,6 +19,7 @@ import (
 )
 
 var (
+	ErrAllocated   = errors.New("allocation_pool_locked")
 	ErrInput       = errors.New("invalid_account_input")
 	ErrDuplicate   = errors.New("account_exists")
 	ErrIdentity    = errors.New("account_identity_mismatch")
@@ -201,6 +202,13 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
+	locked, err := q.AccountHasAllocation(ctx, id)
+	if err != nil {
+		return err
+	}
+	if locked {
+		return ErrAllocated
+	}
 	n, err := q.DeleteAccount(ctx, id)
 	if err != nil {
 		return err

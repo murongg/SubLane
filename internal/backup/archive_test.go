@@ -222,7 +222,7 @@ func TestRestoreMigratesKnownOlderSchemaOnlyInStaging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := connection.Exec("DROP TABLE token_budget_entries; DROP TABLE token_budget_usage; DROP TABLE token_budgets; DROP INDEX request_records_request_id; ALTER TABLE request_records DROP COLUMN request_id; ALTER TABLE request_records DROP COLUMN first_token_ms; ALTER TABLE account_usage DROP COLUMN revision; DELETE FROM schema_migrations WHERE name IN ('019_request_diagnostics.sql','020_native_protocols.sql','021_token_budgets.sql')"); err != nil {
+	if _, err := connection.Exec("DROP VIEW effective_group_access; DROP TABLE allocation_team_groups; DROP TRIGGER allocation_fixed_pool; DROP TRIGGER allocation_exclusive_account; DROP TABLE allocation_debits; DROP TABLE allocation_window_members; DROP TABLE allocation_windows; DROP TABLE allocation_entries; DROP TABLE allocation_keys; DROP TABLE allocation_revisions; DROP TABLE allocation_schemes; DROP TABLE allocation_team_members; DROP TABLE allocation_teams; DROP TABLE token_budget_entries; DROP TABLE token_budget_usage; DROP TABLE token_budgets; DROP INDEX request_records_request_id; ALTER TABLE request_records DROP COLUMN request_id; ALTER TABLE request_records DROP COLUMN first_token_ms; ALTER TABLE account_usage DROP COLUMN revision; DELETE FROM schema_migrations WHERE name IN ('019_request_diagnostics.sql','020_native_protocols.sql','021_token_budgets.sql','022_allocations.sql','023_team_access.sql')"); err != nil {
 		t.Fatal(err)
 	}
 	if err := connection.Close(); err != nil {
@@ -255,7 +255,7 @@ func TestRestoreMigratesKnownOlderSchemaOnlyInStaging(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer restored.Close()
-	if schema, err := storage.ValidateSnapshot(context.Background(), restored); err != nil || schema != 21 {
+	if schema, err := storage.ValidateSnapshot(context.Background(), restored); err != nil || schema != 23 {
 		t.Fatal("older backup not migrated", schema, err)
 	}
 	actual, err := os.ReadFile(archive)

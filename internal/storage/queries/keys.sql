@@ -10,18 +10,22 @@ VALUES(sqlc.arg(user_id),sqlc.arg(group_id),sqlc.arg(name),sqlc.arg(prefix),sqlc
 
 -- name: ListKeys :many
 SELECT k.id,k.group_id,g.name AS group_name,
-CASE WHEN g.enabled=1 AND u.enabled=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id)) THEN 'allowed' ELSE 'blocked' END AS group_access,
+CASE WHEN g.enabled=1 AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) THEN 'allowed' ELSE 'blocked' END AS group_access,
 k.name,k.prefix,k.created_at,k.last_used_at,k.revoked_at,k.enabled,k.expires_at,
-CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copyable
+CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copyable,
+CAST(COALESCE((SELECT scheme_id FROM allocation_keys WHERE key_id=k.id),0) AS INTEGER) AS scheme_id,
+CAST(COALESCE((SELECT s.name FROM allocation_keys ak JOIN allocation_schemes s ON s.id=ak.scheme_id WHERE ak.key_id=k.id),'') AS TEXT) AS scheme_name
 FROM api_keys k JOIN account_groups g ON g.id=k.group_id JOIN users u ON u.id=k.user_id
 WHERE k.user_id=sqlc.arg(user_id) AND (k.id<sqlc.arg(before_id) OR sqlc.arg(before_id)=0)
 ORDER BY k.id DESC LIMIT 51;
 
 -- name: GetKey :one
 SELECT k.id,k.group_id,g.name AS group_name,
-CASE WHEN g.enabled=1 AND u.enabled=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id)) THEN 'allowed' ELSE 'blocked' END AS group_access,
+CASE WHEN g.enabled=1 AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) THEN 'allowed' ELSE 'blocked' END AS group_access,
 k.name,k.prefix,k.created_at,k.last_used_at,k.revoked_at,k.enabled,k.expires_at,
-CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copyable
+CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copyable,
+CAST(COALESCE((SELECT scheme_id FROM allocation_keys WHERE key_id=k.id),0) AS INTEGER) AS scheme_id,
+CAST(COALESCE((SELECT s.name FROM allocation_keys ak JOIN allocation_schemes s ON s.id=ak.scheme_id WHERE ak.key_id=k.id),'') AS TEXT) AS scheme_name
 FROM api_keys k JOIN account_groups g ON g.id=k.group_id JOIN users u ON u.id=k.user_id
 WHERE k.id=sqlc.arg(id) AND k.user_id=sqlc.arg(user_id);
 
@@ -31,7 +35,7 @@ UPDATE api_keys SET revoked_at=COALESCE(revoked_at,sqlc.arg(now)),encrypted_secr
 -- name: AuthenticateKey :one
 SELECT k.id,k.user_id,k.group_id FROM api_keys k JOIN users u ON u.id=k.user_id JOIN account_groups g ON g.id=k.group_id
 WHERE k.token_hash=sqlc.arg(token_hash) AND k.revoked_at IS NULL AND k.enabled=1 AND (k.expires_at IS NULL OR k.expires_at>sqlc.arg(now)) AND u.enabled=1 AND g.enabled=1
-AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id));
+AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id);
 
 -- name: TouchKey :exec
 UPDATE api_keys SET last_used_at = sqlc.arg(now)

@@ -118,6 +118,7 @@ export function checkAccount(id: string) {
 }
 
 const messages = {
+  allocation_pool_locked: 'allocationAccountLocked',
   invalid_account_input: 'accountInvalidInput',
   account_exists: 'accountExists',
   account_identity_mismatch: 'accountIdentityMismatch',

@@ -5,6 +5,8 @@ import { request } from './request'
 
 const secretSchema = z.string().regex(/^sl_[A-Za-z0-9_-]{43}$/)
 const keySchema = z.object({
+  scheme_id: z.number().int().optional(),
+  scheme_name: z.string().optional(),
   copyable: z.boolean(),
   id: z.number().int().positive(),
   group_id: z.number().int().positive(),
@@ -45,6 +47,7 @@ export function keyOptions(
   })
 }
 export function createKey(input: {
+  scheme_id?: number
   name: string
   group_id: number
   expires_at: number | null

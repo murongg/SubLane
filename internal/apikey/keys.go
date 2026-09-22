@@ -12,6 +12,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage/db"
@@ -43,6 +44,8 @@ type Key struct {
 	Enabled     bool   `json:"enabled"`
 	ExpiresAt   *int64 `json:"expires_at"`
 	Copyable    bool   `json:"copyable"`
+	SchemeID    int64  `json:"scheme_id"`
+	SchemeName  string `json:"scheme_name"`
 }
 type UpdateInput struct {
 	Name      string `json:"name"`
@@ -79,6 +82,19 @@ func (s *Service) CreateInGroup(ctx context.Context, userID, groupID int64, name
 }
 
 func (s *Service) CreateWithExpiry(ctx context.Context, userID, groupID int64, name string, expiry *int64) (CreatedKey, error) {
+	return s.create(ctx, userID, groupID, 0, name, expiry)
+}
+func (s *Service) CreateInScheme(ctx context.Context, userID, schemeID int64, name string, expiry *int64) (CreatedKey, error) {
+	if schemeID <= 0 {
+		return CreatedKey{}, ErrInput
+	}
+	row, err := s.queries.GetAllocationScheme(ctx, schemeID)
+	if err != nil {
+		return CreatedKey{}, groups.ErrUnavailable
+	}
+	return s.create(ctx, userID, row.GroupID, schemeID, name, expiry)
+}
+func (s *Service) create(ctx context.Context, userID, groupID, schemeID int64, name string, expiry *int64) (CreatedKey, error) {
 	if groupID <= 0 || !validExpiry(expiry, s.now().Unix()) {
 		return CreatedKey{}, ErrInput
 	}
@@ -110,6 +126,17 @@ func (s *Service) CreateWithExpiry(ctx context.Context, userID, groupID int64, n
 	if !allowed {
 		return CreatedKey{}, groups.ErrUnavailable
 	}
+	if schemeID != 0 {
+		if _, err := allocations.Authorize(ctx, queries, schemeID, userID, groupID, s.now().Unix()); err != nil {
+			return CreatedKey{}, groups.ErrUnavailable
+		}
+	} else {
+		if _, err := queries.GetPoolAllocation(ctx, groupID); err == nil {
+			return CreatedKey{}, groups.ErrUnavailable
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return CreatedKey{}, err
+		}
+	}
 	group, err := queries.GetGroup(ctx, groupID)
 	if err != nil {
 		return CreatedKey{}, err
@@ -133,6 +160,17 @@ func (s *Service) CreateWithExpiry(ctx context.Context, userID, groupID int64, n
 	if err := queries.SaveKeySecret(ctx, db.SaveKeySecretParams{KeyID: key.ID, Secret: encrypted}); err != nil {
 		return CreatedKey{}, err
 	}
+	if schemeID != 0 {
+		if err := queries.BindKeyAllocation(ctx, db.BindKeyAllocationParams{KeyID: key.ID, SchemeID: schemeID}); err != nil {
+			return CreatedKey{}, err
+		}
+		scheme, err := queries.GetAllocationScheme(ctx, schemeID)
+		if err != nil {
+			return CreatedKey{}, err
+		}
+		key.SchemeID = schemeID
+		key.SchemeName = scheme.Name
+	}
 	key.Copyable = true
 	if err := audit.Record(ctx, queries, "key.create", "key", audit.ID(key.ID)); err != nil {
 		return CreatedKey{}, err
@@ -153,7 +191,14 @@ func (s *Service) List(ctx context.Context, userID, beforeID int64) (Page, error
 		return page, err
 	}
 	for _, row := range rows {
-		page.Keys = append(page.Keys, Key(row))
+		key := Key(row)
+		if _, err := allocations.KeyScheme(ctx, s.queries, key.ID, userID, key.GroupID, s.now().Unix()); err != nil {
+			if !errors.Is(err, allocations.ErrUnavailable) {
+				return page, err
+			}
+			key.GroupAccess = "blocked"
+		}
+		page.Keys = append(page.Keys, key)
 	}
 	if len(page.Keys) > 50 {
 		page.Keys = page.Keys[:50]
@@ -175,6 +220,9 @@ func (s *Service) CatalogGroup(ctx context.Context, userID, keyID int64) (int64,
 	}
 	if row.RevokedAt != nil || !row.Enabled || (row.ExpiresAt != nil && *row.ExpiresAt <= s.now().Unix()) {
 		return 0, ErrInactive
+	}
+	if _, err := allocations.KeyScheme(ctx, s.queries, row.ID, userID, row.GroupID, s.now().Unix()); err != nil {
+		return 0, groups.ErrUnavailable
 	}
 	if row.GroupAccess != "allowed" {
 		return 0, groups.ErrUnavailable
@@ -265,6 +313,12 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Principal, e
 		return Principal{}, ErrInvalidKey
 	}
 	if err != nil {
+		return Principal{}, err
+	}
+	if _, err := allocations.KeyScheme(ctx, s.queries, row.ID, row.UserID, row.GroupID, now); err != nil {
+		if errors.Is(err, allocations.ErrUnavailable) {
+			return Principal{}, ErrInvalidKey
+		}
 		return Principal{}, err
 	}
 	threshold := now - 60
