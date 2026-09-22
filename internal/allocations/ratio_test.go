@@ -200,7 +200,9 @@ func TestRatioHealthyAccountSurvivesUnavailablePeerAndRevisionChange(t *testing.
 	s, conn, user, account := fixture(t)
 	ctx := context.Background()
 	q := db.New(conn)
-	now := time.Now().Unix()
+	now := int64(1_900_000_000)
+	// Scheme activation and admission must share a clock even when CI crosses a second.
+	s.now = func() time.Time { return unix(now) }
 	// Add an unavailable peer before reserving the pool.
 	if _, err := conn.Exec("INSERT INTO accounts(id,name,provider,account_id,credential,email,plan,enabled,status,created_at,updated_at,models_revision) VALUES('synthetic-unavailable','Synthetic','codex','synthetic-unavailable',x'00','','',1,'ready',1,1,0)"); err != nil {
 		t.Fatal(err)

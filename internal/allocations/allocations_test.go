@@ -216,7 +216,9 @@ func TestSchemeRevisionDoesNotResetCurrentAllowance(t *testing.T) {
 func TestAccountingIsolationPendingRecoveryAndRollover(t *testing.T) {
 	s, conn, user, account := fixture(t)
 	ctx := context.Background()
-	now := time.Now().Unix()
+	now := int64(1_900_000_000)
+	// Scheme activation and admission must share a clock even when CI crosses a second.
+	s.now = func() time.Time { return unix(now) }
 	q := db.New(conn)
 	team, err := s.SaveTeam(ctx, 0, TeamInput{Name: "Synthetic team", Enabled: true, MemberIDs: []int64{user}})
 	if err != nil {
