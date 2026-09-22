@@ -14,7 +14,7 @@
   <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26%2B-171717?style=flat-square&amp;logo=go&amp;logoColor=white&amp;labelColor=555555" alt="Go 1.26+" height="20"></a>
   <a href="web/package.json"><img src="https://img.shields.io/badge/React-19-171717?style=flat-square&amp;logo=react&amp;logoColor=white&amp;labelColor=555555" alt="React 19" height="20"></a>
   <a href="internal/storage/storage.go"><img src="https://img.shields.io/badge/SQLite-embedded-171717?style=flat-square&amp;logo=sqlite&amp;logoColor=white&amp;labelColor=555555" alt="SQLite embedded" height="20"></a>
-  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/stage-internal%20testing-92400E?style=flat-square&amp;labelColor=555555" alt="Stage: internal testing" height="20"></a>
+  <a href="https://sublane-website.vercel.app/docs/zh/roadmap"><img src="https://img.shields.io/badge/stage-internal%20testing-92400E?style=flat-square&amp;labelColor=555555" alt="Stage: internal testing" height="20"></a>
 </p>
 
 <p align="center">
@@ -26,7 +26,7 @@ SubLane 将团队的 AI 订阅账号整合为统一、自托管的网关，采�
 ## 功能
 
 - 支持 Codex、Claude、Antigravity 账号，通过 OAuth 授权或导入凭据接入。
-- 提供 OpenAI 兼容 API、[Claude Messages 和 Gemini 原生生成接口](docs/protocols.md)，支持 HTTP/SSE 及 Responses WebSocket。
+- 提供 OpenAI 兼容 API、[Claude Messages 和 Gemini 原生生成接口](https://sublane-website.vercel.app/docs/zh/protocols)，支持 HTTP/SSE 及 Responses WebSocket。
 - 成员管理、个人 API 密钥和账号分组权限。
 - 账号池调度、并发限制、冷却恢复和 Codex 额度感知。
 - 请求诊断、用量图表及备份恢复。
@@ -40,9 +40,9 @@ SubLane 将团队的 AI 订阅账号整合为统一、自托管的网关，采�
 curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh | bash
 ```
 
-打开 http://127.0.0.1:8080，创建管理员、接入订阅账号，并将账号加入账号池，再创建个人密钥接入客户端。先按[第一次使用](docs/quickstart.md)跑通一次调用；默认自由使用，团队共享和额度限制之后再按需设置。
+打开 http://127.0.0.1:8080，创建管理员、接入订阅账号，并将账号加入账号池，再创建个人密钥接入客户端。先按[第一次使用](https://sublane-website.vercel.app/docs/zh/quickstart)跑通一次调用；默认自由使用，团队共享和额度限制之后再按需设置。
 
-脚本会在 `./sublane` 安装最新正式版，没有正式版时使用最新预发布版。数据保存在 Docker 数据卷中，不会覆盖已有目录。自定义参数、手动 Compose 部署、HTTPS 和升级步骤见[部署文档](docs/deployment.md)。
+脚本会在 `./sublane` 安装最新正式版，没有正式版时使用最新预发布版。数据保存在 Docker 数据卷中，不会覆盖已有目录。自定义参数、手动 Compose 部署、HTTPS 和升级步骤见[部署文档](https://sublane-website.vercel.app/docs/zh/deployment)。
 
 ## 本地开发
 
@@ -59,10 +59,12 @@ make dev
 
 ## 文档
 
-- [部署与升级](docs/deployment.md) · [备份恢复](docs/backup.md)
-- [服务商接入](docs/providers.md) · [API 密钥](docs/api-keys.md) · [账号分组](docs/groups.md)
-- [开发指南](docs/development.md) · [系统架构](docs/architecture.md)
-- [发版说明](docs/releases.md) · [更新日志](CHANGELOG.md)
+从[分步入门教程](https://sublane-website.vercel.app/docs/zh/guide/installation)开始。使用文档统一维护在[文档仓库](https://github.com/murongg/sublane-website)。
+
+- [部署与升级](https://sublane-website.vercel.app/docs/zh/deployment) · [备份恢复](https://sublane-website.vercel.app/docs/zh/backup)
+- [服务商接入](https://sublane-website.vercel.app/docs/zh/providers) · [API 密钥](https://sublane-website.vercel.app/docs/zh/api-keys) · [账号分组](https://sublane-website.vercel.app/docs/zh/groups)
+- [开发指南](https://sublane-website.vercel.app/docs/zh/development) · [系统架构](https://sublane-website.vercel.app/docs/zh/architecture)
+- [发版说明](https://sublane-website.vercel.app/docs/zh/releases) · [更新日志](CHANGELOG.md)
 - [参与贡献](CONTRIBUTING.md) · [安全说明](SECURITY.md)
 
 ## 协议

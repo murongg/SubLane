@@ -2,11 +2,13 @@
 
 ## Context
 
-Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and `docs/architecture.md` for implementation boundaries before making significant changes. Local account access, Codex, Claude, and Antigravity OAuth/import, encrypted credentials, and gateway forwarding are implemented. Live subscription and desktop compatibility require separate evidence; see `docs/codex.md`.
+Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and [the architecture guide](https://sublane-website.vercel.app/docs/architecture) for implementation boundaries before making significant changes. Local account access, Codex, Claude, and Antigravity OAuth/import, encrypted credentials, and gateway forwarding are implemented. Live subscription and desktop compatibility require separate evidence; see [the Codex guide](https://sublane-website.vercel.app/docs/codex).
 
 Use English for code comments, `PRODUCT.md`, and primary developer documentation. Keep the English and Simplified Chinese UI dictionaries complete. English is the default interface language.
 
 ## Work style
+
+Usage, operations, and architecture guides are maintained in [the documentation repository](https://github.com/murongg/sublane-website). Update guides there instead of duplicating them here; see [the documentation index](docs/README.md) for references retained locally.
 
 - Make the smallest complete change that meets the request. Prefer existing mechanisms to new dependencies or abstractions.
 - Keep unrelated edits out of a task. Do not introduce speculative provider frameworks, shared packages, or runtime services.
@@ -22,6 +24,7 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - `internal/versions` owns persisted Codex version policy, bounded official release checks and their lifecycle. Publish versions only after persistence; manual pins take priority. It must not depend on SDK types or install executables.
 - `internal/auth` owns local user credentials, roles, member lifecycle, first-run initialization, and persisted sessions.
 - `internal/groups` owns account pools, member group grants, available-group discovery, and group-scoped readiness. The default group preserves existing access; default grants can still be revoked.
+- `internal/allocations` owns personnel teams, exclusive-pool schemes, configuration revisions, and per-scheme accounting; it does not own provider network IO, browser authorization, or billing.
 - `internal/apikey` owns personal gateway key generation, immutable group binding, hashed authentication, encrypted recoverable values, owner-only audited disclosure, ownership, expiry, enablement, revocation, and bearer authentication. API keys must never authenticate browser management sessions. Never return full keys in metadata or cache disclosed values in the frontend. Revocation removes encrypted values; legacy hash-only keys remain usable without disclosure.
 - `internal/audit` owns bounded management metadata and actor context. Successful mutation events must share the domain transaction. Never audit credentials, request bodies, raw URLs or error contents; automatic refresh is not a manual authorization event.
 - `internal/storage` owns SQLite initialization, migrations, query SQL, and sqlc-generated database access under `internal/storage/db`. Keep one-to-one metadata on its owner: encrypted key values on `api_keys`, fixed member limits on `users`, and instance-level collection timestamps in `settings`. Keep runtime counters, relations and historical records separate when their lifecycle or cardinality calls for it.
@@ -47,7 +50,7 @@ Use English for code comments, `PRODUCT.md`, and primary developer documentation
 - Keep OAuth states, request bodies, stream events, WebSocket history, and concurrent operations bounded. Never read local Codex credentials automatically or use real credentials in tests.
 - Preserve cancellation and graceful shutdown. Future model streaming routes need explicit timeout and resource policies rather than blanket response buffering.
 - Do not add authentication bypasses or expose management endpoints as member APIs.
-- Default to loopback listening. Keep management routes under the default administrator-only API subtree. Members must never inherit administrator API access; enforce roles on both direct routes and backend requests. First-run setup uses a username and password; preserve its atomic single-administrator guard and disable it after initialization. See `docs/authentication.md` for the current authentication contract.
+- Default to loopback listening. Keep management routes under the default administrator-only API subtree. Members must never inherit administrator API access; enforce roles on both direct routes and backend requests. First-run setup uses a username and password; preserve its atomic single-administrator guard and disable it after initialization. See [the authentication guide](https://sublane-website.vercel.app/docs/authentication) for the current authentication contract.
 
 ## Frontend
 

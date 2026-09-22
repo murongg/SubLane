@@ -43,4 +43,4 @@ Migration `021_token_budgets.sql` adds independent rules, period counters and re
 
 ## Allocation schemes
 
-Team-resource keys use exactly their configured resource rule and bypass these legacy token rules. Unbound keys retain these rules only in unmanaged pools. See [team resources](allocations.md).
+Team-resource keys use exactly their configured resource rule and bypass these legacy token rules. Unbound keys retain these rules only in unmanaged pools. See [team resources](https://sublane-website.vercel.app/docs/allocations).
