@@ -124,6 +124,7 @@ func New(o Options) http.Handler {
 			personal.Get("/requests", accountManagement.personalRequests)
 			personal.Get("/requests/filters", accountManagement.personalRequestFilters)
 			personal.With(login.throttleLogin).Post("/password", login.changePassword)
+			personal.Get("/budgets", memberManagement.ownBudgets)
 			personal.Get("/limits", memberManagement.ownLimits)
 			personal.Get("/usage", memberManagement.ownUsage)
 		})
@@ -135,6 +136,9 @@ func New(o Options) http.Handler {
 		management.Head("/system", system)
 		management.Route("/members", func(members chi.Router) {
 			login.registerMembers(members)
+			members.Get("/{id}/budgets", memberManagement.budgets)
+			members.Put("/{id}/budgets", memberManagement.saveBudget)
+			members.Post("/{id}/budgets/settle", memberManagement.settleBudget)
 			members.Get("/{id}/limits", memberManagement.limits)
 			members.Patch("/{id}/limits", memberManagement.updateLimits)
 		})

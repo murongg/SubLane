@@ -61,7 +61,7 @@ var actions = map[string]string{
 	"settings.update": "settings",
 	"key.reveal":      "key", "key.create": "key", "key.update": "key", "key.revoke": "key",
 	"group.create": "group", "group.update": "group",
-	"member.create": "member", "member.update": "member", "member.groups": "member", "member.limits": "member", "member.password": "member",
+	"member.budget": "member", "member.budget_settle": "member", "member.create": "member", "member.update": "member", "member.groups": "member", "member.limits": "member", "member.password": "member",
 	"user.password": "user", "user.recover": "user",
 	"account.create": "account", "account.authorize": "account", "account.update": "account", "account.delete": "account", "account.concurrency": "account", "account.resume": "account",
 }

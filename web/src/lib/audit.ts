@@ -16,6 +16,8 @@ export const auditActions: Record<string, keyof typeof en> = {
   'member.create': 'auditMemberCreate',
   'member.update': 'auditMemberUpdate',
   'member.groups': 'auditMemberGroups',
+  'member.budget': 'auditMemberBudget',
+  'member.budget_settle': 'auditMemberBudgetSettle',
   'member.limits': 'auditMemberLimits',
   'member.password': 'auditMemberPassword',
   'user.password': 'auditUserPassword',

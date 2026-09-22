@@ -38,23 +38,25 @@ const (
 func (k Kind) IsGemini() bool { return k == Gemini || k == GeminiStream }
 
 type Service struct {
-	db           *sql.DB
-	queries      *db.Queries
-	accounts     *accounts.Service
-	provider     *upstream.Client
-	slots        chan struct{}
-	mu           sync.Mutex
-	next         map[string]int
-	health       map[string]*Runtime
-	memberActive map[int64]int64
-	now          func() time.Time
-	runContext   context.Context
-	stopRuntime  context.CancelFunc
-	workers      sync.WaitGroup
-	closed       bool
-	sequence     int64
-	usage        *usageCache
-	catalog      *catalogCache
+	db            *sql.DB
+	queries       *db.Queries
+	accounts      *accounts.Service
+	provider      *upstream.Client
+	slots         chan struct{}
+	mu            sync.Mutex
+	next          map[string]int
+	health        map[string]*Runtime
+	memberActive  map[int64]int64
+	now           func() time.Time
+	runContext    context.Context
+	stopRuntime   context.CancelFunc
+	workers       sync.WaitGroup
+	closed        bool
+	budgetsReady  bool
+	budgetFailure bool
+	sequence      int64
+	usage         *usageCache
+	catalog       *catalogCache
 }
 
 func New(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *upstream.Client) *Service {
@@ -146,6 +148,10 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		return nil, err
 	}
 	s.mu.Lock()
+	if err := s.admitBudget(ctx, entry, model); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
 	if err := s.admitMember(ctx, userID); err != nil {
 		s.mu.Unlock()
 		return nil, err
@@ -201,6 +207,7 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		}
 		return s.provider.Responses(ctx, c, raw, outgoing, kind == Compact)
 	}
+	entry.budgetDispatched = true
 	result, err := execute(credential)
 	if err != nil {
 		return nil, err

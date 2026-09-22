@@ -1,6 +1,62 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  budgetSaving: '正在保存…',
+  budgetRefresh: '刷新 Token 额度',
+  budgetUnitHint: '1 M = 100 万 tokens，最多 6 位小数（精确到 1 token）。',
+  budgetSettlementInvalid:
+    '请输入不低于已知用量且不超过 2,000 M 的总量，最多 6 位小数。',
+  tokenBudgets: 'Token 额度',
+  budgetsFor: '{{username}} 的 Token 额度',
+  budgetsDescription:
+    '所有命中的额度规则同时生效，同一用户的 API Key 共用额度。按输入与输出 token 总量计数；达到上限后拒绝新请求，进行中的请求可能造成超额。',
+  budgetsLoading: '正在加载 Token 额度…',
+  budgetsLoadFailed: '无法加载 Token 额度。',
+  budgetsEmpty: '未设置 Token 额度，用量不限。',
+  budgetAllGroups: '所有分组',
+  budgetAllModels: '所有模型',
+  budgetDisabled: '限制已停用',
+  budgetPending: '用量待结算',
+  budgetExhausted: '额度已耗尽',
+  budgetDaily: '每日 · UTC',
+  budgetMonthly: '每月 · UTC',
+  budgetUsed: '已用 {{used}} / {{limit}} M tokens',
+  budgetResets: '重置时间：{{time}} UTC',
+  budgetTracking: '开始计量：{{time}} UTC',
+  budgetPendingCount: '{{count}} 条请求待结算，请联系管理员。',
+  budgetEdit: '编辑额度',
+  budgetAdd: '添加额度',
+  budgetGroup: '分组范围',
+  budgetPeriod: '重置周期',
+  budgetModel: '模型 ID',
+  budgetModelHint:
+    '留空表示所有模型，也可填写准确的原生模型 ID。带服务商前缀的名称共用同一额度。',
+  budgetLimit: 'Token 上限（M）',
+  budgetEnabled: '启用此额度限制',
+  budgetEditHint:
+    '新范围从保存时开始计量。保存已有范围会更新其上限。停用限制后仍统计用量，重新启用不会重置额度。每位成员最多 64 条规则。',
+  budgetInvalid:
+    '请输入准确的模型 ID，以及 0.000001 至 1,000,000 M 之间的上限，最多 6 位小数。',
+  budgetSave: '保存额度',
+  budgetSaveFailed: '无法保存，请检查填写内容后重试。',
+  budgetRuleLimit: '该成员已有 64 条规则，请编辑现有规则。',
+  budgetSettlementConflict:
+    '用量状态已变化，或填写总量低于已知用量。请刷新并核对请求。',
+  budgetAccountingFailed:
+    'Token 记账暂不可用。请恢复数据库访问并重启 SubLane，然后处理待结算用量。',
+  budgetSettlementHint:
+    '这些请求未返回完整用量，受影响的额度会阻止新请求，直至结算。请填写输入与输出 token 总量（包含已知用量）。补录会计入所有命中规则并留下审计记录。',
+  budgetKnownTokens: '已知 {{value}} M tokens',
+  budgetSettleTotal: '{{request}} 的 Token 总量（M）',
+  budgetSettle: '结算用量',
+  budgetsPersonalHint:
+    '日/月额度按 UTC 自然周期重置，所有命中的规则同时生效。待结算用量需由管理员处理，跨周期也不会自动解除。',
+  auditMemberBudget: '更新 Token 额度',
+  auditMemberBudgetSettle: '结算 Token 用量',
+  reasonTokenQuota: '你的 Token 额度已耗尽，请等待重置或联系管理员。',
+  reasonTokenPending: '此前的请求存在待结算用量，请联系管理员。',
+  reasonTokenAccounting: 'Token 记账暂不可用，请联系管理员。',
+
   requestFilters: '筛选',
   requestClearFilters: '清除筛选',
   requestApplyFilters: '应用筛选',

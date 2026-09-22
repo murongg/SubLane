@@ -1,4 +1,64 @@
 export const en = {
+  budgetSaving: 'Saving…',
+  budgetRefresh: 'Refresh token budgets',
+  budgetUnitHint: '1 M = 1,000,000 tokens. Up to 6 decimal places (1 token).',
+  budgetSettlementInvalid:
+    'Enter a total from the known usage to 2,000 M, with up to 6 decimal places.',
+  tokenBudgets: 'Token budgets',
+  budgetsFor: 'Token budgets for {{username}}',
+  budgetsDescription:
+    'All matching budgets apply across API keys. Input and output tokens count together. Limits stop new requests; active requests may finish above the limit.',
+  budgetsLoading: 'Loading token budgets…',
+  budgetsLoadFailed: 'Unable to load token budgets.',
+  budgetsEmpty: 'No token budgets. Usage is unlimited.',
+  budgetAllGroups: 'All groups',
+  budgetAllModels: 'All models',
+  budgetDisabled: 'Limit disabled',
+  budgetPending: 'Usage pending settlement',
+  budgetExhausted: 'Budget exhausted',
+  budgetDaily: 'Daily · UTC',
+  budgetMonthly: 'Monthly · UTC',
+  budgetUsed: '{{used}} / {{limit}} M tokens used',
+  budgetResets: 'Resets {{time}} UTC',
+  budgetTracking: 'Tracking since {{time}} UTC',
+  budgetPendingCount:
+    '{{count}} request(s) need settlement. Contact an administrator.',
+  budgetEdit: 'Edit budget',
+  budgetAdd: 'Add budget',
+  budgetGroup: 'Group scope',
+  budgetPeriod: 'Reset period',
+  budgetModel: 'Model ID',
+  budgetModelHint:
+    'Leave blank for all models, or enter an exact native model ID. Provider prefixes share the same budget.',
+  budgetLimit: 'Token limit (M)',
+  budgetEnabled: 'Enforce this budget',
+  budgetEditHint:
+    'New scopes start tracking when saved. Saving an existing scope updates its limit. Disabling a limit keeps counting usage; re-enabling does not reset it. Up to 64 rules per member.',
+  budgetInvalid:
+    'Enter an exact model ID and a limit from 0.000001 to 1,000,000 M, with up to 6 decimal places.',
+  budgetSave: 'Save budget',
+  budgetSaveFailed: 'Unable to save. Check the values and try again.',
+  budgetRuleLimit: 'This member has 64 rules. Edit an existing rule.',
+  budgetSettlementConflict:
+    'Usage changed or the total is below known usage. Refresh and check the request.',
+  budgetAccountingFailed:
+    'Token accounting is unavailable. Restore database access and restart SubLane before settling pending usage.',
+  budgetSettlementHint:
+    'These requests did not report complete usage. Affected budgets block new requests until settled. Enter the total input + output tokens, including any known usage. This applies to every matching rule and is audited.',
+  budgetKnownTokens: '{{value}} M known tokens',
+  budgetSettleTotal: 'Total tokens (M) for {{request}}',
+  budgetSettle: 'Settle usage',
+  budgetsPersonalHint:
+    'Daily and monthly limits reset at UTC boundaries. All matching limits apply. Pending usage requires administrator settlement, even after a reset.',
+  auditMemberBudget: 'Updated token budget',
+  auditMemberBudgetSettle: 'Settled token usage',
+  reasonTokenQuota:
+    'Your token budget is exhausted. Wait for the reset or contact an administrator.',
+  reasonTokenPending:
+    'A previous request needs token settlement. Contact an administrator.',
+  reasonTokenAccounting:
+    'Token accounting is unavailable. Contact an administrator.',
+
   requestFilters: 'Filters',
   requestClearFilters: 'Clear filters',
   requestApplyFilters: 'Apply filters',

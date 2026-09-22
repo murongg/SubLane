@@ -289,6 +289,12 @@ func gatewayFailure(err error) (int, string) {
 		return 409, "conversation_account_unavailable"
 	case errors.Is(err, gateway.ErrNoAccount):
 		return 503, "no_accounts_available"
+	case errors.Is(err, gateway.ErrTokenQuota):
+		return 429, "token_quota_exceeded"
+	case errors.Is(err, gateway.ErrTokenPending):
+		return 429, "token_usage_pending"
+	case errors.Is(err, gateway.ErrTokenAccounting):
+		return 503, "token_accounting_unavailable"
 	case errors.Is(err, gateway.ErrQuotaExhausted):
 		return 429, "quota_exhausted"
 	case errors.Is(err, gateway.ErrAccountCooling):
@@ -328,7 +334,13 @@ func gatewayFailure(err error) (int, string) {
 }
 
 func gatewayError(w http.ResponseWriter, err error) {
-	writeGatewayFailure(w, err, writeGatewayError)
+	writeGatewayFailure(w, err, func(w http.ResponseWriter, status int, code string) {
+		payload := map[string]any{"error": gatewayErrorBody(code)}
+		if details := budgetErrorDetails(err); details != nil {
+			payload["quota"] = details
+		}
+		writeJSON(w, status, payload)
+	})
 }
 
 func writeGatewayFailure(w http.ResponseWriter, err error, writeError func(http.ResponseWriter, int, string)) {
@@ -339,7 +351,16 @@ func writeGatewayFailure(w http.ResponseWriter, err error, writeError func(http.
 	if status == 401 {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 	}
-	if status == 429 {
+	if details := budgetErrorDetails(err); details != nil {
+		var budget *gateway.BudgetError
+		if errors.As(err, &budget) {
+			w.Header().Set("X-Token-Budget-Id", strconv.FormatInt(budget.BudgetID, 10))
+			if budget.ResetAt > 0 {
+				w.Header().Set("X-Token-Budget-Reset", strconv.FormatInt(budget.ResetAt, 10))
+			}
+		}
+	}
+	if status == 429 && !errors.Is(err, gateway.ErrTokenPending) {
 		value := "1"
 		var rejected *upstream.UpstreamError
 		if errors.As(err, &rejected) {
@@ -357,7 +378,12 @@ func writeGatewayFailure(w http.ResponseWriter, err error, writeError func(http.
 		if errors.As(err, &memberRate) {
 			value = strconv.FormatInt(memberRate.RetryAfter, 10)
 		}
-		retryAfter(w, value)
+		var budget *gateway.BudgetError
+		if errors.As(err, &budget) {
+			w.Header().Set("Retry-After", strconv.FormatInt(budget.RetryAfter, 10))
+		} else {
+			retryAfter(w, value)
+		}
 	}
 	writeError(w, status, code)
 }

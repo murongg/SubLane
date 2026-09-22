@@ -46,18 +46,20 @@ func RequestID(ctx context.Context) string {
 var safeModel = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,159}$`)
 
 type observation struct {
-	kind         Kind
-	service      *Service
-	ctx          context.Context
-	cancel       context.CancelFunc
-	stopParent   func() bool
-	once         sync.Once
-	started      time.Time
-	record       db.RecordRequestParams
-	revision     int64
-	leased       bool
-	memberLeased bool
-	sequence     int64
+	kind             Kind
+	service          *Service
+	ctx              context.Context
+	cancel           context.CancelFunc
+	stopParent       func() bool
+	once             sync.Once
+	started          time.Time
+	record           db.RecordRequestParams
+	revision         int64
+	leased           bool
+	memberLeased     bool
+	budgetTracked    bool
+	budgetDispatched bool
+	sequence         int64
 }
 
 func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (*observation, error) {
@@ -146,12 +148,16 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 				state.InFlight = max(0, state.InFlight-1)
 			}
 		}
-		s.mu.Unlock()
+		// Admission must not observe released leases before the token charge commits.
+		defer s.mu.Unlock()
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err == nil {
 			defer tx.Rollback()
 			q := s.queries.WithTx(tx)
-			err = q.RecordRequest(ctx, e.record)
+			err = e.settleBudget(ctx, q)
+			if err == nil {
+				err = q.RecordRequest(ctx, e.record)
+			}
 			if err == nil {
 				err = recordStatistics(ctx, q, e.record)
 			}
@@ -169,6 +175,9 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 			}
 		}
 		if err != nil {
+			if e.budgetTracked {
+				s.budgetFailure = true
+			}
 			slog.Error("Unable to persist request metadata")
 		}
 	})
@@ -189,6 +198,10 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 		return "rejected", "member_busy", ""
 	case errors.Is(err, ErrMemberRate):
 		return "rejected", "member_rate_limited", ""
+	case errors.Is(err, ErrTokenQuota), errors.Is(err, ErrTokenPending):
+		return "rejected", err.Error(), ""
+	case errors.Is(err, ErrTokenAccounting):
+		return "error", "token_accounting_unavailable", ""
 	case errors.Is(err, ErrQuotaExhausted):
 		return "rejected", "quota_exhausted", ""
 	case errors.Is(err, ErrAccountBusy):
