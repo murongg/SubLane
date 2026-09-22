@@ -46,6 +46,9 @@ func fixture(t *testing.T) (*Service, *sql.DB, int64, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := groups.New(conn).Save(ctx, 0, groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{}}); err != nil {
+		t.Fatal(err)
+	}
 	pool, err := groups.New(conn).Save(ctx, 0, groups.Input{Name: "Synthetic pool", Enabled: true, AccountIDs: []string{account.ID}})
 	if err != nil || pool.ID != 2 {
 		t.Fatal(pool, err)
@@ -280,17 +283,36 @@ func TestManagedPoolRejectsNewAccountsAndPausesWithoutQuotaSnapshot(t *testing.T
 	}
 }
 
-func TestDefaultPoolCannotBeReserved(t *testing.T) {
-	s, _, user, _ := fixture(t)
+func TestFirstPoolCanBeReserved(t *testing.T) {
+	s, conn, user, account := fixture(t)
 	ctx := context.Background()
+	pools := groups.New(conn)
+	if _, err := pools.Save(ctx, 2, groups.Input{Name: "Synthetic pool", Enabled: true, AccountIDs: []string{}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pools.Save(ctx, 1, groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{account}}); err != nil {
+		t.Fatal(err)
+	}
 	team, err := s.SaveTeam(ctx, 0, TeamInput{Name: "Synthetic", Enabled: true, MemberIDs: []int64{user}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic", TeamID: team.ID, GroupID: 1, Enabled: true, Config: Config{Mode: "tokens", Period: "day", Members: []Share{{UserID: user, Limit: 100}}}})
-	if !errors.Is(err, ErrPoolConflict) {
-		t.Fatal("default pool must stay open for account imports", err)
+	if _, err = s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic", TeamID: team.ID, GroupID: 1, Enabled: true, Config: Config{Mode: "tokens", Period: "day", Members: []Share{{UserID: user, Limit: 100}}}}); err != nil {
+		t.Fatal("first pool cannot be reserved", err)
 	}
+	cipher, err := vault.Open(filepath.Join(t.TempDir(), "synthetic-import-key"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	imported, err := accounts.New(conn, cipher).Authorize(ctx, "Synthetic later import", accounts.Credential{AccountID: "synthetic-later", AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", ExpiresAt: time.Now().Add(time.Hour).Unix()}, "")
+	if err != nil {
+		t.Fatal("reserving the first pool blocked later imports", err)
+	}
+	var count int
+	if err = conn.QueryRow("SELECT count(*) FROM group_accounts WHERE account_id=?", imported.ID).Scan(&count); err != nil || count != 0 {
+		t.Fatal("later import entered a reserved pool", err)
+	}
+
 }
 
 func TestTokenCorrectionRejectsOversizedUsage(t *testing.T) {

@@ -54,6 +54,7 @@ func TestGatewayKeepsAccountAffinityAndBoundsActiveRequests(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	configureTestPool(t, connection)
 	var mu sync.Mutex
 	var used []string
 	fakeUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

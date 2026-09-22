@@ -36,7 +36,7 @@ func TestRouterGroupsProtectMethodErrorsAndFallbacks(t *testing.T) {
 		t.Fatal(err)
 	}
 	keys := newTestKeyService(t, db)
-	key, err := keys.Create(ctx, member.ID, "Synthetic client")
+	key, err := keys.CreateInGroup(ctx, member.ID, 1, "Synthetic client")
 	if err != nil {
 		t.Fatal(err)
 	}

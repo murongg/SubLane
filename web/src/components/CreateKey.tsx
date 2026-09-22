@@ -232,9 +232,7 @@ function KeyForm({
                               scheme: selectedGroup.scheme_name,
                               pool: selectedGroup.name,
                             })
-                          : selectedGroup.id === 1
-                            ? t('defaultGroup')
-                            : selectedGroup.name
+                          : selectedGroup.name
                         : t('chooseGroup')}
                     </span>
                     <ChevronDown aria-hidden="true" />
@@ -255,9 +253,7 @@ function KeyForm({
                               scheme: group.scheme_name,
                               pool: group.name,
                             })
-                          : group.id === 1
-                            ? t('defaultGroup')
-                            : group.name}
+                          : group.name}
                       </DropdownMenuRadioItem>
                     ))}
                   </DropdownMenuRadioGroup>

@@ -10,7 +10,7 @@ const base = {
   restricted_models: false,
   id: 1,
   name: 'Default',
-  is_default: true,
+  is_default: false,
   enabled: true,
   account_count: 1,
   member_count: 1,
@@ -127,9 +127,7 @@ it('edits an exact model allowlist and makes an empty list explicitly deny all',
     />,
   )
   const user = userEvent.setup()
-  await user.click(
-    await screen.findByRole('button', { name: 'Edit Default group' }),
-  )
+  await user.click(await screen.findByRole('button', { name: 'Edit Default' }))
   const dialog = await screen.findByRole('dialog')
   await user.clear(await within(dialog).findByLabelText('Allowed model IDs'))
   expect(
@@ -137,4 +135,50 @@ it('edits an exact model allowlist and makes an empty list explicitly deny all',
   ).toBeTruthy()
   await user.click(within(dialog).getByRole('button', { name: 'Save group' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+})
+
+it('shows a renamed first pool and allows editing its name and enabled state', async () => {
+  const pool = { ...base, name: 'Synthetic renamed pool', is_default: false }
+  const fetch = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/accounts')
+        return Promise.resolve(response({ accounts: [account] }))
+      if (url === '/api/groups')
+        return Promise.resolve(response({ groups: [pool] }))
+      if (url === '/api/groups/1') {
+        if (init?.method === 'PATCH') {
+          Object.assign(pool, JSON.parse(String(init.body)))
+        }
+        return Promise.resolve(
+          response({ ...pool, account_ids: [account.id], allowed_models: [] }),
+        )
+      }
+      return Promise.reject(new Error('Unexpected request'))
+    })
+  vi.stubGlobal('fetch', fetch)
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/groups'] }),
+      )}
+    />,
+  )
+  const user = userEvent.setup()
+  await user.click(
+    await screen.findByRole('button', { name: 'Edit Synthetic renamed pool' }),
+  )
+  const dialog = await screen.findByRole('dialog')
+  await user.clear(await within(dialog).findByLabelText('Group name'))
+  await user.type(
+    within(dialog).getByLabelText('Group name'),
+    'Synthetic updated pool',
+  )
+  await user.click(within(dialog).getByLabelText('Group enabled'))
+  await user.click(within(dialog).getByRole('button', { name: 'Save group' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(pool.name).toBe('Synthetic updated pool')
+  expect(pool.enabled).toBe(false)
 })

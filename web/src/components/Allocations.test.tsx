@@ -258,7 +258,7 @@ it('offers only enabled, nonempty, dedicated pools without a scheme', async () =
       [pool(1), pool(2), pool(3, false), pool(4, true, 0), pool(5)],
       [{ group_id: 2 }],
     ),
-  ).toEqual([pool(5)])
+  ).toEqual([pool(1), pool(5)])
 })
 
 it('does not label a paused scheme balance as active', async () => {

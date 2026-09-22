@@ -36,7 +36,8 @@ func TestAuditBoundaryRedactionAndKeyUpdates(t *testing.T) {
 			t.Fatal("audit exposed", code)
 		}
 	}
-	created := request(h, "POST", "/api/keys", origin, map[string]any{"name": "Synthetic", "expires_at": time.Now().Add(time.Hour).Unix()}, member)
+	configureTestPool(t, connection)
+	created := request(h, "POST", "/api/keys", origin, map[string]any{"name": "Synthetic", "group_id": 1, "expires_at": time.Now().Add(time.Hour).Unix()}, member)
 	var key apikey.CreatedKey
 	if err := json.Unmarshal(created.Body.Bytes(), &key); err != nil || created.Code != 201 {
 		t.Fatal("expiry creation", created.Body.String())

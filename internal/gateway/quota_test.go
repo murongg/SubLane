@@ -62,6 +62,9 @@ func TestQuotaSelectionPersistsAndNeverMovesStickyConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.db.Exec("INSERT INTO group_accounts(group_id,account_id) VALUES(1,?)", second.ID); err != nil {
+		t.Fatal(err)
+	}
 	saveExhaustedQuota(t, s, ids["codex"])
 	restarted := New(ctx, s.db, s.accounts, s.provider)
 	defer restarted.Close()

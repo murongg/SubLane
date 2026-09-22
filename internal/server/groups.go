@@ -179,8 +179,6 @@ func groupError(w http.ResponseWriter, err error) {
 		status, code = 404, "group_not_found"
 	case errors.Is(err, groups.ErrDuplicate):
 		status, code = 409, "group_exists"
-	case errors.Is(err, groups.ErrDefault):
-		status, code = 409, "default_group_protected"
 	case errors.Is(err, groups.ErrLimit):
 		status, code = 409, "group_limit"
 	case errors.Is(err, groups.ErrUnavailable):

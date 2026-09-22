@@ -100,7 +100,8 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, provider, name, email, plan, enabled, status, expires_at, created_at, updated_at, max_concurrency
+SELECT id, provider, name, email, plan, enabled, status, expires_at, created_at, updated_at, max_concurrency,
+ (SELECT count(*) FROM group_accounts ga WHERE ga.account_id=accounts.id) AS group_count
 FROM accounts ORDER BY created_at DESC, id DESC LIMIT 100
 `
 
@@ -116,6 +117,7 @@ type ListAccountsRow struct {
 	CreatedAt      int64
 	UpdatedAt      int64
 	MaxConcurrency int64
+	GroupCount     int64
 }
 
 func (q *Queries) ListAccounts(ctx context.Context) ([]ListAccountsRow, error) {
@@ -139,6 +141,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]ListAccountsRow, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.MaxConcurrency,
+			&i.GroupCount,
 		); err != nil {
 			return nil, err
 		}

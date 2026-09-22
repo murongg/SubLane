@@ -41,6 +41,7 @@ func newQuotaFixture(t *testing.T) *quotaFixture {
 		t.Fatal(err)
 	}
 	f.id = row.ID
+	configureTestPool(t, f.connection)
 	t.Cleanup(func() { f.service.Close(); f.connection.Close() })
 	return f
 }
@@ -275,6 +276,7 @@ func TestTrafficQuotaRefreshDoesNotWaitAndBoundsWorkers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	configureTestPool(t, f.connection)
 	f.block = make(chan struct{})
 	f.started = make(chan struct{}, 3)
 	defer close(f.block)

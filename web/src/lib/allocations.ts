@@ -255,7 +255,6 @@ export function availableAllocationPools<
 >(pools: T[], schemes: { group_id: number }[]): T[] {
   return pools.filter(
     (pool) =>
-      pool.id !== 1 &&
       pool.enabled &&
       pool.account_count > 0 &&
       !schemes.some((scheme) => scheme.group_id === pool.id),

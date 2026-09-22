@@ -47,24 +47,40 @@ func fixture(t *testing.T) (*sql.DB, *groups.Service, auth.Member, accounts.Acco
 	return connection, groups.New(connection), member, account
 }
 
-func TestNewMembersAndAccountsJoinDefaultGroup(t *testing.T) {
-	_, service, member, account := fixture(t)
+func TestNewAccountsAndMembersRemainUnassigned(t *testing.T) {
+	connection, service, member, _ := fixture(t)
 	ctx := context.Background()
 	choices, err := service.Available(ctx, member.ID)
-	if err != nil || len(choices) != 1 || choices[0].ID != groups.DefaultID {
-		t.Fatal("new member lost default access", err)
+	if err != nil || len(choices) != 0 {
+		t.Fatalf("unexpected automatic access: %+v, %v", choices, err)
 	}
-	value, err := service.Get(ctx, groups.DefaultID)
-	if err != nil || len(value.AccountIDs) != 1 || value.AccountIDs[0] != account.ID {
-		t.Fatal("new account missing from default pool", err)
+	for _, table := range []string{"group_accounts", "group_members"} {
+		var count int
+		if err := connection.QueryRow("SELECT count(*) FROM " + table).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("automatic membership in %s: %d, %v", table, count, err)
+		}
 	}
-	if _, err := service.Save(ctx, groups.DefaultID, groups.Input{Name: "Default", Enabled: false, AccountIDs: []string{account.ID}}); !errors.Is(err, groups.ErrDefault) {
-		t.Fatal("default pool disabled", err)
+}
+
+func TestFirstPoolCanBeRenamedAndDisabled(t *testing.T) {
+	_, service, _, account := fixture(t)
+	ctx := context.Background()
+	pools, err := service.List(ctx)
+	if err != nil || len(pools) != 0 {
+		t.Fatalf("fresh instance created a pool: %+v, %v", pools, err)
+	}
+	pool, err := service.Save(ctx, 0, groups.Input{Name: "Synthetic first pool", Enabled: true, AccountIDs: []string{account.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := service.Save(ctx, pool.ID, groups.Input{Name: "Synthetic renamed", Enabled: false, AccountIDs: []string{account.ID}})
+	if err != nil || updated.Name != "Synthetic renamed" || updated.Enabled || updated.IsDefault {
+		t.Fatalf("first pool still special: %+v, %v", updated, err)
 	}
 }
 
 func TestPoolAndMemberChangesAreAtomicAndScoped(t *testing.T) {
-	_, service, member, account := fixture(t)
+	_, service, member, account := assignedFixture(t)
 	ctx := context.Background()
 	pool, err := service.Save(ctx, 0, groups.Input{Name: "Project alpha", Enabled: true, AccountIDs: []string{account.ID}})
 	if err != nil {
@@ -107,7 +123,7 @@ func TestPoolAndMemberChangesAreAtomicAndScoped(t *testing.T) {
 }
 
 func TestConnectionReadinessOnlyUsesAuthorizedGroups(t *testing.T) {
-	_, service, member, _ := fixture(t)
+	_, service, member, _ := assignedFixture(t)
 	ctx := context.Background()
 	status, err := service.Connection(ctx, member.ID)
 	if err != nil || status != "ready" {
@@ -127,7 +143,7 @@ func TestConnectionReadinessOnlyUsesAuthorizedGroups(t *testing.T) {
 }
 
 func TestMembersRequireTeamAccessInsteadOfDirectGrants(t *testing.T) {
-	connection, service, member, _ := fixture(t)
+	connection, service, member, _ := assignedFixture(t)
 	ctx := context.Background()
 	if _, err := connection.Exec("INSERT INTO allocation_teams(name,enabled,created_at) VALUES('Synthetic configured team',1,1)"); err != nil {
 		t.Fatal(err)
@@ -137,7 +153,7 @@ func TestMembersRequireTeamAccessInsteadOfDirectGrants(t *testing.T) {
 	if err != nil || len(choices) != 0 {
 		t.Fatalf("member without a team saw groups: %+v, %v", choices, err)
 	}
-	if _, err := groups.ReadPolicy(ctx, db.New(connection), member.ID, groups.DefaultID); !errors.Is(err, groups.ErrUnavailable) {
+	if _, err := groups.ReadPolicy(ctx, db.New(connection), member.ID, groups.LegacyID); !errors.Is(err, groups.ErrUnavailable) {
 		t.Fatalf("default grant bypassed team policy: %v", err)
 	}
 	status, err := service.Connection(ctx, member.ID)
@@ -148,4 +164,16 @@ func TestMembersRequireTeamAccessInsteadOfDirectGrants(t *testing.T) {
 	if err != nil || len(choices) != 1 {
 		t.Fatalf("administrator lost management access: %+v, %v", choices, err)
 	}
+}
+
+func assignedFixture(t *testing.T) (*sql.DB, *groups.Service, auth.Member, accounts.Account) {
+	conn, service, member, account := fixture(t)
+	pool, err := service.Save(context.Background(), 0, groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{account.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetMemberGroups(context.Background(), member.ID, []int64{pool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	return conn, service, member, account
 }

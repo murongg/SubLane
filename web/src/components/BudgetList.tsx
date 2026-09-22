@@ -33,11 +33,7 @@ export function BudgetList({
           <div className="min-w-0 flex-1 space-y-1 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-medium">
-                {rule.group_id === 0
-                  ? t('budgetAllGroups')
-                  : rule.group_id === 1
-                    ? t('defaultGroup')
-                    : rule.group_name}
+                {rule.group_id === 0 ? t('budgetAllGroups') : rule.group_name}
               </span>
               <span className="break-all">
                 {rule.model || t('budgetAllModels')}

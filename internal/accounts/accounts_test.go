@@ -42,6 +42,16 @@ func TestAccountCredentialsAndLifecycle(t *testing.T) {
 	if err != nil || len(list) != 1 {
 		t.Fatal("account missing", err)
 	}
+	if list[0].GroupCount == nil || *list[0].GroupCount != 0 {
+		t.Fatal("new account must be unassigned", list)
+	}
+	if _, err := connection.Exec("INSERT INTO account_groups(id,name,enabled,created_at,updated_at) VALUES(1,'Synthetic pool',1,1,1); INSERT INTO group_accounts(group_id,account_id) VALUES(1,?)", account.ID); err != nil {
+		t.Fatal(err)
+	}
+	assigned, err := service.List(ctx)
+	if err != nil || assigned[0].GroupCount == nil || *assigned[0].GroupCount != 1 {
+		t.Fatal("assignment count not updated", assigned, err)
+	}
 	payload, _ := json.Marshal(list)
 	if strings.Contains(string(payload), "synthetic-access") || strings.Contains(string(payload), "refresh_token") {
 		t.Fatal("credentials exposed")

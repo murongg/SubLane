@@ -20,8 +20,8 @@ func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, sess
 }
 func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID int64, session, provider, model string, kind Kind, scheme int64) (string, [32]byte, error) {
 	digest := sha256.Sum256([]byte(fmt.Sprintf("%d:%s", userID, session)))
-	// Preserve upstream session/cache IDs for existing conversations in the default group.
-	if groupID != groups.DefaultID {
+	// Preserve upstream session/cache IDs for existing conversations in the former default pool, even after it is renamed.
+	if groupID != groups.LegacyID {
 		digest = sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%s", userID, groupID, session)))
 	}
 	if userID <= 0 || groupID <= 0 {

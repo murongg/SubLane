@@ -1,37 +1,36 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
-  allocationChooseModel: '请选择模型',
-  allocationPriceMissing: '目录中暂无此模型的价格，请手动填写。',
-  allocationPriceFailed: '暂时无法获取模型价格，请手动填写。',
-  allocationAllowIdleBorrow: '允许借用空闲份额',
-  allocationAllowIdleBorrowHint:
-    '成员可以使用同一账号窗口内其他成员未用的份额。会话仍保持原账号，借用量会单独记录，最终以额度同步结算为准。',
-  allocationBorrowed: '已从成员空闲份额借用 {{points}} 点。',
   allocationPause: '暂停资源额度',
   allocationResume: '启用资源额度',
   personnelTeams: '人员组',
   personnelTeam: '人员组',
-  teamsDescription: '先创建人员组，再在组内添加资源额度。',
-  teamEditDescription: '先选择可以使用的成员，再为他们添加账号池和额度限制。',
+  teamsDescription: '选择成员和账号池，默认自由使用；需要时再设置额度限制。',
+  teamEditDescription: '选好成员和账号池后保存即可，额度限制按需设置。',
   teamCreate: '创建小组',
   teamEdit: '编辑小组',
   teamEditNamed: '编辑 {{name}}',
   teamSave: '保存小组',
   teamName: '小组名称',
   teamEnabled: '启用此小组',
-  teamsEmpty: '先创建人员组并添加成员，再在组内添加资源额度。',
+  teamsEmpty: '创建人员组，选择成员和账号池后保存，即可使用。',
   teamMemberCount: '{{count}} 位成员',
-  teamResourceCount: '{{count}} 个资源额度',
+  teamResourceCount: '已配置 {{count}} 条额度限制',
   teamMembershipHint:
     '移出成员会立即停用其资源额度访问权限；重新加入不会重置用量。每组最多 100 人。',
-  teamAllowedGroups: '允许使用的账号分组',
+  teamFreeUse: '自由使用 · 不设小组额度',
+  teamFreePoolCount: '可自由使用 {{count}} 个账号池',
+  teamAdvancedLimits: '高级设置：额度限制',
+  teamLimitsAfterSave:
+    '先保存人员组，需要时再在这里添加比例、金额或 Token 额度。',
+  teamNoFreePools:
+    '暂无可共享的账号池。请先创建账号池，已被额度规则占用的池在高级设置中管理。',
+  teamAllowedGroups: '自由使用的账号池',
   teamAllowedGroupsHint:
-    '成员只能看到并使用这里选择的共享分组。专用账号池请在下方添加为资源额度。',
+    '勾选的账号池不设置小组额度，成员只能使用所属人员组授权的账号池。已有成员限制和上游账号额度仍然生效。',
   teamResources: '资源额度',
   teamResourcesHint:
-    '每条资源额度就是一个专属账号池加一种限制方式。一个账号池只能添加一次。',
-  teamResourceFormula: '账号池 + 限制方式 = 一条资源额度',
+    '按需为专用账号池设置比例、金额或 Token 额度。收起此处不会取消已有规则；暂停规则会停止访问，不会变为自由使用。',
   teamResourcePoolLabel: '账号池',
   teamResourceLimitLabel: '限制方式：{{mode}}',
   teamPeopleTitle: '谁可以使用',
@@ -39,16 +38,18 @@ export const zh: Record<keyof typeof en, string> = {
     '把成员加入人员组后，他们才能看到这个组里的账号池和资源额度。',
   teamResourceAdd: '添加资源额度',
   teamResourceEdit: '编辑资源额度',
-  teamResourcesEmpty: '还没有添加资源额度。',
-  teamResourceNoPools: '没有可用账号池，请先创建已启用且有账号的账号池。',
+  teamResourcesEmpty: '未设置额度限制，已勾选的账号池可自由使用。',
+  teamResourceNoPools:
+    '暂无符合条件的账号池。请选择已启用、有账号且尚未分配资源额度的账号池。',
   allocationAccountLocked:
     '该账号已被资源额度独占，无法删除。如需停止使用，请停用账号。',
   allocationUnavailableShort: '不可用',
   allocationWaiting: '待生效',
   allocationPrerequisite:
-    '请先创建包含成员的人员组，以及非空、已启用的专用账号池。每个账号池只能添加一条资源额度；默认分组保留用于接收新导入账号。',
+    '请先创建包含成员的人员组，以及非空、已启用的专用账号池。每个账号池只能添加一条资源额度；新导入账号保持未分配。',
   allocationSchemes: '资源额度',
-  allocationsDescription: '给人员组添加账号池，并选择一种额度限制方式。',
+  allocationsDescription:
+    '按需设置额度限制。默认自由使用，只需在人员组勾选账号池，无需创建资源额度。',
   allocationCreate: '添加资源额度',
   allocationEdit: '编辑资源额度',
   allocationEditNamed: '编辑资源额度 {{name}}',
@@ -60,6 +61,9 @@ export const zh: Record<keyof typeof en, string> = {
   allocationSettings: '计量与生效设置',
   allocationShareRules:
     '池内每个订阅账号都使用这组比例，各额度窗口独立重置。只有打开下方选项后，才会借用空闲份额。',
+  allocationAllowIdleBorrow: '允许借用空闲份额',
+  allocationAllowIdleBorrowHint:
+    '成员可以使用同一账号窗口内其他成员未用的份额。会话仍保持原账号，借用量会单独记录，最终以额度同步结算为准。',
   allocationSubscription: '订阅账号 {{label}}',
   allocationUpdating: '用量更新中',
   allocationSyncPaused: '等待额度同步',
@@ -71,6 +75,7 @@ export const zh: Record<keyof typeof en, string> = {
   allocationEstimatedRemaining: '剩余（估算）',
   allocationAccountExhausted:
     '你在此账号、此窗口的份额已用完，不代表整个账号池都没有额度。已有会话会继续保持原账号。',
+  allocationBorrowed: '已从成员空闲份额借用 {{points}} 点。',
   allocationAmount: '按金额',
   allocationTokens: '按 Token',
   allocationSave: '保存资源额度',
@@ -105,6 +110,9 @@ export const zh: Record<keyof typeof en, string> = {
   allocationRemoveRate: '移除第 {{index}} 项模型价格',
   allocationRemove: '移除',
   allocationModelID: '模型 ID',
+  allocationChooseModel: '请选择模型',
+  allocationPriceMissing: '目录中暂无此模型的价格，请手动填写。',
+  allocationPriceFailed: '暂时无法获取模型价格，请手动填写。',
   allocationEnabled: '启用此资源额度',
   allocationNextHint:
     '额度、价格或计量方式的修改在下周期生效。暂停或启用访问立即生效，当前用量与待结算记录保留。',
@@ -830,9 +838,11 @@ export const zh: Record<keyof typeof en, string> = {
   providerQuotaUnsupported: '暂未支持该服务商的额度查询。',
   accountGroups: '账号分组',
   groupsDescription: '为成员和项目分配可用的订阅账号池。',
-  groupsDefaultHint:
-    '现有账号和密钥使用默认组，新账号、新成员也会自动加入。管理员可以调整账号范围和成员权限。',
-  defaultGroup: '默认组',
+  groupsAssignmentHint:
+    '新账号导入后保持未分配。将账号加入账号组，再通过人员组授权，或添加带额度规则的团队资源。',
+  accountUnassigned: '未分配',
+  accountAssignGroup: '分配到账号组',
+  groupsEmpty: '还没有账号组。请创建账号组并选择要使用的订阅账号。',
   createGroup: '创建分组',
   editGroup: '编辑分组',
   editGroupNamed: '编辑 {{name}}',
@@ -844,13 +854,11 @@ export const zh: Record<keyof typeof en, string> = {
   groupEditorDescription: '选择此分组的密钥可以使用的订阅账号。',
   groupAccounts: '订阅账号',
   groupAccountsHint:
-    '账号会保留已有的分组归属。如需独占使用，请将其从默认组及其他组移出。移出账号后，此组绑定到该账号的对话将无法继续调用。',
+    '账号会保留已有的分组归属。如需独占使用，请确保账号只属于一个账号池。移出账号后，此组绑定到该账号的对话将无法继续调用。',
   groupNoAccounts: '可以先添加订阅账号，也可以保存空分组后再配置。',
   saveGroup: '保存分组',
   groupNameTaken: '该分组名称已存在。',
   groupLimitReached: '当前实例最多支持 32 个分组。',
-  defaultGroupProtected:
-    '默认组不可停用或重命名，可调整组内账号、模型限制和成员权限。',
   groupInputInvalid:
     '请检查分组名称（1～64 个字符）、所选账号和完整模型 ID（最多 100 个）。',
   groupSaveFailed: '无法保存分组更改，请重试。',

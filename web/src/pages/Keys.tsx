@@ -128,10 +128,7 @@ function KeyManager({ userID }: { userID: number }) {
                     <p className="break-words font-medium">{key.name}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {t('keyGroupName', {
-                        name:
-                          key.group_id === 1
-                            ? t('defaultGroup')
-                            : key.group_name,
+                        name: key.group_name,
                       })}
                     </p>
                     <CopyKey

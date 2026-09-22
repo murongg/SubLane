@@ -86,11 +86,9 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
   const rowName = (row: Statistic) =>
     view === 'days'
       ? date.format(Number(row.id) * 1000)
-      : view === 'groups' && row.id === '1'
-        ? t('defaultGroup')
-        : row.name === '[other models]'
-          ? t('usageOtherModels')
-          : row.name || t('statisticsUnknown')
+      : row.name === '[other models]'
+        ? t('usageOtherModels')
+        : row.name || t('statisticsUnknown')
   const tokens = (count: number, reported: number) =>
     reported > 0 ? number.format(count) : '—'
   const percentage = (completed: number, requests: number) =>

@@ -66,10 +66,8 @@ export function BudgetForm({
   const groupName =
     groupID === 0
       ? t('budgetAllGroups')
-      : groupID === 1
-        ? t('defaultGroup')
-        : (groups.data?.groups.find((group) => group.id === groupID)?.name ??
-          rule?.group_name)
+      : (groups.data?.groups.find((group) => group.id === groupID)?.name ??
+        rule?.group_name)
   return (
     <form onSubmit={submit} className="space-y-4 border-t border-border pt-4">
       <h3 className="font-medium">{t(rule ? 'budgetEdit' : 'budgetAdd')}</h3>
@@ -109,7 +107,7 @@ export function BudgetForm({
                     key={group.id}
                     value={String(group.id)}
                   >
-                    {group.id === 1 ? t('defaultGroup') : group.name}
+                    {group.name}
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>

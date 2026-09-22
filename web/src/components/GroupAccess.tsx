@@ -159,7 +159,7 @@ function AccessForm({
               className="size-4 shrink-0 accent-primary focus-visible:ring-2 focus-visible:ring-ring"
             />
             <span className="min-w-0 break-words text-sm">
-              {group.is_default ? t('defaultGroup') : group.name}
+              {group.name}
               {!group.enabled && (
                 <span className="ml-2 text-xs text-muted-foreground">
                   {t('disabled')}

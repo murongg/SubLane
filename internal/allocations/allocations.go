@@ -375,10 +375,6 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 	} else if in.Config.AllowIdleBorrow {
 		return Scheme{}, ErrInput
 	}
-	// Default receives newly imported accounts; reserving it would block all future imports.
-	if in.GroupID == 1 {
-		return Scheme{}, ErrPoolConflict
-	}
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return Scheme{}, err

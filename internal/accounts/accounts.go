@@ -31,6 +31,7 @@ var (
 )
 
 type Account struct {
+	GroupCount     *int64 `json:"group_count,omitempty"`
 	ID             string `json:"id"`
 	Provider       string `json:"provider"`
 	Name           string `json:"name"`
@@ -64,7 +65,7 @@ func (s *Service) List(ctx context.Context) ([]Account, error) {
 	}
 	result := make([]Account, 0, len(rows))
 	for _, row := range rows {
-		result = append(result, Account(row))
+		result = append(result, Account{ID: row.ID, Provider: row.Provider, Name: row.Name, Email: row.Email, Plan: row.Plan, Enabled: row.Enabled, Status: row.Status, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, MaxConcurrency: row.MaxConcurrency, GroupCount: &row.GroupCount})
 	}
 	return result, nil
 }
@@ -156,9 +157,6 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	}
 	if n == 0 {
 		return Account{}, ErrDuplicate
-	}
-	if err := queries.AddDefaultGroupAccount(ctx, id); err != nil {
-		return Account{}, err
 	}
 	if err := audit.Record(ctx, queries, "account.create", "account", id); err != nil {
 		return Account{}, err

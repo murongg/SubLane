@@ -313,9 +313,7 @@ function RequestTable({
                       </p>
                     )}
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {item.group_id === 1
-                        ? t('defaultGroup')
-                        : item.group_name || '—'}
+                      {item.group_name || '—'}
                     </p>
                   </td>
                   <td className="px-4 py-4">

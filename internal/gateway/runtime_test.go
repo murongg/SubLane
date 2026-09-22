@@ -22,6 +22,7 @@ func TestSessionlessRequestsRotateWithoutPersistingAffinity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureTestPool(t, service.db)
 	first, one, err := service.selectAccount(ctx, 1, 1, "", "codex", "", Responses)
 	if err != nil {
 		t.Fatal(err)

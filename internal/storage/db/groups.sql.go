@@ -9,24 +9,6 @@ import (
 	"context"
 )
 
-const addDefaultGroupAccount = `-- name: AddDefaultGroupAccount :exec
-INSERT INTO group_accounts(group_id,account_id) VALUES(1,?1)
-`
-
-func (q *Queries) AddDefaultGroupAccount(ctx context.Context, accountID string) error {
-	_, err := q.db.ExecContext(ctx, addDefaultGroupAccount, accountID)
-	return err
-}
-
-const addDefaultGroupMember = `-- name: AddDefaultGroupMember :exec
-INSERT INTO group_members(group_id,user_id) VALUES(1,?1)
-`
-
-func (q *Queries) AddDefaultGroupMember(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, addDefaultGroupMember, userID)
-	return err
-}
-
 const addGroupAccount = `-- name: AddGroupAccount :exec
 INSERT INTO group_accounts(group_id,account_id) VALUES(?1,?2)
 `

@@ -73,8 +73,10 @@ func New(connection *sql.DB, cipher *vault.Vault) *Service {
 	return &Service{vault: cipher, db: connection, queries: db.New(connection), now: time.Now}
 }
 
+// Deprecated: use CreateInGroup or CreateInScheme to choose an explicit scope.
 func (s *Service) Create(ctx context.Context, userID int64, name string) (CreatedKey, error) {
-	return s.CreateInGroup(ctx, userID, groups.DefaultID, name)
+	// A new key requires an explicit pool or resource; never guess its scope.
+	return CreatedKey{}, ErrInput
 }
 
 func (s *Service) CreateInGroup(ctx context.Context, userID, groupID int64, name string) (CreatedKey, error) {

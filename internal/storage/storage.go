@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -66,8 +67,32 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func apply(ctx context.Context, db *sql.DB, name string) error {
-	tx, err := db.BeginTx(ctx, nil)
+func apply(ctx context.Context, db *sql.DB, name string) (result error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	rebuild := name == "024_pools.sql"
+	if rebuild {
+		// SQLite cannot remove a referenced table's CHECK constraint in place.
+		// Pin this connection and suspend FK actions before BEGIN so rebuilding the
+		// parent cannot cascade-delete keys, memberships or conversation bindings.
+		var enabled int
+		if err = conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&enabled); err != nil {
+			return err
+		}
+		if _, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
+			return err
+		}
+		defer func() {
+			_, restoreErr := conn.ExecContext(context.Background(), fmt.Sprintf("PRAGMA foreign_keys=%d", enabled))
+			if restoreErr != nil {
+				result = errors.Join(result, restoreErr)
+			}
+		}()
+	}
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -88,6 +113,21 @@ func apply(ctx context.Context, db *sql.DB, name string) error {
 	}
 	if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations(name) VALUES (?)", name); err != nil {
 		return err
+	}
+	if rebuild {
+		rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+		if err != nil {
+			return err
+		}
+		invalid := rows.Next()
+		checkErr := rows.Err()
+		rows.Close()
+		if checkErr != nil {
+			return checkErr
+		}
+		if invalid {
+			return fmt.Errorf("migration %s violates foreign keys", name)
+		}
 	}
 	// Record the migration in the same transaction so a crash never marks partial work complete.
 	return tx.Commit()

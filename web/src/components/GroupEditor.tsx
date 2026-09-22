@@ -144,7 +144,7 @@ function GroupForm({
             value={name}
             maxLength={128}
             onChange={(event) => setName(event.target.value)}
-            disabled={mutation.isPending || value?.is_default}
+            disabled={mutation.isPending}
             aria-invalid={invalid}
           />
           {invalid && (
@@ -158,16 +158,11 @@ function GroupForm({
             type="checkbox"
             checked={enabled}
             onChange={(event) => setEnabled(event.target.checked)}
-            disabled={mutation.isPending || value?.is_default}
+            disabled={mutation.isPending}
             className="size-4 accent-primary focus-visible:ring-2 focus-visible:ring-ring"
           />
           {t('groupEnabled')}
         </label>
-        {value?.is_default && (
-          <p className="text-xs leading-5 text-muted-foreground">
-            {t('defaultGroupProtected')}
-          </p>
-        )}
         <fieldset className="space-y-2" disabled={mutation.isPending}>
           <legend className="text-sm font-medium">{t('groupAccounts')}</legend>
           <p className="text-xs leading-5 text-muted-foreground">

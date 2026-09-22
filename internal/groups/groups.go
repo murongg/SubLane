@@ -14,7 +14,8 @@ import (
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
-const DefaultID int64 = 1
+// LegacyID identifies pre-pool conversation hashes; it grants no special access.
+const LegacyID int64 = 1
 const MaxGroups = 32
 
 var (
@@ -22,7 +23,6 @@ var (
 	ErrAllocated   = errors.New("allocation_pool_locked")
 	ErrNotFound    = errors.New("group_not_found")
 	ErrDuplicate   = errors.New("group_exists")
-	ErrDefault     = errors.New("default_group_protected")
 	ErrLimit       = errors.New("group_limit")
 	ErrUnavailable = errors.New("group_unavailable")
 )
@@ -32,11 +32,12 @@ type Group struct {
 	ID               int64  `json:"id"`
 	Name             string `json:"name"`
 	Enabled          bool   `json:"enabled"`
-	IsDefault        bool   `json:"is_default"`
-	CreatedAt        int64  `json:"created_at"`
-	UpdatedAt        int64  `json:"updated_at"`
-	AccountCount     int64  `json:"account_count"`
-	MemberCount      int64  `json:"member_count"`
+	// IsDefault is retained for response compatibility and is always false.
+	IsDefault    bool  `json:"is_default"`
+	CreatedAt    int64 `json:"created_at"`
+	UpdatedAt    int64 `json:"updated_at"`
+	AccountCount int64 `json:"account_count"`
+	MemberCount  int64 `json:"member_count"`
 }
 type Detail struct {
 	Group
@@ -71,7 +72,7 @@ func (s *Service) List(ctx context.Context) ([]Group, error) {
 	}
 	result := make([]Group, 0, len(rows))
 	for _, r := range rows {
-		result = append(result, Group{RestrictedModels: r.RestrictedModels, ID: r.ID, Name: r.Name, Enabled: r.Enabled, IsDefault: r.ID == DefaultID, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, AccountCount: r.AccountCount, MemberCount: r.MemberCount})
+		result = append(result, Group{RestrictedModels: r.RestrictedModels, ID: r.ID, Name: r.Name, Enabled: r.Enabled, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, AccountCount: r.AccountCount, MemberCount: r.MemberCount})
 	}
 	return result, nil
 }
@@ -97,7 +98,7 @@ func (s *Service) Get(ctx context.Context, id int64) (Detail, error) {
 	if err != nil {
 		return Detail{}, err
 	}
-	result := Detail{Group: Group{RestrictedModels: row.RestrictedModels, ID: row.ID, Name: row.Name, Enabled: row.Enabled, IsDefault: id == DefaultID, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, AccountCount: int64(len(ids)), MemberCount: count}, AccountIDs: ids}
+	result := Detail{Group: Group{RestrictedModels: row.RestrictedModels, ID: row.ID, Name: row.Name, Enabled: row.Enabled, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, AccountCount: int64(len(ids)), MemberCount: count}, AccountIDs: ids}
 	result.AllowedModels, err = q.ListGroupModels(ctx, id)
 	if err != nil {
 		return Detail{}, err
@@ -119,9 +120,6 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 	name := strings.TrimSpace(input.Name)
 	if id < 0 || !utf8.ValidString(name) || utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 64 || strings.IndexFunc(name, unicode.IsControl) >= 0 || input.AccountIDs == nil || len(input.AccountIDs) > 100 {
 		return Detail{}, ErrInput
-	}
-	if id == DefaultID && (!input.Enabled || name != "Default") {
-		return Detail{}, ErrDefault
 	}
 	tx, err := s.connection.BeginTx(ctx, nil)
 	if err != nil {

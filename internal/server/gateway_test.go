@@ -100,7 +100,7 @@ func newForwardingFixture(t *testing.T, provider string, handler http.HandlerFun
 	}))
 	t.Cleanup(client.Close)
 	keys := newTestKeyService(t, db)
-	created, err := keys.Create(ctx, member.ID, "Synthetic client")
+	created, err := keys.CreateInGroup(ctx, member.ID, 1, "Synthetic client")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,7 +6,7 @@ import {
   useInfiniteQuery,
 } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Plus } from 'lucide-react'
+import { ChevronDown, Plus } from 'lucide-react'
 import {
   teamsOptions,
   schemesOptions,
@@ -32,10 +32,16 @@ export function Teams() {
   const schemes = useQuery(schemesOptions)
   const pools = useQuery(groupOptions)
   const client = useQueryClient()
+  const [advanced, setAdvanced] = useState(false)
   const [editing, setEditing] = useState<Team | null | undefined>()
   const [resourceEditing, setResourceEditing] = useState<
     Scheme | null | undefined
   >()
+  const reservedGroupIDs = (schemes.data?.schemes ?? []).map(
+    (scheme) => scheme.group_id,
+  )
+  const loading = query.isPending || schemes.isPending || pools.isPending
+  const failed = query.isError || schemes.isError || pools.isError
   const mutation = useMutation({
     mutationFn: saveTeam,
     onSuccess: async () => {
@@ -58,8 +64,10 @@ export function Teams() {
         </div>
         {editing === undefined && (
           <Button
+            disabled={loading || failed}
             onClick={() => {
               mutation.reset()
+              setAdvanced(false)
               setEditing(null)
             }}
           >
@@ -68,7 +76,21 @@ export function Teams() {
           </Button>
         )}
       </div>
-      {editing !== undefined ? (
+      {loading ? (
+        <p role="status">{t('allocationLoading')}</p>
+      ) : failed ? (
+        <div role="alert" className="space-y-3">
+          <p>{t('allocationFailed')}</p>
+          <Button
+            variant="outline"
+            onClick={() =>
+              Promise.all([query.refetch(), schemes.refetch(), pools.refetch()])
+            }
+          >
+            {t('reconnect')}
+          </Button>
+        </div>
+      ) : editing !== undefined ? (
         <section className="max-w-3xl space-y-6">
           <div className="space-y-1">
             <h2 className="font-medium">
@@ -81,6 +103,7 @@ export function Teams() {
           <TeamForm
             key={editing?.id ?? 'new'}
             team={editing ?? undefined}
+            reservedGroupIDs={reservedGroupIDs}
             pending={mutation.isPending}
             onCancel={() => setEditing(undefined)}
             onSave={(input) => mutation.mutate(input)}
@@ -90,35 +113,64 @@ export function Teams() {
               {t(allocationErrorKey(mutation.error))}
             </p>
           )}
-          {editing && (
-            <TeamResources
-              team={editing}
-              schemes={schemes.data?.schemes ?? []}
-              groups={pools.data?.groups ?? []}
-              poolsLoading={pools.isPending}
-              editing={resourceEditing}
-              onEdit={setResourceEditing}
-              onSaved={async () => {
-                await Promise.all([
-                  client.invalidateQueries({ queryKey: ['allocations'] }),
-                  client.invalidateQueries({ queryKey: ['available-groups'] }),
-                  client.invalidateQueries({ queryKey: ['keys'] }),
-                ])
-                setResourceEditing(undefined)
-              }}
-              onCancel={() => setResourceEditing(undefined)}
-            />
-          )}
+          <section className="space-y-4 border-t border-border pt-5">
+            <button
+              type="button"
+              className="flex w-full flex-wrap items-center gap-2 rounded-sm text-left text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring"
+              aria-expanded={advanced}
+              aria-controls="team-advanced-limits"
+              onClick={() => setAdvanced((open) => !open)}
+            >
+              <ChevronDown
+                aria-hidden="true"
+                className={`size-4 shrink-0 ${advanced ? 'rotate-180' : ''}`}
+              />
+              <span>{t('teamAdvancedLimits')}</span>
+              {editing &&
+                schemes.data.schemes.some(
+                  (scheme) => scheme.team_id === editing.id,
+                ) && (
+                  <span className="text-muted-foreground">
+                    {t('teamResourceCount', {
+                      count: schemes.data.schemes.filter(
+                        (scheme) => scheme.team_id === editing.id,
+                      ).length,
+                    })}
+                  </span>
+                )}
+            </button>
+            <div id="team-advanced-limits" hidden={!advanced}>
+              {/* Keep drafts mounted when collapsed; visibility must not reset policy inputs. */}
+              {editing ? (
+                <TeamResources
+                  team={editing}
+                  schemes={schemes.data?.schemes ?? []}
+                  groups={pools.data?.groups ?? []}
+                  poolsLoading={pools.isPending}
+                  editing={resourceEditing}
+                  onEdit={setResourceEditing}
+                  onSaved={async () => {
+                    await Promise.all([
+                      client.invalidateQueries({
+                        queryKey: ['allocations'],
+                      }),
+                      client.invalidateQueries({
+                        queryKey: ['available-groups'],
+                      }),
+                      client.invalidateQueries({ queryKey: ['keys'] }),
+                    ])
+                    setResourceEditing(undefined)
+                  }}
+                  onCancel={() => setResourceEditing(undefined)}
+                />
+              ) : (
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {t('teamLimitsAfterSave')}
+                </p>
+              )}
+            </div>
+          </section>
         </section>
-      ) : query.isPending ? (
-        <p role="status">{t('allocationLoading')}</p>
-      ) : query.isError ? (
-        <div role="alert" className="space-y-3">
-          <p>{t('allocationFailed')}</p>
-          <Button variant="outline" onClick={() => query.refetch()}>
-            {t('reconnect')}
-          </Button>
-        </div>
       ) : query.data.teams.length === 0 ? (
         <p className="py-8 text-sm text-muted-foreground">{t('teamsEmpty')}</p>
       ) : (
@@ -139,13 +191,24 @@ export function Teams() {
                   {t('teamMemberCount', { count: team.member_ids.length })}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {t('teamResourceCount', {
-                    count:
-                      schemes.data?.schemes.filter(
-                        (scheme) => scheme.team_id === team.id,
-                      ).length ?? 0,
+                  {t('teamFreePoolCount', {
+                    count: (team.group_ids ?? []).filter(
+                      (id) => !reservedGroupIDs.includes(id),
+                    ).length,
                   })}
                 </p>
+                {schemes.data.schemes.some(
+                  (scheme) => scheme.team_id === team.id,
+                ) && (
+                  <p className="text-sm text-muted-foreground">
+                    {t('teamResourceCount', {
+                      count:
+                        schemes.data?.schemes.filter(
+                          (scheme) => scheme.team_id === team.id,
+                        ).length ?? 0,
+                    })}
+                  </p>
+                )}
                 <p className="max-w-2xl break-words text-sm text-muted-foreground">
                   {team.members.map((m) => m.username).join(', ')}
                 </p>
@@ -156,6 +219,7 @@ export function Teams() {
                 onClick={() => {
                   mutation.reset()
                   setResourceEditing(undefined)
+                  setAdvanced(false)
                   setEditing(team)
                 }}
                 aria-label={t('teamEditNamed', { name: team.name })}
@@ -213,14 +277,13 @@ function TeamResources({
       )
     : available
   return (
-    <section className="space-y-5 border-t border-border pt-6">
+    <section className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-medium">{t('teamResources')}</h3>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
             {t('teamResourcesHint')}
           </p>
-          <p className="mt-2 text-sm font-medium">{t('teamResourceFormula')}</p>
         </div>
         {editing === undefined && (
           <Button
@@ -346,11 +409,13 @@ function TeamResources({
 }
 function TeamForm({
   team,
+  reservedGroupIDs,
   pending,
   onSave,
   onCancel,
 }: {
   team?: Team
+  reservedGroupIDs: number[]
   pending: boolean
   onSave: (input: {
     id?: number
@@ -392,7 +457,9 @@ function TeamForm({
           name: name.trim(),
           enabled,
           member_ids: ids,
-          group_ids: groupIDs,
+          // Reserved pools use scheme access; stale direct grants must not be
+          // resubmitted after a pool is converted to an advanced allowance.
+          group_ids: groupIDs.filter((id) => !reservedGroupIDs.includes(id)),
         })
       }}
     >
@@ -424,9 +491,7 @@ function TeamForm({
           {t('teamEnabled')}
         </label>
         <fieldset className="space-y-3">
-          <legend className="text-sm font-medium">
-            {t('allocationMembers')}
-          </legend>
+          <legend className="text-sm font-medium">{t('members')}</legend>
           {members.isPending && <p role="status">{t('allocationLoading')}</p>}
           {members.isError && (
             <div role="alert">
@@ -477,32 +542,46 @@ function TeamForm({
           <legend className="text-sm font-medium">
             {t('teamAllowedGroups')}
           </legend>
+          <p className="text-sm font-medium">{t('teamFreeUse')}</p>
           <p className="text-sm leading-6 text-muted-foreground">
             {t('teamAllowedGroupsHint')}
           </p>
           {groups.isPending && <p role="status">{t('allocationLoading')}</p>}
           {groups.isError && <p role="alert">{t('groupsLoadFailed')}</p>}
+          {groups.data &&
+            groups.data.groups.every((group) =>
+              reservedGroupIDs.includes(group.id),
+            ) && (
+              <p className="text-sm text-muted-foreground">
+                {t('teamNoFreePools')}
+              </p>
+            )}
           <div className="grid max-h-64 gap-3 overflow-y-auto rounded-lg border border-border p-3 sm:grid-cols-2">
-            {groups.data?.groups.map((group) => (
-              <label key={group.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={groupIDs.includes(group.id)}
-                  className="size-4 accent-primary"
-                  onChange={(e) =>
-                    setGroupIDs((all) =>
-                      e.target.checked
-                        ? [...all, group.id]
-                        : all.filter((id) => id !== group.id),
-                    )
-                  }
-                />
-                <span className="break-words">
-                  {group.name}
-                  {!group.enabled && ` · ${t('disabled')}`}
-                </span>
-              </label>
-            ))}
+            {groups.data?.groups
+              .filter((group) => !reservedGroupIDs.includes(group.id))
+              .map((group) => (
+                <label
+                  key={group.id}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={groupIDs.includes(group.id)}
+                    className="size-4 accent-primary"
+                    onChange={(e) =>
+                      setGroupIDs((all) =>
+                        e.target.checked
+                          ? [...all, group.id]
+                          : all.filter((id) => id !== group.id),
+                      )
+                    }
+                  />
+                  <span className="break-words">
+                    {group.name}
+                    {!group.enabled && ` · ${t('disabled')}`}
+                  </span>
+                </label>
+              ))}
           </div>
         </fieldset>
         <p className="text-sm leading-6 text-muted-foreground">

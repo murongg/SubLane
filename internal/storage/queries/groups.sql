@@ -28,14 +28,8 @@ DELETE FROM group_accounts WHERE group_id=sqlc.arg(group_id);
 -- name: AddGroupAccount :exec
 INSERT INTO group_accounts(group_id,account_id) VALUES(sqlc.arg(group_id),sqlc.arg(account_id));
 
--- name: AddDefaultGroupAccount :exec
-INSERT INTO group_accounts(group_id,account_id) VALUES(1,sqlc.arg(account_id));
-
 -- name: GroupAccountExists :one
 SELECT EXISTS(SELECT 1 FROM accounts WHERE id=sqlc.arg(account_id));
-
--- name: AddDefaultGroupMember :exec
-INSERT INTO group_members(group_id,user_id) VALUES(1,sqlc.arg(user_id));
 
 -- name: ListMemberGroups :many
 SELECT group_id FROM group_members WHERE user_id=sqlc.arg(user_id) ORDER BY group_id;

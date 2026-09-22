@@ -90,7 +90,6 @@ export function groupErrorKey(error: Error) {
     if (error.code === 'allocation_pool_locked') return 'allocationPoolConflict'
     if (error.code === 'group_exists') return 'groupNameTaken'
     if (error.code === 'group_limit') return 'groupLimitReached'
-    if (error.code === 'default_group_protected') return 'defaultGroupProtected'
     if (error.code === 'invalid_group_input') return 'groupInputInvalid'
   }
   return 'groupSaveFailed'

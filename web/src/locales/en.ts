@@ -1,20 +1,12 @@
 export const en = {
-  allocationChooseModel: 'Select a model',
-  allocationPriceMissing:
-    'No catalog price for this model. Enter prices manually.',
-  allocationPriceFailed: 'Could not load model prices. Enter prices manually.',
-  allocationAllowIdleBorrow: 'Allow idle share borrowing',
-  allocationAllowIdleBorrowHint:
-    'A member may use another member’s unused share on this account window. Sessions stay on their current subscription; borrowing is recorded separately and confirmed when quota sync settles.',
-  allocationBorrowed: 'Borrowed {{points}} points from idle member share.',
   allocationPause: 'Pause resource allowance',
   allocationResume: 'Enable resource allowance',
   personnelTeams: 'Personnel teams',
   personnelTeam: 'Personnel team',
   teamsDescription:
-    'Create a personnel team, then add resource allowances inside it.',
+    'Choose members and account pools. Use freely by default; limits are optional.',
   teamEditDescription:
-    'Choose who can use the team first, then add their account pools and limits.',
+    'Select members and account pools, then save. Configure usage limits only if needed.',
   teamCreate: 'Create team',
   teamEdit: 'Edit team',
   teamEditNamed: 'Edit {{name}}',
@@ -22,18 +14,24 @@ export const en = {
   teamName: 'Team name',
   teamEnabled: 'Enable this team',
   teamsEmpty:
-    'Create a personnel team, add members, then add resource allowances inside it.',
+    'Create a team, select its members and account pools, then save to grant access.',
   teamMemberCount: '{{count}} members',
-  teamResourceCount: '{{count}} resource allowances',
+  teamResourceCount: '{{count}} configured usage limits',
   teamMembershipHint:
     'Removing a member immediately blocks their resource allowance access. Rejoining never resets their usage. Up to 100 members per team.',
-  teamAllowedGroups: 'Allowed account groups',
+  teamFreeUse: 'Free use · no team allowance',
+  teamFreePoolCount: 'Free access to {{count}} account pools',
+  teamAdvancedLimits: 'Advanced settings: usage limits',
+  teamLimitsAfterSave:
+    'Save the team first. You can then add share, amount or token limits here if needed.',
+  teamNoFreePools:
+    'No shared pools available. Create an account pool, or manage reserved pools in advanced settings.',
+  teamAllowedGroups: 'Account pools for free use',
   teamAllowedGroupsHint:
-    'Members can see and use only these shared groups. Dedicated pools are added below as resource allowances.',
+    'Selected pools are shared without a team allowance. Members can only use pools authorized through their teams. Existing member limits and upstream quotas still apply.',
   teamResources: 'Resource allowances',
   teamResourcesHint:
-    'Each resource allowance is one dedicated account pool plus one limit type. A pool can be added only once.',
-  teamResourceFormula: 'Account pool + limit type = one resource allowance',
+    'Optionally set a share, amount or token allowance for a dedicated pool. Existing rules remain in effect when this section is collapsed; pausing a rule stops access rather than enabling free use.',
   teamResourcePoolLabel: 'Account pool',
   teamResourceLimitLabel: 'Limit type: {{mode}}',
   teamPeopleTitle: 'Who can use it',
@@ -41,18 +39,19 @@ export const en = {
     'Members added to this team can see its account pools and resource allowances.',
   teamResourceAdd: 'Add resource allowance',
   teamResourceEdit: 'Edit resource allowance',
-  teamResourcesEmpty: 'No resource allowances configured yet.',
+  teamResourcesEmpty:
+    'No usage limits configured. Selected account pools can be used freely.',
   teamResourceNoPools:
-    'No available account pools. Create an enabled, nonempty pool first.',
+    'No eligible account pools. Choose an enabled pool with accounts that is not already assigned to a resource.',
   allocationAccountLocked:
     'This account is reserved by a resource allowance and cannot be deleted. Disable it to stop routing requests.',
   allocationUnavailableShort: 'Unavailable',
   allocationWaiting: 'Scheduled',
   allocationPrerequisite:
-    'Create an enabled personnel team with members and an enabled, nonempty dedicated pool. Each pool can have one resource allowance; Default remains available for new imports.',
+    'Create an enabled personnel team with members and an enabled, nonempty dedicated pool. Each pool can have one resource allowance. Newly imported accounts remain unassigned.',
   allocationSchemes: 'Resource allowances',
   allocationsDescription:
-    'Add an account pool to a personnel team and choose one allowance type.',
+    'Optional usage limits. For free use, select account pools in Personnel teams without creating an allowance.',
   allocationCreate: 'Add resource allowance',
   allocationEdit: 'Edit resource allowance',
   allocationEditNamed: 'Edit resource allowance {{name}}',
@@ -64,6 +63,9 @@ export const en = {
   allocationSettings: 'Metering and activation settings',
   allocationShareRules:
     'The same shares apply to every subscription in this pool. Each window resets separately. Idle shares can be borrowed only when enabled below.',
+  allocationAllowIdleBorrow: 'Allow idle share borrowing',
+  allocationAllowIdleBorrowHint:
+    'A member may use another member’s unused share on this account window. Sessions stay on their current subscription; borrowing is recorded separately and confirmed when quota sync settles.',
   allocationSubscription: 'Subscription {{label}}',
   allocationUpdating: 'Usage updating',
   allocationSyncPaused: 'Waiting for quota sync',
@@ -75,6 +77,7 @@ export const en = {
   allocationEstimatedRemaining: 'Estimated remaining',
   allocationAccountExhausted:
     'Your share on this subscription window is exhausted. This does not mean every subscription in the pool is exhausted. Existing conversations keep their subscription.',
+  allocationBorrowed: 'Borrowed {{points}} points from idle member share.',
   allocationAmount: 'By amount',
   allocationTokens: 'By tokens',
   allocationSave: 'Save resource allowance',
@@ -111,6 +114,10 @@ export const en = {
   allocationRemoveRate: 'Remove model price {{index}}',
   allocationRemove: 'Remove',
   allocationModelID: 'Model ID',
+  allocationChooseModel: 'Select a model',
+  allocationPriceMissing:
+    'No catalog price for this model. Enter prices manually.',
+  allocationPriceFailed: 'Could not load model prices. Enter prices manually.',
   allocationEnabled: 'Enable this resource allowance',
   allocationNextHint:
     'Changes to allowances, prices or type take effect next period. Pausing or enabling access takes effect immediately. Current usage and unsettled entries remain recorded.',
@@ -919,9 +926,12 @@ export const en = {
   accountGroups: 'Account groups',
   groupsDescription:
     'Organize subscription accounts into pools for members and projects.',
-  groupsDefaultHint:
-    'Existing accounts and keys use the default group. New accounts and members join it automatically; administrators can adjust access.',
-  defaultGroup: 'Default group',
+  groupsAssignmentHint:
+    'New accounts remain unassigned until you add them to a group. Grant group access through personnel teams, or add a team resource with an allowance.',
+  accountUnassigned: 'Unassigned',
+  accountAssignGroup: 'Assign to an account group',
+  groupsEmpty:
+    'No account groups yet. Create a group and select its subscription accounts.',
   createGroup: 'Create group',
   editGroup: 'Edit group',
   editGroupNamed: 'Edit {{name}}',
@@ -934,14 +944,12 @@ export const en = {
     'Choose the accounts available to keys in this group.',
   groupAccounts: 'Subscription accounts',
   groupAccountsHint:
-    'Accounts keep their other group memberships. For exclusive access, remove them from the default and other pools. Removing an account stops its existing conversations in this group.',
+    'Accounts keep their other group memberships. For exclusive access, keep them in only one pool. Removing an account stops its existing conversations in this group.',
   groupNoAccounts:
     'Add a subscription account first, or save an empty pool and configure it later.',
   saveGroup: 'Save group',
   groupNameTaken: 'A group with this name already exists.',
   groupLimitReached: 'This instance supports up to 32 groups.',
-  defaultGroupProtected:
-    'The default group stays enabled and keeps its name. You can edit its accounts, model policy and member access.',
   groupInputInvalid:
     'Check the group name (1–64 characters), selected accounts and exact model IDs (up to 100).',
   groupSaveFailed: 'Could not save group changes. Try again.',

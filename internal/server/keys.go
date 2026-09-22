@@ -77,7 +77,7 @@ func (h *keyHTTP) create(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	groupID := groups.DefaultID
+	var groupID int64
 	if input.GroupID != nil {
 		groupID = *input.GroupID
 	}

@@ -382,7 +382,7 @@ export function SchemeForm({
               disabled={!!scheme || pending}
               options={groups.map((pool) => ({
                 value: String(pool.id),
-                label: pool.id === 1 ? t('defaultGroup') : pool.name,
+                label: pool.name,
               }))}
               onChange={(value) => setGroup(Number(value))}
             />
