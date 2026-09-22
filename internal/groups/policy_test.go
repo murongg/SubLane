@@ -9,7 +9,7 @@ import (
 )
 
 func TestModelPolicyDefaultsNormalizationAndPreservation(t *testing.T) {
-	_, service, _, account := fixture(t)
+	_, service, _, account := assignedFixture(t)
 	ctx := context.Background()
 	detail, err := service.Get(ctx, 1)
 	if err != nil || detail.RestrictedModels || len(detail.AllowedModels) != 0 {

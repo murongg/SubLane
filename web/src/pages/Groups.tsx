@@ -16,6 +16,7 @@ export function Groups() {
   const saved = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['groups'] }),
+      client.invalidateQueries({ queryKey: ['accounts'] }),
       client.invalidateQueries({ queryKey: ['model-catalog'] }),
       client.invalidateQueries({ queryKey: ['available-groups'] }),
       client.invalidateQueries({ queryKey: ['keys'] }),
@@ -36,7 +37,7 @@ export function Groups() {
         </Button>
       </div>
       <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-        {t('groupsDefaultHint')}
+        {t('groupsAssignmentHint')}
       </p>
       {query.isPending ? (
         <p
@@ -63,12 +64,16 @@ export function Groups() {
             {t('reconnect')}
           </Button>
         </div>
+      ) : query.data.groups.length === 0 ? (
+        <p className="rounded-xl border border-border p-6 text-sm text-muted-foreground">
+          {t('groupsEmpty')}
+        </p>
       ) : (
         <div className="divide-y divide-border rounded-xl border border-border bg-card">
           {query.data.groups.map((group) => (
             <section
               key={group.id}
-              aria-label={group.is_default ? t('defaultGroup') : group.name}
+              aria-label={group.name}
               className="flex flex-wrap items-center justify-between gap-4 p-5"
             >
               <div className="min-w-0 space-y-2">
@@ -77,9 +82,7 @@ export function Groups() {
                     className="size-4 shrink-0 text-muted-foreground"
                     aria-hidden="true"
                   />
-                  <h2 className="break-words font-medium">
-                    {group.is_default ? t('defaultGroup') : group.name}
-                  </h2>
+                  <h2 className="break-words font-medium">{group.name}</h2>
                   <Status kind={group.enabled ? 'success' : 'neutral'}>
                     {t(group.enabled ? 'active' : 'disabled')}
                   </Status>
@@ -100,7 +103,7 @@ export function Groups() {
               <div className="flex items-center gap-2">
                 <CatalogDialog
                   target={{ kind: 'group', id: group.id }}
-                  name={group.is_default ? t('defaultGroup') : group.name}
+                  name={group.name}
                   disabled={!group.enabled}
                 />
                 <Button
@@ -108,7 +111,7 @@ export function Groups() {
                   size="sm"
                   onClick={() => setEditing(group.id)}
                   aria-label={t('editGroupNamed', {
-                    name: group.is_default ? t('defaultGroup') : group.name,
+                    name: group.name,
                   })}
                 >
                   {t('editGroup')}

@@ -154,7 +154,7 @@ function ImportForm({
           <span className="font-medium">Codex</span>
           <span className="text-muted-foreground">
             {t('keyGroupName', {
-              name: value.group_id === 1 ? t('defaultGroup') : value.group_name,
+              name: value.group_name,
             })}
           </span>
         </div>

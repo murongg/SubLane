@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 )
@@ -128,19 +129,56 @@ func (h *keyHTTP) groupChoices(w http.ResponseWriter, r *http.Request) {
 		groupError(w, err)
 		return
 	}
+	if h.gateway != nil {
+		all, err := h.gateway.Allocations().Schemes(r.Context())
+		if err != nil {
+			allocationError(w, err)
+			return
+		}
+		own, err := h.gateway.Allocations().Own(r.Context(), sessionUser(r).ID)
+		if err != nil {
+			allocationError(w, err)
+			return
+		}
+		eligible := map[int64]allocations.Detail{}
+		for _, s := range own {
+			if s.Available {
+				eligible[s.ID] = s
+			}
+		}
+		filtered := make([]groups.Choice, 0, len(values))
+		for _, g := range values {
+			managed := false
+			for _, s := range all {
+				if s.GroupID == g.ID {
+					managed = true
+					if available, ok := eligible[s.ID]; ok {
+						g.SchemeID = s.ID
+						g.SchemeName = available.Name
+						filtered = append(filtered, g)
+					}
+					break
+				}
+			}
+			if !managed {
+				filtered = append(filtered, g)
+			}
+		}
+		values = filtered
+	}
 	writeJSON(w, 200, map[string]any{"groups": values})
 }
 func groupError(w http.ResponseWriter, err error) {
 	status, code := 503, "unavailable"
 	switch {
+	case errors.Is(err, groups.ErrAllocated):
+		status, code = 409, err.Error()
 	case errors.Is(err, groups.ErrInput):
 		status, code = 400, "invalid_group_input"
 	case errors.Is(err, groups.ErrNotFound):
 		status, code = 404, "group_not_found"
 	case errors.Is(err, groups.ErrDuplicate):
 		status, code = 409, "group_exists"
-	case errors.Is(err, groups.ErrDefault):
-		status, code = 409, "default_group_protected"
 	case errors.Is(err, groups.ErrLimit):
 		status, code = 409, "group_limit"
 	case errors.Is(err, groups.ErrUnavailable):

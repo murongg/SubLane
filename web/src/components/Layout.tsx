@@ -56,6 +56,7 @@ const navigation = [
     items: [
       { to: '/accounts', label: 'accounts', icon: Workflow },
       { to: '/groups', label: 'accountGroups', icon: FolderClosed },
+      { to: '/admin/teams', label: 'personnelTeams', icon: Users },
       { to: '/admin/requests', label: 'allRequests', icon: ListChecks },
       { to: '/admin/usage', label: 'teamUsage', icon: ChartNoAxesCombined },
       { to: '/members', label: 'members', icon: Users },

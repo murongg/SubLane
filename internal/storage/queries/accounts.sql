@@ -2,7 +2,8 @@
 SELECT count(*) FROM accounts;
 
 -- name: ListAccounts :many
-SELECT id, provider, name, email, plan, enabled, status, expires_at, created_at, updated_at, max_concurrency
+SELECT id, provider, name, email, plan, enabled, status, expires_at, created_at, updated_at, max_concurrency,
+ (SELECT count(*) FROM group_accounts ga WHERE ga.account_id=accounts.id) AS group_count
 FROM accounts ORDER BY created_at DESC, id DESC LIMIT 100;
 
 -- name: GetAccount :one

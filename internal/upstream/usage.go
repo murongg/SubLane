@@ -13,8 +13,9 @@ import (
 var ErrUsageUnsupported = errors.New("provider_usage_unsupported")
 
 type Usage struct {
-	Limits    []UsageLimit `json:"limits"`
-	UpdatedAt int64        `json:"updated_at"`
+	ReadStartedAt int64        `json:"read_started_at,omitempty"`
+	Limits        []UsageLimit `json:"limits"`
+	UpdatedAt     int64        `json:"updated_at"`
 }
 
 type UsageLimit struct {

@@ -23,6 +23,9 @@ func runtimeMember(t *testing.T, s *Service) int64 {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := groups.New(s.db).SetMemberGroups(context.Background(), m.ID, []int64{1}); err != nil {
+		t.Fatal(err)
+	}
 	return m.ID
 }
 

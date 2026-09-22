@@ -47,7 +47,7 @@ func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, err := apikey.New(connection, cipher).Create(ctx, 1, "Synthetic key")
+	key, err := apikey.New(connection, cipher).CreateInGroup(ctx, 1, 1, "Synthetic key")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.SchemaVersion != 20 || info.Version != "synthetic-version" {
+	if info.SchemaVersion != 24 || info.Version != "synthetic-version" {
 		t.Fatal(info)
 	}
 	verified, err := Verify(ctx, output)

@@ -1,6 +1,233 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  allocationPause: '暂停资源额度',
+  allocationResume: '启用资源额度',
+  personnelTeams: '人员组',
+  personnelTeam: '人员组',
+  teamsDescription: '选择成员和账号池，默认自由使用；需要时再设置额度限制。',
+  teamEditDescription: '选好成员和账号池后保存即可，额度限制按需设置。',
+  teamCreate: '创建小组',
+  teamEdit: '编辑小组',
+  teamEditNamed: '编辑 {{name}}',
+  teamSave: '保存小组',
+  teamName: '小组名称',
+  teamEnabled: '启用此小组',
+  teamsEmpty: '创建人员组，选择成员和账号池后保存，即可使用。',
+  teamMemberCount: '{{count}} 位成员',
+  teamResourceCount: '已配置 {{count}} 条额度限制',
+  teamMembershipHint:
+    '移出成员会立即停用其资源额度访问权限；重新加入不会重置用量。每组最多 100 人。',
+  teamFreeUse: '自由使用 · 不设小组额度',
+  teamFreePoolCount: '可自由使用 {{count}} 个账号池',
+  teamAdvancedLimits: '高级设置：额度限制',
+  teamLimitsAfterSave:
+    '先保存人员组，需要时再在这里添加比例、金额或 Token 额度。',
+  teamNoFreePools:
+    '暂无可共享的账号池。请先创建账号池，已被额度规则占用的池在高级设置中管理。',
+  teamAllowedGroups: '自由使用的账号池',
+  teamAllowedGroupsHint:
+    '勾选的账号池不设置小组额度，成员只能使用所属人员组授权的账号池。已有成员限制和上游账号额度仍然生效。',
+  teamResources: '资源额度',
+  teamResourcesHint:
+    '按需为专用账号池设置比例、金额或 Token 额度。收起此处不会取消已有规则；暂停规则会停止访问，不会变为自由使用。',
+  teamResourcePoolLabel: '账号池',
+  teamResourceLimitLabel: '限制方式：{{mode}}',
+  teamPeopleTitle: '谁可以使用',
+  teamPeopleHint:
+    '把成员加入人员组后，他们才能看到这个组里的账号池和资源额度。',
+  teamResourceAdd: '添加资源额度',
+  teamResourceEdit: '编辑资源额度',
+  teamResourcesEmpty: '未设置额度限制，已勾选的账号池可自由使用。',
+  teamResourceNoPools:
+    '暂无符合条件的账号池。请选择已启用、有账号且尚未分配资源额度的账号池。',
+  allocationAccountLocked:
+    '该账号已被资源额度独占，无法删除。如需停止使用，请停用账号。',
+  allocationUnavailableShort: '不可用',
+  allocationWaiting: '待生效',
+  allocationPrerequisite:
+    '请先创建包含成员的人员组，以及非空、已启用的专用账号池。每个账号池只能添加一条资源额度；新导入账号保持未分配。',
+  allocationSchemes: '资源额度',
+  allocationsDescription:
+    '按需设置额度限制。默认自由使用，只需在人员组勾选账号池，无需创建资源额度。',
+  allocationCreate: '添加资源额度',
+  allocationEdit: '编辑资源额度',
+  allocationEditNamed: '编辑资源额度 {{name}}',
+  allocationName: '资源额度名称',
+  allocationMode: '限制方式',
+  allocationRatio: '按比例',
+  allocationShares: '成员份额',
+  allocationSplitEqually: '平均分配',
+  allocationSettings: '计量与生效设置',
+  allocationShareRules:
+    '池内每个订阅账号都使用这组比例，各额度窗口独立重置。只有打开下方选项后，才会借用空闲份额。',
+  allocationAllowIdleBorrow: '允许借用空闲份额',
+  allocationAllowIdleBorrowHint:
+    '成员可以使用同一账号窗口内其他成员未用的份额。会话仍保持原账号，借用量会单独记录，最终以额度同步结算为准。',
+  allocationSubscription: '订阅账号 {{label}}',
+  allocationUpdating: '用量更新中',
+  allocationSyncPaused: '等待额度同步',
+  allocationSyncPausedHint:
+    '暂时无法确认此账号的额度，已暂停接收新请求。请稍后重试；持续未恢复时联系管理员。',
+  allocationAutomaticHint:
+    '{{count}} 条已完成请求正在等待上游额度更新，系统会自动重试，正常同步期间无需手动填写。',
+  allocationEstimatedUsed: '已用（估算）',
+  allocationEstimatedRemaining: '剩余（估算）',
+  allocationAccountExhausted:
+    '你在此账号、此窗口的份额已用完，不代表整个账号池都没有额度。已有会话会继续保持原账号。',
+  allocationBorrowed: '已从成员空闲份额借用 {{points}} 点。',
+  allocationAmount: '按金额',
+  allocationTokens: '按 Token',
+  allocationSave: '保存资源额度',
+  allocationView: '查看用量',
+  allocationBack: '返回资源额度',
+  allocationsEmpty: '创建人员组和专用账号池后，即可添加资源额度。',
+  allocationRatioHint:
+    '填写每个人可以使用的份额，例如 50%、30%、20%，无需知道订阅账号共有多少 Token。',
+  allocationAmountHint:
+    '按配置的模型价格扣减美元额度。这是内部使用额度，不代表上游现金余额。',
+  allocationTokensHint:
+    '累计输入与输出 Token。1 M = 1,000,000 Token，缓存输入不重复计算。',
+  allocationExclusiveHint:
+    '请使用专用账号池，并先将其账号从其他所有分组移除。添加后人员组、账号池和池内账号均固定；该账号池原有的未绑定 Key 将停止工作。',
+  allocationMembers: '成员分配',
+  allocationBlankHint: '留空表示该成员不使用此资源额度。',
+  allocationFor: '{{name}} 的额度',
+  allocationTotal: '已分配 {{total}}% · 预留 {{remaining}}%',
+  allocationPeriod: '重置周期',
+  allocationUpstreamReset: '跟随各账号的上游额度窗口',
+  allocationRates: '模型价格与权重',
+  allocationRatesHint:
+    '选择此账号组中的模型后自动填入目录价格，切换模型会更新价格。保存前可以修改；保存后的资源额度版本会固定当时的价格快照。',
+  allocationAutoRatesHint:
+    '用量根据上游额度变化估算，模型权重由系统自动配置；API 价格不代表上游订阅的真实扣量公式。',
+  allocationAdvancedRates: '高级设置：自定义模型权重',
+  allocationPriceLoading: '正在获取模型价格…',
+  allocationRateInput: '输入 · USD / M',
+  allocationRateCached: '缓存输入 · USD / M',
+  allocationRateOutput: '输出 · USD / M',
+  allocationAddRate: '添加模型价格',
+  allocationRemoveRate: '移除第 {{index}} 项模型价格',
+  allocationRemove: '移除',
+  allocationModelID: '模型 ID',
+  allocationChooseModel: '请选择模型',
+  allocationPriceMissing: '目录中暂无此模型的价格，请手动填写。',
+  allocationPriceFailed: '暂时无法获取模型价格，请手动填写。',
+  allocationEnabled: '启用此资源额度',
+  allocationNextHint:
+    '额度、价格或计量方式的修改在下周期生效。暂停或启用访问立即生效，当前用量与待结算记录保留。',
+  allocationStartNext: '从下个周期开始',
+  allocationStartNextRatio: '等所有账号的当前窗口均到达下次重置时间后再生效',
+  allocationImmediateHint:
+    '立即生效：固定额度从现在开始；比例额度按首次有效观测的上游剩余容量分配。不补记此前用量。',
+  allocationScheduled: '{{mode}} 将于 {{date}} 生效',
+  allocationLoading: '正在加载额度…',
+  allocationFailed: '无法加载或保存额度，请重试。',
+  allocationInvalid:
+    '请检查名称、成员、正数额度与模型价格。比例总和不得超过 100%；百分比最多两位小数，M／USD 最多六位。',
+  allocationPoolConflict:
+    '账号已被资源额度占用或与其他池共享。请使用独立账号池；已绑定资源额度的池不能修改账号列表。',
+  allocationSnapshotRequired:
+    '需要有效的 Codex 额度数据，请刷新账号用量后重试。未知或已过重置时间的数据不会被视为满额。',
+  allocationSettlementConflict:
+    '用量已变化，或修正与此前结算冲突，请刷新后重试。',
+  allocationPending: '用量待对账',
+  allocationExhausted: '额度已耗尽',
+  allocationUnavailable: '此资源额度已暂停、尚未生效或你已无权使用。',
+  allocationUnpriced: '模型价格尚未配置',
+  allocationEstimateHint:
+    '估算份额：1 点等于一个账号完整窗口额度的 1%。各窗口独立记账。近期用量会自动更新；长时间未确认时暂停新请求。进行中的请求可能超出剩余额度。',
+  allocationNoBalances:
+    '暂无余额记录。比例模式请在资源额度生效后同步上游用量。',
+  allocationPoints: '点',
+  allocationPrimary: '主额度窗口',
+  allocationSecondary: '次额度窗口',
+  allocationLimit: '分配额度',
+  allocationUsed: '已用',
+  allocationRemaining: '剩余',
+  allocationResetAt: '重置时间：{{date}}',
+  allocationActualTokens: '{{tokens}} M Token',
+  allocationSync: '同步上游用量',
+  allocationAwaitingSync: '等待上游额度变化',
+  allocationCorrect: '修正用量',
+  allocationSettle: '确认结算',
+  allocationSettlementHint:
+    '请先同步上游数据。仅依据实际证据修正：填写请求的输入／输出／缓存 Token 总数，或各原始窗口的消耗点数。修正将被审计，且不能在此撤销。',
+  allocationInputM: '输入 Token · M',
+  allocationOutputM: '输出 Token · M',
+  allocationCachedM: '缓存输入 · M',
+  allocationUnassignedHint:
+    '检测到无法归属成员的上游用量。确认按外部用量处理后，它不会记入任何成员，但仍会减少上游可用额度。',
+  allocationReserve: '确认外部消耗',
+  allocationMoreMembers: '加载更多成员',
+  allocationMine: '我的资源额度',
+  allocationRefreshMine: '刷新我的资源额度',
+  allocationMineEmpty:
+    '尚未分配资源额度。未托管账号池仍遵循已有的个人 Token 规则。',
+  allocationKeyChoice: '资源额度：{{scheme}} · {{pool}}',
+  allocationLegacyHint:
+    '这些个人规则仅用于未绑定资源额度的 Key。资源额度 Key 只执行该资源额度选定的限制方式。',
+  auditTeamSave: '保存人员小组',
+  auditAllocationSave: '保存资源额度',
+  auditAllocationSettle: '结算资源额度用量',
+  auditAllocationReconcile: '确认外部额度消耗',
+
+  budgetSaving: '正在保存…',
+  budgetRefresh: '刷新 Token 额度',
+  budgetUnitHint: '1 M = 100 万 tokens，最多 6 位小数（精确到 1 token）。',
+  budgetSettlementInvalid:
+    '请输入不低于已知用量且不超过 2,000 M 的总量，最多 6 位小数。',
+  tokenBudgets: 'Token 额度',
+  budgetsFor: '{{username}} 的 Token 额度',
+  budgetsDescription:
+    '所有命中的额度规则同时生效，同一用户的 API Key 共用额度。按输入与输出 token 总量计数；达到上限后拒绝新请求，进行中的请求可能造成超额。',
+  budgetsLoading: '正在加载 Token 额度…',
+  budgetsLoadFailed: '无法加载 Token 额度。',
+  budgetsEmpty: '资源额度以外的 Key 未设置 Token 额度。',
+  budgetAllGroups: '所有分组',
+  budgetAllModels: '所有模型',
+  budgetDisabled: '限制已停用',
+  budgetPending: '用量待结算',
+  budgetExhausted: '额度已耗尽',
+  budgetDaily: '每日 · UTC',
+  budgetMonthly: '每月 · UTC',
+  budgetUsed: '已用 {{used}} / {{limit}} M tokens',
+  budgetResets: '重置时间：{{time}} UTC',
+  budgetTracking: '开始计量：{{time}} UTC',
+  budgetPendingCount: '{{count}} 条请求待结算，请联系管理员。',
+  budgetEdit: '编辑额度',
+  budgetAdd: '添加额度',
+  budgetGroup: '分组范围',
+  budgetPeriod: '重置周期',
+  budgetModel: '模型 ID',
+  budgetModelHint:
+    '留空表示所有模型，也可填写准确的原生模型 ID。带服务商前缀的名称共用同一额度。',
+  budgetLimit: 'Token 上限（M）',
+  budgetEnabled: '启用此额度限制',
+  budgetEditHint:
+    '新范围从保存时开始计量。保存已有范围会更新其上限。停用限制后仍统计用量，重新启用不会重置额度。每位成员最多 64 条规则。',
+  budgetInvalid:
+    '请输入准确的模型 ID，以及 0.000001 至 1,000,000 M 之间的上限，最多 6 位小数。',
+  budgetSave: '保存额度',
+  budgetSaveFailed: '无法保存，请检查填写内容后重试。',
+  budgetRuleLimit: '该成员已有 64 条规则，请编辑现有规则。',
+  budgetSettlementConflict:
+    '用量状态已变化，或填写总量低于已知用量。请刷新并核对请求。',
+  budgetAccountingFailed:
+    'Token 记账暂不可用。请恢复数据库访问并重启 SubLane，然后处理待结算用量。',
+  budgetSettlementHint:
+    '这些请求未返回完整用量，受影响的额度会阻止新请求，直至结算。请填写输入与输出 token 总量（包含已知用量）。补录会计入所有命中规则并留下审计记录。',
+  budgetKnownTokens: '已知 {{value}} M tokens',
+  budgetSettleTotal: '{{request}} 的 Token 总量（M）',
+  budgetSettle: '结算用量',
+  budgetsPersonalHint:
+    '日/月额度按 UTC 自然周期重置，所有命中的规则同时生效。待结算用量需由管理员处理，跨周期也不会自动解除。',
+  auditMemberBudget: '更新 Token 额度',
+  auditMemberBudgetSettle: '结算 Token 用量',
+  reasonTokenQuota: '你的 Token 额度已耗尽，请等待重置或联系管理员。',
+  reasonTokenPending: '此前的请求存在待结算用量，请联系管理员。',
+  reasonTokenAccounting: 'Token 记账暂不可用，请联系管理员。',
+
   requestFilters: '筛选',
   requestClearFilters: '清除筛选',
   requestApplyFilters: '应用筛选',
@@ -611,9 +838,11 @@ export const zh: Record<keyof typeof en, string> = {
   providerQuotaUnsupported: '暂未支持该服务商的额度查询。',
   accountGroups: '账号分组',
   groupsDescription: '为成员和项目分配可用的订阅账号池。',
-  groupsDefaultHint:
-    '现有账号和密钥使用默认组，新账号、新成员也会自动加入。管理员可以调整账号范围和成员权限。',
-  defaultGroup: '默认组',
+  groupsAssignmentHint:
+    '新账号导入后保持未分配。将账号加入账号组，再通过人员组授权，或添加带额度规则的团队资源。',
+  accountUnassigned: '未分配',
+  accountAssignGroup: '分配到账号组',
+  groupsEmpty: '还没有账号组。请创建账号组并选择要使用的订阅账号。',
   createGroup: '创建分组',
   editGroup: '编辑分组',
   editGroupNamed: '编辑 {{name}}',
@@ -625,13 +854,11 @@ export const zh: Record<keyof typeof en, string> = {
   groupEditorDescription: '选择此分组的密钥可以使用的订阅账号。',
   groupAccounts: '订阅账号',
   groupAccountsHint:
-    '账号会保留已有的分组归属。如需独占使用，请将其从默认组及其他组移出。移出账号后，此组绑定到该账号的对话将无法继续调用。',
+    '账号会保留已有的分组归属。如需独占使用，请确保账号只属于一个账号池。移出账号后，此组绑定到该账号的对话将无法继续调用。',
   groupNoAccounts: '可以先添加订阅账号，也可以保存空分组后再配置。',
   saveGroup: '保存分组',
   groupNameTaken: '该分组名称已存在。',
   groupLimitReached: '当前实例最多支持 32 个分组。',
-  defaultGroupProtected:
-    '默认组不可停用或重命名，可调整组内账号、模型限制和成员权限。',
   groupInputInvalid:
     '请检查分组名称（1～64 个字符）、所选账号和完整模型 ID（最多 100 个）。',
   groupSaveFailed: '无法保存分组更改，请重试。',

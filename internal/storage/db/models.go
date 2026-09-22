@@ -31,6 +31,53 @@ type AccountGroup struct {
 	RestrictedModels bool
 }
 
+type AllocationEntry struct {
+	RequestID    string
+	SchemeID     int64
+	RevisionID   int64
+	UserID       int64
+	AccountID    string
+	Model        string
+	Mode         string
+	WindowStart  int64
+	ResetAt      int64
+	StartedAt    int64
+	FinishedAt   int64
+	State        string
+	InputTokens  int64
+	OutputTokens int64
+	CachedTokens int64
+	Cost         int64
+	Manual       int64
+}
+
+type AllocationRevision struct {
+	ID          int64
+	SchemeID    int64
+	EffectiveAt int64
+	Config      string
+}
+
+type AllocationTeam struct {
+	ID        int64
+	Name      string
+	Enabled   int64
+	CreatedAt int64
+}
+
+type AllocationWindow struct {
+	ID              int64
+	SchemeID        int64
+	AccountID       string
+	Kind            string
+	ResetAt         int64
+	AccountRevision int64
+	ObservedAt      int64
+	ObservedPoints  int64
+	BaselinePoints  int64
+	Unassigned      int64
+}
+
 type AuditEvent struct {
 	ID         int64
 	ActorID    int64
@@ -43,4 +90,14 @@ type AuditEvent struct {
 	Outcome    string
 	HttpStatus *int64
 	CreatedAt  int64
+}
+
+type TokenBudgetEntry struct {
+	RequestID   string
+	BudgetID    int64
+	WindowStart int64
+	StartedAt   int64
+	State       string
+	Tokens      int64
+	Manual      int64
 }

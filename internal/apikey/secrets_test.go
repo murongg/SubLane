@@ -19,6 +19,7 @@ import (
 
 func newTestKeys(t *testing.T, connection *sql.DB) *Service {
 	t.Helper()
+	configureTestPool(t, connection)
 	cipher, err := vault.Open(filepath.Join(t.TempDir(), "credentials.key"), true)
 	if err != nil {
 		t.Fatal(err)
@@ -51,8 +52,9 @@ func TestEncryptedKeyDisclosureOwnershipAndLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureTestPool(t, connection)
 	keys := New(connection, cipher)
-	created, err := keys.Create(ctx, member.ID, "Synthetic recoverable key")
+	created, err := keys.CreateInGroup(ctx, member.ID, 1, "Synthetic recoverable key")
 	if err != nil || !created.Key.Copyable {
 		t.Fatal("new key not copyable", err)
 	}
@@ -173,7 +175,7 @@ func TestLegacyKeysAndCorruptSecretsFailDisclosure(t *testing.T) {
 	if value, err := keys.Reveal(ctx, 1, 1); !errors.Is(err, ErrNotCopyable) || value != "" {
 		t.Fatal("legacy secret invented", err)
 	}
-	created, err := keys.Create(ctx, 1, "Encrypted")
+	created, err := keys.CreateInGroup(ctx, 1, 1, "Encrypted")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,5 +198,18 @@ func TestLegacyKeysAndCorruptSecretsFailDisclosure(t *testing.T) {
 	}
 	if _, err := keys.Authenticate(ctx, created.Secret); err != nil {
 		t.Fatal("gateway auth stopped using hashes", err)
+	}
+}
+
+func configureTestPool(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	for _, statement := range []string{
+		"INSERT OR IGNORE INTO account_groups(id,name,enabled,created_at,updated_at) VALUES(1,'Default',1,1,1)",
+		"INSERT OR IGNORE INTO group_accounts SELECT 1,id FROM accounts",
+		"INSERT OR IGNORE INTO group_members SELECT 1,id FROM users",
+	} {
+		if _, err := conn.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

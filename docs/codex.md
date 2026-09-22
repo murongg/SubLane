@@ -1,6 +1,33 @@
 # Codex subscriptions and gateway
 
-SubLane uses CLIProxyAPI v7.3.7’s public executors and translators behind `internal/upstream`. SubLane owns authorization, encrypted credential storage, refresh, account selection, and the public gateway. The SDK runs as a private executor registry with no live credentials, a no-op watcher, blocked loopback routes, and automatic refresh disabled. See [architecture](architecture.md) for the execution boundary and [provider setup](providers.md) for Claude and Antigravity. This guide’s authorization and quota details describe Codex.
+With a personal key ready, configure your client below. Otherwise, complete [First request](quickstart.md) first.
+
+## Client configuration
+
+Create a personal API key in **API keys**. Use the instance origin plus `/v1` as the base URL. Configure a model ID returned by `GET /v1/models`.
+
+Set `SUBLANE_API_KEY` in the client process environment. Merge the following settings into the user-level `~/.codex/config.toml`, replacing matching existing values:
+
+```toml
+model = "<model-id-from-your-account>"
+model_provider = "sublane"
+
+[model_providers.sublane]
+name = "SubLane"
+base_url = "http://127.0.0.1:8080/v1"
+env_key = "SUBLANE_API_KEY"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = true
+```
+
+Use your instance's actual URL, with HTTPS for network deployments. For HTTP/SSE transport, set `supports_websockets = false`. Codex CLI and desktop must read the intended user-level configuration. A desktop app already running does not automatically inherit environment variables exported in another terminal; restart it in an environment where the key is available.
+
+The API keys page provides a configuration snippet without embedding or retaining the secret. It also offers an optional [CC Switch import](api-keys.md#import-into-cc-switch) that passes the chosen key to the locally installed application after explicit preparation. CC Switch generates its own Codex authentication-file configuration; it does not preserve the environment-variable or WebSocket settings in the manual snippet above. See the official [advanced configuration](https://learn.chatgpt.com/docs/config-file/config-advanced) and [authentication](https://learn.chatgpt.com/docs/auth) guidance for client configuration and credential storage.
+
+Account catalogs are cached and survive restarts. Discovery, group aggregation and model-aware account selection are described in [model catalogs](models.md).
+
+After a successful response, see [Everyday use](usage.md). The remaining sections are reference details.
 
 ## Add an account
 
@@ -39,31 +66,6 @@ Back up the database and `credentials.key` together after stopping the instance.
 
 SubLane is the sole refresh owner. It serializes credential refresh with administrator changes and persists rotated tokens before publishing them to requests. Tokens near expiry refresh before use. An upstream 401 permits one refresh and one retry on the same account; concurrent rejections of an old token reuse the already refreshed credential. Older in-flight results cannot invalidate a later refresh or reauthorization.
 
-## Client configuration
-
-Create a personal API key in **API keys**. Use the instance origin plus `/v1` as the base URL. Configure a model ID returned by `GET /v1/models`.
-
-Set `SUBLANE_API_KEY` in the client process environment. Merge the following settings into the user-level `~/.codex/config.toml`, replacing matching existing values:
-
-```toml
-model = "<model-id-from-your-account>"
-model_provider = "sublane"
-
-[model_providers.sublane]
-name = "SubLane"
-base_url = "http://127.0.0.1:8080/v1"
-env_key = "SUBLANE_API_KEY"
-wire_api = "responses"
-requires_openai_auth = false
-supports_websockets = true
-```
-
-Use your instance's actual URL, with HTTPS for network deployments. For HTTP/SSE transport, set `supports_websockets = false`. Codex CLI and desktop must read the intended user-level configuration. A desktop app already running does not automatically inherit environment variables exported in another terminal; restart it in an environment where the key is available.
-
-The API keys page provides a configuration snippet without embedding or retaining the secret. It also offers an optional [CC Switch import](api-keys.md#import-into-cc-switch) that passes the chosen key to the locally installed application after explicit preparation. CC Switch generates its own Codex authentication-file configuration; it does not preserve the environment-variable or WebSocket settings in the manual snippet above. See the official [advanced configuration](https://learn.chatgpt.com/docs/config-file/config-advanced) and [authentication](https://learn.chatgpt.com/docs/auth) guidance for client configuration and credential storage.
-
-Account catalogs are cached and survive restarts. Discovery, group aggregation and model-aware account selection are described in [model catalogs](models.md).
-
 ## Gateway contract
 
 All gateway routes require a SubLane bearer key, independently of browser cookies:
@@ -97,3 +99,7 @@ SUBLANE_TEST_CODEX=1 go test ./internal/server -run TestCodexCLIProtocol -count=
 Codex CLI 0.152.1 passed both HTTP/SSE and WebSocket modes against the synthetic upstream. Actual subscription authorization and live model requests require an explicitly authorized test account. The real desktop application has not yet been validated; shared configuration and protocol tests alone do not establish live desktop compatibility.
 
 Before the v7 upgrade, a local macOS arm64 preview (CLIProxyAPI v6.10.9, Go 1.26.0, production binary, one encrypted synthetic account) measured 23,376 KiB RSS, approximately 22.8 MiB, after about twelve minutes idle on 2026-09-19. This is an idle observation only; real models, concurrency, payload size, and platform change memory use. Docker Compose configuration validated locally, but the Docker daemon was unavailable for a local image build.
+
+## Execution reference
+
+SubLane uses CLIProxyAPI v7.3.7’s public executors and translators behind `internal/upstream`. SubLane owns authorization, encrypted credential storage, refresh, account selection, and the public gateway. The SDK runs as a private executor registry with no live credentials, a no-op watcher, blocked loopback routes, and automatic refresh disabled. See [architecture](architecture.md) for the execution boundary and [provider setup](providers.md) for Claude and Antigravity. This guide’s authorization and quota details describe Codex.

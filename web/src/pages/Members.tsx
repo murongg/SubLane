@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { getMembers, setMemberEnabled } from '@/lib/members'
 import { Button } from '@/components/ui/Button'
 import { Status } from '@/components/Status'
-import { GroupAccess } from '@/components/GroupAccess'
 import { CreateMember } from '@/components/CreateMember'
 import { MemberActions } from '@/components/MemberActions'
 
@@ -136,7 +135,6 @@ export function Members() {
                   </td>
                   <td className="px-5 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <GroupAccess member={member} />
                       <Button
                         variant="outline"
                         size="sm"

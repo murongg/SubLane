@@ -69,9 +69,6 @@ func (s *Service) CreateMember(ctx context.Context, username, password string) (
 		return Member{}, err
 	}
 	// A newly created member keeps the existing shared-pool behavior until an administrator changes grants.
-	if err := queries.AddDefaultGroupMember(ctx, row.ID); err != nil {
-		return Member{}, err
-	}
 	if err := audit.Record(ctx, queries, "member.create", "member", audit.ID(row.ID)); err != nil {
 		return Member{}, err
 	}

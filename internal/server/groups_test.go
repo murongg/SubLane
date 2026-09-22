@@ -81,8 +81,8 @@ func TestGroupHTTPManagementAndPersonalChoices(t *testing.T) {
 			t.Fatal("member read management data", path, got)
 		}
 	}
-	if got := request(h, "PATCH", "/api/groups/1", origin, groups.Input{Name: "Default", Enabled: false, AccountIDs: []string{}}, owner).Code; got != 409 {
-		t.Fatal("default group unprotected", got)
+	if got := request(h, "PATCH", "/api/groups/1", origin, groups.Input{Name: "Default", Enabled: false, AccountIDs: []string{}}, owner).Code; got != 200 {
+		t.Fatal("ordinary pool cannot be disabled", got)
 	}
 }
 

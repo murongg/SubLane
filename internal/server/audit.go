@@ -65,6 +65,10 @@ func auditTarget(r *http.Request) (string, string, string) {
 	path := strings.TrimSuffix(r.URL.Path, "/")
 	action, resource, id := "", "", ""
 	switch {
+	case path == "/api/teams" && r.Method == "POST":
+		action, resource = "team.save", "team"
+	case path == "/api/allocations" && r.Method == "POST":
+		action, resource = "allocation.save", "allocation"
 	case r.Method == "POST" && path == "/api/settings/backup/export":
 		action, resource = "backup.export", "backup"
 	case r.Method == "POST" && path == "/api/settings/backup/verify":
@@ -85,6 +89,9 @@ func auditTarget(r *http.Request) (string, string, string) {
 		action, resource = "account.authorize", "account"
 	default:
 		parts := strings.Split(strings.TrimPrefix(path, "/api/"), "/")
+		if len(parts) == 4 && parts[0] == "members" && parts[2] == "budgets" && parts[3] == "settle" && r.Method == "POST" {
+			return "member.budget_settle", "member", parts[1]
+		}
 		if len(parts) < 2 || len(parts) > 3 {
 			return "", "", ""
 		}
@@ -94,6 +101,23 @@ func auditTarget(r *http.Request) (string, string, string) {
 			tail = parts[2]
 		}
 		switch parts[0] {
+		case "teams":
+			if r.Method == "PATCH" && tail == "" {
+				action, resource = "team.save", "team"
+			}
+		case "allocations":
+			if r.Method == "PATCH" && tail == "" {
+				action, resource = "allocation.save", "allocation"
+			}
+			if r.Method == "POST" && tail == "enabled" {
+				action, resource = "allocation.save", "allocation"
+			}
+			if r.Method == "POST" && tail == "settle" {
+				action, resource = "allocation.settle", "allocation"
+			}
+			if r.Method == "POST" && tail == "reserve" {
+				action, resource = "allocation.reconcile", "allocation"
+			}
 		case "keys":
 			resource = "key"
 			if tail == "" && r.Method == "PATCH" {
@@ -109,6 +133,9 @@ func auditTarget(r *http.Request) (string, string, string) {
 			resource = "member"
 			if tail == "" && r.Method == "PATCH" {
 				action = "member.update"
+			}
+			if tail == "budgets" && r.Method == "PUT" {
+				action = "member.budget"
 			}
 			if tail == "limits" && r.Method == "PATCH" {
 				action = "member.limits"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -13,14 +14,15 @@ import (
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
-const DefaultID int64 = 1
+// LegacyID identifies pre-pool conversation hashes; it grants no special access.
+const LegacyID int64 = 1
 const MaxGroups = 32
 
 var (
 	ErrInput       = errors.New("invalid_group_input")
+	ErrAllocated   = errors.New("allocation_pool_locked")
 	ErrNotFound    = errors.New("group_not_found")
 	ErrDuplicate   = errors.New("group_exists")
-	ErrDefault     = errors.New("default_group_protected")
 	ErrLimit       = errors.New("group_limit")
 	ErrUnavailable = errors.New("group_unavailable")
 )
@@ -30,11 +32,12 @@ type Group struct {
 	ID               int64  `json:"id"`
 	Name             string `json:"name"`
 	Enabled          bool   `json:"enabled"`
-	IsDefault        bool   `json:"is_default"`
-	CreatedAt        int64  `json:"created_at"`
-	UpdatedAt        int64  `json:"updated_at"`
-	AccountCount     int64  `json:"account_count"`
-	MemberCount      int64  `json:"member_count"`
+	// IsDefault is retained for response compatibility and is always false.
+	IsDefault    bool  `json:"is_default"`
+	CreatedAt    int64 `json:"created_at"`
+	UpdatedAt    int64 `json:"updated_at"`
+	AccountCount int64 `json:"account_count"`
+	MemberCount  int64 `json:"member_count"`
 }
 type Detail struct {
 	Group
@@ -42,8 +45,10 @@ type Detail struct {
 	AllowedModels []string `json:"allowed_models"`
 }
 type Choice struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	SchemeID   int64  `json:"scheme_id,omitempty"`
+	SchemeName string `json:"scheme_name,omitempty"`
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
 }
 type Input struct {
 	ModelPolicy *ModelPolicy `json:"model_policy,omitempty"`
@@ -67,7 +72,7 @@ func (s *Service) List(ctx context.Context) ([]Group, error) {
 	}
 	result := make([]Group, 0, len(rows))
 	for _, r := range rows {
-		result = append(result, Group{RestrictedModels: r.RestrictedModels, ID: r.ID, Name: r.Name, Enabled: r.Enabled, IsDefault: r.ID == DefaultID, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, AccountCount: r.AccountCount, MemberCount: r.MemberCount})
+		result = append(result, Group{RestrictedModels: r.RestrictedModels, ID: r.ID, Name: r.Name, Enabled: r.Enabled, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, AccountCount: r.AccountCount, MemberCount: r.MemberCount})
 	}
 	return result, nil
 }
@@ -93,7 +98,7 @@ func (s *Service) Get(ctx context.Context, id int64) (Detail, error) {
 	if err != nil {
 		return Detail{}, err
 	}
-	result := Detail{Group: Group{RestrictedModels: row.RestrictedModels, ID: row.ID, Name: row.Name, Enabled: row.Enabled, IsDefault: id == DefaultID, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, AccountCount: int64(len(ids)), MemberCount: count}, AccountIDs: ids}
+	result := Detail{Group: Group{RestrictedModels: row.RestrictedModels, ID: row.ID, Name: row.Name, Enabled: row.Enabled, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, AccountCount: int64(len(ids)), MemberCount: count}, AccountIDs: ids}
 	result.AllowedModels, err = q.ListGroupModels(ctx, id)
 	if err != nil {
 		return Detail{}, err
@@ -115,9 +120,6 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 	name := strings.TrimSpace(input.Name)
 	if id < 0 || !utf8.ValidString(name) || utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 64 || strings.IndexFunc(name, unicode.IsControl) >= 0 || input.AccountIDs == nil || len(input.AccountIDs) > 100 {
 		return Detail{}, ErrInput
-	}
-	if id == DefaultID && (!input.Enabled || name != "Default") {
-		return Detail{}, ErrDefault
 	}
 	tx, err := s.connection.BeginTx(ctx, nil)
 	if err != nil {
@@ -169,13 +171,33 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 	} else if err := q.UpdateGroup(ctx, db.UpdateGroupParams{ID: id, Name: name, Enabled: input.Enabled, Now: now}); err != nil {
 		return Detail{}, err
 	}
-	// Membership replacement commits atomically: no request can observe a half-edited pool.
-	if err := q.ClearGroupAccounts(ctx, id); err != nil {
-		return Detail{}, err
+	managed := false
+	if _, e := q.GetPoolAllocation(ctx, id); e == nil {
+		managed = true
+		old, e := q.ListGroupAccounts(ctx, id)
+		if e != nil {
+			return Detail{}, e
+		}
+		next := slices.Clone(input.AccountIDs)
+		slices.Sort(next)
+		if !slices.Equal(old, next) {
+			return Detail{}, ErrAllocated
+		}
+	} else if !errors.Is(e, sql.ErrNoRows) {
+		return Detail{}, e
 	}
-	for _, accountID := range input.AccountIDs {
-		if err := q.AddGroupAccount(ctx, db.AddGroupAccountParams{GroupID: id, AccountID: accountID}); err != nil {
+	if !managed {
+		// Membership replacement commits atomically: no request can observe a half-edited pool.
+		if err := q.ClearGroupAccounts(ctx, id); err != nil {
 			return Detail{}, err
+		}
+		for _, accountID := range input.AccountIDs {
+			if err := q.AddGroupAccount(ctx, db.AddGroupAccountParams{GroupID: id, AccountID: accountID}); err != nil {
+				if strings.Contains(err.Error(), "allocation_") {
+					return Detail{}, ErrAllocated
+				}
+				return Detail{}, err
+			}
 		}
 	}
 	if input.ModelPolicy != nil {

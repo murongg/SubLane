@@ -19,6 +19,7 @@ export const accountSchema = z.object({
   provider: z.enum(providers).default('codex'),
   max_concurrency: z.number().int().min(1).max(8).default(2),
   name: z.string(),
+  group_count: z.number().int().nonnegative().optional(),
   email: z.string(),
   plan: z.string(),
   enabled: z.boolean(),
@@ -118,6 +119,7 @@ export function checkAccount(id: string) {
 }
 
 const messages = {
+  allocation_pool_locked: 'allocationAccountLocked',
   invalid_account_input: 'accountInvalidInput',
   account_exists: 'accountExists',
   account_identity_mismatch: 'accountIdentityMismatch',

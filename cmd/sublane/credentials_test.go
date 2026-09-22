@@ -32,7 +32,10 @@ func TestMissingVaultKeyIsNotRecreatedForGatewaySecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := apikey.New(connection, cipher).Create(ctx, 1, "Synthetic key"); err != nil {
+	if _, err := connection.Exec("INSERT INTO account_groups(id,name,enabled,created_at,updated_at) VALUES(1,'Synthetic pool',1,1,1)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := apikey.New(connection, cipher).CreateInGroup(ctx, 1, 1, "Synthetic key"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(path); err != nil {

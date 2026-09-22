@@ -1,0 +1,722 @@
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { SchemeForm } from './SchemeForm'
+import { parseAllocationValue } from '@/lib/allocations'
+
+it('splits shares exactly and preserves saved price weights while editing', async () => {
+  const user = userEvent.setup()
+  const submit = vi.fn()
+  const team = {
+    id: 1,
+    name: 'Synthetic team',
+    enabled: true,
+    created_at: 1,
+    member_ids: [2, 3, 4],
+    members: [2, 3, 4].map((id) => ({
+      id,
+      username: `synthetic-${id}`,
+      enabled: true,
+    })),
+  }
+  const rates = [
+    {
+      model: 'synthetic-model',
+      input: 1000000,
+      cached: 100000,
+      output: 4000000,
+    },
+  ]
+  render(
+    <SchemeForm
+      teams={[team]}
+      fixedTeam={team}
+      resourceMode
+      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      scheme={{
+        id: 1,
+        name: 'Synthetic',
+        team_id: 1,
+        team_name: team.name,
+        group_id: 2,
+        group_name: 'Synthetic pool',
+        enabled: true,
+        created_at: 1,
+        effective_at: 1,
+        next: null,
+        config: { mode: 'ratio', period: 'upstream', members: [], rates },
+      }}
+      pending={false}
+      onCancel={() => {}}
+      onSubmit={submit}
+    />,
+  )
+  await user.click(screen.getByRole('button', { name: 'Split equally' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: {
+        mode: 'ratio',
+        period: 'upstream',
+        members: [
+          { user_id: 2, limit: 3334 },
+          { user_id: 3, limit: 3333 },
+          { user_id: 4, limit: 3333 },
+        ],
+        rates,
+      },
+    }),
+  )
+})
+
+it('distinguishes account windows updating normally from blocked reconciliation', async () => {
+  const { AllocationBalances } = await import('./AllocationBalances')
+  const balance = {
+    user_id: 2,
+    username: 'synthetic-member',
+    mode: 'ratio' as const,
+    limit: 5000,
+    used: 1200,
+    tokens: 100,
+    pending: 0,
+    reset_at: 2000000000,
+    window_kind: 'primary',
+    syncing: 1,
+  }
+  render(
+    <AllocationBalances
+      detail={{
+        id: 1,
+        name: 'Synthetic',
+        team_id: 1,
+        team_name: 'Synthetic',
+        group_id: 2,
+        group_name: 'Synthetic',
+        enabled: true,
+        created_at: 1,
+        effective_at: 1,
+        next: null,
+        config: {
+          mode: 'ratio',
+          period: 'upstream',
+          members: [{ user_id: 2, limit: 5000 }],
+          rates: [],
+        },
+        available: true,
+        unassigned: 0,
+        pending: [],
+        balances: [
+          { ...balance, window_id: 1, account_label: '1', sync_paused: false },
+          { ...balance, window_id: 2, account_label: '2', sync_paused: true },
+        ],
+      }}
+    />,
+  )
+  expect(screen.getByText('Usage updating')).toBeTruthy()
+  expect(screen.getByText('Waiting for quota sync')).toBeTruthy()
+  expect(screen.getByText(/Subscription 1/)).toBeTruthy()
+  expect(screen.getByText(/Subscription 2/)).toBeTruthy()
+})
+
+it('converts the three units without losing small values', () => {
+  expect(parseAllocationValue('50.25', 'ratio')).toBe(5025)
+  expect(parseAllocationValue('1.000001', 'tokens')).toBe(1000001)
+  expect(parseAllocationValue('0.000001', 'amount')).toBe(1)
+  expect(parseAllocationValue('0.001', 'ratio')).toBeNull()
+  expect(parseAllocationValue('-1', 'amount')).toBeNull()
+})
+it('submits exactly one mode and rejects an overallocated ratio', async () => {
+  const submit = vi.fn()
+  const user = userEvent.setup()
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <SchemeForm
+        teams={[
+          {
+            id: 1,
+            name: 'Synthetic team',
+            enabled: true,
+            member_ids: [2],
+            members: [{ id: 2, username: 'synthetic-member', enabled: true }],
+            created_at: 1,
+          },
+        ]}
+        groups={[{ id: 1, name: 'Synthetic pool', enabled: true }]}
+        onSubmit={submit}
+        onCancel={() => {}}
+        pending={false}
+      />
+    </QueryClientProvider>,
+  )
+  await user.type(
+    screen.getByLabelText('Resource allowance name'),
+    'Synthetic scheme',
+  )
+  await user.click(screen.getByLabelText('By tokens'))
+  await user.type(
+    screen.getByLabelText('Allowance for synthetic-member'),
+    '1.5',
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: {
+        mode: 'tokens',
+        period: 'month',
+        members: [{ user_id: 2, limit: 1500000 }],
+        rates: [],
+      },
+    }),
+  )
+  submit.mockClear()
+  await user.click(screen.getByLabelText('By share'))
+  const allowance = screen.getByLabelText('Allowance for synthetic-member')
+  await user.clear(allowance)
+  await user.type(allowance, '101')
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).not.toHaveBeenCalled()
+  expect(screen.getByRole('alert')).toBeTruthy()
+})
+
+it('keeps automatic ratio pricing out of the default form', () => {
+  render(
+    <SchemeForm
+      teams={[
+        {
+          id: 1,
+          name: 'Synthetic team',
+          enabled: true,
+          member_ids: [2],
+          members: [{ id: 2, username: 'synthetic-member', enabled: true }],
+          created_at: 1,
+        },
+      ]}
+      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      onSubmit={() => {}}
+      onCancel={() => {}}
+      pending={false}
+    />,
+  )
+  expect(
+    screen.getByRole('button', { name: 'Advanced: customize model weights' }),
+  ).toBeTruthy()
+  expect(screen.queryByLabelText('模型 ID')).toBeNull()
+})
+
+it('makes idle share borrowing an explicit ratio option', async () => {
+  const submit = vi.fn()
+  const user = userEvent.setup()
+  const team = {
+    id: 1,
+    name: 'Synthetic team',
+    enabled: true,
+    member_ids: [2],
+    members: [{ id: 2, username: 'synthetic-member', enabled: true }],
+    created_at: 1,
+  }
+  render(
+    <SchemeForm
+      teams={[team]}
+      fixedTeam={team}
+      resourceMode
+      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      pending={false}
+      onCancel={() => {}}
+      onSubmit={submit}
+    />,
+  )
+  await user.type(screen.getByLabelText('Allowance for synthetic-member'), '50')
+  await user.click(
+    screen.getByRole('checkbox', { name: /Allow idle share borrowing/ }),
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: expect.objectContaining({ allow_idle_borrow: true }),
+    }),
+  )
+})
+
+it('offers only enabled, nonempty, dedicated pools without a scheme', async () => {
+  const { availableAllocationPools } = await import('@/lib/allocations')
+  const pool = (id: number, enabled = true, account_count = 1) => ({
+    id,
+    enabled,
+    account_count,
+  })
+  expect(
+    availableAllocationPools(
+      [pool(1), pool(2), pool(3, false), pool(4, true, 0), pool(5)],
+      [{ group_id: 2 }],
+    ),
+  ).toEqual([pool(1), pool(5)])
+})
+
+it('does not label a paused scheme balance as active', async () => {
+  const { AllocationBalances } = await import('./AllocationBalances')
+  render(
+    <AllocationBalances
+      detail={{
+        id: 1,
+        name: 'Synthetic',
+        team_id: 1,
+        team_name: 'Synthetic',
+        group_id: 2,
+        group_name: 'Synthetic',
+        enabled: false,
+        effective_at: 1,
+        created_at: 1,
+        next: null,
+        config: {
+          mode: 'tokens',
+          period: 'month',
+          members: [{ user_id: 2, limit: 100 }],
+          rates: [],
+        },
+        available: false,
+        unassigned: 0,
+        pending: [],
+        balances: [
+          {
+            user_id: 2,
+            username: 'synthetic-member',
+            mode: 'tokens',
+            limit: 100,
+            used: 0,
+            tokens: 0,
+            pending: 0,
+            reset_at: 2000000000,
+            window_id: 0,
+            window_kind: '',
+          },
+        ],
+      }}
+    />,
+  )
+  expect(screen.queryByText('Active')).toBeNull()
+  expect(screen.getByText('Unavailable')).toBeTruthy()
+})
+
+it('changes team, pool and period with accessible dropdowns and clears old shares', async () => {
+  const user = userEvent.setup()
+  const submit = vi.fn()
+  const team = (id: number, name: string) => ({
+    id,
+    name,
+    enabled: true,
+    member_ids: [2],
+    members: [{ id: 2, username: 'synthetic-member', enabled: true }],
+    created_at: 1,
+  })
+  render(
+    <SchemeForm
+      teams={[
+        team(1, 'Synthetic first team'),
+        team(2, 'Synthetic second team'),
+      ]}
+      groups={[
+        { id: 2, name: 'Synthetic first pool', enabled: true },
+        { id: 3, name: 'Synthetic second pool', enabled: true },
+      ]}
+      onSubmit={submit}
+      onCancel={() => {}}
+      pending={false}
+    />,
+  )
+  await user.type(screen.getByLabelText('Resource allowance name'), 'Synthetic')
+  await user.click(screen.getByLabelText('By tokens'))
+  await user.type(
+    screen.getByLabelText('Allowance for synthetic-member'),
+    '1.5',
+  )
+  await user.click(screen.getByRole('button', { name: 'Personnel team' }))
+  await user.keyboard('{End}{Enter}')
+  expect(
+    screen.getByRole('button', { name: 'Personnel team' }).textContent,
+  ).toContain('Synthetic second team')
+  expect(
+    (
+      screen.getByLabelText(
+        'Allowance for synthetic-member',
+      ) as HTMLInputElement
+    ).value,
+  ).toBe('')
+  await user.type(screen.getByLabelText('Allowance for synthetic-member'), '2')
+  await user.click(screen.getByRole('button', { name: 'Account group' }))
+  await user.click(
+    screen.getByRole('menuitemradio', {
+      name: 'Synthetic second pool',
+    }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Reset period' }))
+  await user.click(screen.getByRole('menuitemradio', { name: 'Daily · UTC' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      team_id: 2,
+      group_id: 3,
+      config: {
+        mode: 'tokens',
+        period: 'day',
+        members: [{ user_id: 2, limit: 2000000 }],
+        rates: [],
+      },
+    }),
+  )
+})
+
+const modelCatalog = {
+  models: ['synthetic-basic', 'synthetic-pro'].map((id) => ({
+    id,
+    object: 'model',
+    owned_by: 'synthetic',
+  })),
+  known_accounts: 1,
+  unknown_accounts: 0,
+  stale_accounts: 0,
+  refreshing: false,
+  refresh_failed: false,
+  server_time: 1900000000,
+}
+function mountModelPrices(savedModel?: string) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  client.setQueryData(['auth'], {
+    initialized: true,
+    user: { id: 1, username: 'synthetic-admin', role: 'admin' },
+  })
+  const submit = vi.fn()
+  render(
+    <QueryClientProvider client={client}>
+      <SchemeForm
+        teams={[
+          {
+            id: 1,
+            name: 'Synthetic team',
+            enabled: true,
+            created_at: 1,
+            member_ids: [2],
+            members: [{ id: 2, username: 'synthetic-member', enabled: true }],
+          },
+        ]}
+        groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+        scheme={
+          savedModel
+            ? {
+                id: 1,
+                name: 'Synthetic saved',
+                team_id: 1,
+                team_name: 'Synthetic team',
+                group_id: 2,
+                group_name: 'Synthetic pool',
+                enabled: true,
+                created_at: 1,
+                effective_at: 1,
+                next: null,
+                config: {
+                  mode: 'amount',
+                  period: 'month',
+                  members: [{ user_id: 2, limit: 10000000 }],
+                  rates: [
+                    {
+                      model: savedModel,
+                      input: 3000000,
+                      cached: 0,
+                      output: 7000000,
+                    },
+                  ],
+                },
+              }
+            : undefined
+        }
+        pending={false}
+        onCancel={() => {}}
+        onSubmit={submit}
+      />
+    </QueryClientProvider>,
+  )
+  return submit
+}
+async function openModelPrices(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByLabelText('By amount'))
+  await user.click(screen.getByRole('button', { name: 'Add model price' }))
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Model ID' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  )
+  await user.click(screen.getByRole('button', { name: 'Model ID' }))
+}
+it('selects pool models and replaces prices when changing the selected model', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (url: string) =>
+        new Response(
+          JSON.stringify(
+            url.includes('/models')
+              ? modelCatalog
+              : {
+                  prices: {
+                    [new URL(url, 'http://example.test').searchParams.get(
+                      'model',
+                    )!]: {
+                      input: url.includes('synthetic-pro') ? 5000000 : 1000000,
+                      cached: 100000,
+                      output: 8000000,
+                      source: 'synthetic',
+                    },
+                  },
+                },
+          ),
+        ),
+    ),
+  )
+  const user = userEvent.setup()
+  const submit = mountModelPrices()
+  await user.type(screen.getByLabelText('Resource allowance name'), 'Synthetic')
+  await openModelPrices(user)
+  await user.click(
+    screen.getByRole('menuitemradio', { name: 'synthetic-basic' }),
+  )
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText('Input · USD / M') as HTMLInputElement).value,
+    ).toBe('1'),
+  )
+  await user.clear(screen.getByLabelText('Input · USD / M'))
+  await user.type(screen.getByLabelText('Input · USD / M'), '2')
+  await user.click(screen.getByRole('button', { name: 'Model ID' }))
+  await user.click(screen.getByRole('menuitemradio', { name: 'synthetic-pro' }))
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText('Input · USD / M') as HTMLInputElement).value,
+    ).toBe('5'),
+  )
+  await user.type(screen.getByLabelText('Allowance for synthetic-member'), '10')
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: expect.objectContaining({
+        rates: [
+          {
+            model: 'synthetic-pro',
+            input: 5000000,
+            cached: 100000,
+            output: 8000000,
+          },
+        ],
+      }),
+    }),
+  )
+})
+it('ignores a late price response after switching models and explains missing prices', async () => {
+  let resolve!: (response: Response) => void
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      if (url.includes('/models'))
+        return Promise.resolve(new Response(JSON.stringify(modelCatalog)))
+      if (url.includes('synthetic-basic'))
+        return new Promise<Response>((done) => {
+          resolve = done
+        })
+      return Promise.resolve(new Response(JSON.stringify({ prices: {} })))
+    }),
+  )
+  const user = userEvent.setup()
+  mountModelPrices()
+  await openModelPrices(user)
+  await user.click(
+    screen.getByRole('menuitemradio', { name: 'synthetic-basic' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Model ID' }))
+  await user.click(screen.getByRole('menuitemradio', { name: 'synthetic-pro' }))
+  expect(
+    await screen.findByText(
+      'No catalog price for this model. Enter prices manually.',
+    ),
+  ).toBeTruthy()
+  await user.type(screen.getByLabelText('Input · USD / M'), '3')
+  await act(async () =>
+    resolve(
+      new Response(
+        JSON.stringify({
+          prices: {
+            'synthetic-basic': {
+              input: 1000000,
+              cached: 100000,
+              output: 8000000,
+              source: 'synthetic',
+            },
+          },
+        }),
+      ),
+    ),
+  )
+  expect(
+    (screen.getByLabelText('Input · USD / M') as HTMLInputElement).value,
+  ).toBe('3')
+  expect(
+    screen.getByRole('button', { name: 'Model ID' }).textContent,
+  ).toContain('synthetic-pro')
+})
+it('reports a failed catalog and can retry before selecting a model', async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response('{}', { status: 503 }))
+  vi.stubGlobal('fetch', fetch)
+  const user = userEvent.setup()
+  mountModelPrices()
+  await user.click(screen.getByLabelText('By amount'))
+  await user.click(screen.getByRole('button', { name: 'Add model price' }))
+  expect(
+    await screen.findByText(
+      'Could not retrieve the model catalog. Try again later.',
+    ),
+  ).toBeTruthy()
+  fetch.mockResolvedValue(new Response(JSON.stringify(modelCatalog)))
+  await user.click(screen.getByRole('button', { name: 'Refresh list' }))
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Model ID' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  )
+  await user.click(screen.getByRole('button', { name: 'Model ID' }))
+  expect(
+    screen.getByRole('menuitemradio', { name: 'synthetic-basic' }),
+  ).toBeTruthy()
+})
+
+it('retains a saved model and its custom prices when the catalog no longer lists it', async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify(modelCatalog)))
+  vi.stubGlobal('fetch', fetch)
+  const user = userEvent.setup()
+  const submit = mountModelPrices('synthetic-retired')
+  await user.click(screen.getByRole('button', { name: 'Model ID' }))
+  expect(
+    await screen.findByRole('menuitemradio', { name: 'synthetic-basic' }),
+  ).toBeTruthy()
+  expect(
+    screen
+      .getByRole('menuitemradio', { name: 'synthetic-retired' })
+      .getAttribute('aria-checked'),
+  ).toBe('true')
+  await user.keyboard('{Escape}')
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: expect.objectContaining({
+        rates: [
+          {
+            model: 'synthetic-retired',
+            input: 3000000,
+            cached: 0,
+            output: 7000000,
+          },
+        ],
+      }),
+    }),
+  )
+  expect(
+    fetch.mock.calls.every(([url]) => String(url).endsWith('/groups/2/models')),
+  ).toBe(true)
+})
+it('does not fill a replacement row from a removed row and recovers from a price failure', async () => {
+  let resolve!: (response: Response) => void
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      if (url.includes('/models'))
+        return Promise.resolve(new Response(JSON.stringify(modelCatalog)))
+      if (url.includes('synthetic-basic'))
+        return new Promise<Response>((done) => {
+          resolve = done
+        })
+      return Promise.resolve(new Response('{}', { status: 503 }))
+    }),
+  )
+  const user = userEvent.setup()
+  mountModelPrices()
+  await openModelPrices(user)
+  await user.click(
+    screen.getByRole('menuitemradio', { name: 'synthetic-basic' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Remove model price 1' }))
+  await user.click(screen.getByRole('button', { name: 'Add model price' }))
+  await user.click(screen.getByRole('button', { name: 'Model ID' }))
+  await user.click(screen.getByRole('menuitemradio', { name: 'synthetic-pro' }))
+  expect(
+    await screen.findByText(
+      'Could not load model prices. Enter prices manually.',
+    ),
+  ).toBeTruthy()
+  await user.type(screen.getByLabelText('Input · USD / M'), '9')
+  await act(async () =>
+    resolve(
+      new Response(
+        JSON.stringify({
+          prices: {
+            'synthetic-basic': {
+              input: 1000000,
+              cached: 100000,
+              output: 8000000,
+              source: 'synthetic',
+            },
+          },
+        }),
+      ),
+    ),
+  )
+  expect(
+    (screen.getByLabelText('Input · USD / M') as HTMLInputElement).value,
+  ).toBe('9')
+  await user.click(screen.getByRole('button', { name: 'Add model price' }))
+  await user.click(screen.getAllByRole('button', { name: 'Model ID' })[1])
+  expect(
+    screen.queryByRole('menuitemradio', { name: 'synthetic-pro' }),
+  ).toBeNull()
+  expect(
+    screen.getByRole('menuitemradio', { name: 'synthetic-basic' }),
+  ).toBeTruthy()
+})
+it('shows an empty pool catalog honestly and allows reloading it', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ...modelCatalog, models: [] })),
+      ),
+  )
+  const user = userEvent.setup()
+  mountModelPrices()
+  await user.click(screen.getByLabelText('By amount'))
+  await user.click(screen.getByRole('button', { name: 'Add model price' }))
+  expect(
+    await screen.findByText('No models are currently available to this group.'),
+  ).toBeTruthy()
+  expect(
+    (screen.getByRole('button', { name: 'Model ID' }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true)
+  expect(screen.getByRole('button', { name: 'Refresh list' })).toBeTruthy()
+})

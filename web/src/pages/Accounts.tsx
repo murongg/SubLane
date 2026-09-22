@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
@@ -57,6 +58,7 @@ export function Accounts() {
   const invalidate = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['accounts'] }),
+      client.invalidateQueries({ queryKey: ['groups'] }),
       client.invalidateQueries({ queryKey: ['model-catalog'] }),
       client.invalidateQueries({ queryKey: ['account-runtime'] }),
       client.invalidateQueries({ queryKey: ['system'] }),
@@ -235,6 +237,17 @@ export function Accounts() {
                   </div>
                   <div className="min-w-0 space-y-2.5">
                     <AccountStatus account={account} />
+                    {account.group_count === 0 && (
+                      <div className="space-y-1">
+                        <Status kind="neutral">{t('accountUnassigned')}</Status>
+                        <Link
+                          to="/groups"
+                          className="block text-xs underline underline-offset-4"
+                        >
+                          {t('accountAssignGroup')}
+                        </Link>
+                      </div>
+                    )}
                     {runtime.data?.accounts
                       .filter((state) => state.id === account.id)
                       .map((state) => (

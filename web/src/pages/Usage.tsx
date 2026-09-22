@@ -10,6 +10,8 @@ import {
 } from '@/lib/statistics'
 import { Button } from '@/components/ui/Button'
 import { UsageChart } from '@/components/UsageChart'
+import { PersonalAllocations } from '@/components/PersonalAllocations'
+import { PersonalBudgets } from '@/components/PersonalBudgets'
 import { ActivityMap } from '@/components/ActivityMap'
 import {
   metricLabels,
@@ -84,11 +86,9 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
   const rowName = (row: Statistic) =>
     view === 'days'
       ? date.format(Number(row.id) * 1000)
-      : view === 'groups' && row.id === '1'
-        ? t('defaultGroup')
-        : row.name === '[other models]'
-          ? t('usageOtherModels')
-          : row.name || t('statisticsUnknown')
+      : row.name === '[other models]'
+        ? t('usageOtherModels')
+        : row.name || t('statisticsUnknown')
   const tokens = (count: number, reported: number) =>
     reported > 0 ? number.format(count) : '—'
   const percentage = (completed: number, requests: number) =>
@@ -127,6 +127,12 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
           {t('refresh')}
         </Button>
       </div>
+      {scope === 'personal' && (
+        <>
+          <PersonalAllocations userID={userID} />
+          <PersonalBudgets userID={userID} />
+        </>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

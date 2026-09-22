@@ -7,17 +7,24 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
-	Addr      string
-	DataDir   string
-	LogLevel  slog.Level
-	PublicURL string
+	Addr            string
+	DataDir         string
+	LogLevel        slog.Level
+	PublicURL       string
+	PricingURL      string
+	PricingHashURL  string
+	PricingCache    string
+	PricingFallback string
+	PricingOverride string
+	PricingInterval time.Duration
 }
 
 func Load(getenv func(string) string) (Config, error) {
-	c := Config{Addr: "127.0.0.1:8080", DataDir: "./data", LogLevel: slog.LevelInfo}
+	c := Config{Addr: "127.0.0.1:8080", DataDir: "./data", LogLevel: slog.LevelInfo, PricingInterval: 6 * time.Hour}
 	if v := getenv("SUBLANE_ADDR"); v != "" {
 		c.Addr = v
 	}
@@ -48,6 +55,18 @@ func Load(getenv func(string) string) (Config, error) {
 			}
 		}
 		c.PublicURL = u.Scheme + "://" + host
+	}
+	c.PricingURL = getenv("SUBLANE_PRICING_URL")
+	c.PricingHashURL = getenv("SUBLANE_PRICING_HASH_URL")
+	c.PricingCache = getenv("SUBLANE_PRICING_CACHE")
+	c.PricingFallback = getenv("SUBLANE_PRICING_FALLBACK")
+	c.PricingOverride = getenv("SUBLANE_PRICING_OVERRIDE")
+	if v := getenv("SUBLANE_PRICING_INTERVAL"); v != "" {
+		interval, err := time.ParseDuration(v)
+		if err != nil || interval <= 0 {
+			return c, fmt.Errorf("SUBLANE_PRICING_INTERVAL must be a positive duration")
+		}
+		c.PricingInterval = interval
 	}
 	_, port, err := net.SplitHostPort(c.Addr)
 	if err != nil {

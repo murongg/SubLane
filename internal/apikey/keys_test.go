@@ -33,7 +33,7 @@ func TestKeyOwnershipHashingAndRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	keys := newTestKeys(t, db)
-	created, err := keys.Create(ctx, member.ID, "Laptop test")
+	created, err := keys.CreateInGroup(ctx, member.ID, 1, "Laptop test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,13 +107,13 @@ func TestKeyLimitAndInvalidInput(t *testing.T) {
 	}
 	keys := newTestKeys(t, db)
 	for _, name := range []string{"", "   ", strings.Repeat("x", 65)} {
-		if _, err := keys.Create(ctx, 1, name); !errors.Is(err, ErrInput) {
+		if _, err := keys.CreateInGroup(ctx, 1, 1, name); !errors.Is(err, ErrInput) {
 			t.Fatal("invalid key name accepted")
 		}
 	}
 	var first int64
 	for i := 0; i < 20; i++ {
-		key, err := keys.Create(ctx, 1, "Synthetic key")
+		key, err := keys.CreateInGroup(ctx, 1, 1, "Synthetic key")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -121,13 +121,13 @@ func TestKeyLimitAndInvalidInput(t *testing.T) {
 			first = key.Key.ID
 		}
 	}
-	if _, err := keys.Create(ctx, 1, "Too many"); !errors.Is(err, ErrLimit) {
+	if _, err := keys.CreateInGroup(ctx, 1, 1, "Too many"); !errors.Is(err, ErrLimit) {
 		t.Fatal("active key limit not enforced")
 	}
 	if _, err := keys.Revoke(ctx, 1, first); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := keys.Create(ctx, 1, "Replacement"); err != nil {
+	if _, err := keys.CreateInGroup(ctx, 1, 1, "Replacement"); err != nil {
 		t.Fatal(err)
 	}
 	for _, token := range []string{"", "sl_short", strings.Repeat("x", 46)} {
@@ -155,6 +155,7 @@ func TestKeysEnforceGroupGrantsOnCreationAndEveryAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureTestPool(t, connection)
 	pools := groups.New(connection)
 	pool, err := pools.Save(ctx, 0, groups.Input{Name: "Private pool", Enabled: true, AccountIDs: []string{}})
 	if err != nil {
@@ -167,7 +168,7 @@ func TestKeysEnforceGroupGrantsOnCreationAndEveryAuthentication(t *testing.T) {
 	if err := pools.SetMemberGroups(ctx, member.ID, []int64{pool.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := keys.Create(ctx, member.ID, "Default denied"); !errors.Is(err, groups.ErrUnavailable) {
+	if _, err := keys.CreateInGroup(ctx, member.ID, 1, "Default denied"); !errors.Is(err, groups.ErrUnavailable) {
 		t.Fatal("omitted group bypassed revoked default grant", err)
 	}
 	created, err := keys.CreateInGroup(ctx, member.ID, pool.ID, "Synthetic key")
@@ -196,5 +197,52 @@ func TestKeysEnforceGroupGrantsOnCreationAndEveryAuthentication(t *testing.T) {
 	}
 	if _, err := keys.Authenticate(ctx, created.Secret); !errors.Is(err, ErrInvalidKey) {
 		t.Fatal("disabled group key worked", err)
+	}
+}
+
+func TestManagedPoolRequiresSchemeBinding(t *testing.T) {
+	ctx := context.Background()
+	conn, err := storage.Open(ctx, filepath.Join(t.TempDir(), "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	identity, err := auth.New(conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+		t.Fatal(err)
+	}
+	member, err := identity.CreateMember(ctx, "synthetic-user", "synthetic-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := newTestKeys(t, conn)
+	legacy, err := keys.CreateInGroup(ctx, member.ID, 1, "Legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Minimal synthetic scheme fixture deliberately exercises authentication independent of management validation.
+	for _, stmt := range []string{"INSERT INTO allocation_teams(id,name,enabled,created_at) VALUES(1,'Synthetic',1,1)", "INSERT INTO allocation_team_members(team_id,user_id) VALUES(1,2)", "INSERT INTO allocation_schemes(id,name,team_id,group_id,enabled,created_at) VALUES(1,'Synthetic',1,1,1,1)", `INSERT INTO allocation_revisions(scheme_id,effective_at,config) VALUES(1,1,'{"mode":"tokens","period":"day","members":[{"user_id":2,"limit":100}],"rates":[] }')`} {
+		if _, err = conn.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = keys.Authenticate(ctx, legacy.Secret); !errors.Is(err, ErrInvalidKey) {
+		t.Fatal("legacy key bypassed managed pool", err)
+	}
+	bound, err := keys.CreateInScheme(ctx, member.ID, 1, "Bound", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = keys.Authenticate(ctx, bound.Secret); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = conn.Exec("DELETE FROM allocation_team_members WHERE user_id=2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = keys.Authenticate(ctx, bound.Secret); !errors.Is(err, ErrInvalidKey) {
+		t.Fatal("removed member retained access", err)
 	}
 }

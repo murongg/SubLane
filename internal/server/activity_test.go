@@ -16,7 +16,7 @@ func TestHourlyActivityHTTPUsesTheSessionIdentity(t *testing.T) {
 		io.WriteString(w, "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"synthetic\",\"output\":[]}}\n\n")
 	})
 	ctx := context.Background()
-	ownerKey, err := f.keys.Create(ctx, 1, "Synthetic owner client")
+	ownerKey, err := f.keys.CreateInGroup(ctx, 1, 1, "Synthetic owner client")
 	if err != nil {
 		t.Fatal(err)
 	}

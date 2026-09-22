@@ -12,7 +12,7 @@ import (
 const authenticateKey = `-- name: AuthenticateKey :one
 SELECT k.id,k.user_id,k.group_id FROM api_keys k JOIN users u ON u.id=k.user_id JOIN account_groups g ON g.id=k.group_id
 WHERE k.token_hash=?1 AND k.revoked_at IS NULL AND k.enabled=1 AND (k.expires_at IS NULL OR k.expires_at>?2) AND u.enabled=1 AND g.enabled=1
-AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id))
+AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
 `
 
 type AuthenticateKeyParams struct {
@@ -77,9 +77,11 @@ func (q *Queries) CreateKey(ctx context.Context, arg CreateKeyParams) (int64, er
 
 const getKey = `-- name: GetKey :one
 SELECT k.id,k.group_id,g.name AS group_name,
-CASE WHEN g.enabled=1 AND u.enabled=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id)) THEN 'allowed' ELSE 'blocked' END AS group_access,
+CASE WHEN g.enabled=1 AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) THEN 'allowed' ELSE 'blocked' END AS group_access,
 k.name,k.prefix,k.created_at,k.last_used_at,k.revoked_at,k.enabled,k.expires_at,
-CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copyable
+CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copyable,
+CAST(COALESCE((SELECT scheme_id FROM allocation_keys WHERE key_id=k.id),0) AS INTEGER) AS scheme_id,
+CAST(COALESCE((SELECT s.name FROM allocation_keys ak JOIN allocation_schemes s ON s.id=ak.scheme_id WHERE ak.key_id=k.id),'') AS TEXT) AS scheme_name
 FROM api_keys k JOIN account_groups g ON g.id=k.group_id JOIN users u ON u.id=k.user_id
 WHERE k.id=?1 AND k.user_id=?2
 `
@@ -102,6 +104,8 @@ type GetKeyRow struct {
 	Enabled     bool
 	ExpiresAt   *int64
 	Copyable    bool
+	SchemeID    int64
+	SchemeName  string
 }
 
 func (q *Queries) GetKey(ctx context.Context, arg GetKeyParams) (GetKeyRow, error) {
@@ -120,6 +124,8 @@ func (q *Queries) GetKey(ctx context.Context, arg GetKeyParams) (GetKeyRow, erro
 		&i.Enabled,
 		&i.ExpiresAt,
 		&i.Copyable,
+		&i.SchemeID,
+		&i.SchemeName,
 	)
 	return i, err
 }
@@ -137,9 +143,11 @@ func (q *Queries) GetKeyOwnerEnabled(ctx context.Context, userID int64) (bool, e
 
 const listKeys = `-- name: ListKeys :many
 SELECT k.id,k.group_id,g.name AS group_name,
-CASE WHEN g.enabled=1 AND u.enabled=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id)) THEN 'allowed' ELSE 'blocked' END AS group_access,
+CASE WHEN g.enabled=1 AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) THEN 'allowed' ELSE 'blocked' END AS group_access,
 k.name,k.prefix,k.created_at,k.last_used_at,k.revoked_at,k.enabled,k.expires_at,
-CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copyable
+CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copyable,
+CAST(COALESCE((SELECT scheme_id FROM allocation_keys WHERE key_id=k.id),0) AS INTEGER) AS scheme_id,
+CAST(COALESCE((SELECT s.name FROM allocation_keys ak JOIN allocation_schemes s ON s.id=ak.scheme_id WHERE ak.key_id=k.id),'') AS TEXT) AS scheme_name
 FROM api_keys k JOIN account_groups g ON g.id=k.group_id JOIN users u ON u.id=k.user_id
 WHERE k.user_id=?1 AND (k.id<?2 OR ?2=0)
 ORDER BY k.id DESC LIMIT 51
@@ -163,6 +171,8 @@ type ListKeysRow struct {
 	Enabled     bool
 	ExpiresAt   *int64
 	Copyable    bool
+	SchemeID    int64
+	SchemeName  string
 }
 
 func (q *Queries) ListKeys(ctx context.Context, arg ListKeysParams) ([]ListKeysRow, error) {
@@ -187,6 +197,8 @@ func (q *Queries) ListKeys(ctx context.Context, arg ListKeysParams) ([]ListKeysR
 			&i.Enabled,
 			&i.ExpiresAt,
 			&i.Copyable,
+			&i.SchemeID,
+			&i.SchemeName,
 		); err != nil {
 			return nil, err
 		}

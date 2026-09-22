@@ -232,6 +232,8 @@ func accountError(w http.ResponseWriter, err error) {
 	status, code := 503, "unavailable"
 	var rejected *upstream.UpstreamError
 	switch {
+	case errors.Is(err, accounts.ErrAllocated):
+		status, code = 409, err.Error()
 	case errors.Is(err, upstream.ErrUsageUnsupported):
 		status, code = 400, "provider_usage_unsupported"
 	case errors.Is(err, accounts.ErrInput):

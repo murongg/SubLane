@@ -48,6 +48,12 @@ it.each([
     const fetch = vi.fn().mockImplementation((url: string) => {
       if (url === '/api/auth/state')
         return Promise.resolve(new Response(JSON.stringify(session)))
+      if (url === '/api/me/allocations')
+        return Promise.resolve(new Response(JSON.stringify({ schemes: [] })))
+      if (url === '/api/me/budgets')
+        return Promise.resolve(
+          new Response(JSON.stringify({ rules: [], pending: [] })),
+        )
       if (url === '/api/me/limits')
         return Promise.resolve(
           new Response(
@@ -83,6 +89,14 @@ it.each([
     await screen.findByRole('img', { name: 'Daily · Requests' })
     await screen.findByRole('region', { name: 'Activity by time' })
     expect(screen.getAllByRole('gridcell')).toHaveLength(168)
+    if (path === '/usage')
+      await screen.findByText(
+        'No token budgets for keys outside resource allowances.',
+      )
+    else
+      expect(
+        screen.queryByRole('heading', { name: 'Token budgets' }),
+      ).toBeNull()
     const reads = fetch.mock.calls.filter(
       ([url]) => url === endpoint + '?days=7',
     ).length
@@ -116,6 +130,8 @@ it.each([
         ([url]) =>
           url === '/api/auth/state' ||
           url === '/api/me/limits' ||
+          url === '/api/me/budgets' ||
+          url === '/api/me/allocations' ||
           url.startsWith(endpoint + '?'),
       ),
     ).toBe(true)

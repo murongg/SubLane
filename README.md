@@ -40,7 +40,7 @@ With Docker, Compose, curl and jq installed, run:
 curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh | bash
 ```
 
-Open http://127.0.0.1:8080, create the administrator, add a subscription account and create an API key for your client.
+Open http://127.0.0.1:8080, create the administrator, connect a subscription and add it to an account pool, then create a personal key. Follow [First request](docs/quickstart.md) to complete the connection; team sharing and usage limits can wait until you need them.
 
 The script installs the latest stable release, or the newest prerelease if no stable release exists, in `./sublane`. Data stays in a Docker volume; existing directories are left unchanged. For options, manual Compose deployment, HTTPS and upgrades, see the [deployment guide](docs/deployment.md).
 

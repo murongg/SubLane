@@ -9,24 +9,6 @@ import (
 	"context"
 )
 
-const addDefaultGroupAccount = `-- name: AddDefaultGroupAccount :exec
-INSERT INTO group_accounts(group_id,account_id) VALUES(1,?1)
-`
-
-func (q *Queries) AddDefaultGroupAccount(ctx context.Context, accountID string) error {
-	_, err := q.db.ExecContext(ctx, addDefaultGroupAccount, accountID)
-	return err
-}
-
-const addDefaultGroupMember = `-- name: AddDefaultGroupMember :exec
-INSERT INTO group_members(group_id,user_id) VALUES(1,?1)
-`
-
-func (q *Queries) AddDefaultGroupMember(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, addDefaultGroupMember, userID)
-	return err
-}
-
 const addGroupAccount = `-- name: AddGroupAccount :exec
 INSERT INTO group_accounts(group_id,account_id) VALUES(?1,?2)
 `
@@ -58,7 +40,7 @@ func (q *Queries) AddGroupModel(ctx context.Context, arg AddGroupModelParams) er
 const canUseGroup = `-- name: CanUseGroup :one
 SELECT EXISTS(SELECT 1 FROM account_groups g JOIN users u ON u.id=?1
 WHERE g.id=?2 AND g.enabled=1 AND u.enabled=1
-AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id)))
+AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id))
 `
 
 type CanUseGroupParams struct {
@@ -101,7 +83,7 @@ func (q *Queries) ClearMemberGroups(ctx context.Context, userID int64) error {
 }
 
 const countGroupMembers = `-- name: CountGroupMembers :one
-SELECT count(*) FROM group_members m JOIN users u ON u.id=m.user_id WHERE m.group_id=?1 AND u.role='member'
+SELECT count(*) FROM effective_group_access m JOIN users u ON u.id=m.user_id WHERE m.group_id=?1 AND u.role='member'
 `
 
 func (q *Queries) CountGroupMembers(ctx context.Context, groupID int64) (int64, error) {
@@ -198,10 +180,10 @@ func (q *Queries) GroupAccountExists(ctx context.Context, accountID string) (boo
 const groupConnectionStatus = `-- name: GroupConnectionStatus :one
 SELECT CASE WHEN EXISTS(
  SELECT 1 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id JOIN account_groups g ON g.id=ga.group_id JOIN users u ON u.id=?1
- WHERE g.enabled=1 AND a.enabled=1 AND a.status='ready' AND u.enabled=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id))
+ WHERE g.enabled=1 AND a.enabled=1 AND a.status='ready' AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
 ) THEN 'ready' WHEN EXISTS(
  SELECT 1 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id JOIN account_groups g ON g.id=ga.group_id JOIN users u ON u.id=?1
- WHERE g.enabled=1 AND a.enabled=1 AND u.enabled=1 AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id))
+ WHERE g.enabled=1 AND a.enabled=1 AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
 ) THEN 'needs_attention' ELSE 'not_configured' END AS status
 `
 
@@ -215,7 +197,7 @@ func (q *Queries) GroupConnectionStatus(ctx context.Context, userID int64) (stri
 const listAvailableGroups = `-- name: ListAvailableGroups :many
 SELECT g.id,g.name FROM account_groups g JOIN users u ON u.id=?1
 WHERE g.enabled=1 AND u.enabled=1
-AND (u.role='admin' OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=u.id)) ORDER BY g.id
+AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) ORDER BY g.id
 `
 
 type ListAvailableGroupsRow struct {
@@ -302,7 +284,7 @@ func (q *Queries) ListGroupModels(ctx context.Context, groupID int64) ([]string,
 
 const listGroups = `-- name: ListGroups :many
 SELECT g.id, g.name, g.enabled, g.created_at, g.updated_at, g.restricted_models, (SELECT count(*) FROM group_accounts a WHERE a.group_id=g.id) AS account_count,
-(SELECT count(*) FROM group_members m JOIN users u ON u.id=m.user_id WHERE m.group_id=g.id AND u.role='member') AS member_count
+(SELECT count(*) FROM effective_group_access m JOIN users u ON u.id=m.user_id WHERE m.group_id=g.id AND u.role='member') AS member_count
 FROM account_groups g ORDER BY g.id
 `
 

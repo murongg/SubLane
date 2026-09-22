@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/upstream"
@@ -46,18 +47,25 @@ func RequestID(ctx context.Context) string {
 var safeModel = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,159}$`)
 
 type observation struct {
-	kind         Kind
-	service      *Service
-	ctx          context.Context
-	cancel       context.CancelFunc
-	stopParent   func() bool
-	once         sync.Once
-	started      time.Time
-	record       db.RecordRequestParams
-	revision     int64
-	leased       bool
-	memberLeased bool
-	sequence     int64
+	kind               Kind
+	service            *Service
+	ctx                context.Context
+	cancel             context.CancelFunc
+	stopParent         func() bool
+	once               sync.Once
+	started            time.Time
+	record             db.RecordRequestParams
+	revision           int64
+	leased             bool
+	memberLeased       bool
+	schemeID           int64
+	allocationTracked  bool
+	budgetTracked      bool
+	budgetDispatched   bool
+	sequence           int64
+	quotaReadStartedAt int64
+	quotaRevision      int64
+	quota              *upstream.Usage
 }
 
 func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (*observation, error) {
@@ -100,6 +108,11 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		s := e.service
+		if e.quota != nil && (outcome == "success" || outcome == "incomplete") {
+			if err := s.observeUsage(ctx, e.record.AccountID, e.quotaRevision, *e.quota); err != nil {
+				slog.Warn("Unable to persist response quota")
+			}
+		}
 		s.mu.Lock()
 		if e.memberLeased {
 			if s.memberActive[e.record.UserID] <= 1 {
@@ -146,14 +159,24 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 				state.InFlight = max(0, state.InFlight-1)
 			}
 		}
-		s.mu.Unlock()
+		// Admission must not observe released leases before the token charge commits.
+		defer s.mu.Unlock()
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err == nil {
 			defer tx.Rollback()
 			q := s.queries.WithTx(tx)
-			err = q.RecordRequest(ctx, e.record)
+			err = e.settleAllocation(ctx, q)
+			if err == nil {
+				err = e.settleBudget(ctx, q)
+			}
+			if err == nil {
+				err = q.RecordRequest(ctx, e.record)
+			}
 			if err == nil {
 				err = recordStatistics(ctx, q, e.record)
+			}
+			if err == nil {
+				err = allocations.Prune(ctx, q, s.now().Add(-90*24*time.Hour).Unix())
 			}
 			if err == nil {
 				err = q.PruneStatistics(ctx, s.now().UTC().Truncate(24*time.Hour).Unix()-89*86400)
@@ -169,7 +192,12 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 			}
 		}
 		if err != nil {
+			if e.budgetTracked || e.allocationTracked {
+				s.budgetFailure = true
+			}
 			slog.Error("Unable to persist request metadata")
+		} else if e.allocationTracked {
+			s.scheduleAllocationSync(e.schemeID, e.record.AccountID)
 		}
 	})
 }
@@ -185,10 +213,16 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 		return statusOutcome(rejected.Status)
 	}
 	switch {
+	case errors.Is(err, allocations.ErrQuota), errors.Is(err, allocations.ErrPending), errors.Is(err, allocations.ErrSync), errors.Is(err, allocations.ErrUnavailable), errors.Is(err, allocations.ErrUnpriced), errors.Is(err, allocations.ErrSnapshot):
+		return "rejected", err.Error(), ""
 	case errors.Is(err, ErrMemberBusy):
 		return "rejected", "member_busy", ""
 	case errors.Is(err, ErrMemberRate):
 		return "rejected", "member_rate_limited", ""
+	case errors.Is(err, ErrTokenQuota), errors.Is(err, ErrTokenPending):
+		return "rejected", err.Error(), ""
+	case errors.Is(err, ErrTokenAccounting):
+		return "error", "token_accounting_unavailable", ""
 	case errors.Is(err, ErrQuotaExhausted):
 		return "rejected", "quota_exhausted", ""
 	case errors.Is(err, ErrAccountBusy):

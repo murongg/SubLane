@@ -19,7 +19,14 @@ const detailSchema = groupSchema.extend({
   allowed_models: z.array(z.string()).max(100),
 })
 const choicesSchema = z.object({
-  groups: z.array(groupSchema.pick({ id: true, name: true })).max(32),
+  groups: z
+    .array(
+      groupSchema.pick({ id: true, name: true }).extend({
+        scheme_id: z.number().int().optional(),
+        scheme_name: z.string().optional(),
+      }),
+    )
+    .max(32),
 })
 const grantsSchema = z.object({
   group_ids: z.array(z.number().int().positive()).max(32),
@@ -80,9 +87,9 @@ export function availableGroupOptions(client: QueryClient, userID: number) {
 }
 export function groupErrorKey(error: Error) {
   if (error instanceof ApiError) {
+    if (error.code === 'allocation_pool_locked') return 'allocationPoolConflict'
     if (error.code === 'group_exists') return 'groupNameTaken'
     if (error.code === 'group_limit') return 'groupLimitReached'
-    if (error.code === 'default_group_protected') return 'defaultGroupProtected'
     if (error.code === 'invalid_group_input') return 'groupInputInvalid'
   }
   return 'groupSaveFailed'

@@ -47,7 +47,7 @@ func TestNativeProtocolsEnforceMemberGroupModelAndKeyPolicies(t *testing.T) {
 			if response := call(f.secret); response.StatusCode != 200 {
 				t.Fatal("initial call failed", response.StatusCode)
 			}
-			second, err := f.keys.Create(ctx, f.userID, "Synthetic second key")
+			second, err := f.keys.CreateInGroup(ctx, f.userID, 1, "Synthetic second key")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -61,7 +61,7 @@ func TestNativeProtocolsEnforceMemberGroupModelAndKeyPolicies(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := f.groups.Save(ctx, groups.DefaultID, groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{accounts[0].ID}, ModelPolicy: &groups.ModelPolicy{Restricted: true, Models: []string{"other-model"}}}); err != nil {
+			if _, err := f.groups.Save(ctx, groups.LegacyID, groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{accounts[0].ID}, ModelPolicy: &groups.ModelPolicy{Restricted: true, Models: []string{"other-model"}}}); err != nil {
 				t.Fatal(err)
 			}
 			if response := call(f.secret); response.StatusCode != 403 {

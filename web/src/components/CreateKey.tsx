@@ -107,6 +107,9 @@ function KeyForm({
     setSelectedID(selectedGroup.id)
     mutation.mutate({
       name,
+      ...(selectedGroup.scheme_id
+        ? { scheme_id: selectedGroup.scheme_id }
+        : {}),
       group_id: selectedGroup.id,
       expires_at: expiryValue(expiry, null),
     })
@@ -224,8 +227,11 @@ function KeyForm({
                   >
                     <span className="truncate">
                       {selectedGroup
-                        ? selectedGroup.id === 1
-                          ? t('defaultGroup')
+                        ? selectedGroup.scheme_id
+                          ? t('allocationKeyChoice', {
+                              scheme: selectedGroup.scheme_name,
+                              pool: selectedGroup.name,
+                            })
                           : selectedGroup.name
                         : t('chooseGroup')}
                     </span>
@@ -242,7 +248,12 @@ function KeyForm({
                         key={group.id}
                         value={String(group.id)}
                       >
-                        {group.id === 1 ? t('defaultGroup') : group.name}
+                        {group.scheme_id
+                          ? t('allocationKeyChoice', {
+                              scheme: group.scheme_name,
+                              pool: group.name,
+                            })
+                          : group.name}
                       </DropdownMenuRadioItem>
                     ))}
                   </DropdownMenuRadioGroup>

@@ -350,3 +350,29 @@ it('explains why a quota-exhausted account is skipped for new sessions', async (
     screen.getByText(/New sessions use another available account/),
   ).toBeTruthy()
 })
+
+it('identifies an unassigned account and offers pool setup', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/accounts')
+        return Promise.resolve(
+          response({
+            accounts: [{ ...account, group_count: 0, enabled: false }],
+          }),
+        )
+      if (url === '/api/accounts/runtime')
+        return Promise.resolve(response({ accounts: [] }))
+      return Promise.reject(new Error('Unexpected request: ' + url))
+    }),
+  )
+  open()
+  await screen.findByText('Unassigned')
+  expect(
+    screen
+      .getByRole('link', { name: 'Assign to an account group' })
+      .getAttribute('href'),
+  ).toBe('/groups')
+})

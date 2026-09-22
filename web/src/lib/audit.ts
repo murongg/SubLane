@@ -3,6 +3,10 @@ import { z } from 'zod'
 import type { en } from '@/locales/en'
 import { request } from './request'
 export const auditActions: Record<string, keyof typeof en> = {
+  'team.save': 'auditTeamSave',
+  'allocation.save': 'auditAllocationSave',
+  'allocation.settle': 'auditAllocationSettle',
+  'allocation.reconcile': 'auditAllocationReconcile',
   'backup.export': 'auditBackupExport',
   'backup.prepare': 'auditBackupPrepare',
   'backup.verify': 'auditBackupVerify',
@@ -16,6 +20,8 @@ export const auditActions: Record<string, keyof typeof en> = {
   'member.create': 'auditMemberCreate',
   'member.update': 'auditMemberUpdate',
   'member.groups': 'auditMemberGroups',
+  'member.budget': 'auditMemberBudget',
+  'member.budget_settle': 'auditMemberBudgetSettle',
   'member.limits': 'auditMemberLimits',
   'member.password': 'auditMemberPassword',
   'user.password': 'auditUserPassword',
@@ -28,6 +34,8 @@ export const auditActions: Record<string, keyof typeof en> = {
   'account.resume': 'auditAccountResume',
 }
 export const auditResources = {
+  team: 'personnelTeam',
+  allocation: 'allocationSchemes',
   backup: 'backupTitle',
   settings: 'auditSettings',
   key: 'apiKey',
@@ -46,6 +54,8 @@ const eventSchema = z.object({
   source: z.enum(['user', 'local']),
   action: z.string().max(64),
   resource: z.enum([
+    'team',
+    'allocation',
     'key',
     'group',
     'member',

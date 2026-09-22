@@ -52,10 +52,19 @@ export function resumeAccount(id: string) {
   })
 }
 export const reasonKeys: Record<string, keyof typeof en> = {
+  allocation_exhausted: 'allocationExhausted',
+  allocation_pending: 'allocationPending',
+  allocation_syncing: 'allocationSyncPaused',
+  allocation_unavailable: 'allocationUnavailable',
+  allocation_model_unpriced: 'allocationUnpriced',
+  allocation_snapshot_required: 'allocationSnapshotRequired',
   quota_exhausted: 'reasonQuotaExhausted',
   model_not_allowed: 'reasonModelNotAllowed',
   model_not_available: 'reasonModelUnavailable',
   model_catalog_unavailable: 'reasonCatalogUnavailable',
+  token_quota_exceeded: 'reasonTokenQuota',
+  token_usage_pending: 'reasonTokenPending',
+  token_accounting_unavailable: 'reasonTokenAccounting',
   member_busy: 'reasonMemberBusy',
   member_rate_limited: 'reasonMemberRate',
   context_limit: 'reasonContextLimit',

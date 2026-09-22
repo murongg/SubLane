@@ -83,7 +83,7 @@ func TestKeyLifecycleAndExpiryBoundary(t *testing.T) {
 	if _, err := connection.Exec("CREATE TRIGGER fail_audit BEFORE INSERT ON audit_events BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := keys.Create(ctx, 1, "Rollback"); err == nil {
+	if _, err := keys.CreateInGroup(ctx, 1, 1, "Rollback"); err == nil {
 		t.Fatal("audit failure ignored")
 	}
 	page, err := keys.List(ctx, 1, 0)

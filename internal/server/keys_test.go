@@ -39,7 +39,11 @@ func TestPersonalKeyOwnershipAndGatewayBoundary(t *testing.T) {
 	}
 	login := request(h, "POST", "/api/auth/login", origin, memberInput, nil)
 	member := login.Result().Cookies()[0]
-	created := request(h, "POST", "/api/keys", origin, map[string]string{"name": "Synthetic laptop"}, member)
+	configureTestPool(t, db)
+	if result := request(h, "POST", "/api/keys", origin, map[string]string{"name": "Missing pool"}, member); result.Code != 400 {
+		t.Fatalf("key created without choosing a pool: %d", result.Code)
+	}
+	created := request(h, "POST", "/api/keys", origin, map[string]any{"name": "Synthetic laptop", "group_id": 1}, member)
 	if created.Code != 201 {
 		t.Fatalf("member key create: %d", created.Code)
 	}
@@ -92,6 +96,7 @@ func TestPersonalKeyOwnershipAndGatewayBoundary(t *testing.T) {
 
 func newTestKeyService(t *testing.T, connection *sql.DB) *apikey.Service {
 	t.Helper()
+	configureTestPool(t, connection)
 	cipher, err := vault.Open(filepath.Join(t.TempDir(), "credentials.key"), true)
 	if err != nil {
 		t.Fatal(err)
@@ -117,8 +122,9 @@ func TestPersonalKeyDisclosureBoundaryAndNoStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureTestPool(t, connection)
 	cookie := request(h, "POST", "/api/auth/login", origin, map[string]string{"username": "synthetic-member", "password": "synthetic-pass"}, nil).Result().Cookies()[0]
-	created, err := keys.Create(ctx, member.ID, "Synthetic client")
+	created, err := keys.CreateInGroup(ctx, member.ID, 1, "Synthetic client")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,5 +170,18 @@ func TestPersonalKeyDisclosureBoundaryAndNoStore(t *testing.T) {
 	}
 	if got := request(h, "POST", path, origin, map[string]any{}, cookie); got.Code != 409 || strings.Contains(got.Body.String(), created.Secret) {
 		t.Fatal("revoked key disclosed")
+	}
+}
+
+func configureTestPool(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	for _, statement := range []string{
+		"INSERT OR IGNORE INTO account_groups(id,name,enabled,created_at,updated_at) VALUES(1,'Default',1,1,1)",
+		"INSERT OR IGNORE INTO group_accounts SELECT 1,id FROM accounts",
+		"INSERT OR IGNORE INTO group_members SELECT 1,id FROM users",
+	} {
+		if _, err := conn.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

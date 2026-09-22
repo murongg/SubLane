@@ -70,17 +70,24 @@ func (h *keyHTTP) list(w http.ResponseWriter, r *http.Request) {
 func (h *keyHTTP) create(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Name      string `json:"name"`
+		SchemeID  int64  `json:"scheme_id"`
 		GroupID   *int64 `json:"group_id"`
 		ExpiresAt *int64 `json:"expires_at"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	groupID := groups.DefaultID
+	var groupID int64
 	if input.GroupID != nil {
 		groupID = *input.GroupID
 	}
-	created, err := h.service.CreateWithExpiry(r.Context(), sessionUser(r).ID, groupID, input.Name, input.ExpiresAt)
+	var created apikey.CreatedKey
+	var err error
+	if input.SchemeID != 0 {
+		created, err = h.service.CreateInScheme(r.Context(), sessionUser(r).ID, input.SchemeID, input.Name, input.ExpiresAt)
+	} else {
+		created, err = h.service.CreateWithExpiry(r.Context(), sessionUser(r).ID, groupID, input.Name, input.ExpiresAt)
+	}
 	if err != nil {
 		keyError(w, err)
 		return

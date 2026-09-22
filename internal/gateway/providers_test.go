@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -69,6 +70,7 @@ func providerFixture(t *testing.T, transport http.RoundTripper, known bool, vers
 			}
 		}
 	}
+	configureTestPool(t, connection)
 	client := upstream.NewWithTransport(transportFunc(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Path == "/backend-api/wham/usage" {
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"rate_limit":{}}`))}, nil
@@ -154,6 +156,19 @@ func TestUnsupportedQuotaDoesNotVerifyOrPublishSnapshot(t *testing.T) {
 		row, err := gateway.accounts.Get(ctx, ids[kind])
 		if err != nil || row.Status != "unverified" {
 			t.Fatal("unsupported quota verified account", err)
+		}
+	}
+}
+
+func configureTestPool(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	for _, statement := range []string{
+		"INSERT OR IGNORE INTO account_groups(id,name,enabled,created_at,updated_at) VALUES(1,'Default',1,1,1)",
+		"INSERT OR IGNORE INTO group_accounts SELECT 1,id FROM accounts",
+		"INSERT OR IGNORE INTO group_members SELECT 1,id FROM users",
+	} {
+		if _, err := conn.Exec(statement); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

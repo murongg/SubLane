@@ -1,4 +1,244 @@
 export const en = {
+  allocationPause: 'Pause resource allowance',
+  allocationResume: 'Enable resource allowance',
+  personnelTeams: 'Personnel teams',
+  personnelTeam: 'Personnel team',
+  teamsDescription:
+    'Choose members and account pools. Use freely by default; limits are optional.',
+  teamEditDescription:
+    'Select members and account pools, then save. Configure usage limits only if needed.',
+  teamCreate: 'Create team',
+  teamEdit: 'Edit team',
+  teamEditNamed: 'Edit {{name}}',
+  teamSave: 'Save team',
+  teamName: 'Team name',
+  teamEnabled: 'Enable this team',
+  teamsEmpty:
+    'Create a team, select its members and account pools, then save to grant access.',
+  teamMemberCount: '{{count}} members',
+  teamResourceCount: '{{count}} configured usage limits',
+  teamMembershipHint:
+    'Removing a member immediately blocks their resource allowance access. Rejoining never resets their usage. Up to 100 members per team.',
+  teamFreeUse: 'Free use · no team allowance',
+  teamFreePoolCount: 'Free access to {{count}} account pools',
+  teamAdvancedLimits: 'Advanced settings: usage limits',
+  teamLimitsAfterSave:
+    'Save the team first. You can then add share, amount or token limits here if needed.',
+  teamNoFreePools:
+    'No shared pools available. Create an account pool, or manage reserved pools in advanced settings.',
+  teamAllowedGroups: 'Account pools for free use',
+  teamAllowedGroupsHint:
+    'Selected pools are shared without a team allowance. Members can only use pools authorized through their teams. Existing member limits and upstream quotas still apply.',
+  teamResources: 'Resource allowances',
+  teamResourcesHint:
+    'Optionally set a share, amount or token allowance for a dedicated pool. Existing rules remain in effect when this section is collapsed; pausing a rule stops access rather than enabling free use.',
+  teamResourcePoolLabel: 'Account pool',
+  teamResourceLimitLabel: 'Limit type: {{mode}}',
+  teamPeopleTitle: 'Who can use it',
+  teamPeopleHint:
+    'Members added to this team can see its account pools and resource allowances.',
+  teamResourceAdd: 'Add resource allowance',
+  teamResourceEdit: 'Edit resource allowance',
+  teamResourcesEmpty:
+    'No usage limits configured. Selected account pools can be used freely.',
+  teamResourceNoPools:
+    'No eligible account pools. Choose an enabled pool with accounts that is not already assigned to a resource.',
+  allocationAccountLocked:
+    'This account is reserved by a resource allowance and cannot be deleted. Disable it to stop routing requests.',
+  allocationUnavailableShort: 'Unavailable',
+  allocationWaiting: 'Scheduled',
+  allocationPrerequisite:
+    'Create an enabled personnel team with members and an enabled, nonempty dedicated pool. Each pool can have one resource allowance. Newly imported accounts remain unassigned.',
+  allocationSchemes: 'Resource allowances',
+  allocationsDescription:
+    'Optional usage limits. For free use, select account pools in Personnel teams without creating an allowance.',
+  allocationCreate: 'Add resource allowance',
+  allocationEdit: 'Edit resource allowance',
+  allocationEditNamed: 'Edit resource allowance {{name}}',
+  allocationName: 'Resource allowance name',
+  allocationMode: 'Allowance type',
+  allocationRatio: 'By share',
+  allocationShares: 'Member shares',
+  allocationSplitEqually: 'Split equally',
+  allocationSettings: 'Metering and activation settings',
+  allocationShareRules:
+    'The same shares apply to every subscription in this pool. Each window resets separately. Idle shares can be borrowed only when enabled below.',
+  allocationAllowIdleBorrow: 'Allow idle share borrowing',
+  allocationAllowIdleBorrowHint:
+    'A member may use another member’s unused share on this account window. Sessions stay on their current subscription; borrowing is recorded separately and confirmed when quota sync settles.',
+  allocationSubscription: 'Subscription {{label}}',
+  allocationUpdating: 'Usage updating',
+  allocationSyncPaused: 'Waiting for quota sync',
+  allocationSyncPausedHint:
+    'New requests on this subscription are paused until its quota can be confirmed. Retry shortly; contact the administrator if this persists.',
+  allocationAutomaticHint:
+    '{{count}} completed requests are waiting for upstream quota updates. SubLane retries automatically; no manual entry is needed during normal syncing.',
+  allocationEstimatedUsed: 'Estimated used',
+  allocationEstimatedRemaining: 'Estimated remaining',
+  allocationAccountExhausted:
+    'Your share on this subscription window is exhausted. This does not mean every subscription in the pool is exhausted. Existing conversations keep their subscription.',
+  allocationBorrowed: 'Borrowed {{points}} points from idle member share.',
+  allocationAmount: 'By amount',
+  allocationTokens: 'By tokens',
+  allocationSave: 'Save resource allowance',
+  allocationView: 'View usage',
+  allocationBack: 'Back to resource allowances',
+  allocationsEmpty:
+    'Create a personnel team and a dedicated account pool to add a resource allowance.',
+  allocationRatioHint:
+    'Set how much each member may use, such as 50%, 30% and 20%. You do not need to know the subscription’s total token capacity.',
+  allocationAmountHint:
+    'Charge usage at your configured model prices in USD. This is an internal allowance, not an upstream cash balance.',
+  allocationTokensHint:
+    'Count input plus output tokens. 1 M = 1,000,000 tokens. Cached input is not counted twice.',
+  allocationExclusiveHint:
+    'Use a dedicated pool and remove its accounts from every other group first. After adding it, the team, pool and account membership stay fixed. Existing unbound keys for this pool stop working.',
+  allocationMembers: 'Member allowances',
+  allocationBlankHint:
+    'Leave a member blank if they should not use this resource allowance.',
+  allocationFor: 'Allowance for {{name}}',
+  allocationTotal: 'Allocated {{total}}% · Reserved {{remaining}}%',
+  allocationPeriod: 'Reset period',
+  allocationUpstreamReset: 'Follows each upstream quota window',
+  allocationRates: 'Model prices and weights',
+  allocationRatesHint:
+    'Select a model available in this account group to fill its catalog prices. Switching models replaces the prices. You can edit them before saving; the saved revision keeps its own snapshot.',
+  allocationAutoRatesHint:
+    'Usage is estimated from upstream quota changes. Model weights are configured automatically; API prices are not the provider’s subscription charging formula.',
+  allocationAdvancedRates: 'Advanced: customize model weights',
+  allocationPriceLoading: 'Loading model price…',
+  allocationRateInput: 'Input · USD / M',
+  allocationRateCached: 'Cached input · USD / M',
+  allocationRateOutput: 'Output · USD / M',
+  allocationAddRate: 'Add model price',
+  allocationRemoveRate: 'Remove model price {{index}}',
+  allocationRemove: 'Remove',
+  allocationModelID: 'Model ID',
+  allocationChooseModel: 'Select a model',
+  allocationPriceMissing:
+    'No catalog price for this model. Enter prices manually.',
+  allocationPriceFailed: 'Could not load model prices. Enter prices manually.',
+  allocationEnabled: 'Enable this resource allowance',
+  allocationNextHint:
+    'Changes to allowances, prices or type take effect next period. Pausing or enabling access takes effect immediately. Current usage and unsettled entries remain recorded.',
+  allocationStartNext: 'Start next period',
+  allocationStartNextRatio:
+    'Wait until all current account windows reach their next reset before starting',
+  allocationImmediateHint:
+    'Start immediately: fixed allowances begin now; share allowances divide the remaining upstream capacity at the first fresh observation. Earlier usage is not backfilled.',
+  allocationScheduled: '{{mode}} takes effect {{date}}',
+  allocationLoading: 'Loading allocations…',
+  allocationFailed: 'Unable to load or save allocations. Please retry.',
+  allocationInvalid:
+    'Check the name, members, positive allowances and model prices. Shares must total at most 100%; percentages allow two decimal places and M / USD allow six.',
+  allocationPoolConflict:
+    'These accounts are reserved by a resource allowance or shared with another pool. Use a separate pool; a managed pool’s account list is fixed.',
+  allocationSnapshotRequired:
+    'Fresh Codex quota data is required. Refresh account usage and retry. Unknown or reset data is never treated as full capacity.',
+  allocationSettlementConflict:
+    'Usage changed or the correction conflicts with a previous settlement. Refresh before retrying.',
+  allocationPending: 'Usage pending reconciliation',
+  allocationExhausted: 'Allowance exhausted',
+  allocationUnavailable:
+    'This resource allowance is paused, scheduled, or no longer available to you.',
+  allocationUnpriced: 'Model price is not configured',
+  allocationEstimateHint:
+    'Estimated shares: 1 point = 1% of one account’s full window. Windows are tracked separately. Recent usage updates automatically. Prolonged delays pause new requests; in-flight requests may exceed the remaining allowance.',
+  allocationNoBalances:
+    'No balances yet. For share mode, sync fresh upstream usage after the resource allowance starts.',
+  allocationPoints: 'points',
+  allocationPrimary: 'Primary window',
+  allocationSecondary: 'Secondary window',
+  allocationLimit: 'Allowance',
+  allocationUsed: 'Used',
+  allocationRemaining: 'Remaining',
+  allocationResetAt: 'Resets {{date}}',
+  allocationActualTokens: '{{tokens}} M tokens',
+  allocationSync: 'Sync upstream usage',
+  allocationAwaitingSync: 'Awaiting upstream change',
+  allocationCorrect: 'Correct usage',
+  allocationSettle: 'Confirm settlement',
+  allocationSettlementHint:
+    'Sync upstream data first. Correct only with evidence: enter total input/output/cache tokens, or the request’s total percentage points for each original window. Corrections are audited and cannot be undone here.',
+  allocationInputM: 'Input tokens · M',
+  allocationOutputM: 'Output tokens · M',
+  allocationCachedM: 'Cached input · M',
+  allocationUnassignedHint:
+    'Some upstream usage cannot be attributed to a member. Confirm it as external usage; it reduces upstream capacity and is not charged to any member.',
+  allocationReserve: 'Confirm external usage',
+  allocationMoreMembers: 'Load more members',
+  allocationMine: 'My resource allowances',
+  allocationRefreshMine: 'Refresh my resource allowances',
+  allocationMineEmpty:
+    'No resource allowances assigned. Existing personal token rules apply to unmanaged pools.',
+  allocationKeyChoice: 'Resource allowance: {{scheme}} · {{pool}}',
+  allocationLegacyHint:
+    'These personal rules apply only to keys outside resource allowances. A resource allowance key uses exactly its selected allowance type.',
+  auditTeamSave: 'Saved personnel team',
+  auditAllocationSave: 'Saved resource allowance',
+  auditAllocationSettle: 'Settled resource allowance usage',
+  auditAllocationReconcile: 'Confirmed external quota usage',
+
+  budgetSaving: 'Saving…',
+  budgetRefresh: 'Refresh token budgets',
+  budgetUnitHint: '1 M = 1,000,000 tokens. Up to 6 decimal places (1 token).',
+  budgetSettlementInvalid:
+    'Enter a total from the known usage to 2,000 M, with up to 6 decimal places.',
+  tokenBudgets: 'Token budgets',
+  budgetsFor: 'Token budgets for {{username}}',
+  budgetsDescription:
+    'All matching budgets apply across API keys. Input and output tokens count together. Limits stop new requests; active requests may finish above the limit.',
+  budgetsLoading: 'Loading token budgets…',
+  budgetsLoadFailed: 'Unable to load token budgets.',
+  budgetsEmpty: 'No token budgets for keys outside resource allowances.',
+  budgetAllGroups: 'All groups',
+  budgetAllModels: 'All models',
+  budgetDisabled: 'Limit disabled',
+  budgetPending: 'Usage pending settlement',
+  budgetExhausted: 'Budget exhausted',
+  budgetDaily: 'Daily · UTC',
+  budgetMonthly: 'Monthly · UTC',
+  budgetUsed: '{{used}} / {{limit}} M tokens used',
+  budgetResets: 'Resets {{time}} UTC',
+  budgetTracking: 'Tracking since {{time}} UTC',
+  budgetPendingCount:
+    '{{count}} request(s) need settlement. Contact an administrator.',
+  budgetEdit: 'Edit budget',
+  budgetAdd: 'Add budget',
+  budgetGroup: 'Group scope',
+  budgetPeriod: 'Reset period',
+  budgetModel: 'Model ID',
+  budgetModelHint:
+    'Leave blank for all models, or enter an exact native model ID. Provider prefixes share the same budget.',
+  budgetLimit: 'Token limit (M)',
+  budgetEnabled: 'Enforce this budget',
+  budgetEditHint:
+    'New scopes start tracking when saved. Saving an existing scope updates its limit. Disabling a limit keeps counting usage; re-enabling does not reset it. Up to 64 rules per member.',
+  budgetInvalid:
+    'Enter an exact model ID and a limit from 0.000001 to 1,000,000 M, with up to 6 decimal places.',
+  budgetSave: 'Save budget',
+  budgetSaveFailed: 'Unable to save. Check the values and try again.',
+  budgetRuleLimit: 'This member has 64 rules. Edit an existing rule.',
+  budgetSettlementConflict:
+    'Usage changed or the total is below known usage. Refresh and check the request.',
+  budgetAccountingFailed:
+    'Token accounting is unavailable. Restore database access and restart SubLane before settling pending usage.',
+  budgetSettlementHint:
+    'These requests did not report complete usage. Affected budgets block new requests until settled. Enter the total input + output tokens, including any known usage. This applies to every matching rule and is audited.',
+  budgetKnownTokens: '{{value}} M known tokens',
+  budgetSettleTotal: 'Total tokens (M) for {{request}}',
+  budgetSettle: 'Settle usage',
+  budgetsPersonalHint:
+    'Daily and monthly limits reset at UTC boundaries. All matching limits apply. Pending usage requires administrator settlement, even after a reset.',
+  auditMemberBudget: 'Updated token budget',
+  auditMemberBudgetSettle: 'Settled token usage',
+  reasonTokenQuota:
+    'Your token budget is exhausted. Wait for the reset or contact an administrator.',
+  reasonTokenPending:
+    'A previous request needs token settlement. Contact an administrator.',
+  reasonTokenAccounting:
+    'Token accounting is unavailable. Contact an administrator.',
+
   requestFilters: 'Filters',
   requestClearFilters: 'Clear filters',
   requestApplyFilters: 'Apply filters',
@@ -686,9 +926,12 @@ export const en = {
   accountGroups: 'Account groups',
   groupsDescription:
     'Organize subscription accounts into pools for members and projects.',
-  groupsDefaultHint:
-    'Existing accounts and keys use the default group. New accounts and members join it automatically; administrators can adjust access.',
-  defaultGroup: 'Default group',
+  groupsAssignmentHint:
+    'New accounts remain unassigned until you add them to a group. Grant group access through personnel teams, or add a team resource with an allowance.',
+  accountUnassigned: 'Unassigned',
+  accountAssignGroup: 'Assign to an account group',
+  groupsEmpty:
+    'No account groups yet. Create a group and select its subscription accounts.',
   createGroup: 'Create group',
   editGroup: 'Edit group',
   editGroupNamed: 'Edit {{name}}',
@@ -701,14 +944,12 @@ export const en = {
     'Choose the accounts available to keys in this group.',
   groupAccounts: 'Subscription accounts',
   groupAccountsHint:
-    'Accounts keep their other group memberships. For exclusive access, remove them from the default and other pools. Removing an account stops its existing conversations in this group.',
+    'Accounts keep their other group memberships. For exclusive access, keep them in only one pool. Removing an account stops its existing conversations in this group.',
   groupNoAccounts:
     'Add a subscription account first, or save an empty pool and configure it later.',
   saveGroup: 'Save group',
   groupNameTaken: 'A group with this name already exists.',
   groupLimitReached: 'This instance supports up to 32 groups.',
-  defaultGroupProtected:
-    'The default group stays enabled and keeps its name. You can edit its accounts, model policy and member access.',
   groupInputInvalid:
     'Check the group name (1–64 characters), selected accounts and exact model IDs (up to 100).',
   groupSaveFailed: 'Could not save group changes. Try again.',
