@@ -69,10 +69,15 @@ export function Teams() {
         )}
       </div>
       {editing !== undefined ? (
-        <section className="max-w-2xl space-y-4">
-          <h2 className="font-medium">
-            {t(editing ? 'teamEdit' : 'teamCreate')}
-          </h2>
+        <section className="max-w-3xl space-y-6">
+          <div className="space-y-1">
+            <h2 className="font-medium">
+              {t(editing ? 'teamEdit' : 'teamCreate')}
+            </h2>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {t('teamEditDescription')}
+            </p>
+          </div>
           <TeamForm
             key={editing?.id ?? 'new'}
             team={editing ?? undefined}
@@ -208,13 +213,14 @@ function TeamResources({
       )
     : available
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-muted/20 p-5">
+    <section className="space-y-5 border-t border-border pt-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-medium">{t('teamResources')}</h3>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
             {t('teamResourcesHint')}
           </p>
+          <p className="mt-2 text-sm font-medium">{t('teamResourceFormula')}</p>
         </div>
         {editing === undefined && (
           <Button
@@ -277,7 +283,7 @@ function TeamResources({
           )}
         </div>
       ) : teamSchemes.length ? (
-        <div className="divide-y divide-border rounded-lg border border-border bg-background">
+        <div className="divide-y divide-border rounded-lg border border-border">
           {teamSchemes.map((scheme) => (
             <div
               key={scheme.id}
@@ -285,10 +291,13 @@ function TeamResources({
             >
               <div className="min-w-0 space-y-1">
                 <p className="break-words text-sm font-medium">
-                  {scheme.group_name}
+                  {t('teamResourcePoolLabel')}: {scheme.group_name}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {t(modeLabels[scheme.config.mode])} ·{' '}
+                  {t('teamResourceLimitLabel', {
+                    mode: t(modeLabels[scheme.config.mode]),
+                  })}{' '}
+                  ·{' '}
                   {t(
                     scheme.config.period === 'upstream'
                       ? 'allocationUpstreamReset'
@@ -388,6 +397,12 @@ function TeamForm({
       }}
     >
       <fieldset disabled={pending} className="space-y-5">
+        <div className="space-y-1">
+          <h3 className="font-medium">{t('teamPeopleTitle')}</h3>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {t('teamPeopleHint')}
+          </p>
+        </div>
         <div className="space-y-2">
           <label htmlFor="team-name" className="text-sm font-medium">
             {t('teamName')}

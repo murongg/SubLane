@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/murongg/SubLane/internal/allocations"
@@ -10,6 +11,28 @@ import (
 )
 
 type allocationHTTP struct{ gateway *gateway.Service }
+
+func (h *allocationHTTP) prices(w http.ResponseWriter, r *http.Request) {
+	if h.gateway == nil || h.gateway.Pricing() == nil {
+		writeJSON(w, 200, map[string]any{"prices": map[string]any{}})
+		return
+	}
+	models := r.URL.Query()["model"]
+	if len(models) == 0 {
+		allocationError(w, allocations.ErrInput)
+		return
+	}
+	result := map[string]any{}
+	for _, model := range models {
+		if strings.TrimSpace(model) == "" {
+			continue
+		}
+		if price, ok := h.gateway.Pricing().Lookup(model); ok {
+			result[model] = price
+		}
+	}
+	writeJSON(w, 200, map[string]any{"prices": result})
+}
 
 func (h *allocationHTTP) available(w http.ResponseWriter, r *http.Request) bool {
 	if h.gateway != nil {
@@ -31,7 +54,7 @@ func allocationError(w http.ResponseWriter, err error) {
 		status, code = 404, err.Error()
 	case errors.Is(err, allocations.ErrUnavailable):
 		status, code = 403, err.Error()
-	case errors.Is(err, allocations.ErrPoolConflict), errors.Is(err, allocations.ErrSettlement), errors.Is(err, allocations.ErrPending):
+	case errors.Is(err, allocations.ErrPoolConflict), errors.Is(err, allocations.ErrSettlement), errors.Is(err, allocations.ErrPending), errors.Is(err, allocations.ErrUnpriced):
 		status, code = 409, err.Error()
 	case errors.Is(err, allocations.ErrSnapshot):
 		status, code = 409, err.Error()
@@ -81,6 +104,7 @@ func (h *allocationHTTP) saveTeam(w http.ResponseWriter, r *http.Request, id int
 	writeJSON(w, status, value)
 }
 func (h *allocationHTTP) register(r chi.Router) {
+	r.Get("/prices", h.prices)
 	r.Get("/", h.list)
 	r.Post("/", func(w http.ResponseWriter, r *http.Request) { h.save(w, r, 0) })
 	r.Get("/{id}", h.detail)

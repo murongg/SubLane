@@ -6,10 +6,15 @@ import (
 	"errors"
 
 	"github.com/murongg/SubLane/internal/allocations"
+	"github.com/murongg/SubLane/internal/pricing"
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
-func (s *Service) Allocations() *allocations.Service { return allocations.New(s.db) }
+func (s *Service) Allocations() *allocations.Service {
+	return allocations.NewWithPricing(s.db, s.pricing)
+}
+
+func (s *Service) Pricing() *pricing.Service { return s.pricing }
 func (s *Service) RefreshAllocation(ctx context.Context, id int64) error {
 	row, err := s.queries.GetAllocationScheme(ctx, id)
 	if err != nil {

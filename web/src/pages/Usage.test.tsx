@@ -91,7 +91,7 @@ it.each([
     expect(screen.getAllByRole('gridcell')).toHaveLength(168)
     if (path === '/usage')
       await screen.findByText(
-        'No token budgets for keys outside allocation schemes.',
+        'No token budgets for keys outside resource allowances.',
       )
     else
       expect(

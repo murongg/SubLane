@@ -46,7 +46,7 @@ vi.mock('@/lib/members', () => ({
   getMembers: () => Promise.resolve({ members: [], next_cursor: 0 }),
 }))
 
-it('shows team resources beside team membership settings', async () => {
+it('shows resource allowances beside team membership settings', async () => {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <Teams />
@@ -56,10 +56,10 @@ it('shows team resources beside team membership settings', async () => {
   await userEvent
     .setup()
     .click(screen.getByRole('button', { name: 'Edit Synthetic team' }))
-  expect(screen.getByText('Team resources')).toBeTruthy()
+  expect(screen.getByText('Resource allowances')).toBeTruthy()
   await userEvent
     .setup()
-    .click(screen.getByRole('button', { name: 'Add team resource' }))
+    .click(screen.getByRole('button', { name: 'Add resource allowance' }))
   expect(screen.getByText('Synthetic team')).toBeTruthy()
   expect(screen.queryByLabelText('Scheme name')).toBeNull()
 })

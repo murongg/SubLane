@@ -25,6 +25,12 @@ const rateSchema = z.object({
   cached: integer,
   output: integer,
 })
+const priceSchema = z.object({
+  input: integer,
+  cached: integer,
+  output: integer,
+  source: z.string(),
+})
 const configSchema = z.object({
   mode: modeSchema,
   period: z.enum(['upstream', 'day', 'month']),
@@ -154,6 +160,12 @@ export function saveScheme({ id, ...input }: SchemeInput & { id?: number }) {
     schemeSchema,
     { method: id ? 'PATCH' : 'POST', body: JSON.stringify(input) },
   )
+}
+export function lookupModelPrice(model: string) {
+  return request(
+    `/api/allocations/prices?model=${encodeURIComponent(model)}`,
+    z.object({ prices: z.record(z.string(), priceSchema) }),
+  ).then((result) => result.prices[model] ?? Object.values(result.prices)[0])
 }
 export function refreshAllocation(id: number) {
   return request(`/api/allocations/${id}/refresh`, allocationDetailSchema, {

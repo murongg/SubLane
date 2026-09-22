@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { catalogOptions } from '@/lib/catalog'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import {
@@ -9,6 +11,7 @@ import {
   modeLabels,
   parseAllocationValue,
   allocationValue,
+  lookupModelPrice,
 } from '@/lib/allocations'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -27,6 +30,7 @@ function SchemeChoice({
   value,
   options,
   disabled,
+  placeholder,
   onChange,
 }: {
   id: string
@@ -34,6 +38,7 @@ function SchemeChoice({
   value: string
   options: { value: string; label: string }[]
   disabled: boolean
+  placeholder?: string
   onChange: (value: string) => void
 }) {
   return (
@@ -43,12 +48,13 @@ function SchemeChoice({
           id={id}
           type="button"
           variant="outline"
-          className="w-full justify-between gap-3"
+          className="w-full min-w-0 justify-between gap-3"
           aria-label={label}
           disabled={disabled}
         >
           <span className="truncate">
-            {options.find((option) => option.value === value)?.label}
+            {options.find((option) => option.value === value)?.label ??
+              placeholder}
           </span>
           <ChevronDown className="size-4 shrink-0" aria-hidden="true" />
         </Button>
@@ -68,11 +74,83 @@ function SchemeChoice({
     </DropdownMenu>
   )
 }
+function ModelChoice({
+  id,
+  groupID,
+  value,
+  excluded,
+  pending,
+  onChange,
+}: {
+  id: string
+  groupID: number
+  value: string
+  excluded: string[]
+  pending: boolean
+  onChange: (model: string) => void
+}) {
+  const { t } = useTranslation()
+  const client = useQueryClient()
+  const query = useQuery(catalogOptions(client, { kind: 'group', id: groupID }))
+  // Keep a saved model visible even if it is absent from the current pool catalog.
+  const models = [
+    ...new Set([...(value ? [value] : []), ...(query.data?.models ?? [])]),
+  ].filter((model) => model === value || !excluded.includes(model))
+  return (
+    <div className="min-w-0 flex-1 space-y-2">
+      <SchemeChoice
+        id={id}
+        label={t('allocationModelID')}
+        value={value}
+        placeholder={t(
+          query.isPending ? 'catalogLoading' : 'allocationChooseModel',
+        )}
+        options={models.map((model) => ({ value: model, label: model }))}
+        disabled={pending || models.length === 0}
+        onChange={onChange}
+      />
+      {(query.isError || query.data?.refresh_failed) && (
+        <p role="status" className="text-xs text-warning">
+          {t('catalogLoadFailed')}
+        </p>
+      )}
+      {query.data?.partial && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {t('catalogPartial')}
+        </p>
+      )}
+      {query.data && !query.data.known && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {t('catalogUnknownHint')}
+        </p>
+      )}
+      {query.data?.known && query.data.models.length === 0 && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {t('catalogEmptyGroup')}
+        </p>
+      )}
+      {(query.isError ||
+        query.data?.refresh_failed ||
+        query.data?.models.length === 0) && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pending || query.isFetching}
+          onClick={() => query.refetch()}
+        >
+          {t('catalogReload')}
+        </Button>
+      )}
+    </div>
+  )
+}
 type RateDraft = {
   model: string
   input: string
   cached: string
   output: string
+  priceState?: 'loading' | 'missing' | 'failed'
 }
 export function SchemeForm({
   teams,
@@ -107,7 +185,7 @@ export function SchemeForm({
     initial?.period === 'day' ? 'day' : 'month',
   )
   const [enabled, setEnabled] = useState(scheme?.enabled ?? true)
-  const [startNext, setStartNext] = useState(true)
+  const [startNext, setStartNext] = useState(false)
   const [values, setValues] = useState<Record<number, string>>(
     Object.fromEntries(
       initial?.members.map((m) => [
@@ -124,6 +202,7 @@ export function SchemeForm({
       output: allocationValue(r.output, 'amount'),
     })) ?? [],
   )
+  const [advancedRates, setAdvancedRates] = useState(mode !== 'ratio')
   const [invalid, setInvalid] = useState(false)
   const team = fixedTeam ?? teams.find((v) => v.id === teamID)
   const group = groups.find((v) => v.id === groupID)
@@ -135,6 +214,7 @@ export function SchemeForm({
   const changeMode = (next: AllocationMode) => {
     if (next !== mode) {
       setMode(next)
+      setAdvancedRates(next !== 'ratio')
       setValues({})
       setInvalid(false)
     }
@@ -143,9 +223,47 @@ export function SchemeForm({
     setRates((all) =>
       all.map((r, n) => (n === i ? { ...r, [field]: value } : r)),
     )
+  const fillPrice = async (index: number, model: string) => {
+    const draft: RateDraft = {
+      model,
+      input: '',
+      cached: '',
+      output: '',
+      priceState: 'loading',
+    }
+    setRates((all) => all.map((rate, i) => (i === index ? draft : rate)))
+    try {
+      const price = await lookupModelPrice(model)
+      // Match the exact selection, not its array index: rows can be removed or
+      // another model selected before this request finishes.
+      setRates((all) =>
+        all.map((rate) =>
+          rate === draft
+            ? {
+                model,
+                input: price ? allocationValue(price.input, 'amount') : '',
+                cached: price ? allocationValue(price.cached, 'amount') : '',
+                output: price ? allocationValue(price.output, 'amount') : '',
+                priceState: price ? undefined : 'missing',
+              }
+            : rate,
+        ),
+      )
+    } catch {
+      setRates((all) =>
+        all.map((rate) =>
+          rate === draft ? { ...rate, priceState: 'failed' } : rate,
+        ),
+      )
+    }
+  }
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (pending) return
+    if (
+      pending ||
+      (mode !== 'tokens' && rates.some((rate) => rate.priceState === 'loading'))
+    )
+      return
     const members = (team?.members ?? [])
       .filter((m) => (values[m.id] ?? '').trim() !== '')
       .map((m) => ({
@@ -155,12 +273,18 @@ export function SchemeForm({
     const parsedRates =
       mode === 'tokens'
         ? []
-        : rates.map((r) => ({
-            model: r.model.trim(),
-            input: parseAllocationValue(r.input, 'amount') ?? -1,
-            cached: parseAllocationValue(r.cached, 'amount') ?? -1,
-            output: parseAllocationValue(r.output, 'amount') ?? -1,
-          }))
+        : mode === 'ratio' && !advancedRates
+          ? // Editing shares must preserve the revision's pricing snapshot even
+            // while pricing controls are collapsed. New resources resolve prices automatically.
+            initial?.mode === 'ratio'
+            ? initial.rates
+            : []
+          : rates.map((r) => ({
+              model: r.model.trim(),
+              input: parseAllocationValue(r.input, 'amount') ?? -1,
+              cached: parseAllocationValue(r.cached, 'amount') ?? -1,
+              output: parseAllocationValue(r.output, 'amount') ?? -1,
+            }))
     const bad =
       (!resourceMode && !name.trim()) ||
       !teamID ||
@@ -168,7 +292,7 @@ export function SchemeForm({
       members.length === 0 ||
       members.some((m) => m.limit <= 0) ||
       (mode === 'ratio' && total > 10000) ||
-      (mode !== 'tokens' &&
+      (mode === 'amount' &&
         (parsedRates.length === 0 ||
           parsedRates.some(
             (r) =>
@@ -309,7 +433,36 @@ export function SchemeForm({
           </div>
         )}
         <section className="space-y-3">
-          <h3 className="font-medium">{t('allocationMembers')}</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-medium">
+              {t(mode === 'ratio' ? 'allocationShares' : 'allocationMembers')}
+            </h3>
+            {mode === 'ratio' && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!team?.members.length}
+                onClick={() => {
+                  const members = team?.members ?? []
+                  setValues(
+                    Object.fromEntries(
+                      members.map((member, index) => [
+                        member.id,
+                        allocationValue(
+                          Math.floor(10000 / members.length) +
+                            (index < 10000 % members.length ? 1 : 0),
+                          'ratio',
+                        ),
+                      ]),
+                    ),
+                  )
+                }}
+              >
+                {t('allocationSplitEqually')}
+              </Button>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground">
             {t('allocationBlankHint')}
           </p>
@@ -358,107 +511,162 @@ export function SchemeForm({
             </p>
           )}
         </section>
-        {mode !== 'tokens' && (
-          <section className="space-y-3">
-            <h3 className="font-medium">{t('allocationRates')}</h3>
+        {mode === 'ratio' && (
+          <div className="space-y-2">
+            <p className="text-sm leading-6">{t('allocationShareRules')}</p>
+            {!scheme && (
+              <p className="text-sm leading-6">
+                {t(
+                  startNext
+                    ? 'allocationStartNextRatio'
+                    : 'allocationImmediateHint',
+                )}
+              </p>
+            )}
             <p className="text-sm leading-6 text-muted-foreground">
-              {t('allocationRatesHint')}
+              {t('allocationAutoRatesHint')}
             </p>
-            {rates.map((r, i) => (
-              <div
-                key={i}
-                className="grid gap-3 border-b border-border pb-4 sm:grid-cols-3"
-              >
-                <div className="space-y-2 sm:col-span-3">
-                  <label htmlFor={`rate-model-${i}`} className="text-sm">
-                    {t('allocationModelID')}
-                  </label>
-                  <div className="flex gap-2">
-                    <Input
-                      id={`rate-model-${i}`}
-                      value={r.model}
-                      onChange={(e) => updateRate(i, 'model', e.target.value)}
-                      maxLength={128}
-                    />
-                    <Button
-                      variant="outline"
-                      type="button"
-                      onClick={() =>
-                        setRates((all) => all.filter((_, n) => n !== i))
-                      }
-                      aria-label={t('allocationRemoveRate', { index: i + 1 })}
-                    >
-                      {t('allocationRemove')}
-                    </Button>
-                  </div>
-                </div>
-                {(['input', 'cached', 'output'] as const).map((field) => (
-                  <div key={field} className="space-y-2">
-                    <label htmlFor={`rate-${field}-${i}`} className="text-sm">
-                      {t(
-                        field === 'input'
-                          ? 'allocationRateInput'
-                          : field === 'cached'
-                            ? 'allocationRateCached'
-                            : 'allocationRateOutput',
-                      )}
-                    </label>
-                    <Input
-                      id={`rate-${field}-${i}`}
-                      value={r[field]}
-                      inputMode="decimal"
-                      onChange={(e) => updateRate(i, field, e.target.value)}
-                    />
-                  </div>
-                ))}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={rates.length >= 128}
-              onClick={() =>
-                setRates((all) => [
-                  ...all,
-                  { model: '', input: '', cached: '', output: '' },
-                ])
-              }
-            >
-              {t('allocationAddRate')}
-            </Button>
-          </section>
+          </div>
         )}
-        <div className="space-y-3 border-t border-border pt-5">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="size-4 accent-primary"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            {t('allocationEnabled')}
-          </label>
-          {scheme ? (
-            <p className="text-sm leading-6 text-muted-foreground">
-              {t('allocationNextHint')}
-            </p>
-          ) : (
-            <label className="flex items-start gap-2 text-sm leading-6">
+        {scheme && (
+          <p className="text-sm leading-6 text-muted-foreground">
+            {t('allocationNextHint')}
+          </p>
+        )}
+        <details
+          className="space-y-4 border-t border-border pt-4"
+          open={mode === 'ratio' ? undefined : true}
+        >
+          <summary className="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
+            {t('allocationSettings')}
+          </summary>
+          {mode === 'ratio' && !advancedRates && (
+            <div className="space-y-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAdvancedRates(true)}
+              >
+                {t('allocationAdvancedRates')}
+              </Button>
+            </div>
+          )}
+          {mode !== 'tokens' && (mode !== 'ratio' || advancedRates) && (
+            <section className="space-y-3">
+              <h3 className="font-medium">{t('allocationRates')}</h3>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {t('allocationRatesHint')}
+              </p>
+              {rates.map((r, i) => (
+                <div
+                  key={i}
+                  className="grid gap-3 border-b border-border pb-4 sm:grid-cols-3"
+                >
+                  <div className="space-y-2 sm:col-span-3">
+                    <label htmlFor={`rate-model-${i}`} className="text-sm">
+                      {t('allocationModelID')}
+                    </label>
+                    <div className="flex gap-2">
+                      <ModelChoice
+                        id={`rate-model-${i}`}
+                        groupID={groupID}
+                        value={r.model}
+                        excluded={rates.map((rate) => rate.model)}
+                        pending={pending}
+                        onChange={(model) => fillPrice(i, model)}
+                      />
+                      <Button
+                        variant="outline"
+                        type="button"
+                        onClick={() =>
+                          setRates((all) => all.filter((_, n) => n !== i))
+                        }
+                        aria-label={t('allocationRemoveRate', { index: i + 1 })}
+                      >
+                        {t('allocationRemove')}
+                      </Button>
+                    </div>
+                  </div>
+                  {(['input', 'cached', 'output'] as const).map((field) => (
+                    <div key={field} className="space-y-2">
+                      <label htmlFor={`rate-${field}-${i}`} className="text-sm">
+                        {t(
+                          field === 'input'
+                            ? 'allocationRateInput'
+                            : field === 'cached'
+                              ? 'allocationRateCached'
+                              : 'allocationRateOutput',
+                        )}
+                      </label>
+                      <Input
+                        id={`rate-${field}-${i}`}
+                        value={r[field]}
+                        disabled={r.priceState === 'loading'}
+                        inputMode="decimal"
+                        onChange={(e) => updateRate(i, field, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                  {r.priceState && (
+                    <p className="text-xs text-muted-foreground sm:col-span-3">
+                      {t(
+                        r.priceState === 'loading'
+                          ? 'allocationPriceLoading'
+                          : r.priceState === 'missing'
+                            ? 'allocationPriceMissing'
+                            : 'allocationPriceFailed',
+                      )}
+                    </p>
+                  )}
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                disabled={rates.length >= 128}
+                onClick={() =>
+                  setRates((all) => [
+                    ...all,
+                    { model: '', input: '', cached: '', output: '' },
+                  ])
+                }
+              >
+                {t('allocationAddRate')}
+              </Button>
+            </section>
+          )}
+          <div className="space-y-3 border-t border-border pt-5">
+            <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                className="mt-1 size-4 shrink-0 accent-primary"
-                checked={startNext}
-                onChange={(e) => setStartNext(e.target.checked)}
+                className="size-4 accent-primary"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
               />
-              {t('allocationStartNext')}
+              {t('allocationEnabled')}
             </label>
-          )}
-          {!scheme && !startNext && (
-            <p className="text-sm leading-6 text-muted-foreground">
-              {t('allocationImmediateHint')}
-            </p>
-          )}
-        </div>
+            {!scheme && (
+              <label className="flex items-start gap-2 text-sm leading-6">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4 shrink-0 accent-primary"
+                  checked={startNext}
+                  onChange={(e) => setStartNext(e.target.checked)}
+                />
+                {t(
+                  mode === 'ratio'
+                    ? 'allocationStartNextRatio'
+                    : 'allocationStartNext',
+                )}
+              </label>
+            )}
+            {!scheme && !startNext && mode !== 'ratio' && (
+              <p className="text-sm leading-6 text-muted-foreground">
+                {t('allocationImmediateHint')}
+              </p>
+            )}
+          </div>
+        </details>
       </fieldset>
       {invalid && (
         <p role="alert" className="text-sm text-error">
@@ -474,7 +682,14 @@ export function SchemeForm({
         >
           {t('cancel')}
         </Button>
-        <Button type="submit" disabled={pending}>
+        <Button
+          type="submit"
+          disabled={
+            pending ||
+            (mode !== 'tokens' &&
+              rates.some((rate) => rate.priceState === 'loading'))
+          }
+        >
           {t('allocationSave')}
         </Button>
       </div>

@@ -8,13 +8,16 @@ import (
 	"errors"
 	"math/big"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/groups"
+	"github.com/murongg/SubLane/internal/pricing"
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
@@ -91,11 +94,15 @@ type Scheme struct {
 	Next *Revision `json:"next"`
 }
 type Service struct {
-	conn *sql.DB
-	now  func() time.Time
+	conn    *sql.DB
+	now     func() time.Time
+	pricing *pricing.Service
 }
 
 func New(conn *sql.DB) *Service { return &Service{conn: conn, now: time.Now} }
+func NewWithPricing(conn *sql.DB, catalog *pricing.Service) *Service {
+	return &Service{conn: conn, now: time.Now, pricing: catalog}
+}
 func validName(v string) bool {
 	return v == strings.TrimSpace(v) && utf8.ValidString(v) && utf8.RuneCountInString(v) > 0 && utf8.RuneCountInString(v) <= 64 && strings.IndexFunc(v, unicode.IsControl) < 0
 }
@@ -255,7 +262,7 @@ func normalize(c *Config) error {
 	if c.Mode == "ratio" && total > 10000 {
 		return ErrInput
 	}
-	if c.Mode != "tokens" && len(c.Rates) == 0 {
+	if c.Mode == "amount" && len(c.Rates) == 0 {
 		return ErrInput
 	}
 	models := map[string]bool{}
@@ -352,8 +359,17 @@ func readScheme(ctx context.Context, q *db.Queries, id, now int64) (Scheme, erro
 	return out, nil
 }
 func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Scheme, error) {
-	if id < 0 || !validName(in.Name) || in.TeamID <= 0 || in.GroupID <= 0 || normalize(&in.Config) != nil {
+	if id < 0 || !validName(in.Name) || in.TeamID <= 0 || in.GroupID <= 0 {
 		return Scheme{}, ErrInput
+	}
+	if in.Config.Mode == "ratio" {
+		var total int64
+		for _, member := range in.Config.Members {
+			total += member.Limit
+		}
+		if total > 10000 {
+			return Scheme{}, ErrInput
+		}
 	}
 	// Default receives newly imported accounts; reserving it would block all future imports.
 	if in.GroupID == 1 {
@@ -392,6 +408,12 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 		if in.Config.Mode == "ratio" && a.Provider != "codex" {
 			return Scheme{}, ErrInput
 		}
+	}
+	if err = s.applyPrices(ctx, q, in.GroupID, &in.Config); err != nil {
+		return Scheme{}, err
+	}
+	if normalize(&in.Config) != nil {
+		return Scheme{}, ErrInput
 	}
 	effective := now
 	if id == 0 {
@@ -462,6 +484,67 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 		return Scheme{}, err
 	}
 	return out, tx.Commit()
+}
+
+// applyPrices resolves omitted or zero model rates once, before the config is
+// persisted into a revision. Existing non-zero values remain explicit overrides.
+func (s *Service) applyPrices(ctx context.Context, q *db.Queries, groupID int64, config *Config) error {
+	if config.Mode == "tokens" || s.pricing == nil {
+		if config.Mode == "ratio" && len(config.Rates) == 0 {
+			return ErrUnpriced
+		}
+		return nil
+	}
+	if config.Mode == "ratio" && len(config.Rates) == 0 && q != nil {
+		rows, err := q.ListGroupCatalogs(ctx, groupID)
+		if err != nil {
+			return err
+		}
+		models := map[string]bool{}
+		for _, row := range rows {
+			catalog, err := accounts.DecodeCatalog(row.ModelsSnapshot, row.ModelsRevision)
+			if err != nil {
+				continue
+			}
+			for _, model := range catalog.Models {
+				_, native := groups.SplitModel(model)
+				models[native] = true
+			}
+		}
+		if len(models) == 0 {
+			return ErrUnpriced
+		}
+		ids := make([]string, 0, len(models))
+		for model := range models {
+			ids = append(ids, model)
+		}
+		sort.Strings(ids)
+		for _, model := range ids {
+			price, ok := s.pricing.Lookup(model)
+			if !ok {
+				return ErrUnpriced
+			}
+			config.Rates = append(config.Rates, Rate{Model: model, Input: price.Input, Cached: price.Cached, Output: price.Output})
+		}
+		return nil
+	}
+	for i := range config.Rates {
+		model := config.Rates[i].Model
+		price, ok := s.pricing.Lookup(model)
+		if !ok {
+			continue
+		}
+		if config.Rates[i].Input == 0 {
+			config.Rates[i].Input = price.Input
+		}
+		if config.Rates[i].Cached == 0 {
+			config.Rates[i].Cached = price.Cached
+		}
+		if config.Rates[i].Output == 0 {
+			config.Rates[i].Output = price.Output
+		}
+	}
+	return nil
 }
 func Cost(r Rate, input, output, cached int64) (int64, error) {
 	if input < 0 || output < 0 || cached < 0 || cached > input || input > 1_000_000_000 || output > 1_000_000_000 {

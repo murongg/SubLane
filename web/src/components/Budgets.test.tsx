@@ -69,7 +69,7 @@ it('creates a scoped budget and edits its limit without changing its scope', asy
     name: 'Token budgets for member-test',
   })
   await within(dialog).findByText(
-    'No token budgets for keys outside allocation schemes.',
+    'No token budgets for keys outside resource allowances.',
   )
   await user.click(within(dialog).getByRole('button', { name: 'Add budget' }))
   await user.type(within(dialog).getByLabelText('Model ID'), 'synthetic-model')

@@ -12,6 +12,7 @@ import (
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/groups"
+	"github.com/murongg/SubLane/internal/pricing"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/vault"
@@ -88,6 +89,69 @@ func TestTeamsSchemesAndExclusiveCapacity(t *testing.T) {
 		t.Fatal("unpriced amount scheme", err)
 	}
 }
+
+func TestSchemeCopiesAutomaticPriceIntoRevision(t *testing.T) {
+	_, conn, user, _ := fixture(t)
+	ctx := context.Background()
+	manager := NewWithPricing(conn, pricing.NewStatic(map[string]pricing.Price{
+		"gpt-5.1-codex": {Input: 1250000, Cached: 125000, Output: 10000000},
+	}))
+	team, err := manager.SaveTeam(ctx, 0, TeamInput{Name: "Platform engineering", Enabled: true, MemberIDs: []int64{user}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheme, err := manager.SaveScheme(ctx, 0, SchemeInput{Name: "Codex shared plan", TeamID: team.ID, GroupID: 2, Enabled: true, Config: Config{Mode: "amount", Period: "day", Members: []Share{{UserID: user, Limit: 100}}, Rates: []Rate{{Model: "gpt-5.1-codex"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rate := scheme.Config.Rates[0]
+	if rate.Input != 1250000 || rate.Cached != 125000 || rate.Output != 10000000 {
+		t.Fatalf("automatic price not snapshotted: %+v", rate)
+	}
+}
+
+func TestRatioSchemeBuildsRatesFromPoolCatalog(t *testing.T) {
+	_, conn, user, account := fixture(t)
+	ctx := context.Background()
+	if _, err := conn.Exec(`UPDATE accounts SET models_snapshot = ? WHERE id = ?`,
+		`{"models":["gpt-5.1-codex","claude-3-7-sonnet-20250219"],"updated_at":1,"source":"synthetic"}`, account); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewWithPricing(conn, pricing.NewStatic(map[string]pricing.Price{
+		"gpt-5.1-codex":              {Input: 1250000, Cached: 125000, Output: 10000000},
+		"claude-3-7-sonnet-20250219": {Input: 3000000, Cached: 300000, Output: 15000000},
+	}))
+	team, err := manager.SaveTeam(ctx, 0, TeamInput{Name: "Synthetic ratio team", Enabled: true, MemberIDs: []int64{user}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheme, err := manager.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic ratio", TeamID: team.ID, GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scheme.Config.Rates) != 2 || scheme.Config.Rates[0].Model != "claude-3-7-sonnet-20250219" || scheme.Config.Rates[1].Model != "gpt-5.1-codex" {
+		t.Fatalf("automatic ratio rates not snapshotted: %+v", scheme.Config.Rates)
+	}
+}
+
+func TestRatioSchemeRejectsUnpricedPoolModel(t *testing.T) {
+	_, conn, user, account := fixture(t)
+	ctx := context.Background()
+	if _, err := conn.Exec(`UPDATE accounts SET models_snapshot = ? WHERE id = ?`,
+		`{"models":["unknown-codex-model"],"updated_at":1,"source":"synthetic"}`, account); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewWithPricing(conn, pricing.NewStatic(map[string]pricing.Price{}))
+	team, err := manager.SaveTeam(ctx, 0, TeamInput{Name: "Synthetic ratio team", Enabled: true, MemberIDs: []int64{user}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = manager.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic ratio", TeamID: team.ID, GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}}})
+	if !errors.Is(err, ErrUnpriced) {
+		t.Fatalf("want unpriced model error, got %v", err)
+	}
+}
+
 func TestCostSeparatesCacheAndPreservesSmallCharges(t *testing.T) {
 	r := Rate{Model: "synthetic-model", Input: 2000000, Cached: 200000, Output: 8000000}
 	cost, err := Cost(r, 100, 50, 40)

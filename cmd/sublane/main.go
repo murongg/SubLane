@@ -21,6 +21,7 @@ import (
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/oauth"
+	"github.com/murongg/SubLane/internal/pricing"
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/upstream"
@@ -107,7 +108,17 @@ func run() error {
 	if err := provider.Start(ctx); err != nil {
 		return err
 	}
-	forwarding := gateway.New(ctx, db, subscriptions, provider)
+	pricingCache := cfg.PricingCache
+	if pricingCache == "" {
+		pricingCache = filepath.Join(cfg.DataDir, "model-prices.json")
+	}
+	priceCatalog, err := pricing.New(pricing.Config{URL: cfg.PricingURL, HashURL: cfg.PricingHashURL, CachePath: pricingCache, HashPath: pricingCache + ".sha256", FallbackPath: cfg.PricingFallback, OverridePath: cfg.PricingOverride, Interval: cfg.PricingInterval})
+	if err != nil {
+		return fmt.Errorf("load model pricing: %w", err)
+	}
+	priceCatalog.Start(ctx)
+	defer priceCatalog.Close()
+	forwarding := gateway.New(ctx, db, subscriptions, provider, priceCatalog)
 	defer forwarding.Close()
 	authorization := oauth.New(subscriptions, provider)
 	srv := &http.Server{
