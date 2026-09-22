@@ -2,7 +2,7 @@
 
 ## Context
 
-Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and [the architecture guide](https://sublane-website.vercel.app/docs/architecture) for implementation boundaries before making significant changes. Local account access, Codex, Claude, and Antigravity OAuth/import, encrypted credentials, and gateway forwarding are implemented. Live subscription and desktop compatibility require separate evidence; see [the Codex guide](https://sublane-website.vercel.app/docs/codex).
+Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and [the architecture guide](https://sublane.dev/docs/architecture) for implementation boundaries before making significant changes. Local account access, Codex, Claude, and Antigravity OAuth/import, encrypted credentials, and gateway forwarding are implemented. Live subscription and desktop compatibility require separate evidence; see [the Codex guide](https://sublane.dev/docs/codex).
 
 Use English for code comments, `PRODUCT.md`, and primary developer documentation. Keep the English and Simplified Chinese UI dictionaries complete. English is the default interface language.
 
@@ -50,7 +50,7 @@ Usage, operations, and architecture guides are maintained in [the documentation 
 - Keep OAuth states, request bodies, stream events, WebSocket history, and concurrent operations bounded. Never read local Codex credentials automatically or use real credentials in tests.
 - Preserve cancellation and graceful shutdown. Future model streaming routes need explicit timeout and resource policies rather than blanket response buffering.
 - Do not add authentication bypasses or expose management endpoints as member APIs.
-- Default to loopback listening. Keep management routes under the default administrator-only API subtree. Members must never inherit administrator API access; enforce roles on both direct routes and backend requests. First-run setup uses a username and password; preserve its atomic single-administrator guard and disable it after initialization. See [the authentication guide](https://sublane-website.vercel.app/docs/authentication) for the current authentication contract.
+- Default to loopback listening. Keep management routes under the default administrator-only API subtree. Members must never inherit administrator API access; enforce roles on both direct routes and backend requests. First-run setup uses a username and password; preserve its atomic single-administrator guard and disable it after initialization. See [the authentication guide](https://sublane.dev/docs/authentication) for the current authentication contract.
 
 ## Frontend
 

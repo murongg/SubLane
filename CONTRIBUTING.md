@@ -1,6 +1,6 @@
 # Contributing to SubLane
 
-SubLane is at the foundation stage. Read [PRODUCT.md](PRODUCT.md) and [the roadmap](https://sublane-website.vercel.app/docs/roadmap) before expanding scope. Small improvements to a reliable Codex-first workflow are more useful than broad provider coverage at this stage.
+SubLane is at the foundation stage. Read [PRODUCT.md](PRODUCT.md) and [the roadmap](https://sublane.dev/docs/roadmap) before expanding scope. Small improvements to a reliable Codex-first workflow are more useful than broad provider coverage at this stage.
 
 ## Local workflow
 
@@ -10,7 +10,7 @@ SubLane is at the foundation stage. Read [PRODUCT.md](PRODUCT.md) and [the roadm
 4. Run `make check` before submitting your work.
 5. Update relevant documentation and both UI languages when behavior changes.
 
-See [development notes](https://sublane-website.vercel.app/docs/development) for commands and troubleshooting.
+See [development notes](https://sublane.dev/docs/development) for commands and troubleshooting.
 
 ## Change boundaries
 
