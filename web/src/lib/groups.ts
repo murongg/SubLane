@@ -22,6 +22,7 @@ const choicesSchema = z.object({
   groups: z
     .array(
       groupSchema.pick({ id: true, name: true }).extend({
+        account_count: z.number().int().nonnegative(),
         scheme_id: z.number().int().optional(),
         scheme_name: z.string().optional(),
       }),

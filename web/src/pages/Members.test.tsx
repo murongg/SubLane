@@ -129,6 +129,11 @@ it('creates a member and toggles their access using the management API', async (
     within(drawer).getByRole('button', { name: 'Create member' }),
   )
   await screen.findByRole('button', { name: 'Disable member-test' })
+  expect(
+    screen.getAllByRole('button', {
+      name: 'Manage groups for member-test',
+    }),
+  ).toHaveLength(2)
   const created = fetchMock.mock.calls.find(
     ([, init]) => init?.method === 'POST',
   )
@@ -248,5 +253,124 @@ it('keeps the create form usable after a duplicate username and validates confir
         .getByRole('button', { name: 'Create member' })
         .hasAttribute('disabled'),
     ).toBe(false),
+  )
+})
+
+it('adds an existing login as an administrator and changes its workspace role', async () => {
+  let members: (typeof syntheticMember)[] = []
+  const calls: Array<{ username: string; role: string }> = []
+  const fetchMock = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/tenants/1/members' && init?.method === 'POST') {
+        const input = JSON.parse(String(init.body))
+        calls.push(input)
+        members = [{ ...syntheticMember, role: input.role }]
+        return Promise.resolve(response(members[0], 201))
+      }
+      if (url === '/api/members/2/role' && init?.method === 'PATCH') {
+        const input = JSON.parse(String(init.body))
+        members = [{ ...syntheticMember, role: input.role }]
+        return Promise.resolve(response(members[0]))
+      }
+      return Promise.resolve(response({ members, next_cursor: 0 }))
+    })
+  vi.stubGlobal('fetch', fetchMock)
+  const user = userEvent.setup()
+  open()
+  await screen.findByText('No members yet')
+  await user.click(screen.getByRole('button', { name: 'Add existing account' }))
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Add existing account',
+  })
+  await user.type(within(dialog).getByLabelText('Username'), 'member-test')
+  await user.click(within(dialog).getByRole('radio', { name: 'Administrator' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Save access' }))
+  const row = await screen.findByRole('row', { name: /member-test/ })
+  expect(within(row).getByText('Administrator')).toBeTruthy()
+  expect(calls[0]).toEqual({ username: 'member-test', role: 'admin' })
+  await user.click(
+    screen.getByRole('button', { name: 'Change role for member-test' }),
+  )
+  const change = await screen.findByRole('dialog', {
+    name: 'Change workspace role',
+  })
+  await user.click(within(change).getByRole('radio', { name: 'Member' }))
+  await user.click(within(change).getByRole('button', { name: 'Save access' }))
+  await waitFor(() =>
+    expect(
+      within(screen.getByRole('row', { name: /member-test/ })).getByText(
+        'Member',
+      ),
+    ).toBeTruthy(),
+  )
+  expect(
+    screen.getAllByRole('button', {
+      name: 'Manage groups for member-test',
+    }),
+  ).toHaveLength(2)
+  expect(
+    fetchMock.mock.calls.some(
+      ([url, init]) =>
+        url === '/api/members/2/role' &&
+        init?.method === 'PATCH' &&
+        init.body === '{"role":"member"}',
+    ),
+  ).toBe(true)
+})
+
+it('offers a pool grant immediately when an older linked login is outside the current page', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/tenants/1/members' && init?.method === 'POST')
+        return Promise.resolve(response(syntheticMember, 201))
+      return Promise.resolve(response({ members: [], next_cursor: 0 }))
+    }),
+  )
+  const user = userEvent.setup()
+  open()
+  await screen.findByText('No members yet')
+  await user.click(screen.getByRole('button', { name: 'Add existing account' }))
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Add existing account',
+  })
+  await user.type(within(dialog).getByLabelText('Username'), 'member-test')
+  await user.click(within(dialog).getByRole('button', { name: 'Save access' }))
+  expect(
+    await screen.findByRole('button', {
+      name: 'Manage groups for member-test',
+    }),
+  ).toBeTruthy()
+})
+
+it('explains how to change a role when an existing login already belongs here', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/tenants/1/members' && init?.method === 'POST')
+        return Promise.resolve(
+          response({ error: 'member_already_exists' }, 409),
+        )
+      return Promise.resolve(response({ members: [], next_cursor: 0 }))
+    }),
+  )
+  const user = userEvent.setup()
+  open()
+  await screen.findByText('No members yet')
+  await user.click(screen.getByRole('button', { name: 'Add existing account' }))
+  const dialog = await screen.findByRole('dialog', {
+    name: 'Add existing account',
+  })
+  await user.type(within(dialog).getByLabelText('Username'), 'member-test')
+  await user.click(within(dialog).getByRole('button', { name: 'Save access' }))
+  expect((await within(dialog).findByRole('alert')).textContent).toContain(
+    'Change workspace role',
   )
 })

@@ -87,6 +87,15 @@ func New(o Options) http.Handler {
 			}
 			summary["status"] = status
 		}
+		usableKey := false
+		if o.Keys != nil {
+			usableKey, err = o.Keys.HasUsableKey(r.Context(), sessionUser(r).ID)
+			if err != nil {
+				writeJSON(w, 503, map[string]string{"error": "storage_unavailable"})
+				return
+			}
+		}
+		summary["has_usable_key"] = usableKey
 		writeJSON(w, 200, map[string]any{
 			"name": "SubLane", "version": o.Version, "status": "ok", "uptime_seconds": max(0, int64(time.Since(o.StartedAt).Seconds())),
 			"storage": map[string]string{"engine": "sqlite", "status": "ready"},
@@ -104,7 +113,7 @@ func New(o Options) http.Handler {
 		api.Route("/tenants", func(workspaces chi.Router) {
 			routeErrors(workspaces)
 			workspaces.Use(login.requireUser)
-			(&tenantHTTP{service: o.Tenants}).register(workspaces)
+			(&tenantHTTP{service: o.Tenants, tenantID: tenantID}).register(workspaces)
 		})
 		api.Route("/connection", func(common chi.Router) {
 			routeErrors(common)

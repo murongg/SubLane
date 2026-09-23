@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LoaderCircle, Plus, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { getMembers, setMemberEnabled } from '@/lib/members'
+import { getMembers, setMemberEnabled, type Member } from '@/lib/members'
 import { authOptions } from '@/lib/auth'
 import { selectedWorkspace } from '@/lib/workspace'
 import { Button } from '@/components/ui/Button'
@@ -10,6 +10,7 @@ import { Status } from '@/components/Status'
 import { CreateMember } from '@/components/CreateMember'
 import { GroupAccess } from '@/components/GroupAccess'
 import { MemberActions } from '@/components/MemberActions'
+import { MembershipEditor } from '@/components/MembershipEditor'
 
 export function Members() {
   const { t, i18n } = useTranslation()
@@ -20,7 +21,11 @@ export function Members() {
   const [cursors, setCursors] = useState([0])
   const cursor = cursors[cursors.length - 1]
   const [creating, setCreating] = useState(false)
-  const [createdName, setCreatedName] = useState('')
+  const [membershipTarget, setMembershipTarget] = useState<
+    Member | 'new' | null
+  >(null)
+  const [createdMember, setCreatedMember] = useState<Member | null>(null)
+  const [accessSaved, setAccessSaved] = useState<Member | null>(null)
   const [resetName, setResetName] = useState('')
   const query = useQuery({
     queryKey: ['members', cursor],
@@ -37,20 +42,44 @@ export function Members() {
           <h1 className="page-title">{t('members')}</h1>
           <p className="page-description">{t('membersDescription')}</p>
         </div>
-        <Button
-          onClick={() => {
-            setCreatedName('')
-            setCreating(true)
-          }}
-        >
-          <Plus aria-hidden="true" />
-          {t('addMember')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setMembershipTarget('new')}>
+            {t('memberExistingAdd')}
+          </Button>
+          <Button
+            onClick={() => {
+              setCreatedMember(null)
+              setCreating(true)
+            }}
+          >
+            <Plus aria-hidden="true" />
+            {t('addMember')}
+          </Button>
+        </div>
       </div>
-      {createdName && (
-        <p role="status" className="text-sm text-success">
-          {t('memberCreated', { username: createdName })}
-        </p>
+      {createdMember && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-3 text-sm text-success"
+        >
+          <span>
+            {t('memberCreated', { username: createdMember.username })}
+          </span>
+          <GroupAccess member={createdMember} />
+        </div>
+      )}
+      {accessSaved && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-3 text-sm text-success"
+        >
+          <span>
+            {t('memberAccessSaved', { username: accessSaved.username })}
+          </span>
+          {accessSaved.role === 'member' && (
+            <GroupAccess member={accessSaved} />
+          )}
+        </div>
       )}
       {update.isError && (
         <p role="alert" className="text-sm text-error">
@@ -110,6 +139,9 @@ export function Members() {
                   {t('memberStatus')}
                 </th>
                 <th scope="col" className="px-5 py-3 font-medium">
+                  {t('role')}
+                </th>
+                <th scope="col" className="px-5 py-3 font-medium">
                   {t('memberCreatedAt')}
                 </th>
                 <th scope="col" className="px-5 py-3 text-right font-medium">
@@ -128,6 +160,9 @@ export function Members() {
                       {t(member.enabled ? 'active' : 'disabled')}
                     </Status>
                   </td>
+                  <td className="px-5 py-4">
+                    {t(member.role === 'admin' ? 'administrator' : 'member')}
+                  </td>
                   <td className="whitespace-nowrap px-5 py-4 text-muted-foreground">
                     <time
                       dateTime={new Date(
@@ -141,33 +176,51 @@ export function Members() {
                   </td>
                   <td className="px-5 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={update.isPending}
-                        aria-label={t(
-                          member.enabled
-                            ? 'disableMemberNamed'
-                            : 'enableMemberNamed',
-                          { username: member.username },
-                        )}
-                        onClick={() =>
-                          update.mutate({
-                            id: member.id,
-                            enabled: !member.enabled,
-                          })
-                        }
-                      >
-                        {update.isPending &&
-                          update.variables.id === member.id && (
-                            <LoaderCircle
-                              className="motion-safe:animate-spin"
-                              aria-hidden="true"
-                            />
-                          )}
-                        {t(member.enabled ? 'disableMember' : 'enableMember')}
-                      </Button>
-                      <GroupAccess member={member} />
+                      {member.role === 'member' && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={update.isPending}
+                            aria-label={t(
+                              member.enabled
+                                ? 'disableMemberNamed'
+                                : 'enableMemberNamed',
+                              { username: member.username },
+                            )}
+                            onClick={() =>
+                              update.mutate({
+                                id: member.id,
+                                enabled: !member.enabled,
+                              })
+                            }
+                          >
+                            {update.isPending &&
+                              update.variables.id === member.id && (
+                                <LoaderCircle
+                                  className="motion-safe:animate-spin"
+                                  aria-hidden="true"
+                                />
+                              )}
+                            {t(
+                              member.enabled ? 'disableMember' : 'enableMember',
+                            )}
+                          </Button>
+                          <GroupAccess member={member} />
+                        </>
+                      )}
+                      {member.id !== session.data?.user?.id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={t('memberRoleChangeNamed', {
+                            username: member.username,
+                          })}
+                          onClick={() => setMembershipTarget(member)}
+                        >
+                          {t('memberRoleChange')}
+                        </Button>
+                      )}
                       <MemberActions
                         member={member}
                         onPasswordReset={
@@ -212,10 +265,25 @@ export function Members() {
         <CreateMember
           onClose={() => setCreating(false)}
           onCreated={(member) => {
-            setCreatedName(member.username)
+            setCreatedMember(member)
             setCreating(false)
             setCursors([0])
             return client.invalidateQueries({ queryKey: ['members'] })
+          }}
+        />
+      )}
+      {membershipTarget && (
+        <MembershipEditor
+          member={membershipTarget === 'new' ? undefined : membershipTarget}
+          onClose={() => setMembershipTarget(null)}
+          onSaved={async (member) => {
+            setAccessSaved(member)
+            setMembershipTarget(null)
+            setCursors([0])
+            await Promise.all([
+              client.invalidateQueries({ queryKey: ['members'] }),
+              client.invalidateQueries({ queryKey: ['auth'] }),
+            ])
           }}
         />
       )}

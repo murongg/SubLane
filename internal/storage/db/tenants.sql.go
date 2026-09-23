@@ -64,7 +64,7 @@ func (q *Queries) GetTenantMember(ctx context.Context, arg GetTenantMemberParams
 const listTenantMembers = `-- name: ListTenantMembers :many
 SELECT u.id,u.username,m.role,m.enabled,u.enabled AS user_enabled,m.created_at
 FROM memberships m JOIN users u ON u.id=m.user_id
-WHERE m.tenant_id=?1 AND m.role='member'
+WHERE m.tenant_id=?1 AND m.role IN ('member','admin')
 AND (u.id<?2 OR ?2=0)
 ORDER BY u.id DESC LIMIT 51
 `
@@ -130,4 +130,20 @@ func (q *Queries) SetTenantMemberEnabled(ctx context.Context, arg SetTenantMembe
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const updateTenantMemberRole = `-- name: UpdateTenantMemberRole :exec
+UPDATE memberships SET role=?1
+WHERE tenant_id=?2 AND user_id=?3 AND role IN ('member','admin')
+`
+
+type UpdateTenantMemberRoleParams struct {
+	Role     string
+	TenantID int64
+	UserID   int64
+}
+
+func (q *Queries) UpdateTenantMemberRole(ctx context.Context, arg UpdateTenantMemberRoleParams) error {
+	_, err := q.db.ExecContext(ctx, updateTenantMemberRole, arg.Role, arg.TenantID, arg.UserID)
+	return err
 }

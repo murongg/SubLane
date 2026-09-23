@@ -249,7 +249,8 @@ func (q *Queries) GroupConnectionStatus(ctx context.Context, arg GroupConnection
 }
 
 const listAvailableGroups = `-- name: ListAvailableGroups :many
-SELECT g.id,g.name FROM account_groups g JOIN users u ON u.id=?1
+SELECT g.id,g.name,(SELECT count(*) FROM group_accounts ga WHERE ga.group_id=g.id) AS account_count
+FROM account_groups g JOIN users u ON u.id=?1
 WHERE g.tenant_id=?2 AND g.enabled=1 AND u.enabled=1
 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) ORDER BY g.id
 `
@@ -260,8 +261,9 @@ type ListAvailableGroupsParams struct {
 }
 
 type ListAvailableGroupsRow struct {
-	ID   int64
-	Name string
+	ID           int64
+	Name         string
+	AccountCount int64
 }
 
 func (q *Queries) ListAvailableGroups(ctx context.Context, arg ListAvailableGroupsParams) ([]ListAvailableGroupsRow, error) {
@@ -273,7 +275,7 @@ func (q *Queries) ListAvailableGroups(ctx context.Context, arg ListAvailableGrou
 	items := []ListAvailableGroupsRow{}
 	for rows.Next() {
 		var i ListAvailableGroupsRow
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.AccountCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

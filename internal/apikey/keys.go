@@ -78,6 +78,23 @@ func NewForTenant(connection *sql.DB, cipher *vault.Vault, tenantID int64) *Serv
 	return &Service{vault: cipher, db: connection, queries: db.New(connection), tenantID: tenantID, now: time.Now}
 }
 
+func (s *Service) HasUsableKey(ctx context.Context, userID int64) (bool, error) {
+	now := s.now().Unix()
+	candidates, err := s.queries.ListKeyReadinessCandidates(ctx, db.ListKeyReadinessCandidatesParams{UserID: userID, TenantID: s.tenantID, Now: &now})
+	if err != nil {
+		return false, err
+	}
+	for _, key := range candidates {
+		// A key in a reserved pool is usable only while its bound allowance admits the member.
+		if _, err := allocations.KeyScheme(ctx, s.queries, key.ID, userID, key.GroupID, now); err == nil {
+			return true, nil
+		} else if !errors.Is(err, allocations.ErrUnavailable) {
+			return false, err
+		}
+	}
+	return false, nil
+}
+
 // Deprecated: use CreateInGroup or CreateInScheme to choose an explicit scope.
 func (s *Service) Create(ctx context.Context, userID int64, name string) (CreatedKey, error) {
 	// A new key requires an explicit pool or resource; never guess its scope.

@@ -4,7 +4,11 @@ export const system = {
   status: 'ok',
   uptime_seconds: 42,
   storage: { engine: 'sqlite', status: 'ready' },
-  gateway: { provider: 'codex', status: 'not_configured' },
+  gateway: {
+    provider: 'codex',
+    status: 'not_configured',
+    has_usable_key: false,
+  },
 }
 
 export const authenticated = {

@@ -644,6 +644,12 @@ export const en = {
   gatewayNeedsAttention: 'Needs attention',
   gatewayReadyDescription:
     'Your gateway is ready. Connect a client using a personal API key.',
+  gatewayKeyNeeded: 'Key needed',
+  gatewayKeyNeededDescription:
+    'A subscription is connected, but no usable personal key is ready. Create or reactivate a key for a ready pool.',
+  gatewayNoKey: 'No usable key',
+  gatewayKeySetupDescription:
+    'Create a personal key for a ready account pool before your first request.',
   clientGuideTitle: 'Connect your client',
   clientGuideDescription:
     'Choose the API format your client supports and connect with a personal SubLane API key.',
@@ -747,11 +753,30 @@ export const en = {
   membersDescription:
     'Manage access to this workspace. Disabling a member blocks their keys here without affecting other workspaces.',
   addMember: 'Add member',
+  memberExistingAdd: 'Add existing account',
+  memberExistingDescription:
+    'Enter an existing login and choose its role in this workspace. If the account is already here, change its role from the member list.',
+  memberExistingNameRequired: 'Enter a username.',
+  memberExistingNotFound: 'This account does not exist or is disabled.',
+  memberExistingAlreadyHere:
+    'This account already belongs to this workspace. Use Change workspace role on its row.',
+  memberRoleInvalid:
+    'Enable this member before assigning the administrator role.',
+  memberExistingSaveFailed: 'Could not save workspace access. Try again.',
+  memberAccessSaved: 'Workspace access saved for {{username}}.',
+  memberRoleChange: 'Change workspace role',
+  memberRoleChangeNamed: 'Change role for {{username}}',
+  memberRoleChangeDescription: 'Choose the workspace role for {{username}}.',
+  memberBasicRoleHint:
+    'Can use granted account pools and manage personal keys and usage.',
+  memberAdminRoleHint:
+    'Can manage accounts, pools, members, allowances and audit in this workspace.',
   addMemberDescription:
     'Create a member account and share its credentials privately with that person.',
   createMember: 'Create member',
   creatingMember: 'Creating member…',
-  memberCreated: 'Member {{username}} was created.',
+  memberCreated:
+    'Member {{username}} was created. Grant access to an account pool so they can use the gateway.',
   memberUsernameTaken: 'This username is already in use.',
   memberCreateFailed: 'Could not create the member. Please try again.',
   memberUpdateFailed: 'Could not update this member. Please try again.',
@@ -759,7 +784,7 @@ export const en = {
   membersLoadFailed: 'Could not load members. Please try again.',
   noMembers: 'No members yet',
   noMembersDescription:
-    'Add a member, then grant access to the account pools they can use.',
+    'Create a login or add an existing account, then grant members access to the pools they can use.',
   memberStatus: 'Status',
   memberCreatedAt: 'Created',
   actions: 'Actions',
@@ -810,8 +835,7 @@ export const en = {
   codexSetupDescription:
     'Add a subscription, then verify its connection before inviting your team to use it.',
   teamAccess: 'Gateway keys',
-  teamAccessDescription:
-    'Administrators and members can create and revoke their own API keys.',
+  teamAccessDescription: 'An active personal key can use a ready account pool.',
   comingNext: 'Coming next',
   planned: 'Planned',
   clientAccess: 'Client access',
@@ -945,6 +969,9 @@ export const en = {
     'This member will not be able to create or use gateway keys until a group is granted.',
   saveGroupAccess: 'Save access',
   keyGroup: 'Account pool',
+  poolAccountCount: '{{count}} accounts',
+  keyEmptyPoolWarning:
+    'This pool has no subscription accounts. A new key cannot serve requests until an account is added.',
   keyGroupHint:
     'This key can only use the selected pool. To switch pools, create a new key, update your client, then revoke the old key.',
   noAvailableGroups:

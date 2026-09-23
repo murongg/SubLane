@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	ErrForbidden = errors.New("tenant_forbidden")
-	ErrInput     = errors.New("tenant_invalid_input")
-	ErrNotFound  = errors.New("tenant_member_not_found")
+	ErrForbidden     = errors.New("tenant_forbidden")
+	ErrInput         = errors.New("tenant_invalid_input")
+	ErrNotFound      = errors.New("tenant_member_not_found")
+	ErrAlreadyMember = errors.New("tenant_member_exists")
 )
 
 type Role string
@@ -215,46 +216,133 @@ func NormalizeName(name string) (string, error) {
 }
 
 func (s *Service) AddMember(ctx context.Context, actorID, tenantID, userID int64, role Role) error {
+	_, err := s.addMember(ctx, actorID, tenantID, userID, "", role)
+	return err
+}
+
+func (s *Service) AddMemberByUsername(ctx context.Context, actorID, tenantID int64, username string, role Role) (MemberSummary, error) {
+	username = strings.ToLower(strings.TrimSpace(username))
+	if username == "" {
+		return MemberSummary{}, ErrInput
+	}
+	return s.addMember(ctx, actorID, tenantID, 0, username, role)
+}
+
+func (s *Service) addMember(ctx context.Context, actorID, tenantID, userID int64, username string, role Role) (MemberSummary, error) {
 	if role != RoleAdmin && role != RoleMember {
-		return ErrInput
+		return MemberSummary{}, ErrInput
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return MemberSummary{}, err
 	}
 	defer tx.Rollback()
+	q := storageDB.New(tx)
 	var actorRole Role
 	var ownerID int64
 	err = tx.QueryRowContext(ctx, `SELECT m.role,t.owner_user_id FROM memberships m
 		JOIN tenants t ON t.id=m.tenant_id JOIN users u ON u.id=m.user_id
 		WHERE m.tenant_id=? AND m.user_id=? AND t.status='active' AND m.enabled=1 AND u.enabled=1`, tenantID, actorID).Scan(&actorRole, &ownerID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return ErrForbidden
+		return MemberSummary{}, ErrForbidden
 	}
 	if err != nil {
-		return err
+		return MemberSummary{}, err
 	}
 	if actorRole != RoleOwner && actorRole != RoleAdmin {
-		return ErrForbidden
+		return MemberSummary{}, ErrForbidden
+	}
+	if username != "" {
+		if err := tx.QueryRowContext(ctx, "SELECT id FROM users WHERE username=? AND enabled=1", username).Scan(&userID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return MemberSummary{}, ErrInput
+			}
+			return MemberSummary{}, err
+		}
 	}
 	// Owner transfer is a separate operation; ordinary member updates must never remove the only owner.
 	if userID == ownerID {
-		return ErrForbidden
+		return MemberSummary{}, ErrForbidden
 	}
+	if username != "" {
+		var exists bool
+		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM memberships WHERE tenant_id=? AND user_id=?)", tenantID, userID).Scan(&exists); err != nil {
+			return MemberSummary{}, err
+		}
+		if exists {
+			return MemberSummary{}, ErrAlreadyMember
+		}
+	}
+	now := time.Now().Unix()
 	result, err := tx.ExecContext(ctx, `INSERT INTO memberships(tenant_id,user_id,role,created_at)
 		SELECT ?,id,?,? FROM users WHERE id=? AND enabled=1
-		ON CONFLICT(tenant_id,user_id) DO UPDATE SET role=excluded.role,enabled=1`, tenantID, role, time.Now().Unix(), userID)
+		ON CONFLICT(tenant_id,user_id) DO UPDATE SET role=excluded.role,enabled=1`, tenantID, role, now, userID)
 	if err != nil {
-		return err
+		return MemberSummary{}, err
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return MemberSummary{}, err
 	}
 	if affected == 0 {
-		return ErrInput
+		return MemberSummary{}, ErrInput
 	}
-	return tx.Commit()
+	row, err := q.GetTenantMember(ctx, storageDB.GetTenantMemberParams{TenantID: tenantID, UserID: userID})
+	if err != nil {
+		return MemberSummary{}, err
+	}
+	if err := audit.Record(ctx, q, "member.update", "member", audit.ID(userID)); err != nil {
+		return MemberSummary{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return MemberSummary{}, err
+	}
+	return MemberSummary{ID: row.ID, Username: row.Username, Role: Role(row.Role), Enabled: row.Enabled == 1 && row.UserEnabled, CreatedAt: row.CreatedAt}, nil
+}
+
+func (s *Service) SetMemberRole(ctx context.Context, actorID, tenantID, userID int64, role Role) (MemberSummary, error) {
+	if role != RoleAdmin && role != RoleMember {
+		return MemberSummary{}, ErrInput
+	}
+	if actorID == userID {
+		return MemberSummary{}, ErrForbidden
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return MemberSummary{}, err
+	}
+	defer tx.Rollback()
+	q := storageDB.New(tx)
+	allowed, err := q.CanManageTenant(ctx, storageDB.CanManageTenantParams{TenantID: tenantID, ActorID: actorID})
+	if err != nil {
+		return MemberSummary{}, err
+	}
+	if !allowed {
+		return MemberSummary{}, ErrForbidden
+	}
+	current, err := q.GetTenantMember(ctx, storageDB.GetTenantMemberParams{TenantID: tenantID, UserID: userID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return MemberSummary{}, ErrNotFound
+	}
+	if err != nil {
+		return MemberSummary{}, err
+	}
+	if current.Role == string(RoleOwner) {
+		return MemberSummary{}, ErrForbidden
+	}
+	if role == RoleAdmin && (current.Enabled != 1 || !current.UserEnabled) {
+		return MemberSummary{}, ErrInput
+	}
+	if err := q.UpdateTenantMemberRole(ctx, storageDB.UpdateTenantMemberRoleParams{TenantID: tenantID, UserID: userID, Role: string(role)}); err != nil {
+		return MemberSummary{}, err
+	}
+	if err := audit.Record(ctx, q, "member.update", "member", audit.ID(userID)); err != nil {
+		return MemberSummary{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return MemberSummary{}, err
+	}
+	return MemberSummary{ID: current.ID, Username: current.Username, Role: role, Enabled: current.Enabled == 1 && current.UserEnabled, CreatedAt: current.CreatedAt}, nil
 }
 
 func (s *Service) Membership(ctx context.Context, tenantID, userID int64) (Member, bool, error) {

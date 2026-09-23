@@ -86,6 +86,55 @@ func TestPersonalKeysAreBoundToWorkspace(t *testing.T) {
 	}
 }
 
+func TestUsableKeyReadinessRequiresAnActiveKeyAndReadyPoolAccount(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	connection, err := storage.Open(ctx, filepath.Join(dir, "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-owner", "synthetic-password", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := groups.New(connection).Save(ctx, 0, groups.Input{Name: "Synthetic pool", Enabled: true, AccountIDs: []string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := New(connection, cipher)
+	created, err := service.CreateInGroup(ctx, 1, pool.ID, "Synthetic key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(want bool) {
+		t.Helper()
+		ready, err := service.HasUsableKey(ctx, 1)
+		if err != nil || ready != want {
+			t.Fatalf("usable key readiness: got %v, want %v, err %v", ready, want, err)
+		}
+	}
+	check(false)
+	if _, err := connection.ExecContext(ctx, `INSERT INTO accounts(id,name,account_id,status,credential,created_at,updated_at) VALUES('synthetic-account','Synthetic account','synthetic-upstream','ready',x'01',1,1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connection.ExecContext(ctx, "INSERT INTO group_accounts(group_id,account_id) VALUES(?,'synthetic-account')", pool.ID); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	if _, err := service.Update(ctx, 1, created.Key.ID, UpdateInput{Name: "Synthetic key", Enabled: false}); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+}
+
 func TestKeyOwnershipHashingAndRevocation(t *testing.T) {
 	ctx := context.Background()
 	db, err := storage.Open(ctx, filepath.Join(t.TempDir(), "keys.db"))

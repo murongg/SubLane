@@ -14,7 +14,41 @@ func (h *authHTTP) registerMembers(router chi.Router) {
 	router.Get("/", h.listMembers)
 	router.Post("/", h.createMember)
 	router.Patch("/{id}", h.memberStatus)
+	router.Patch("/{id}/role", h.memberRole)
 	router.With(h.throttleLogin).Post("/{id}/password", h.resetMemberPassword)
+}
+
+func (h *authHTTP) memberRole(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil || id <= 0 {
+		writeJSON(w, 400, map[string]string{"error": "invalid_input"})
+		return
+	}
+	var input struct {
+		Role tenants.Role `json:"role"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if h.tenants == nil {
+		writeJSON(w, 503, map[string]string{"error": "unavailable"})
+		return
+	}
+	member, err := h.tenants.SetMemberRole(r.Context(), sessionUser(r).ID, h.tenantID, id, input.Role)
+	if err != nil {
+		switch {
+		case errors.Is(err, tenants.ErrNotFound):
+			writeJSON(w, 404, map[string]string{"error": "member_not_found"})
+		case errors.Is(err, tenants.ErrForbidden):
+			writeJSON(w, 403, map[string]string{"error": "forbidden"})
+		case errors.Is(err, tenants.ErrInput):
+			writeJSON(w, 400, map[string]string{"error": "invalid_input"})
+		default:
+			writeJSON(w, 503, map[string]string{"error": "unavailable"})
+		}
+		return
+	}
+	writeJSON(w, 200, member)
 }
 
 func (h *authHTTP) listMembers(w http.ResponseWriter, r *http.Request) {

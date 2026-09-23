@@ -45,10 +45,11 @@ type Detail struct {
 	AllowedModels []string `json:"allowed_models"`
 }
 type Choice struct {
-	SchemeID   int64  `json:"scheme_id,omitempty"`
-	SchemeName string `json:"scheme_name,omitempty"`
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
+	SchemeID     int64  `json:"scheme_id,omitempty"`
+	SchemeName   string `json:"scheme_name,omitempty"`
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	AccountCount int64  `json:"account_count"`
 }
 type Member struct {
 	ID       int64  `json:"id"`
@@ -237,7 +238,7 @@ func (s *Service) Available(ctx context.Context, userID int64) ([]Choice, error)
 	}
 	result := make([]Choice, 0, len(rows))
 	for _, r := range rows {
-		result = append(result, Choice{ID: r.ID, Name: r.Name})
+		result = append(result, Choice{ID: r.ID, Name: r.Name, AccountCount: r.AccountCount})
 	}
 	return result, nil
 }

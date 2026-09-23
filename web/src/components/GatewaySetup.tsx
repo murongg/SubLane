@@ -7,19 +7,25 @@ import type { GatewayStatus } from '@/lib/connection'
 
 export function GatewaySetup({
   status,
+  hasUsableKey,
 }: {
   status: GatewayStatus | 'unknown'
+  hasUsableKey: boolean | null
 }) {
   const { t } = useTranslation()
   const configured = status === 'ready'
+  const ready = configured && hasUsableKey === true
+  const needsKey = configured && hasUsableKey === false
   const statusKey =
     status === 'unknown'
       ? 'gatewayStatusUnknown'
-      : configured
-        ? 'ready'
-        : status === 'needs_attention'
-          ? 'gatewayNeedsAttention'
-          : 'notConfigured'
+      : status === 'needs_attention'
+        ? 'gatewayNeedsAttention'
+        : ready
+          ? 'ready'
+          : needsKey
+            ? 'gatewayKeyNeeded'
+            : 'notConfigured'
   const steps = [
     {
       title: 'administrator',
@@ -39,8 +45,15 @@ export function GatewaySetup({
     },
     {
       title: 'teamAccess',
-      description: 'teamAccessDescription',
-      status: 'ready',
+      description: hasUsableKey
+        ? 'teamAccessDescription'
+        : 'gatewayKeySetupDescription',
+      status:
+        hasUsableKey === null
+          ? 'statusUnknown'
+          : hasUsableKey
+            ? 'ready'
+            : 'gatewayNoKey',
     },
   ] as const
   return (
@@ -56,7 +69,7 @@ export function GatewaySetup({
             </h2>
             <Status
               kind={
-                configured
+                ready
                   ? 'success'
                   : status === 'needs_attention'
                     ? 'warning'
@@ -68,11 +81,13 @@ export function GatewaySetup({
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
             {t(
-              configured
+              ready
                 ? 'gatewayReadyDescription'
                 : status === 'needs_attention'
                   ? 'gatewayAttentionDescription'
-                  : 'gatewaySetupDescription',
+                  : needsKey
+                    ? 'gatewayKeyNeededDescription'
+                    : 'gatewaySetupDescription',
             )}
           </p>
         </div>
@@ -105,8 +120,14 @@ export function GatewaySetup({
         </ol>
         <div className="border-t border-border px-6 py-4">
           <Button asChild variant="outline">
-            <Link to="/accounts">
-              {t('viewAccounts')}
+            <Link to={configured ? '/keys' : '/accounts'}>
+              {t(
+                configured
+                  ? hasUsableKey
+                    ? 'manageKeys'
+                    : 'createKeyTitle'
+                  : 'viewAccounts',
+              )}
               <ArrowUpRight aria-hidden="true" />
             </Link>
           </Button>

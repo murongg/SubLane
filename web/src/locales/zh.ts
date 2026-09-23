@@ -584,6 +584,11 @@ export const zh: Record<keyof typeof en, string> = {
   accountReadyDescription: '已验证的订阅账号可用于网关请求。',
   gatewayNeedsAttention: '需要处理',
   gatewayReadyDescription: '网关已就绪，可使用个人 API 密钥接入客户端。',
+  gatewayKeyNeeded: '还需密钥',
+  gatewayKeyNeededDescription:
+    '订阅账号已接入，但还没有可用的个人密钥。请为已就绪的账号池创建或恢复密钥。',
+  gatewayNoKey: '暂无可用密钥',
+  gatewayKeySetupDescription: '首次调用前，请为已就绪的账号池创建个人密钥。',
   clientGuideTitle: '接入客户端',
   clientGuideDescription:
     '选择客户端支持的 API 协议，使用个人 SubLane API 密钥接入。',
@@ -680,18 +685,34 @@ export const zh: Record<keyof typeof en, string> = {
   membersDescription:
     '管理本工作空间的成员权限。停用成员会立即阻止其在此空间使用 Key，不影响其他工作空间。',
   addMember: '添加成员',
+  memberExistingAdd: '添加已有账号',
+  memberExistingDescription:
+    '输入已有登录账号的用户名，设置其在当前工作空间的角色。账号已在本空间时，请从成员列表修改角色。',
+  memberExistingNameRequired: '请输入用户名。',
+  memberExistingNotFound: '账号不存在或已被停用。',
+  memberExistingAlreadyHere:
+    '此账号已在当前工作空间。请在成员行使用「修改工作空间角色」。',
+  memberRoleInvalid: '请先启用该成员，再设为管理员。',
+  memberExistingSaveFailed: '保存工作空间权限失败，请重试。',
+  memberAccessSaved: '已保存 {{username}} 的工作空间权限。',
+  memberRoleChange: '修改工作空间角色',
+  memberRoleChangeNamed: '修改 {{username}} 的角色',
+  memberRoleChangeDescription: '设置 {{username}} 在当前工作空间的角色。',
+  memberBasicRoleHint: '可使用获授权的账号池，管理自己的密钥和用量。',
+  memberAdminRoleHint: '可管理本空间的账号、账号池、成员、额度和审计。',
   addMemberDescription:
     '创建成员账号后，请通过私密渠道将账号和密码交给该成员。',
   createMember: '创建成员',
   creatingMember: '正在创建成员…',
-  memberCreated: '成员 {{username}} 已创建。',
+  memberCreated: '成员 {{username}} 已创建。请授权账号池，成员才能使用网关。',
   memberUsernameTaken: '此用户名已被使用。',
   memberCreateFailed: '创建成员失败，请重试。',
   memberUpdateFailed: '更新成员失败，请重试。',
   loadingMembers: '正在加载成员…',
   membersLoadFailed: '加载成员失败，请重试。',
   noMembers: '还没有成员',
-  noMembersDescription: '添加成员后，再为其授权可使用的账号池。',
+  noMembersDescription:
+    '创建成员或加入已有账号，再为普通成员授权可使用的账号池。',
   memberStatus: '状态',
   memberCreatedAt: '创建时间',
   actions: '操作',
@@ -735,7 +756,7 @@ export const zh: Record<keyof typeof en, string> = {
   adminReadyDescription: '当前实例已完成登录与管理权限设置。',
   codexSetupDescription: '添加订阅并验证连接后，即可供团队使用。',
   teamAccess: '网关密钥',
-  teamAccessDescription: '管理员与成员均可创建和撤销自己的 API 密钥。',
+  teamAccessDescription: '已有个人密钥可使用已就绪的账号池。',
   comingNext: '即将开放',
   planned: '计划中',
   clientAccess: '客户端接入',
@@ -856,6 +877,9 @@ export const zh: Record<keyof typeof en, string> = {
   memberNoGroupsHint: '未分配任何分组时，该成员无法创建或使用网关密钥。',
   saveGroupAccess: '保存权限',
   keyGroup: '账号池',
+  poolAccountCount: '{{count}} 个账号',
+  keyEmptyPoolWarning:
+    '此账号池还没有订阅账号。现在创建的密钥需要等账号加入池后才能发起请求。',
   keyGroupHint:
     '此密钥只能使用所选账号池。换池时先创建新密钥、更新客户端，再撤销旧密钥。',
   noAvailableGroups: '当前空间没有可用账号池。请创建账号池，或联系管理员授权。',

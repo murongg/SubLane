@@ -150,6 +150,53 @@ func (q *Queries) GetKeyOwnerEnabled(ctx context.Context, userID int64) (bool, e
 	return enabled, err
 }
 
+const listKeyReadinessCandidates = `-- name: ListKeyReadinessCandidates :many
+SELECT DISTINCT k.id,k.group_id FROM api_keys k
+JOIN account_groups g ON g.id=k.group_id
+JOIN users u ON u.id=k.user_id
+JOIN group_accounts ga ON ga.group_id=g.id
+JOIN accounts a ON a.id=ga.account_id
+WHERE k.user_id=?1 AND g.tenant_id=?2
+AND k.revoked_at IS NULL AND k.enabled=1 AND (k.expires_at IS NULL OR k.expires_at>?3)
+AND u.enabled=1 AND g.enabled=1 AND a.enabled=1 AND a.status='ready'
+AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
+ORDER BY k.id DESC LIMIT 20
+`
+
+type ListKeyReadinessCandidatesParams struct {
+	UserID   int64
+	TenantID int64
+	Now      *int64
+}
+
+type ListKeyReadinessCandidatesRow struct {
+	ID      int64
+	GroupID int64
+}
+
+func (q *Queries) ListKeyReadinessCandidates(ctx context.Context, arg ListKeyReadinessCandidatesParams) ([]ListKeyReadinessCandidatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listKeyReadinessCandidates, arg.UserID, arg.TenantID, arg.Now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListKeyReadinessCandidatesRow{}
+	for rows.Next() {
+		var i ListKeyReadinessCandidatesRow
+		if err := rows.Scan(&i.ID, &i.GroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listKeys = `-- name: ListKeys :many
 SELECT k.id,k.group_id,g.name AS group_name,
 CASE WHEN g.enabled=1 AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) THEN 'allowed' ELSE 'blocked' END AS group_access,

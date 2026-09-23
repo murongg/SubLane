@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -51,6 +52,49 @@ func TestWorkspaceHTTPRequiresLoginAndListsOwnedWorkspaces(t *testing.T) {
 	member, ok, err := tenants.New(connection).Membership(context.Background(), 1, 2)
 	if err != nil || !ok || member.Role != tenants.RoleMember {
 		t.Fatalf("membership after API write: %+v %v %v", member, ok, err)
+	}
+	second, err := tenants.New(connection).Create(context.Background(), 1, "Second workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondHandler := New(Options{Auth: login, Tenants: tenants.New(connection), TenantID: second.ID, Ping: connection.PingContext, StartedAt: time.Now()})
+	wrongWorkspace := request(secondHandler, http.MethodPost, "/api/tenants/1/members", "http://example.test", map[string]any{"user_id": 2, "role": "admin"}, cookie)
+	if wrongWorkspace.Code != http.StatusNotFound {
+		t.Fatalf("membership mutation crossed selected workspace: %d %s", wrongWorkspace.Code, wrongWorkspace.Body.String())
+	}
+	path := fmt.Sprintf("/api/tenants/%d/members", second.ID)
+	byName := request(secondHandler, http.MethodPost, path, "http://example.test", map[string]any{"username": "member-test", "role": "admin"}, cookie)
+	if byName.Code != http.StatusCreated || !strings.Contains(byName.Body.String(), `"username":"member-test"`) || !strings.Contains(byName.Body.String(), `"role":"admin"`) {
+		t.Fatalf("add existing user by name: %d %s", byName.Code, byName.Body.String())
+	}
+	member, ok, err = tenants.New(connection).Membership(context.Background(), second.ID, 2)
+	if err != nil || !ok || member.Role != tenants.RoleAdmin {
+		t.Fatalf("administrator membership after name lookup: %+v %v %v", member, ok, err)
+	}
+	listedMembers := request(secondHandler, http.MethodGet, "/api/members", "", nil, cookie)
+	if listedMembers.Code != http.StatusOK || !strings.Contains(listedMembers.Body.String(), `"role":"admin"`) || !strings.Contains(listedMembers.Body.String(), `"username":"member-test"`) {
+		t.Fatalf("administrator missing from workspace roster: %d %s", listedMembers.Code, listedMembers.Body.String())
+	}
+	duplicate := request(secondHandler, http.MethodPost, path, "http://example.test", map[string]any{"username": "member-test", "role": "member"}, cookie)
+	if duplicate.Code != http.StatusConflict {
+		t.Fatalf("duplicate membership silently changed role: %d %s", duplicate.Code, duplicate.Body.String())
+	}
+	missing := request(secondHandler, http.MethodPost, path, "http://example.test", map[string]any{"username": "unknown-synthetic-user", "role": "member"}, cookie)
+	if missing.Code != http.StatusBadRequest {
+		t.Fatalf("unknown username: %d %s", missing.Code, missing.Body.String())
+	}
+	if _, err := connection.Exec("UPDATE memberships SET enabled=0 WHERE tenant_id=? AND user_id=2", second.ID); err != nil {
+		t.Fatal(err)
+	}
+	changed := request(secondHandler, http.MethodPatch, "/api/members/2/role", "http://example.test", map[string]string{"role": "member"}, cookie)
+	if changed.Code != http.StatusOK || !strings.Contains(changed.Body.String(), `"role":"member"`) || !strings.Contains(changed.Body.String(), `"enabled":false`) {
+		t.Fatalf("role update changed member status: %d %s", changed.Code, changed.Body.String())
+	}
+	if promoted := request(secondHandler, http.MethodPatch, "/api/members/2/role", "http://example.test", map[string]string{"role": "admin"}, cookie); promoted.Code != http.StatusBadRequest {
+		t.Fatalf("disabled member promoted: %d %s", promoted.Code, promoted.Body.String())
+	}
+	if ownerRole := request(secondHandler, http.MethodPatch, "/api/members/1/role", "http://example.test", map[string]string{"role": "member"}, cookie); ownerRole.Code != http.StatusForbidden {
+		t.Fatalf("workspace owner role changed: %d %s", ownerRole.Code, ownerRole.Body.String())
 	}
 }
 

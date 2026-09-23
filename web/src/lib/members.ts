@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import { request } from './request'
+import { selectedWorkspace } from './workspace'
 
 const memberSchema = z.object({
   id: z.number().int().positive(),
   username: z.string().min(3).max(32),
-  role: z.literal('member'),
+  role: z.enum(['member', 'admin']),
   enabled: z.boolean(),
   created_at: z.number().int().nonnegative(),
 })
@@ -21,6 +22,23 @@ export function createMember(input: { username: string; password: string }) {
   return request('/api/members', memberSchema, {
     method: 'POST',
     body: JSON.stringify(input),
+  })
+}
+
+export function saveWorkspaceMember(input: {
+  username: string
+  role: 'member' | 'admin'
+}) {
+  return request(`/api/tenants/${selectedWorkspace()}/members`, memberSchema, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function setWorkspaceMemberRole(id: number, role: 'member' | 'admin') {
+  return request(`/api/members/${id}/role`, memberSchema, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
   })
 }
 export function setMemberEnabled(input: { id: number; enabled: boolean }) {

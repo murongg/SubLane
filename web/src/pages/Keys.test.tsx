@@ -50,7 +50,7 @@ it('lets a member create, copy once, and revoke an owned key', async () => {
         return Promise.resolve(response(memberAuthenticated))
       if (url === '/api/keys/groups')
         return Promise.resolve(
-          response({ groups: [{ id: 1, name: 'Default' }] }),
+          response({ groups: [{ id: 1, name: 'Default', account_count: 1 }] }),
         )
       if (url.endsWith('/revoke')) {
         keys = [{ ...metadata, revoked_at: 1900000100 }]
@@ -71,7 +71,7 @@ it('lets a member create, copy once, and revoke an owned key', async () => {
   const form = await screen.findByRole('dialog', { name: 'Create API key' })
   await user.click(within(form).getByRole('button', { name: 'Account pool' }))
   await user.click(
-    await screen.findByRole('menuitemradio', { name: 'Default' }),
+    await screen.findByRole('menuitemradio', { name: /Default/ }),
   )
   await user.type(within(form).getByLabelText('Name'), 'Synthetic laptop')
   await user.click(within(form).getByRole('button', { name: 'Create key' }))
@@ -108,7 +108,7 @@ it('discards a displayed secret when a background check changes the user', async
       if (url === '/api/auth/state') return Promise.resolve(response(state))
       if (url === '/api/keys/groups')
         return Promise.resolve(
-          response({ groups: [{ id: 1, name: 'Default' }] }),
+          response({ groups: [{ id: 1, name: 'Default', account_count: 1 }] }),
         )
       if (init?.method === 'POST')
         return Promise.resolve(response({ key: metadata, secret }))
@@ -122,7 +122,7 @@ it('discards a displayed secret when a background check changes the user', async
   const form = await screen.findByRole('dialog', { name: 'Create API key' })
   await user.click(within(form).getByRole('button', { name: 'Account pool' }))
   await user.click(
-    await screen.findByRole('menuitemradio', { name: 'Default' }),
+    await screen.findByRole('menuitemradio', { name: /Default/ }),
   )
   await user.type(within(form).getByLabelText('Name'), 'Synthetic laptop')
   await user.click(within(form).getByRole('button', { name: 'Create key' }))
@@ -152,8 +152,8 @@ it('requires an explicit pool choice before binding a key', async () => {
         return Promise.resolve(
           response({
             groups: [
-              { id: 2, name: 'Project alpha' },
-              { id: 3, name: 'Project beta' },
+              { id: 2, name: 'Project alpha', account_count: 1 },
+              { id: 3, name: 'Project beta', account_count: 1 },
             ],
           }),
         )
@@ -187,13 +187,44 @@ it('requires an explicit pool choice before binding a key', async () => {
       .hasAttribute('disabled'),
   ).toBe(true)
   await user.click(within(dialog).getByRole('button', { name: 'Account pool' }))
-  await user.click(screen.getByRole('menuitemradio', { name: 'Project beta' }))
+  await user.click(screen.getByRole('menuitemradio', { name: /Project beta/ }))
   await user.type(
     within(dialog).getByLabelText('Name'),
     'Synthetic project key',
   )
   await user.click(within(dialog).getByRole('button', { name: 'Create key' }))
   await screen.findByDisplayValue(secret)
+})
+
+it('warns that a key bound to an empty pool cannot serve requests yet', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(memberAuthenticated))
+      if (url === '/api/keys/groups')
+        return Promise.resolve(
+          response({
+            groups: [{ id: 9, name: 'Synthetic empty pool', account_count: 0 }],
+          }),
+        )
+      return Promise.resolve(response({ keys: [], next_cursor: 0 }))
+    }),
+  )
+  const user = userEvent.setup()
+  open()
+  await screen.findByText('No API keys yet')
+  await user.click(screen.getByRole('button', { name: 'Create key' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Create API key' })
+  await user.click(within(dialog).getByRole('button', { name: 'Account pool' }))
+  await user.click(
+    await screen.findByRole('menuitemradio', { name: /Synthetic empty pool/ }),
+  )
+  expect(
+    within(dialog).getByText(
+      'This pool has no subscription accounts. A new key cannot serve requests until an account is added.',
+    ),
+  ).toBeTruthy()
 })
 
 it('opens client setup on demand, copies the model config, and restores focus on close', async () => {
@@ -351,7 +382,7 @@ it('creates a key with the selected expiry period', async () => {
         return Promise.resolve(response(memberAuthenticated))
       if (url === '/api/keys/groups')
         return Promise.resolve(
-          response({ groups: [{ id: 1, name: 'Default' }] }),
+          response({ groups: [{ id: 1, name: 'Default', account_count: 1 }] }),
         )
       if (init?.method === 'POST') {
         const data = JSON.parse(String(init.body))
@@ -376,7 +407,7 @@ it('creates a key with the selected expiry period', async () => {
   const dialog = await screen.findByRole('dialog')
   await user.click(within(dialog).getByRole('button', { name: 'Account pool' }))
   await user.click(
-    await screen.findByRole('menuitemradio', { name: 'Default' }),
+    await screen.findByRole('menuitemradio', { name: /Default/ }),
   )
   await user.type(
     within(dialog).getByLabelText('Name'),

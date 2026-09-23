@@ -58,7 +58,8 @@ WHERE g.id=sqlc.arg(group_id) AND g.enabled=1 AND u.enabled=1
 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id));
 
 -- name: ListAvailableGroups :many
-SELECT g.id,g.name FROM account_groups g JOIN users u ON u.id=sqlc.arg(user_id)
+SELECT g.id,g.name,(SELECT count(*) FROM group_accounts ga WHERE ga.group_id=g.id) AS account_count
+FROM account_groups g JOIN users u ON u.id=sqlc.arg(user_id)
 WHERE g.tenant_id=sqlc.arg(tenant_id) AND g.enabled=1 AND u.enabled=1
 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) ORDER BY g.id;
 
