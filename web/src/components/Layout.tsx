@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import {
   FolderClosed,
+  Gauge,
   ChevronRight,
   ShieldCheck,
   ChartNoAxesCombined,
@@ -60,6 +61,7 @@ const navigation = [
       { to: '/admin/requests', label: 'allRequests', icon: ListChecks },
       { to: '/admin/usage', label: 'teamUsage', icon: ChartNoAxesCombined },
       { to: '/members', label: 'members', icon: Users },
+      { to: '/admin/allocations', label: 'allocationSchemes', icon: Gauge },
       { to: '/admin/audit', label: 'auditLog', icon: ShieldCheck },
       {
         to: '/admin/settings',

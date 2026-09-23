@@ -40,6 +40,7 @@ it('gives members their own workspace without management navigation or requests'
   expect(screen.queryByRole('link', { name: 'Members' })).toBeNull()
   expect(screen.getByRole('link', { name: 'Requests' })).toBeTruthy()
   expect(screen.queryByRole('link', { name: 'All requests' })).toBeNull()
+  expect(screen.queryByRole('link', { name: 'Resource allowances' })).toBeNull()
   expect(screen.queryByRole('group', { name: 'Administration' })).toBeNull()
   await user.click(screen.getByRole('link', { name: 'Preferences' }))
   await screen.findByRole('heading', { name: 'Preferences' })
@@ -78,6 +79,9 @@ it('groups common and administrator navigation separately for administrators', a
   expect(
     within(administration).getByRole('link', { name: 'Members' }),
   ).toBeTruthy()
+  expect(
+    within(administration).getByRole('link', { name: 'Resource allowances' }),
+  ).toBeTruthy()
 })
 
 it.each([
@@ -86,6 +90,7 @@ it.each([
   '/groups',
   '/admin/requests',
   '/admin/usage',
+  '/admin/allocations',
   '/admin/settings',
   '/admin/settings/codex',
   '/admin/settings/backup',
