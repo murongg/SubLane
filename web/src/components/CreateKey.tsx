@@ -67,9 +67,8 @@ function KeyForm({
   const client = useQueryClient()
   const groups = useQuery(availableGroupOptions(client, userID))
   const [selectedID, setSelectedID] = useState<number | null>(null)
-  const groupID = selectedID ?? groups.data?.groups[0]?.id
   const selectedGroup = groups.data?.groups.find(
-    (group) => group.id === groupID,
+    (group) => group.id === selectedID,
   )
   const [expiry, setExpiry] = useState<ExpiryChoice>('never')
   const [nameError, setNameError] = useState(false)

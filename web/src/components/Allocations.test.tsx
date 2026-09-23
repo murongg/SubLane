@@ -351,7 +351,7 @@ it('changes pool and period with accessible dropdowns and clears old shares', as
     screen.getByLabelText('Allowance for synthetic-member'),
     '1.5',
   )
-  await user.click(screen.getByRole('button', { name: 'Account group' }))
+  await user.click(screen.getByRole('button', { name: 'Account pool' }))
   await user.click(
     screen.getByRole('menuitemradio', { name: 'Synthetic second pool' }),
   )

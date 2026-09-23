@@ -907,7 +907,7 @@ export const en = {
     'Quota reporting is not available for this provider yet.',
   accountGroups: 'Account groups',
   groupsDescription:
-    'Organize subscription accounts into pools for members and projects.',
+    'Organize subscription accounts into pools, then grant access to members.',
   groupsAssignmentHint:
     'New accounts remain unassigned until you add them to a group. Grant pool access directly to members, then optionally configure an allowance.',
   accountUnassigned: 'Unassigned',
@@ -931,7 +931,7 @@ export const en = {
     'Add a subscription account first, or save an empty pool and configure it later.',
   saveGroup: 'Save group',
   groupNameTaken: 'A group with this name already exists.',
-  groupLimitReached: 'This instance supports up to 32 groups.',
+  groupLimitReached: 'Each workspace supports up to 32 account pools.',
   groupInputInvalid:
     'Check the group name (1–64 characters), selected accounts and exact model IDs (up to 100).',
   groupSaveFailed: 'Could not save group changes. Try again.',
@@ -944,16 +944,16 @@ export const en = {
   memberNoGroupsHint:
     'This member will not be able to create or use gateway keys until a group is granted.',
   saveGroupAccess: 'Save access',
-  keyGroup: 'Account group',
+  keyGroup: 'Account pool',
   keyGroupHint:
-    'This key can only use accounts in the selected group. Revoke and create a new key to change its group.',
+    'This key can only use the selected pool. To switch pools, create a new key, update your client, then revoke the old key.',
   noAvailableGroups:
-    'No groups are available. Ask your administrator to grant access.',
+    'No account pools are available. Create one or ask an administrator for access.',
   groupAccessChanged:
-    'Group access has changed. Select an available group and try again.',
-  keyGroupUnavailable: 'Group unavailable',
-  keyGroupName: 'Group: {{name}}',
-  chooseGroup: 'Choose a group',
+    'Pool access has changed. Select an available pool and try again.',
+  keyGroupUnavailable: 'Pool unavailable',
+  keyGroupName: 'Pool: {{name}}',
+  chooseGroup: 'Choose an account pool',
   clientGuideAction: 'Setup guide',
   accountScheduling: 'Scheduling settings',
   accountConcurrencyLimit: 'Concurrent model requests',
