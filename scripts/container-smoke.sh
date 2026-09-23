@@ -38,7 +38,7 @@ wait_healthy
 read_state | jq -e '.initialized == false' >/dev/null
 docker exec "$name" wget -q -T 5 -O - \
   --header='Content-Type: application/json' --header='Origin: http://127.0.0.1:8080' \
-  --post-data='{"username":"container-admin","password":"synthetic-password"}' \
+  --post-data='{"username":"container-admin","password":"synthetic-password","workspace_name":"Synthetic workspace"}' \
   http://127.0.0.1:8080/api/auth/setup | jq -e '.initialized == true' >/dev/null
 [[ $(docker exec "$name" stat -c %a /data/credentials.key) == 600 ]]
 # Root owns /app: probe as root so ordinary Unix permissions cannot mask a writable rootfs.
