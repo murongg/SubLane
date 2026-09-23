@@ -15,15 +15,12 @@ import (
 
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
-	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/config"
-	"github.com/murongg/SubLane/internal/gateway"
-	"github.com/murongg/SubLane/internal/groups"
-	"github.com/murongg/SubLane/internal/oauth"
 	"github.com/murongg/SubLane/internal/pricing"
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/storage"
+	"github.com/murongg/SubLane/internal/tenants"
 	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/versions"
 	"github.com/murongg/SubLane/web"
@@ -91,9 +88,15 @@ func run() error {
 	if err := keys.Verify(ctx); err != nil {
 		return fmt.Errorf("verify API key secrets: %w", err)
 	}
-	subscriptions := accounts.New(db, cipher)
-	if err := subscriptions.Verify(ctx); err != nil {
-		return fmt.Errorf("verify upstream credentials: %w", err)
+	tenancy := tenants.New(db)
+	ids, err := tenancy.AllIDs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := accounts.NewForTenant(db, cipher, id).Verify(ctx); err != nil {
+			return fmt.Errorf("verify upstream credentials for workspace %d: %w", id, err)
+		}
 	}
 	releases := versions.NewReleases(nil)
 	defer releases.Close()
@@ -118,12 +121,14 @@ func run() error {
 	}
 	priceCatalog.Start(ctx)
 	defer priceCatalog.Close()
-	forwarding := gateway.New(ctx, db, subscriptions, provider, priceCatalog)
-	defer forwarding.Close()
-	authorization := oauth.New(subscriptions, provider)
+	registry := &tenantRegistry{ctx: ctx, db: db, vault: cipher, auth: authentication,
+		tenants: tenancy, provider: provider, pricing: priceCatalog, versions: codexVersions,
+		assets: web.Assets(), dataDir: cfg.DataDir, publicURL: cfg.PublicURL,
+		version: version, started: time.Now()}
+	defer registry.Close()
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(server.Options{DataDir: cfg.DataDir, CodexVersions: codexVersions, Audit: audit.New(db), Groups: groups.New(db), Assets: web.Assets(), Version: version, StartedAt: time.Now(), Ping: db.PingContext, Auth: authentication, Keys: keys, PublicURL: cfg.PublicURL, Accounts: subscriptions, OAuth: authorization, Gateway: forwarding}),
+		Handler:           server.NewMulti(db, authentication, tenancy, cfg.PublicURL, registry.Handler),
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,

@@ -1,57 +1,29 @@
 export const en = {
+  workspaceChooseTitle: 'Choose a workspace',
+  workspaceChooseDescription: 'Select an active workspace to continue.',
+  workspaceNoneActive: 'You do not have access to an active workspace.',
+  workspaceCreate: 'Create workspace',
+  workspaceCreateDescription:
+    'Set up a separate space for members, accounts, and usage.',
+  workspaceName: 'Workspace name',
+  workspaceNameInvalid: 'Enter a workspace name with up to 64 characters.',
+  workspaceCreateFailed: 'Could not create the workspace. Try again.',
+  workspaceListFailed: 'Could not load workspaces.',
+  workspaceSave: 'Save workspace',
   allocationPause: 'Pause resource allowance',
   allocationResume: 'Enable resource allowance',
-  personnelTeams: 'Personnel teams',
-  personnelTeam: 'Personnel team',
-  teamsDescription:
-    'Choose members and account pools. Use freely by default; limits are optional.',
-  teamEditDescription:
-    'Select members and account pools, then save. Configure usage limits only if needed.',
-  teamCreate: 'Create team',
-  teamEdit: 'Edit team',
-  teamEditNamed: 'Edit {{name}}',
-  teamSave: 'Save team',
-  teamName: 'Team name',
-  teamEnabled: 'Enable this team',
-  teamsEmpty:
-    'Create a team, select its members and account pools, then save to grant access.',
-  teamMemberCount: '{{count}} members',
-  teamResourceCount: '{{count}} configured usage limits',
-  teamMembershipHint:
-    'Removing a member immediately blocks their resource allowance access. Rejoining never resets their usage. Up to 100 members per team.',
-  teamFreeUse: 'Free use · no team allowance',
-  teamFreePoolCount: 'Free access to {{count}} account pools',
-  teamAdvancedLimits: 'Advanced settings: usage limits',
-  teamLimitsAfterSave:
-    'Save the team first. You can then add share, amount or token limits here if needed.',
-  teamNoFreePools:
-    'No shared pools available. Create an account pool, or manage reserved pools in advanced settings.',
-  teamAllowedGroups: 'Account pools for free use',
-  teamAllowedGroupsHint:
-    'Selected pools are shared without a team allowance. Members can only use pools authorized through their teams. Existing member limits and upstream quotas still apply.',
-  teamResources: 'Resource allowances',
-  teamResourcesHint:
-    'Optionally set a share, amount or token allowance for a dedicated pool. Existing rules remain in effect when this section is collapsed; pausing a rule stops access rather than enabling free use.',
-  teamResourcePoolLabel: 'Account pool',
-  teamResourceLimitLabel: 'Limit type: {{mode}}',
-  teamPeopleTitle: 'Who can use it',
-  teamPeopleHint:
-    'Members added to this team can see its account pools and resource allowances.',
-  teamResourceAdd: 'Add resource allowance',
-  teamResourceEdit: 'Edit resource allowance',
-  teamResourcesEmpty:
-    'No usage limits configured. Selected account pools can be used freely.',
-  teamResourceNoPools:
-    'No eligible account pools. Choose an enabled pool with accounts that is not already assigned to a resource.',
   allocationAccountLocked:
     'This account is reserved by a resource allowance and cannot be deleted. Disable it to stop routing requests.',
   allocationUnavailableShort: 'Unavailable',
   allocationWaiting: 'Scheduled',
   allocationPrerequisite:
-    'Create an enabled personnel team with members and an enabled, nonempty dedicated pool. Each pool can have one resource allowance. Newly imported accounts remain unassigned.',
+    'Create an enabled account pool with subscription accounts, then grant pool access to members. Each pool can have one resource allowance.',
+  allocationRosterFailed: 'Could not load members with access to this pool.',
+  allocationNoGrantedMembers:
+    'Grant members access to this account pool before assigning an allowance.',
   allocationSchemes: 'Resource allowances',
   allocationsDescription:
-    'Optional usage limits. For free use, select account pools in Personnel teams without creating an allowance.',
+    'Optional usage limits for members with access to an account pool.',
   allocationCreate: 'Add resource allowance',
   allocationEdit: 'Edit resource allowance',
   allocationEditNamed: 'Edit resource allowance {{name}}',
@@ -84,7 +56,7 @@ export const en = {
   allocationView: 'View usage',
   allocationBack: 'Back to resource allowances',
   allocationsEmpty:
-    'Create a personnel team and a dedicated account pool to add a resource allowance.',
+    'Create a dedicated account pool and grant members access to add a resource allowance.',
   allocationRatioHint:
     'Set how much each member may use, such as 50%, 30% and 20%. You do not need to know the subscription’s total token capacity.',
   allocationAmountHint:
@@ -92,7 +64,7 @@ export const en = {
   allocationTokensHint:
     'Count input plus output tokens. 1 M = 1,000,000 tokens. Cached input is not counted twice.',
   allocationExclusiveHint:
-    'Use a dedicated pool and remove its accounts from every other group first. After adding it, the team, pool and account membership stay fixed. Existing unbound keys for this pool stop working.',
+    'Use a dedicated pool and remove its accounts from every other group first. After adding an allowance, the pool and its account membership stay fixed. Existing unbound keys for this pool stop working.',
   allocationMembers: 'Member allowances',
   allocationBlankHint:
     'Leave a member blank if they should not use this resource allowance.',
@@ -174,7 +146,6 @@ export const en = {
   allocationKeyChoice: 'Resource allowance: {{scheme}} · {{pool}}',
   allocationLegacyHint:
     'These personal rules apply only to keys outside resource allowances. A resource allowance key uses exactly its selected allowance type.',
-  auditTeamSave: 'Saved personnel team',
   auditAllocationSave: 'Saved resource allowance',
   auditAllocationSettle: 'Settled resource allowance usage',
   auditAllocationReconcile: 'Confirmed external quota usage',
@@ -673,6 +644,12 @@ export const en = {
   gatewayNeedsAttention: 'Needs attention',
   gatewayReadyDescription:
     'Your gateway is ready. Connect a client using a personal API key.',
+  gatewayKeyNeeded: 'Key needed',
+  gatewayKeyNeededDescription:
+    'A subscription is connected, but no usable personal key is ready. Create or reactivate a key for a ready pool.',
+  gatewayNoKey: 'No usable key',
+  gatewayKeySetupDescription:
+    'Create a personal key for a ready account pool before your first request.',
   clientGuideTitle: 'Connect your client',
   clientGuideDescription:
     'Choose the API format your client supports and connect with a personal SubLane API key.',
@@ -702,15 +679,23 @@ export const en = {
   setupAccountStep: 'Create your administrator',
   setupAccountDetail:
     'Choose the username and password you’ll use to manage this instance.',
-  setupWorkspaceStep: 'Enter your workspace',
+  setupWorkspaceStep: 'Create your first workspace',
   setupWorkspaceDetail:
-    'You’ll be signed in automatically and can explore your instance.',
+    'Name the space for your accounts, members, keys and usage. Setup finishes only after this step.',
   startSetup: 'Start setup',
   backToWelcome: 'Back to welcome',
+  setupBackToAdmin: 'Back to administrator',
+  setupProgress: 'Step {{current}} of 2',
+  setupContinue: 'Continue',
+  setupFirstWorkspace: 'Create your first workspace',
+  setupFirstWorkspaceDescription:
+    'Choose the name shown in the workspace switcher. Your administrator account and this workspace will be created together.',
+  setupFinish: 'Create workspace',
+  setupFinishing: 'Creating workspace…',
   createAdministrator: 'Create administrator',
   creatingAdministrator: 'Creating administrator…',
   setupDescription:
-    'This account manages your SubLane instance. Once it’s created, you’ll be signed in automatically.',
+    'Choose your administrator credentials. Next, you’ll name your first workspace before either is created.',
   username: 'Username',
   usernameHint:
     'Use 3–32 letters, numbers, underscores, or hyphens. Start with a letter or number.',
@@ -766,13 +751,32 @@ export const en = {
   keyRevokeFailed: 'Could not revoke this key. Please try again.',
   manageKeys: 'Manage API keys',
   membersDescription:
-    'Manage member sign-in. Disabling an account signs it out immediately.',
+    'Manage access to this workspace. Disabling a member blocks their keys here without affecting other workspaces.',
   addMember: 'Add member',
+  memberExistingAdd: 'Add existing account',
+  memberExistingDescription:
+    'Enter an existing login and choose its role in this workspace. If the account is already here, change its role from the member list.',
+  memberExistingNameRequired: 'Enter a username.',
+  memberExistingNotFound: 'This account does not exist or is disabled.',
+  memberExistingAlreadyHere:
+    'This account already belongs to this workspace. Use Change workspace role on its row.',
+  memberRoleInvalid:
+    'Enable this member before assigning the administrator role.',
+  memberExistingSaveFailed: 'Could not save workspace access. Try again.',
+  memberAccessSaved: 'Workspace access saved for {{username}}.',
+  memberRoleChange: 'Change workspace role',
+  memberRoleChangeNamed: 'Change role for {{username}}',
+  memberRoleChangeDescription: 'Choose the workspace role for {{username}}.',
+  memberBasicRoleHint:
+    'Can use granted account pools and manage personal keys and usage.',
+  memberAdminRoleHint:
+    'Can manage accounts, pools, members, allowances and audit in this workspace.',
   addMemberDescription:
     'Create a member account and share its credentials privately with that person.',
   createMember: 'Create member',
   creatingMember: 'Creating member…',
-  memberCreated: 'Member {{username}} was created.',
+  memberCreated:
+    'Member {{username}} was created. Grant access to an account pool so they can use the gateway.',
   memberUsernameTaken: 'This username is already in use.',
   memberCreateFailed: 'Could not create the member. Please try again.',
   memberUpdateFailed: 'Could not update this member. Please try again.',
@@ -780,7 +784,7 @@ export const en = {
   membersLoadFailed: 'Could not load members. Please try again.',
   noMembers: 'No members yet',
   noMembersDescription:
-    'Add a member so they can sign in to their own workspace.',
+    'Create a login or add an existing account, then grant members access to the pools they can use.',
   memberStatus: 'Status',
   memberCreatedAt: 'Created',
   actions: 'Actions',
@@ -815,6 +819,7 @@ export const en = {
   accounts: 'Accounts',
   preferences: 'Preferences',
   workspace: 'Workspace',
+  workspaces: 'Workspaces',
   general: 'General',
   administration: 'Administration',
   foundation: 'Foundation',
@@ -830,8 +835,7 @@ export const en = {
   codexSetupDescription:
     'Add a subscription, then verify its connection before inviting your team to use it.',
   teamAccess: 'Gateway keys',
-  teamAccessDescription:
-    'Administrators and members can create and revoke their own API keys.',
+  teamAccessDescription: 'An active personal key can use a ready account pool.',
   comingNext: 'Coming next',
   planned: 'Planned',
   clientAccess: 'Client access',
@@ -927,9 +931,9 @@ export const en = {
     'Quota reporting is not available for this provider yet.',
   accountGroups: 'Account groups',
   groupsDescription:
-    'Organize subscription accounts into pools for members and projects.',
+    'Organize subscription accounts into pools, then grant access to members.',
   groupsAssignmentHint:
-    'New accounts remain unassigned until you add them to a group. Grant group access through personnel teams, or add a team resource with an allowance.',
+    'New accounts remain unassigned until you add them to a group. Grant pool access directly to members, then optionally configure an allowance.',
   accountUnassigned: 'Unassigned',
   accountAssignGroup: 'Assign to an account group',
   groupsEmpty:
@@ -951,7 +955,7 @@ export const en = {
     'Add a subscription account first, or save an empty pool and configure it later.',
   saveGroup: 'Save group',
   groupNameTaken: 'A group with this name already exists.',
-  groupLimitReached: 'This instance supports up to 32 groups.',
+  groupLimitReached: 'Each workspace supports up to 32 account pools.',
   groupInputInvalid:
     'Check the group name (1–64 characters), selected accounts and exact model IDs (up to 100).',
   groupSaveFailed: 'Could not save group changes. Try again.',
@@ -964,16 +968,19 @@ export const en = {
   memberNoGroupsHint:
     'This member will not be able to create or use gateway keys until a group is granted.',
   saveGroupAccess: 'Save access',
-  keyGroup: 'Account group',
+  keyGroup: 'Account pool',
+  poolAccountCount: '{{count}} accounts',
+  keyEmptyPoolWarning:
+    'This pool has no subscription accounts. A new key cannot serve requests until an account is added.',
   keyGroupHint:
-    'This key can only use accounts in the selected group. Revoke and create a new key to change its group.',
+    'This key can only use the selected pool. To switch pools, create a new key, update your client, then revoke the old key.',
   noAvailableGroups:
-    'No groups are available. Ask your administrator to grant access.',
+    'No account pools are available. Create one or ask an administrator for access.',
   groupAccessChanged:
-    'Group access has changed. Select an available group and try again.',
-  keyGroupUnavailable: 'Group unavailable',
-  keyGroupName: 'Group: {{name}}',
-  chooseGroup: 'Choose a group',
+    'Pool access has changed. Select an available pool and try again.',
+  keyGroupUnavailable: 'Pool unavailable',
+  keyGroupName: 'Pool: {{name}}',
+  chooseGroup: 'Choose an account pool',
   clientGuideAction: 'Setup guide',
   accountScheduling: 'Scheduling settings',
   accountConcurrencyLimit: 'Concurrent model requests',

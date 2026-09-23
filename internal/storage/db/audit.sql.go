@@ -10,11 +10,12 @@ import (
 )
 
 const createAuditEvent = `-- name: CreateAuditEvent :exec
-INSERT INTO audit_events(actor_id,actor_name,actor_role,source,action,resource,resource_id,outcome,http_status,created_at)
-VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
+INSERT INTO audit_events(tenant_id,actor_id,actor_name,actor_role,source,action,resource,resource_id,outcome,http_status,created_at)
+VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
 `
 
 type CreateAuditEventParams struct {
+	TenantID   int64
 	ActorID    int64
 	ActorName  string
 	ActorRole  string
@@ -29,6 +30,7 @@ type CreateAuditEventParams struct {
 
 func (q *Queries) CreateAuditEvent(ctx context.Context, arg CreateAuditEventParams) error {
 	_, err := q.db.ExecContext(ctx, createAuditEvent,
+		arg.TenantID,
 		arg.ActorID,
 		arg.ActorName,
 		arg.ActorRole,
@@ -44,21 +46,27 @@ func (q *Queries) CreateAuditEvent(ctx context.Context, arg CreateAuditEventPara
 }
 
 const listAuditEvents = `-- name: ListAuditEvents :many
-SELECT id, actor_id, actor_name, actor_role, source, "action", resource, resource_id, outcome, http_status, created_at FROM audit_events
-WHERE (id<?1 OR ?1=0)
-AND (resource=?2 OR ?2='')
-AND (outcome=?3 OR ?3='')
+SELECT id, tenant_id, actor_id, actor_name, actor_role, source, "action", resource, resource_id, outcome, http_status, created_at FROM audit_events
+WHERE tenant_id=?1 AND (id<?2 OR ?2=0)
+AND (resource=?3 OR ?3='')
+AND (outcome=?4 OR ?4='')
 ORDER BY id DESC LIMIT 51
 `
 
 type ListAuditEventsParams struct {
+	TenantID int64
 	BeforeID int64
 	Resource string
 	Outcome  string
 }
 
 func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error) {
-	rows, err := q.db.QueryContext(ctx, listAuditEvents, arg.BeforeID, arg.Resource, arg.Outcome)
+	rows, err := q.db.QueryContext(ctx, listAuditEvents,
+		arg.TenantID,
+		arg.BeforeID,
+		arg.Resource,
+		arg.Outcome,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +76,7 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 		var i AuditEvent
 		if err := rows.Scan(
 			&i.ID,
+			&i.TenantID,
 			&i.ActorID,
 			&i.ActorName,
 			&i.ActorRole,
@@ -93,10 +102,18 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 }
 
 const pruneAuditEvents = `-- name: PruneAuditEvents :exec
-DELETE FROM audit_events WHERE audit_events.created_at<?1 OR audit_events.id IN (SELECT id FROM audit_events ORDER BY id DESC LIMIT -1 OFFSET 10000)
+DELETE FROM audit_events AS current_event WHERE current_event.tenant_id=?1
+AND (current_event.created_at<?2 OR current_event.id IN (
+SELECT old_event.id FROM audit_events AS old_event WHERE old_event.tenant_id=?1
+ORDER BY old_event.id DESC LIMIT -1 OFFSET 10000))
 `
 
-func (q *Queries) PruneAuditEvents(ctx context.Context, oldest int64) error {
-	_, err := q.db.ExecContext(ctx, pruneAuditEvents, oldest)
+type PruneAuditEventsParams struct {
+	ScopeTenantID int64
+	Oldest        int64
+}
+
+func (q *Queries) PruneAuditEvents(ctx context.Context, arg PruneAuditEventsParams) error {
+	_, err := q.db.ExecContext(ctx, pruneAuditEvents, arg.ScopeTenantID, arg.Oldest)
 	return err
 }

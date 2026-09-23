@@ -22,6 +22,7 @@ const choicesSchema = z.object({
   groups: z
     .array(
       groupSchema.pick({ id: true, name: true }).extend({
+        account_count: z.number().int().nonnegative(),
         scheme_id: z.number().int().optional(),
         scheme_name: z.string().optional(),
       }),
@@ -63,6 +64,26 @@ export function memberGroupOptions(id: number) {
     queryKey: ['member-groups', id],
     queryFn: ({ signal }) =>
       request(`/api/groups/members/${id}`, grantsSchema, { signal }),
+  })
+}
+export function poolMembersOptions(id: number) {
+  return queryOptions({
+    queryKey: ['pool-members', id],
+    queryFn: ({ signal }) =>
+      request(
+        `/api/groups/${id}/members`,
+        z.object({
+          members: z
+            .array(
+              z.object({
+                id: z.number().int().positive(),
+                username: z.string(),
+              }),
+            )
+            .max(100),
+        }),
+        { signal },
+      ),
   })
 }
 export function saveMemberGroups({

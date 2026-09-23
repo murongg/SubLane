@@ -4,7 +4,7 @@ import { createMemoryHistory } from '@tanstack/react-router'
 import { expect, it, vi } from 'vitest'
 import { App } from '@/App'
 import { createAppRouter } from '@/router'
-import { authenticated, memberAuthenticated } from '@/test/fixtures'
+import { authenticated, memberAuthenticated, workspaces } from '@/test/fixtures'
 
 it.each(['responses', 'messages', 'gemini'])(
   'shows %s request metadata and filters failed calls',
@@ -73,6 +73,8 @@ it.each([memberAuthenticated, authenticated])(
     const fetch = vi.fn().mockImplementation((url: string) => {
       if (url === '/api/auth/state')
         return Promise.resolve(new Response(JSON.stringify(session)))
+      if (url === '/api/workspaces')
+        return Promise.resolve(new Response(JSON.stringify(workspaces)))
       if (url.startsWith('/api/me/requests?'))
         return Promise.resolve(
           new Response(
@@ -139,7 +141,9 @@ it.each([memberAuthenticated, authenticated])(
     expect(
       fetch.mock.calls.every(
         ([url]) =>
-          url === '/api/auth/state' || url.startsWith('/api/me/requests?'),
+          url === '/api/auth/state' ||
+          url === '/api/workspaces' ||
+          url.startsWith('/api/me/requests?'),
       ),
     ).toBe(true)
   },

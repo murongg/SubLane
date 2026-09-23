@@ -8,6 +8,7 @@ import (
 
 	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/storage/db"
+	"github.com/murongg/SubLane/internal/tenants"
 )
 
 var (
@@ -46,6 +47,10 @@ func (s *Service) ListMembers(ctx context.Context, beforeID int64) (MemberPage, 
 }
 
 func (s *Service) CreateMember(ctx context.Context, username, password string) (Member, error) {
+	return s.CreateMemberForTenant(ctx, 1, username, password)
+}
+
+func (s *Service) CreateMemberForTenant(ctx context.Context, tenantID int64, username, password string) (Member, error) {
 	username = strings.ToLower(strings.TrimSpace(username))
 	if !validCredentials(username, password, 20) {
 		return Member{}, ErrInput
@@ -68,7 +73,10 @@ func (s *Service) CreateMember(ctx context.Context, username, password string) (
 	if err != nil {
 		return Member{}, err
 	}
-	// A newly created member keeps the existing shared-pool behavior until an administrator changes grants.
+	if err := tenants.AddNewMember(ctx, tx, tenantID, row.ID, s.now().Unix()); err != nil {
+		return Member{}, err
+	}
+	// Workspace membership and identity commit together; pool grants are assigned separately.
 	if err := audit.Record(ctx, queries, "member.create", "member", audit.ID(row.ID)); err != nil {
 		return Member{}, err
 	}

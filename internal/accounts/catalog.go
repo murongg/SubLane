@@ -24,6 +24,9 @@ type Catalog struct {
 }
 
 func (s *Service) Catalog(ctx context.Context, id string) (Catalog, error) {
+	if _, err := s.get(ctx, id); err != nil {
+		return Catalog{}, err
+	}
 	row, err := s.queries.GetAccountCatalog(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Catalog{}, ErrNotFound
@@ -67,6 +70,9 @@ func normalizedCatalog(models []string) ([]string, error) {
 }
 
 func (s *Service) SaveCatalog(ctx context.Context, id string, revision int64, models []string, observedAt int64, source string) error {
+	if _, err := s.get(ctx, id); err != nil {
+		return err
+	}
 	if observedAt <= 0 || len(source) > 64 {
 		return ErrInput
 	}

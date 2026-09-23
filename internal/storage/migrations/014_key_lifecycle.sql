@@ -1,2 +1,0 @@
-ALTER TABLE api_keys ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1));
-ALTER TABLE api_keys ADD COLUMN expires_at INTEGER;

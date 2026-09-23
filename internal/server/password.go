@@ -24,6 +24,10 @@ func (h *authHTTP) changePassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *authHTTP) resetMemberPassword(w http.ResponseWriter, r *http.Request) {
+	if h.tenantID != 1 || sessionUser(r).ID != 1 {
+		writeJSON(w, 403, map[string]string{"error": "forbidden"})
+		return
+	}
 	id, err := pathID(r)
 	if err != nil || id <= 0 {
 		authError(w, auth.ErrInput)

@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/murongg/SubLane/internal/storage/db"
+	"github.com/murongg/SubLane/internal/tenants"
 )
 
 var (
@@ -39,8 +40,10 @@ type User struct {
 	Role     Role   `json:"role"`
 }
 type State struct {
-	Initialized bool  `json:"initialized"`
-	User        *User `json:"user"`
+	Initialized    bool  `json:"initialized"`
+	User           *User `json:"user"`
+	WorkspaceCount int   `json:"workspace_count,omitempty"`
+	NeedsWorkspace bool  `json:"needs_workspace,omitempty"`
 }
 type Session struct {
 	Token     string
@@ -90,7 +93,7 @@ func (s *Service) State(ctx context.Context, token string) (State, error) {
 	return state, nil
 }
 
-func (s *Service) Setup(ctx context.Context, username, password string) (Session, error) {
+func (s *Service) Setup(ctx context.Context, username, password, workspaceName string) (Session, error) {
 	initialized, err := s.Initialized(ctx)
 	if err != nil {
 		return Session{}, err
@@ -100,6 +103,10 @@ func (s *Service) Setup(ctx context.Context, username, password string) (Session
 	}
 	username = strings.ToLower(strings.TrimSpace(username))
 	if !validCredentials(username, password, 20) {
+		return Session{}, ErrInput
+	}
+	workspaceName, err = tenants.NormalizeName(workspaceName)
+	if err != nil {
 		return Session{}, ErrInput
 	}
 	if err := s.acquire(ctx); err != nil {
@@ -119,6 +126,9 @@ func (s *Service) Setup(ctx context.Context, username, password string) (Session
 	}
 	if n == 0 {
 		return Session{}, ErrInitialized
+	}
+	if err := tenants.CreateInitial(ctx, tx, 1, s.now().Unix(), workspaceName); err != nil {
+		return Session{}, err
 	}
 	session, err := s.createSession(ctx, tx, User{ID: 1}, hash)
 	if err != nil {

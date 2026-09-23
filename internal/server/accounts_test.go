@@ -31,7 +31,7 @@ func TestAccountManagementIsAdministratorOnlyAndNeverReturnsTokens(t *testing.T)
 	}
 	h := New(Options{Auth: identity, Accounts: accounts.New(db, cipher), Ping: db.PingContext})
 	origin := "http://example.test"
-	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "owner-test", "password": "owner pass 42"}, nil)
+	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "owner-test", "password": "owner pass 42", "workspace_name": "Synthetic workspace"}, nil)
 	owner := setup.Result().Cookies()[0]
 	input := map[string]string{"username": "member-test", "password": "member pass 42"}
 	if result := request(h, "POST", "/api/members", origin, input, owner); result.Code != 201 {

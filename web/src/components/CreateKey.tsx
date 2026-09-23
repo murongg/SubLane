@@ -67,9 +67,8 @@ function KeyForm({
   const client = useQueryClient()
   const groups = useQuery(availableGroupOptions(client, userID))
   const [selectedID, setSelectedID] = useState<number | null>(null)
-  const groupID = selectedID ?? groups.data?.groups[0]?.id
   const selectedGroup = groups.data?.groups.find(
-    (group) => group.id === groupID,
+    (group) => group.id === selectedID,
   )
   const [expiry, setExpiry] = useState<ExpiryChoice>('never')
   const [nameError, setNameError] = useState(false)
@@ -248,12 +247,19 @@ function KeyForm({
                         key={group.id}
                         value={String(group.id)}
                       >
-                        {group.scheme_id
-                          ? t('allocationKeyChoice', {
-                              scheme: group.scheme_name,
-                              pool: group.name,
-                            })
-                          : group.name}
+                        <span className="min-w-0 flex-1 truncate">
+                          {group.scheme_id
+                            ? t('allocationKeyChoice', {
+                                scheme: group.scheme_name,
+                                pool: group.name,
+                              })
+                            : group.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {t('poolAccountCount', {
+                            count: group.account_count,
+                          })}
+                        </span>
                       </DropdownMenuRadioItem>
                     ))}
                   </DropdownMenuRadioGroup>
@@ -263,6 +269,11 @@ function KeyForm({
             <p className="text-xs leading-5 text-muted-foreground">
               {t('keyGroupHint')}
             </p>
+            {selectedGroup?.account_count === 0 && (
+              <p role="status" className="text-sm leading-6 text-warning">
+                {t('keyEmptyPoolWarning')}
+              </p>
+            )}
           </div>
           <KeyExpiry
             value={expiry}

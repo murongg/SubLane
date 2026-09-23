@@ -4,7 +4,7 @@ import { createMemoryHistory } from '@tanstack/react-router'
 import { expect, it, vi } from 'vitest'
 import { App } from '@/App'
 import { createAppRouter } from '@/router'
-import { authenticated, system } from '@/test/fixtures'
+import { authenticated, system, workspaces } from '@/test/fixtures'
 
 function open() {
   render(
@@ -52,6 +52,8 @@ it('preserves the last successful status when refresh fails and recovers on retr
     vi.fn().mockImplementation((url: string) => {
       if (url === '/api/auth/state')
         return Promise.resolve(new Response(JSON.stringify(authenticated)))
+      if (url === '/api/workspaces')
+        return Promise.resolve(new Response(JSON.stringify(workspaces)))
       reads++
       return Promise.resolve(
         reads === 2
@@ -70,7 +72,7 @@ it('preserves the last successful status when refresh fails and recovers on retr
     'Showing the last successful check',
   )
   expect(screen.getByText('synthetic-1')).toBeTruthy()
-  expect(screen.getByText('Status unknown')).toBeTruthy()
+  expect(screen.getAllByText('Status unknown').length).toBeGreaterThan(0)
   await user.click(screen.getByRole('button', { name: 'Refresh' }))
   expect(await screen.findByText('synthetic-3')).toBeTruthy()
   expect(screen.queryByRole('alert')).toBeNull()
@@ -84,7 +86,14 @@ it('uses the verified account state for gateway readiness', async () => {
       const data =
         url === '/api/auth/state'
           ? authenticated
-          : { ...system, gateway: { provider: 'codex', status: 'ready' } }
+          : {
+              ...system,
+              gateway: {
+                provider: 'codex',
+                status: 'ready',
+                has_usable_key: true,
+              },
+            }
       return Promise.resolve(new Response(JSON.stringify(data)))
     }),
   )
@@ -95,4 +104,36 @@ it('uses the verified account state for gateway readiness', async () => {
     ),
   ).toBeTruthy()
   expect(screen.queryByText('Not configured')).toBeNull()
+})
+
+it('does not mark gateway keys ready before an active key has a ready pool', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url === '/api/auth/state'
+              ? authenticated
+              : {
+                  ...system,
+                  gateway: {
+                    provider: 'codex',
+                    status: 'ready',
+                    has_usable_key: false,
+                  },
+                },
+          ),
+        ),
+      ),
+    ),
+  )
+  open()
+  expect(await screen.findByText('No usable key')).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Create API key' })).toBeTruthy()
+  expect(
+    screen.queryByText(
+      'Your gateway is ready. Connect a client using a personal API key.',
+    ),
+  ).toBeNull()
 })

@@ -10,7 +10,8 @@ import (
 )
 
 const listAccountRuntime = `-- name: ListAccountRuntime :many
-SELECT a.id,a.max_concurrency,COALESCE(r.cooldown_until,0) AS cooldown_until,COALESCE(r.reason,'') AS reason,COALESCE(r.failures,0) AS failures,COALESCE(r.last_failure_at,0) AS last_failure_at,COALESCE(r.revision,0) AS revision FROM accounts a LEFT JOIN account_runtime r ON r.account_id=a.id
+SELECT a.id,a.max_concurrency,COALESCE(r.cooldown_until,0) AS cooldown_until,COALESCE(r.reason,'') AS reason,COALESCE(r.failures,0) AS failures,COALESCE(r.last_failure_at,0) AS last_failure_at,COALESCE(r.revision,0) AS revision
+FROM accounts a LEFT JOIN account_runtime r ON r.account_id=a.id WHERE a.tenant_id=?1
 `
 
 type ListAccountRuntimeRow struct {
@@ -23,8 +24,8 @@ type ListAccountRuntimeRow struct {
 	Revision       int64
 }
 
-func (q *Queries) ListAccountRuntime(ctx context.Context) ([]ListAccountRuntimeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAccountRuntime)
+func (q *Queries) ListAccountRuntime(ctx context.Context, tenantID int64) ([]ListAccountRuntimeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAccountRuntime, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +57,8 @@ func (q *Queries) ListAccountRuntime(ctx context.Context) ([]ListAccountRuntimeR
 
 const saveAccountRuntime = `-- name: SaveAccountRuntime :exec
 INSERT INTO account_runtime(account_id,cooldown_until,reason,failures,last_failure_at,revision)
-SELECT id,?1,?2,?3,?4,?5 FROM accounts WHERE id=?6
+SELECT id,?1,?2,?3,?4,?5 FROM accounts
+WHERE id=?6 AND tenant_id=?7
 ON CONFLICT(account_id) DO UPDATE SET cooldown_until=excluded.cooldown_until,reason=excluded.reason,failures=excluded.failures,last_failure_at=excluded.last_failure_at,revision=excluded.revision
 `
 
@@ -67,6 +69,7 @@ type SaveAccountRuntimeParams struct {
 	LastFailureAt int64
 	Revision      int64
 	AccountID     string
+	TenantID      int64
 }
 
 func (q *Queries) SaveAccountRuntime(ctx context.Context, arg SaveAccountRuntimeParams) error {
@@ -77,22 +80,30 @@ func (q *Queries) SaveAccountRuntime(ctx context.Context, arg SaveAccountRuntime
 		arg.LastFailureAt,
 		arg.Revision,
 		arg.AccountID,
+		arg.TenantID,
 	)
 	return err
 }
 
 const setAccountConcurrency = `-- name: SetAccountConcurrency :execrows
-UPDATE accounts SET max_concurrency=?1,updated_at=?2 WHERE id=?3
+UPDATE accounts SET max_concurrency=?1,updated_at=?2
+WHERE id=?3 AND tenant_id=?4
 `
 
 type SetAccountConcurrencyParams struct {
 	MaxConcurrency int64
 	Now            int64
 	ID             string
+	TenantID       int64
 }
 
 func (q *Queries) SetAccountConcurrency(ctx context.Context, arg SetAccountConcurrencyParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, setAccountConcurrency, arg.MaxConcurrency, arg.Now, arg.ID)
+	result, err := q.db.ExecContext(ctx, setAccountConcurrency,
+		arg.MaxConcurrency,
+		arg.Now,
+		arg.ID,
+		arg.TenantID,
+	)
 	if err != nil {
 		return 0, err
 	}

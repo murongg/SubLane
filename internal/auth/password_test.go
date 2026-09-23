@@ -10,7 +10,7 @@ import (
 func TestPasswordChangeRevokesSessionsAndPreservesOtherUsers(t *testing.T) {
 	s, connection := fixture(t)
 	ctx := context.Background()
-	owner, err := s.Setup(ctx, "owner-test", syntheticPassword)
+	owner, err := s.Setup(ctx, "owner-test", syntheticPassword, "Synthetic workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestResetPasswordBoundariesAndRollback(t *testing.T) {
 	if err := s.RecoverAdministrator(ctx, "new password 42"); err == nil {
 		t.Fatal("recovery created a missing administrator")
 	}
-	owner, err := s.Setup(ctx, "owner-test", syntheticPassword)
+	owner, err := s.Setup(ctx, "owner-test", syntheticPassword, "Synthetic workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestResetPasswordBoundariesAndRollback(t *testing.T) {
 func TestSessionCreationRejectsHashVerifiedBeforePasswordReset(t *testing.T) {
 	s, connection := fixture(t)
 	ctx := context.Background()
-	owner, err := s.Setup(ctx, "owner-test", syntheticPassword)
+	owner, err := s.Setup(ctx, "owner-test", syntheticPassword, "Synthetic workspace")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,9 +8,9 @@ import (
 )
 
 func TestMemberLifecycleAndSessionIsolation(t *testing.T) {
-	s, _ := fixture(t)
+	s, connection := fixture(t)
 	ctx := context.Background()
-	owner, err := s.Setup(ctx, "owner-test", syntheticPassword)
+	owner, err := s.Setup(ctx, "owner-test", syntheticPassword, "Synthetic workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,6 +23,10 @@ func TestMemberLifecycleAndSessionIsolation(t *testing.T) {
 	}
 	if member.Role != "member" || member.ID <= 1 || !member.Enabled || member.Username != "member-test" {
 		t.Fatalf("wrong member: %+v", member)
+	}
+	var workspaceRole string
+	if err := connection.QueryRow("SELECT role FROM memberships WHERE tenant_id=1 AND user_id=?", member.ID).Scan(&workspaceRole); err != nil || workspaceRole != "member" {
+		t.Fatalf("new member was not enrolled in the initial workspace: role=%q err=%v", workspaceRole, err)
 	}
 	if _, err := s.CreateMember(ctx, "MEMBER-TEST", "member pass 42"); !errors.Is(err, ErrUsernameTaken) {
 		t.Fatalf("duplicate accepted: %v", err)
@@ -73,7 +77,7 @@ func TestMemberLifecycleAndSessionIsolation(t *testing.T) {
 func TestMembersArePaginatedAndExcludeAdministrator(t *testing.T) {
 	s, db := fixture(t)
 	ctx := context.Background()
-	if _, err := s.Setup(ctx, "owner-test", syntheticPassword); err != nil {
+	if _, err := s.Setup(ctx, "owner-test", syntheticPassword, "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 51; i++ {
@@ -99,7 +103,7 @@ func TestMembersArePaginatedAndExcludeAdministrator(t *testing.T) {
 func TestSessionCreationRechecksDisabledUser(t *testing.T) {
 	s, db := fixture(t)
 	ctx := context.Background()
-	if _, err := s.Setup(ctx, "owner-test", syntheticPassword); err != nil {
+	if _, err := s.Setup(ctx, "owner-test", syntheticPassword, "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	member, err := s.CreateMember(ctx, "member-test", "member pass 42")

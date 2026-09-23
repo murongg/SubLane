@@ -6,6 +6,88 @@ import { App } from './App'
 import { createAppRouter } from './router'
 import { anonymous, authenticated, system } from './test/fixtures'
 
+it('places the selected workspace in the upper-left sidebar', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              initialized: true,
+              user: { id: 1, username: 'synthetic-admin', role: 'admin' },
+              workspace_count: 1,
+            }),
+          ),
+        )
+      if (url === '/api/workspaces')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              tenants: [{ id: 1, name: 'Synthetic studio', status: 'active' }],
+            }),
+          ),
+        )
+      return Promise.resolve(new Response(JSON.stringify(system)))
+    }),
+  )
+  render(
+    <App
+      router={createAppRouter(createMemoryHistory({ initialEntries: ['/'] }))}
+    />,
+  )
+  const selector = await screen.findByRole('button', {
+    name: 'Workspace: Synthetic studio',
+  })
+  expect(selector.closest('[data-slot="sidebar-header"]')).toBeTruthy()
+})
+
+it('keeps platform settings out of tenant administrator navigation', async () => {
+  sessionStorage.setItem('sublane.workspace', '2')
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              initialized: true,
+              user: { id: 2, username: 'synthetic-owner', role: 'admin' },
+              workspace_count: 2,
+            }),
+          ),
+        )
+      if (url === '/api/workspaces')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              tenants: [
+                { id: 1, name: 'First workspace', status: 'active' },
+                { id: 2, name: 'Second workspace', status: 'active' },
+              ],
+            }),
+          ),
+        )
+      return Promise.resolve(new Response(JSON.stringify(system)))
+    }),
+  )
+  try {
+    render(
+      <App
+        router={createAppRouter(
+          createMemoryHistory({ initialEntries: ['/admin/settings/codex'] }),
+        )}
+      />,
+    )
+    expect(
+      await screen.findByRole('heading', { name: 'Access denied' }),
+    ).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'System settings' })).toBeNull()
+  } finally {
+    sessionStorage.removeItem('sublane.workspace')
+  }
+})
+
 it('loads service data, navigates accounts, and persists the theme', async () => {
   vi.stubGlobal(
     'fetch',
@@ -50,6 +132,14 @@ it('shows a failed connection and allows recovery', async () => {
   const fetchMock = vi.fn().mockImplementation((url: string) => {
     if (url === '/api/auth/state')
       return Promise.resolve(new Response(JSON.stringify(authenticated)))
+    if (url === '/api/workspaces')
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            tenants: [{ id: 1, name: 'Synthetic studio', status: 'active' }],
+          }),
+        ),
+      )
     systemCalls++
     return Promise.resolve(
       systemCalls === 1

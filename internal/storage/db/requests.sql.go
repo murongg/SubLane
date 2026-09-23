@@ -14,13 +14,16 @@ SELECT r.user_id, r.key_id, COALESCE(u.username,'') AS username, COALESCE(k.name
 FROM request_records r
 LEFT JOIN users u ON u.id=r.user_id
 LEFT JOIN api_keys k ON k.id=r.key_id
-WHERE (r.user_id=?1 OR ?1=0) AND r.started_at>=?2
+JOIN account_groups g ON g.id=r.group_id
+WHERE g.tenant_id=?1
+AND (r.user_id=?2 OR ?2=0) AND r.started_at>=?3
 GROUP BY r.user_id,r.key_id ORDER BY username,key_name,r.key_id LIMIT 5000
 `
 
 type ListRequestCallersParams struct {
-	UserID int64
-	Since  int64
+	TenantID int64
+	UserID   int64
+	Since    int64
 }
 
 type ListRequestCallersRow struct {
@@ -31,7 +34,7 @@ type ListRequestCallersRow struct {
 }
 
 func (q *Queries) ListRequestCallers(ctx context.Context, arg ListRequestCallersParams) ([]ListRequestCallersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listRequestCallers, arg.UserID, arg.Since)
+	rows, err := q.db.QueryContext(ctx, listRequestCallers, arg.TenantID, arg.UserID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -61,16 +64,18 @@ func (q *Queries) ListRequestCallers(ctx context.Context, arg ListRequestCallers
 const listRequests = `-- name: ListRequests :many
 SELECT r.id, r.user_id, r.key_id, r.group_id, r.account_id, r.provider, r.model, r.transport, r.operation, r.started_at, r.duration_ms, r.outcome, r.error_code, r.upstream_status, r.input_tokens, r.output_tokens, r.cached_tokens, r.request_id, r.first_token_ms,COALESCE(u.username,'') AS username,COALESCE(k.name,'') AS key_name,COALESCE(g.name,'') AS group_name,COALESCE(a.name,'') AS account_name
 FROM request_records r LEFT JOIN users u ON u.id=r.user_id LEFT JOIN api_keys k ON k.id=r.key_id LEFT JOIN account_groups g ON g.id=r.group_id LEFT JOIN accounts a ON a.id=r.account_id
-WHERE (r.user_id=?1 OR ?1=0) AND (r.id<?2 OR ?2=0) AND (r.account_id=?3 OR ?3='') AND (r.outcome=?4 OR ?4='') AND r.started_at>=?5
- AND (r.started_at<?6 OR ?6=0)
- AND (r.user_id=?7 OR ?7=0)
- AND (r.key_id=?8 OR ?8=0)
- AND (r.model=?9 OR ?9='')
- AND (r.request_id=?10 OR ?10='')
+WHERE g.tenant_id=?1
+ AND (r.user_id=?2 OR ?2=0) AND (r.id<?3 OR ?3=0) AND (r.account_id=?4 OR ?4='') AND (r.outcome=?5 OR ?5='') AND r.started_at>=?6
+ AND (r.started_at<?7 OR ?7=0)
+ AND (r.user_id=?8 OR ?8=0)
+ AND (r.key_id=?9 OR ?9=0)
+ AND (r.model=?10 OR ?10='')
+ AND (r.request_id=?11 OR ?11='')
 ORDER BY r.id DESC LIMIT 51
 `
 
 type ListRequestsParams struct {
+	TenantID  int64
 	UserID    int64
 	Cursor    int64
 	AccountID string
@@ -111,6 +116,7 @@ type ListRequestsRow struct {
 
 func (q *Queries) ListRequests(ctx context.Context, arg ListRequestsParams) ([]ListRequestsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listRequests,
+		arg.TenantID,
 		arg.UserID,
 		arg.Cursor,
 		arg.AccountID,

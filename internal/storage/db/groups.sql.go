@@ -75,15 +75,23 @@ func (q *Queries) ClearGroupModels(ctx context.Context, groupID int64) error {
 
 const clearMemberGroups = `-- name: ClearMemberGroups :exec
 DELETE FROM group_members WHERE user_id=?1
+AND group_id IN (SELECT id FROM account_groups WHERE tenant_id=?2)
 `
 
-func (q *Queries) ClearMemberGroups(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, clearMemberGroups, userID)
+type ClearMemberGroupsParams struct {
+	UserID   int64
+	TenantID int64
+}
+
+func (q *Queries) ClearMemberGroups(ctx context.Context, arg ClearMemberGroupsParams) error {
+	_, err := q.db.ExecContext(ctx, clearMemberGroups, arg.UserID, arg.TenantID)
 	return err
 }
 
 const countGroupMembers = `-- name: CountGroupMembers :one
-SELECT count(*) FROM effective_group_access m JOIN users u ON u.id=m.user_id WHERE m.group_id=?1 AND u.role='member'
+SELECT count(*) FROM group_members grant_row
+JOIN effective_group_access access ON access.group_id=grant_row.group_id AND access.user_id=grant_row.user_id
+WHERE grant_row.group_id=?1
 `
 
 func (q *Queries) CountGroupMembers(ctx context.Context, groupID int64) (int64, error) {
@@ -94,29 +102,35 @@ func (q *Queries) CountGroupMembers(ctx context.Context, groupID int64) (int64, 
 }
 
 const countGroups = `-- name: CountGroups :one
-SELECT count(*) FROM account_groups
+SELECT count(*) FROM account_groups WHERE tenant_id=?1
 `
 
-func (q *Queries) CountGroups(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countGroups)
+func (q *Queries) CountGroups(ctx context.Context, tenantID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countGroups, tenantID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const createGroup = `-- name: CreateGroup :execlastid
-INSERT INTO account_groups(name,enabled,created_at,updated_at)
-VALUES(?1,?2,?3,?3)
+INSERT INTO account_groups(tenant_id,name,enabled,created_at,updated_at)
+VALUES(?1,?2,?3,?4,?4)
 `
 
 type CreateGroupParams struct {
-	Name    string
-	Enabled bool
-	Now     int64
+	TenantID int64
+	Name     string
+	Enabled  bool
+	Now      int64
 }
 
 func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, createGroup, arg.Name, arg.Enabled, arg.Now)
+	result, err := q.db.ExecContext(ctx, createGroup,
+		arg.TenantID,
+		arg.Name,
+		arg.Enabled,
+		arg.Now,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -124,18 +138,23 @@ func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (int64
 }
 
 const findGroupName = `-- name: FindGroupName :one
-SELECT id FROM account_groups WHERE name=?1 COLLATE NOCASE
+SELECT id FROM account_groups WHERE tenant_id=?1 AND name=?2 COLLATE NOCASE
 `
 
-func (q *Queries) FindGroupName(ctx context.Context, name string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, findGroupName, name)
+type FindGroupNameParams struct {
+	TenantID int64
+	Name     string
+}
+
+func (q *Queries) FindGroupName(ctx context.Context, arg FindGroupNameParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, findGroupName, arg.TenantID, arg.Name)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
 }
 
 const getGroup = `-- name: GetGroup :one
-SELECT id, name, enabled, created_at, updated_at, restricted_models FROM account_groups WHERE id=?1
+SELECT id, name, enabled, created_at, updated_at, restricted_models, tenant_id FROM account_groups WHERE id=?1
 `
 
 func (q *Queries) GetGroup(ctx context.Context, id int64) (AccountGroup, error) {
@@ -148,6 +167,31 @@ func (q *Queries) GetGroup(ctx context.Context, id int64) (AccountGroup, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.RestrictedModels,
+		&i.TenantID,
+	)
+	return i, err
+}
+
+const getTenantGroup = `-- name: GetTenantGroup :one
+SELECT id, name, enabled, created_at, updated_at, restricted_models, tenant_id FROM account_groups WHERE id=?1 AND tenant_id=?2
+`
+
+type GetTenantGroupParams struct {
+	ID       int64
+	TenantID int64
+}
+
+func (q *Queries) GetTenantGroup(ctx context.Context, arg GetTenantGroupParams) (AccountGroup, error) {
+	row := q.db.QueryRowContext(ctx, getTenantGroup, arg.ID, arg.TenantID)
+	var i AccountGroup
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RestrictedModels,
+		&i.TenantID,
 	)
 	return i, err
 }
@@ -167,11 +211,16 @@ func (q *Queries) GrantMemberGroup(ctx context.Context, arg GrantMemberGroupPara
 }
 
 const groupAccountExists = `-- name: GroupAccountExists :one
-SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1)
+SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND tenant_id=?2)
 `
 
-func (q *Queries) GroupAccountExists(ctx context.Context, accountID string) (bool, error) {
-	row := q.db.QueryRowContext(ctx, groupAccountExists, accountID)
+type GroupAccountExistsParams struct {
+	AccountID string
+	TenantID  int64
+}
+
+func (q *Queries) GroupAccountExists(ctx context.Context, arg GroupAccountExistsParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, groupAccountExists, arg.AccountID, arg.TenantID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -180,33 +229,45 @@ func (q *Queries) GroupAccountExists(ctx context.Context, accountID string) (boo
 const groupConnectionStatus = `-- name: GroupConnectionStatus :one
 SELECT CASE WHEN EXISTS(
  SELECT 1 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id JOIN account_groups g ON g.id=ga.group_id JOIN users u ON u.id=?1
- WHERE g.enabled=1 AND a.enabled=1 AND a.status='ready' AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
+ WHERE g.tenant_id=?2 AND g.enabled=1 AND a.enabled=1 AND a.status='ready' AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
 ) THEN 'ready' WHEN EXISTS(
  SELECT 1 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id JOIN account_groups g ON g.id=ga.group_id JOIN users u ON u.id=?1
- WHERE g.enabled=1 AND a.enabled=1 AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
+ WHERE g.tenant_id=?2 AND g.enabled=1 AND a.enabled=1 AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
 ) THEN 'needs_attention' ELSE 'not_configured' END AS status
 `
 
-func (q *Queries) GroupConnectionStatus(ctx context.Context, userID int64) (string, error) {
-	row := q.db.QueryRowContext(ctx, groupConnectionStatus, userID)
+type GroupConnectionStatusParams struct {
+	UserID   int64
+	TenantID int64
+}
+
+func (q *Queries) GroupConnectionStatus(ctx context.Context, arg GroupConnectionStatusParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, groupConnectionStatus, arg.UserID, arg.TenantID)
 	var status string
 	err := row.Scan(&status)
 	return status, err
 }
 
 const listAvailableGroups = `-- name: ListAvailableGroups :many
-SELECT g.id,g.name FROM account_groups g JOIN users u ON u.id=?1
-WHERE g.enabled=1 AND u.enabled=1
+SELECT g.id,g.name,(SELECT count(*) FROM group_accounts ga WHERE ga.group_id=g.id) AS account_count
+FROM account_groups g JOIN users u ON u.id=?1
+WHERE g.tenant_id=?2 AND g.enabled=1 AND u.enabled=1
 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) ORDER BY g.id
 `
 
-type ListAvailableGroupsRow struct {
-	ID   int64
-	Name string
+type ListAvailableGroupsParams struct {
+	UserID   int64
+	TenantID int64
 }
 
-func (q *Queries) ListAvailableGroups(ctx context.Context, userID int64) ([]ListAvailableGroupsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAvailableGroups, userID)
+type ListAvailableGroupsRow struct {
+	ID           int64
+	Name         string
+	AccountCount int64
+}
+
+func (q *Queries) ListAvailableGroups(ctx context.Context, arg ListAvailableGroupsParams) ([]ListAvailableGroupsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAvailableGroups, arg.UserID, arg.TenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +275,7 @@ func (q *Queries) ListAvailableGroups(ctx context.Context, userID int64) ([]List
 	items := []ListAvailableGroupsRow{}
 	for rows.Next() {
 		var i ListAvailableGroupsRow
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.AccountCount); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -283,9 +344,11 @@ func (q *Queries) ListGroupModels(ctx context.Context, groupID int64) ([]string,
 }
 
 const listGroups = `-- name: ListGroups :many
-SELECT g.id, g.name, g.enabled, g.created_at, g.updated_at, g.restricted_models, (SELECT count(*) FROM group_accounts a WHERE a.group_id=g.id) AS account_count,
-(SELECT count(*) FROM effective_group_access m JOIN users u ON u.id=m.user_id WHERE m.group_id=g.id AND u.role='member') AS member_count
-FROM account_groups g ORDER BY g.id
+SELECT g.id, g.name, g.enabled, g.created_at, g.updated_at, g.restricted_models, g.tenant_id, (SELECT count(*) FROM group_accounts a WHERE a.group_id=g.id) AS account_count,
+(SELECT count(*) FROM group_members grant_row
+ JOIN effective_group_access access ON access.group_id=grant_row.group_id AND access.user_id=grant_row.user_id
+ WHERE grant_row.group_id=g.id) AS member_count
+FROM account_groups g WHERE g.tenant_id=?1 ORDER BY g.id
 `
 
 type ListGroupsRow struct {
@@ -295,12 +358,13 @@ type ListGroupsRow struct {
 	CreatedAt        int64
 	UpdatedAt        int64
 	RestrictedModels bool
+	TenantID         int64
 	AccountCount     int64
 	MemberCount      int64
 }
 
-func (q *Queries) ListGroups(ctx context.Context) ([]ListGroupsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listGroups)
+func (q *Queries) ListGroups(ctx context.Context, tenantID int64) ([]ListGroupsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGroups, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -315,6 +379,7 @@ func (q *Queries) ListGroups(ctx context.Context) ([]ListGroupsRow, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.RestrictedModels,
+			&i.TenantID,
 			&i.AccountCount,
 			&i.MemberCount,
 		); err != nil {
@@ -332,11 +397,17 @@ func (q *Queries) ListGroups(ctx context.Context) ([]ListGroupsRow, error) {
 }
 
 const listMemberGroups = `-- name: ListMemberGroups :many
-SELECT group_id FROM group_members WHERE user_id=?1 ORDER BY group_id
+SELECT m.group_id FROM group_members m JOIN account_groups g ON g.id=m.group_id
+WHERE m.user_id=?1 AND g.tenant_id=?2 ORDER BY m.group_id
 `
 
-func (q *Queries) ListMemberGroups(ctx context.Context, userID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listMemberGroups, userID)
+type ListMemberGroupsParams struct {
+	UserID   int64
+	TenantID int64
+}
+
+func (q *Queries) ListMemberGroups(ctx context.Context, arg ListMemberGroupsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listMemberGroups, arg.UserID, arg.TenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -358,6 +429,59 @@ func (q *Queries) ListMemberGroups(ctx context.Context, userID int64) ([]int64, 
 	return items, nil
 }
 
+const listPoolMembers = `-- name: ListPoolMembers :many
+SELECT u.id,u.username FROM group_members grant_row
+JOIN effective_group_access access ON access.group_id=grant_row.group_id AND access.user_id=grant_row.user_id
+JOIN users u ON u.id=access.user_id
+WHERE grant_row.group_id=?1
+ORDER BY u.username,u.id LIMIT 100
+`
+
+type ListPoolMembersRow struct {
+	ID       int64
+	Username string
+}
+
+func (q *Queries) ListPoolMembers(ctx context.Context, groupID int64) ([]ListPoolMembersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPoolMembers, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPoolMembersRow{}
+	for rows.Next() {
+		var i ListPoolMembersRow
+		if err := rows.Scan(&i.ID, &i.Username); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const memberExistsInTenant = `-- name: MemberExistsInTenant :one
+SELECT EXISTS(SELECT 1 FROM memberships m
+WHERE m.tenant_id=?1 AND m.user_id=?2)
+`
+
+type MemberExistsInTenantParams struct {
+	TenantID int64
+	UserID   int64
+}
+
+func (q *Queries) MemberExistsInTenant(ctx context.Context, arg MemberExistsInTenantParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, memberExistsInTenant, arg.TenantID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const setGroupModelPolicy = `-- name: SetGroupModelPolicy :exec
 UPDATE account_groups SET restricted_models=?1 WHERE id=?2
 `
@@ -373,14 +497,16 @@ func (q *Queries) SetGroupModelPolicy(ctx context.Context, arg SetGroupModelPoli
 }
 
 const updateGroup = `-- name: UpdateGroup :exec
-UPDATE account_groups SET name=?1,enabled=?2,updated_at=?3 WHERE id=?4
+UPDATE account_groups SET name=?1,enabled=?2,updated_at=?3
+WHERE id=?4 AND tenant_id=?5
 `
 
 type UpdateGroupParams struct {
-	Name    string
-	Enabled bool
-	Now     int64
-	ID      int64
+	Name     string
+	Enabled  bool
+	Now      int64
+	ID       int64
+	TenantID int64
 }
 
 func (q *Queries) UpdateGroup(ctx context.Context, arg UpdateGroupParams) error {
@@ -389,6 +515,7 @@ func (q *Queries) UpdateGroup(ctx context.Context, arg UpdateGroupParams) error 
 		arg.Enabled,
 		arg.Now,
 		arg.ID,
+		arg.TenantID,
 	)
 	return err
 }

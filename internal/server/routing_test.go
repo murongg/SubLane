@@ -23,7 +23,7 @@ func TestRouterGroupsProtectMethodErrorsAndFallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner, err := identity.Setup(ctx, "owner-test", "owner pass 42")
+	owner, err := identity.Setup(ctx, "owner-test", "owner pass 42", "Synthetic workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,6 +35,7 @@ func TestRouterGroupsProtectMethodErrorsAndFallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureTestPool(t, db)
 	keys := newTestKeyService(t, db)
 	key, err := keys.CreateInGroup(ctx, member.ID, 1, "Synthetic client")
 	if err != nil {

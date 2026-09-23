@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -69,6 +70,12 @@ type observation struct {
 }
 
 func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (*observation, error) {
+	if _, err := s.queries.GetTenantGroup(ctx, db.GetTenantGroupParams{ID: groupID, TenantID: s.tenantID}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, groups.ErrUnavailable
+		}
+		return nil, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {

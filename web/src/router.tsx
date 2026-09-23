@@ -23,11 +23,6 @@ const settings = createRoute({
 const routes = root.addChildren([
   createRoute({
     getParentRoute: () => root,
-    path: '/admin/teams',
-    component: lazyRouteComponent(() => import('@/pages/Teams'), 'Teams'),
-  }),
-  createRoute({
-    getParentRoute: () => root,
     path: '/admin/allocations',
     component: lazyRouteComponent(
       () => import('@/pages/Allocations'),

@@ -2,6 +2,7 @@ import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 import { authKey, type AuthState } from './auth'
 import { ApiError, request } from './request'
+import { selectedWorkspace } from './workspace'
 
 const settingsSchema = z.object({
   max_upload_bytes: z.number().int().positive(),
@@ -56,7 +57,11 @@ export async function exportBackup(signal: AbortSignal) {
     signal,
     credentials: 'same-origin',
     cache: 'no-store',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/gzip' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/gzip',
+      'X-SubLane-Workspace': String(selectedWorkspace()),
+    },
   })
   if (!response.ok) {
     const value = z

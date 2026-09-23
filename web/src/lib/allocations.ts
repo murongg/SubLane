@@ -4,20 +4,6 @@ import { request, ApiError } from './request'
 import { authKey, type AuthState } from './auth'
 
 const integer = z.number().int().nonnegative()
-const memberSchema = z.object({
-  id: integer,
-  username: z.string(),
-  enabled: z.boolean(),
-})
-export const teamSchema = z.object({
-  id: integer,
-  name: z.string(),
-  enabled: z.boolean(),
-  member_ids: z.array(integer).max(100),
-  group_ids: z.array(integer).max(32).optional(),
-  members: z.array(memberSchema).max(100),
-  created_at: integer,
-})
 const modeSchema = z.enum(['ratio', 'amount', 'tokens'])
 const rateSchema = z.object({
   model: z.string(),
@@ -42,8 +28,6 @@ const revisionSchema = z.object({ effective_at: integer, config: configSchema })
 export const schemeSchema = revisionSchema.extend({
   id: integer,
   name: z.string(),
-  team_id: integer,
-  team_name: z.string(),
   group_id: integer,
   group_name: z.string(),
   enabled: z.boolean(),
@@ -93,7 +77,6 @@ export const allocationDetailSchema = schemeSchema.extend({
   unassigned: integer,
   available: z.boolean(),
 })
-export type Team = z.infer<typeof teamSchema>
 export type Scheme = z.infer<typeof schemeSchema>
 export type AllocationDetail = z.infer<typeof allocationDetailSchema>
 export type AllocationPending = z.infer<typeof pendingSchema>
@@ -101,19 +84,11 @@ export type AllocationMode = z.infer<typeof modeSchema>
 export type AllocationConfig = z.infer<typeof configSchema>
 export type SchemeInput = {
   name: string
-  team_id: number
   group_id: number
   enabled: boolean
   start_next: boolean
   config: AllocationConfig
 }
-export const teamsOptions = queryOptions({
-  queryKey: ['teams'],
-  queryFn: ({ signal }) =>
-    request('/api/teams', z.object({ teams: z.array(teamSchema).max(64) }), {
-      signal,
-    }),
-})
 export const schemesOptions = queryOptions({
   queryKey: ['allocations'],
   refetchInterval: 30_000,
@@ -143,21 +118,6 @@ export function ownAllocationOptions(client: QueryClient, user: number) {
         { signal },
       ),
     refetchInterval: 30_000,
-  })
-}
-export function saveTeam({
-  id,
-  ...input
-}: {
-  id?: number
-  name: string
-  enabled: boolean
-  member_ids: number[]
-  group_ids?: number[]
-}) {
-  return request(id ? `/api/teams/${id}` : '/api/teams', teamSchema, {
-    method: id ? 'PATCH' : 'POST',
-    body: JSON.stringify(input),
   })
 }
 export function saveScheme({ id, ...input }: SchemeInput & { id?: number }) {

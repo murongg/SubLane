@@ -13,7 +13,7 @@ func (h *memberHTTP) ownBudgets(w http.ResponseWriter, r *http.Request) {
 }
 func (h *memberHTTP) budgets(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
-	if err != nil || id <= 1 {
+	if err != nil || id <= 0 {
 		accountError(w, accounts.ErrInput)
 		return
 	}
@@ -49,7 +49,7 @@ func (h *memberHTTP) saveBudget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := pathID(r)
-	if err != nil || id <= 1 {
+	if err != nil || id <= 0 {
 		accountError(w, accounts.ErrInput)
 		return
 	}
@@ -79,7 +79,7 @@ func (h *memberHTTP) settleBudget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := pathID(r)
-	if err != nil || id <= 1 {
+	if err != nil || id <= 0 {
 		accountError(w, accounts.ErrInput)
 		return
 	}

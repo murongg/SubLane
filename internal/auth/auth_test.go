@@ -46,7 +46,7 @@ func TestSetupPasswordLength(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, _ := fixture(t)
 			ctx := context.Background()
-			_, err := s.Setup(ctx, "admin-test", tc.password)
+			_, err := s.Setup(ctx, "admin-test", tc.password, "Synthetic workspace")
 			if !tc.valid {
 				if !errors.Is(err, ErrInput) {
 					t.Fatalf("invalid password accepted: %v", err)
@@ -90,17 +90,24 @@ func TestSetupSessionAndRevocation(t *testing.T) {
 	if err != nil || state.Initialized || state.User != nil {
 		t.Fatalf("initial state: %+v, %v", state, err)
 	}
-	if _, err := s.Setup(ctx, "admin-test", "short"); !errors.Is(err, ErrInput) {
+	if _, err := s.Setup(ctx, "admin-test", "short", "Synthetic workspace"); !errors.Is(err, ErrInput) {
 		t.Fatalf("short password accepted: %v", err)
 	}
-	session, err := s.Setup(ctx, "Admin-Test", syntheticPassword)
+	session, err := s.Setup(ctx, "Admin-Test", syntheticPassword, "Synthetic workspace")
 	if err != nil {
 		t.Fatal(err)
+	}
+	var ownerID int64
+	var role string
+	if err := db.QueryRow(`SELECT t.owner_user_id,m.role FROM tenants t
+		JOIN memberships m ON m.tenant_id=t.id AND m.user_id=t.owner_user_id
+		WHERE t.id=1`).Scan(&ownerID, &role); err != nil || ownerID != session.User.ID || role != "owner" {
+		t.Fatalf("setup did not create the initial workspace owner: id=%d role=%q err=%v", ownerID, role, err)
 	}
 	if session.User.Username != "admin-test" {
 		t.Fatal("username is not normalized")
 	}
-	if _, err := s.Setup(ctx, "another-test", syntheticPassword); !errors.Is(err, ErrInitialized) {
+	if _, err := s.Setup(ctx, "another-test", syntheticPassword, "Synthetic workspace"); !errors.Is(err, ErrInitialized) {
 		t.Fatalf("setup reopened: %v", err)
 	}
 	var hash string
@@ -121,7 +128,7 @@ func TestSetupSessionAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := restarted.Setup(ctx, "another-test", syntheticPassword); !errors.Is(err, ErrInitialized) {
+	if _, err := restarted.Setup(ctx, "another-test", syntheticPassword, "Synthetic workspace"); !errors.Is(err, ErrInitialized) {
 		t.Fatalf("restart reopened setup: %v", err)
 	}
 	state, err = restarted.State(ctx, session.Token)
@@ -145,7 +152,7 @@ func TestConcurrentSetupCreatesExactlyOneAdministrator(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := s.Setup(context.Background(), "admin-test", syntheticPassword)
+			_, err := s.Setup(context.Background(), "admin-test", syntheticPassword, "Synthetic workspace")
 			results <- err
 		}()
 	}
@@ -174,7 +181,7 @@ func TestLoginExpiryAndSessionBound(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 	s.now = func() time.Time { return now }
-	first, err := s.Setup(ctx, "admin-test", syntheticPassword)
+	first, err := s.Setup(ctx, "admin-test", syntheticPassword, "Synthetic workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,14 +220,14 @@ func TestLoginExpiryAndSessionBound(t *testing.T) {
 func TestInputAndHashWorkAreBounded(t *testing.T) {
 	s, _ := fixture(t)
 	for _, name := range []string{"x", "spaces are invalid", strings.Repeat("x", 33)} {
-		if _, err := s.Setup(context.Background(), name, syntheticPassword); !errors.Is(err, ErrInput) {
+		if _, err := s.Setup(context.Background(), name, syntheticPassword, "Synthetic workspace"); !errors.Is(err, ErrInput) {
 			t.Fatalf("invalid username accepted: %q", name)
 		}
 	}
-	if _, err := s.Setup(context.Background(), "admin-test", strings.Repeat("界", 129)); !errors.Is(err, ErrInput) {
+	if _, err := s.Setup(context.Background(), "admin-test", strings.Repeat("界", 129), "Synthetic workspace"); !errors.Is(err, ErrInput) {
 		t.Fatal("oversized Unicode password accepted")
 	}
-	if _, err := s.Setup(context.Background(), "admin-test", syntheticPassword); err != nil {
+	if _, err := s.Setup(context.Background(), "admin-test", syntheticPassword, "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	s.hashSlots <- struct{}{}
@@ -241,7 +248,7 @@ func TestFailedSetupRollsBackAndCanRetry(t *testing.T) {
 	if _, err := db.Exec("DROP TABLE sessions"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Setup(context.Background(), "admin-test", syntheticPassword); err == nil {
+	if _, err := s.Setup(context.Background(), "admin-test", syntheticPassword, "Synthetic workspace"); err == nil {
 		t.Fatal("setup succeeded without session persistence")
 	}
 	initialized, err := s.Initialized(context.Background())
@@ -251,7 +258,7 @@ func TestFailedSetupRollsBackAndCanRetry(t *testing.T) {
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Setup(context.Background(), "admin-test", syntheticPassword); err != nil {
+	if _, err := s.Setup(context.Background(), "admin-test", syntheticPassword, "Synthetic workspace"); err != nil {
 		t.Fatalf("setup cannot be retried after rollback: %v", err)
 	}
 }

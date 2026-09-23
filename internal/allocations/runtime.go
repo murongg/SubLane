@@ -272,7 +272,7 @@ func Finish(ctx context.Context, q *db.Queries, id string, c Completion, now int
 }
 func (s *Service) Refresh(ctx context.Context, id int64) error {
 	q := db.New(s.conn)
-	scheme, err := q.GetAllocationScheme(ctx, id)
+	scheme, err := q.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: id, TenantID: s.tenantID})
 	if err != nil {
 		return ErrNotFound
 	}
@@ -332,6 +332,9 @@ func (s *Service) Settle(ctx context.Context, scheme int64, id string, c Complet
 	}
 	defer tx.Rollback()
 	q := db.New(tx)
+	if _, err := q.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: scheme, TenantID: s.tenantID}); err != nil {
+		return ErrNotFound
+	}
 	e, err := q.GetAllocationEntry(ctx, id)
 	if err != nil || e.SchemeID != scheme {
 		return ErrSettlement

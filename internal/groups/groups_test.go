@@ -12,7 +12,7 @@ import (
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage"
-	"github.com/murongg/SubLane/internal/storage/db"
+	"github.com/murongg/SubLane/internal/tenants"
 	"github.com/murongg/SubLane/internal/vault"
 )
 
@@ -29,7 +29,7 @@ func fixture(t *testing.T) (*sql.DB, *groups.Service, auth.Member, accounts.Acco
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	member, err := identity.CreateMember(ctx, "synthetic-member", "synthetic-pass")
@@ -60,6 +60,109 @@ func TestNewAccountsAndMembersRemainUnassigned(t *testing.T) {
 			t.Fatalf("automatic membership in %s: %d, %v", table, count, err)
 		}
 	}
+}
+
+func TestPoolManagementAndGrantsStayInWorkspace(t *testing.T) {
+	connection, first, member, firstAccount := fixture(t)
+	ctx := context.Background()
+	if _, err := connection.Exec(`INSERT INTO users(id,username,role,password_hash,enabled,created_at)
+		VALUES(3,'synthetic-owner-two','member','synthetic-hash',1,1);
+		INSERT INTO tenants(id,name,owner_user_id,created_at) VALUES(2,'Second workspace',3,1);
+		INSERT INTO memberships(tenant_id,user_id,role,created_at)
+		VALUES(2,3,'owner',1),(2,2,'member',1);
+		INSERT INTO accounts(id,tenant_id,provider,name,account_id,status,credential,created_at,updated_at)
+		VALUES('second-account',2,'codex','Second account','synthetic-subject','ready',x'01',1,1)`); err != nil {
+		t.Fatal(err)
+	}
+	second := groups.NewForTenant(connection, 2)
+	firstPool, err := first.Save(ctx, 0, groups.Input{Name: "Shared name", Enabled: true, AccountIDs: []string{firstAccount.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondPool, err := second.Save(ctx, 0, groups.Input{Name: "Shared name", Enabled: true, AccountIDs: []string{"second-account"}})
+	if err != nil {
+		t.Fatalf("second workspace could not use its own pool name: %v", err)
+	}
+	if _, err := second.Save(ctx, firstPool.ID, groups.Input{Name: "Foreign edit", Enabled: true, AccountIDs: []string{"second-account"}}); !errors.Is(err, groups.ErrNotFound) {
+		t.Fatalf("foreign workspace pool was editable: %v", err)
+	}
+	if _, err := second.Save(ctx, 0, groups.Input{Name: "Foreign account", Enabled: true, AccountIDs: []string{firstAccount.ID}}); !errors.Is(err, groups.ErrInput) {
+		t.Fatalf("foreign workspace account was assignable: %v", err)
+	}
+	for _, check := range []struct {
+		service *groups.Service
+		own     int64
+		other   int64
+	}{{first, firstPool.ID, secondPool.ID}, {second, secondPool.ID, firstPool.ID}} {
+		values, err := check.service.List(ctx)
+		if err != nil || len(values) != 1 || values[0].ID != check.own {
+			t.Fatalf("pool list leaked another workspace: %+v, %v", values, err)
+		}
+		if _, err := check.service.Get(ctx, check.other); !errors.Is(err, groups.ErrNotFound) {
+			t.Fatalf("foreign pool was readable: %v", err)
+		}
+	}
+	if err := first.SetMemberGroups(ctx, member.ID, []int64{firstPool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.SetMemberGroups(ctx, member.ID, []int64{secondPool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	for _, check := range []struct {
+		service *groups.Service
+		want    int64
+	}{{first, firstPool.ID}, {second, secondPool.ID}} {
+		ids, err := check.service.MemberGroups(ctx, member.ID)
+		if err != nil || len(ids) != 1 || ids[0] != check.want {
+			t.Fatalf("pool grants crossed workspaces: %v, %v", ids, err)
+		}
+	}
+	if err := second.SetMemberGroups(ctx, member.ID, []int64{}); err != nil {
+		t.Fatal(err)
+	}
+	ids, err := first.MemberGroups(ctx, member.ID)
+	if err != nil || len(ids) != 1 || ids[0] != firstPool.ID {
+		t.Fatalf("revoking second workspace deleted first workspace grant: %v, %v", ids, err)
+	}
+}
+
+func TestPoolRosterUsesActiveDirectGrantsAcrossWorkspaceRoles(t *testing.T) {
+	connection, _, owner, _ := fixture(t)
+	ctx := context.Background()
+	workspace, err := tenants.New(connection).Create(ctx, owner.ID, "Second workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tenants.New(connection).AddMember(ctx, owner.ID, workspace.ID, 1, tenants.RoleMember); err != nil {
+		t.Fatal(err)
+	}
+	service := groups.NewForTenant(connection, workspace.ID)
+	pool, err := service.Save(ctx, 0, groups.Input{Name: "Synthetic pool", Enabled: true, AccountIDs: []string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetMemberGroups(ctx, 1, []int64{pool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetMemberGroups(ctx, owner.ID, []int64{pool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	assertRoster := func(want int) {
+		t.Helper()
+		members, err := service.Members(ctx, pool.ID)
+		if err != nil || len(members) != want {
+			t.Fatalf("workspace member roster: %+v, %v", members, err)
+		}
+		listed, err := service.List(ctx)
+		if err != nil || len(listed) != 1 || listed[0].MemberCount != int64(want) {
+			t.Fatalf("workspace member count: %+v, %v", listed, err)
+		}
+	}
+	assertRoster(2)
+	if _, err := tenants.New(connection).SetMemberEnabled(ctx, owner.ID, workspace.ID, 1, false); err != nil {
+		t.Fatal(err)
+	}
+	assertRoster(1)
 }
 
 func TestFirstPoolCanBeRenamedAndDisabled(t *testing.T) {
@@ -142,27 +245,18 @@ func TestConnectionReadinessOnlyUsesAuthorizedGroups(t *testing.T) {
 	}
 }
 
-func TestMembersRequireTeamAccessInsteadOfDirectGrants(t *testing.T) {
-	connection, service, member, _ := assignedFixture(t)
-	ctx := context.Background()
-	if _, err := connection.Exec("INSERT INTO allocation_teams(name,enabled,created_at) VALUES('Synthetic configured team',1,1)"); err != nil {
+func TestPoolMembersListsOnlyDirectEnabledGrants(t *testing.T) {
+	_, service, member, _ := assignedFixture(t)
+	values, err := service.Members(context.Background(), 1)
+	if err != nil || len(values) != 1 || values[0].ID != member.ID {
+		t.Fatalf("pool grant members: %+v, %v", values, err)
+	}
+	if err := service.SetMemberGroups(context.Background(), member.ID, []int64{}); err != nil {
 		t.Fatal(err)
 	}
-	// The legacy default grant exists but must no longer authorize a member.
-	choices, err := service.Available(ctx, member.ID)
-	if err != nil || len(choices) != 0 {
-		t.Fatalf("member without a team saw groups: %+v, %v", choices, err)
-	}
-	if _, err := groups.ReadPolicy(ctx, db.New(connection), member.ID, groups.LegacyID); !errors.Is(err, groups.ErrUnavailable) {
-		t.Fatalf("default grant bypassed team policy: %v", err)
-	}
-	status, err := service.Connection(ctx, member.ID)
-	if err != nil || status != "not_configured" {
-		t.Fatalf("unauthorized account leaked readiness: %s, %v", status, err)
-	}
-	choices, err = service.Available(ctx, 1)
-	if err != nil || len(choices) != 1 {
-		t.Fatalf("administrator lost management access: %+v, %v", choices, err)
+	values, err = service.Members(context.Background(), 1)
+	if err != nil || len(values) != 0 {
+		t.Fatalf("revoked member still listed: %+v, %v", values, err)
 	}
 }
 

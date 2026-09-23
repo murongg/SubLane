@@ -197,8 +197,7 @@ func runAllocationSimulation(t *testing.T, dir string, scenario simulationCase, 
 		pool, err := groups.New(conn).Save(ctx, poolID, groups.Input{Name: fmt.Sprintf("Mock pool %d", team+1), Enabled: true, AccountIDs: ids})
 		check(err)
 		members := users[team*3 : (team+1)*3]
-		personnel, err := s.SaveTeam(ctx, 0, TeamInput{Name: fmt.Sprintf("Mock team %d", team+1), Enabled: true, MemberIDs: members})
-		check(err)
+		check(grantPoolMembers(ctx, conn, pool.ID, members...))
 		weights := []int64{int64(10 + rng.Intn(50)), int64(10 + rng.Intn(50)), int64(10 + rng.Intn(50))}
 		total := weights[0] + weights[1] + weights[2]
 		remaining := int64(10000)
@@ -211,7 +210,7 @@ func runAllocationSimulation(t *testing.T, dir string, scenario simulationCase, 
 			remaining -= share
 			shares = append(shares, Share{UserID: u, Limit: share})
 		}
-		scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: fmt.Sprintf("Mock allocation %d", team+1), TeamID: personnel.ID, GroupID: pool.ID, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", AllowIdleBorrow: scenario.Borrow, Members: shares}})
+		scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: fmt.Sprintf("Mock allocation %d", team+1), GroupID: pool.ID, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", AllowIdleBorrow: scenario.Borrow, Members: shares}})
 		check(err)
 		result.Schemes = append(result.Schemes, scheme)
 	}
@@ -410,10 +409,8 @@ func TestAllocationSimulationBoundaries(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			team, err := s.SaveTeam(ctx, 0, TeamInput{Name: "Synthetic boundary", Enabled: true, MemberIDs: []int64{user}})
-			check(err)
 			config := Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}, Rates: []Rate{{Model: "synthetic", Input: 1_000_000, Cached: 100_000, Output: 8_000_000}}}
-			scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic boundary", TeamID: team.ID, GroupID: 2, Enabled: true, Config: config})
+			scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic boundary", GroupID: 2, Enabled: true, Config: config})
 			check(err)
 			resets := [2]int64{now + 60, now + 604800}
 			snapshot := func(primary, secondary float64) {
@@ -467,10 +464,9 @@ func TestAllocationSimulationBoundaries(t *testing.T) {
 			check(err)
 			newcomer, err := res.LastInsertId()
 			check(err)
-			_, err = s.SaveTeam(ctx, team.ID, TeamInput{Name: "Synthetic boundary", Enabled: true, MemberIDs: []int64{user, newcomer}})
-			check(err)
+			check(grantPoolMembers(ctx, conn, 2, newcomer))
 			config.Members = []Share{{UserID: user, Limit: 5000}, {UserID: newcomer, Limit: 5000}}
-			_, err = s.SaveScheme(ctx, scheme.ID, SchemeInput{Name: "Synthetic boundary", TeamID: team.ID, GroupID: 2, Enabled: true, Config: config})
+			_, err = s.SaveScheme(ctx, scheme.ID, SchemeInput{Name: "Synthetic boundary", GroupID: 2, Enabled: true, Config: config})
 			check(err)
 			rev, err := Current(ctx, q, scheme.ID, now)
 			check(err)

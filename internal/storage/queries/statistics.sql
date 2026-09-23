@@ -21,8 +21,12 @@ SELECT value FROM settings WHERE key='usage.daily.started_at';
 
 -- name: CanTrackStatisticsModel :one
 SELECT CAST(
- EXISTS(SELECT 1 FROM usage_daily s WHERE s.day=sqlc.arg(day) AND s.user_id=sqlc.arg(user_id) AND s.model=sqlc.arg(model))
- OR (SELECT COUNT(DISTINCT s.model) FROM usage_daily s WHERE s.day=sqlc.arg(day) AND s.user_id=sqlc.arg(user_id) AND s.model!='[other models]')<64
+ EXISTS(SELECT 1 FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
+ WHERE g.tenant_id=(SELECT target.tenant_id FROM account_groups target WHERE target.id=sqlc.arg(group_id))
+ AND s.day=sqlc.arg(day) AND s.user_id=sqlc.arg(user_id) AND s.model=sqlc.arg(model))
+ OR (SELECT COUNT(DISTINCT s.model) FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
+ WHERE g.tenant_id=(SELECT target.tenant_id FROM account_groups target WHERE target.id=sqlc.arg(group_id))
+ AND s.day=sqlc.arg(day) AND s.user_id=sqlc.arg(user_id) AND s.model!='[other models]')<64
 AS INTEGER);
 
 -- name: PruneStatistics :exec
@@ -42,8 +46,8 @@ CAST(COALESCE(SUM(s.cached_tokens),0) AS INTEGER) AS cached_tokens,
 CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
-FROM usage_daily s
-WHERE s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND (s.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0);
+FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
+WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND (s.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0);
 
 -- name: ListStatistics :many
 SELECT CAST(CASE sqlc.arg(dimension) WHEN 'day' THEN s.day WHEN 'member' THEN s.user_id WHEN 'group' THEN s.group_id ELSE s.model END AS TEXT) AS bucket,
@@ -61,6 +65,6 @@ CAST(COALESCE(SUM(s.cached_tokens),0) AS INTEGER) AS cached_tokens,
 CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
-FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id LEFT JOIN account_groups g ON g.id=s.group_id
-WHERE s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND (s.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0)
+FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id JOIN account_groups g ON g.id=s.group_id
+WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND (s.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0)
 GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT sqlc.arg(max_rows);

@@ -90,8 +90,13 @@ func (q *Queries) GetTokenBudgetUsage(ctx context.Context, arg GetTokenBudgetUsa
 const listPendingTokenRequests = `-- name: ListPendingTokenRequests :many
 SELECT e.request_id, CAST(min(e.started_at) AS INTEGER) AS started_at, CAST(max(e.tokens) AS INTEGER) AS known_tokens
 FROM token_budget_entries e JOIN token_budgets b ON b.id=e.budget_id
-WHERE b.user_id=? AND e.state='pending' GROUP BY e.request_id ORDER BY started_at LIMIT 256
+WHERE b.tenant_id=?1 AND b.user_id=?2 AND e.state='pending' GROUP BY e.request_id ORDER BY started_at LIMIT 256
 `
+
+type ListPendingTokenRequestsParams struct {
+	TenantID int64
+	UserID   int64
+}
 
 type ListPendingTokenRequestsRow struct {
 	RequestID   string
@@ -99,8 +104,8 @@ type ListPendingTokenRequestsRow struct {
 	KnownTokens int64
 }
 
-func (q *Queries) ListPendingTokenRequests(ctx context.Context, userID int64) ([]ListPendingTokenRequestsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPendingTokenRequests, userID)
+func (q *Queries) ListPendingTokenRequests(ctx context.Context, arg ListPendingTokenRequestsParams) ([]ListPendingTokenRequestsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPendingTokenRequests, arg.TenantID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -124,16 +129,17 @@ func (q *Queries) ListPendingTokenRequests(ctx context.Context, userID int64) ([
 
 const listTokenBudgetEntries = `-- name: ListTokenBudgetEntries :many
 SELECT e.request_id, e.budget_id, e.window_start, e.started_at, e.state, e.tokens, e.manual FROM token_budget_entries e JOIN token_budgets b ON b.id=e.budget_id
-WHERE e.request_id=? AND b.user_id=? ORDER BY e.budget_id
+WHERE e.request_id=?1 AND b.user_id=?2 AND b.tenant_id=?3 ORDER BY e.budget_id
 `
 
 type ListTokenBudgetEntriesParams struct {
 	RequestID string
 	UserID    int64
+	TenantID  int64
 }
 
 func (q *Queries) ListTokenBudgetEntries(ctx context.Context, arg ListTokenBudgetEntriesParams) ([]TokenBudgetEntry, error) {
-	rows, err := q.db.QueryContext(ctx, listTokenBudgetEntries, arg.RequestID, arg.UserID)
+	rows, err := q.db.QueryContext(ctx, listTokenBudgetEntries, arg.RequestID, arg.UserID, arg.TenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -164,12 +170,18 @@ func (q *Queries) ListTokenBudgetEntries(ctx context.Context, arg ListTokenBudge
 }
 
 const listTokenBudgets = `-- name: ListTokenBudgets :many
-SELECT b.id, b.user_id, b.group_id, b.model, b.period, b.token_limit, b.enabled, b.created_at, COALESCE(g.name,'') AS group_name FROM token_budgets b
-LEFT JOIN account_groups g ON g.id=b.group_id WHERE b.user_id=? ORDER BY b.id
+SELECT b.id, b.tenant_id, b.user_id, b.group_id, b.model, b.period, b.token_limit, b.enabled, b.created_at, COALESCE(g.name,'') AS group_name FROM token_budgets b
+LEFT JOIN account_groups g ON g.id=b.group_id WHERE b.tenant_id=?1 AND b.user_id=?2 ORDER BY b.id
 `
+
+type ListTokenBudgetsParams struct {
+	TenantID int64
+	UserID   int64
+}
 
 type ListTokenBudgetsRow struct {
 	ID         int64
+	TenantID   int64
 	UserID     int64
 	GroupID    int64
 	Model      string
@@ -180,8 +192,8 @@ type ListTokenBudgetsRow struct {
 	GroupName  string
 }
 
-func (q *Queries) ListTokenBudgets(ctx context.Context, userID int64) ([]ListTokenBudgetsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTokenBudgets, userID)
+func (q *Queries) ListTokenBudgets(ctx context.Context, arg ListTokenBudgetsParams) ([]ListTokenBudgetsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTokenBudgets, arg.TenantID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +203,7 @@ func (q *Queries) ListTokenBudgets(ctx context.Context, userID int64) ([]ListTok
 		var i ListTokenBudgetsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.TenantID,
 			&i.UserID,
 			&i.GroupID,
 			&i.Model,
@@ -234,20 +247,22 @@ func (q *Queries) PruneTokenBudgetUsage(ctx context.Context, beforeTime int64) e
 
 const recoverTokenBudgetEntries = `-- name: RecoverTokenBudgetEntries :exec
 UPDATE token_budget_entries SET state='pending' WHERE state='active'
+AND EXISTS(SELECT 1 FROM token_budgets b WHERE b.id=token_budget_entries.budget_id AND b.tenant_id=?1)
 `
 
-func (q *Queries) RecoverTokenBudgetEntries(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, recoverTokenBudgetEntries)
+func (q *Queries) RecoverTokenBudgetEntries(ctx context.Context, tenantID int64) error {
+	_, err := q.db.ExecContext(ctx, recoverTokenBudgetEntries, tenantID)
 	return err
 }
 
 const saveTokenBudget = `-- name: SaveTokenBudget :one
-INSERT INTO token_budgets(user_id,group_id,model,period,token_limit,enabled,created_at)
-VALUES(?,?,?,?,?,?,?) ON CONFLICT(user_id,group_id,model,period)
+INSERT INTO token_budgets(tenant_id,user_id,group_id,model,period,token_limit,enabled,created_at)
+VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(tenant_id,user_id,group_id,model,period)
 DO UPDATE SET token_limit=excluded.token_limit,enabled=excluded.enabled RETURNING id
 `
 
 type SaveTokenBudgetParams struct {
+	TenantID   int64
 	UserID     int64
 	GroupID    int64
 	Model      string
@@ -259,6 +274,7 @@ type SaveTokenBudgetParams struct {
 
 func (q *Queries) SaveTokenBudget(ctx context.Context, arg SaveTokenBudgetParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, saveTokenBudget,
+		arg.TenantID,
 		arg.UserID,
 		arg.GroupID,
 		arg.Model,

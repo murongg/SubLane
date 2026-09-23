@@ -12,7 +12,128 @@ import (
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage"
+	"github.com/murongg/SubLane/internal/tenants"
+	"github.com/murongg/SubLane/internal/vault"
 )
+
+func TestPersonalKeysAreBoundToWorkspace(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	connection, err := storage.Open(ctx, filepath.Join(dir, "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-password", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
+	member, err := identity.CreateMember(ctx, "synthetic-member", "synthetic-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondWorkspace, err := tenants.New(connection).Create(ctx, member.ID, "Second workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstPool, err := groups.New(connection).Save(ctx, 0, groups.Input{Name: "Pool", Enabled: true, AccountIDs: []string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondPool, err := groups.NewForTenant(connection, secondWorkspace.ID).Save(ctx, 0, groups.Input{Name: "Pool", Enabled: true, AccountIDs: []string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := groups.New(connection).SetMemberGroups(ctx, member.ID, []int64{firstPool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := New(connection, cipher)
+	second := NewForTenant(connection, cipher, secondWorkspace.ID)
+	a, err := first.CreateInGroup(ctx, member.ID, firstPool.ID, "First key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := second.CreateInGroup(ctx, member.ID, secondPool.ID, "Second key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, check := range []struct {
+		service *Service
+		own     CreatedKey
+		other   CreatedKey
+	}{{first, a, b}, {second, b, a}} {
+		page, err := check.service.List(ctx, member.ID, 0)
+		if err != nil || len(page.Keys) != 1 || page.Keys[0].ID != check.own.Key.ID {
+			t.Fatalf("key metadata leaked across workspaces: %+v, %v", page, err)
+		}
+		if _, err := check.service.Authenticate(ctx, check.other.Secret); !errors.Is(err, ErrInvalidKey) {
+			t.Fatalf("foreign workspace key authenticated: %v", err)
+		}
+		principal, err := check.service.Authenticate(ctx, check.own.Secret)
+		if err != nil || principal.TenantID != check.service.tenantID {
+			t.Fatalf("key lost its immutable workspace binding: %+v, %v", principal, err)
+		}
+		if _, err := check.service.Reveal(ctx, member.ID, check.other.Key.ID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("foreign workspace key secret disclosed: %v", err)
+		}
+	}
+}
+
+func TestUsableKeyReadinessRequiresAnActiveKeyAndReadyPoolAccount(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	connection, err := storage.Open(ctx, filepath.Join(dir, "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-owner", "synthetic-password", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := groups.New(connection).Save(ctx, 0, groups.Input{Name: "Synthetic pool", Enabled: true, AccountIDs: []string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := New(connection, cipher)
+	created, err := service.CreateInGroup(ctx, 1, pool.ID, "Synthetic key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(want bool) {
+		t.Helper()
+		ready, err := service.HasUsableKey(ctx, 1)
+		if err != nil || ready != want {
+			t.Fatalf("usable key readiness: got %v, want %v, err %v", ready, want, err)
+		}
+	}
+	check(false)
+	if _, err := connection.ExecContext(ctx, `INSERT INTO accounts(id,name,account_id,status,credential,created_at,updated_at) VALUES('synthetic-account','Synthetic account','synthetic-upstream','ready',x'01',1,1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connection.ExecContext(ctx, "INSERT INTO group_accounts(group_id,account_id) VALUES(?,'synthetic-account')", pool.ID); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	if _, err := service.Update(ctx, 1, created.Key.ID, UpdateInput{Name: "Synthetic key", Enabled: false}); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+}
 
 func TestKeyOwnershipHashingAndRevocation(t *testing.T) {
 	ctx := context.Background()
@@ -25,7 +146,7 @@ func TestKeyOwnershipHashingAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(ctx, "owner-test", "owner pass 42"); err != nil {
+	if _, err := identity.Setup(ctx, "owner-test", "owner pass 42", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	member, err := identity.CreateMember(ctx, "member-test", "member pass 42")
@@ -102,7 +223,7 @@ func TestKeyLimitAndInvalidInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(ctx, "owner-test", "owner pass 42"); err != nil {
+	if _, err := identity.Setup(ctx, "owner-test", "owner pass 42", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	keys := newTestKeys(t, db)
@@ -148,7 +269,7 @@ func TestKeysEnforceGroupGrantsOnCreationAndEveryAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	member, err := identity.CreateMember(ctx, "synthetic-member", "synthetic-pass")
@@ -211,7 +332,7 @@ func TestManagedPoolRequiresSchemeBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+	if _, err = identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	member, err := identity.CreateMember(ctx, "synthetic-user", "synthetic-pass")
@@ -224,7 +345,7 @@ func TestManagedPoolRequiresSchemeBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Minimal synthetic scheme fixture deliberately exercises authentication independent of management validation.
-	for _, stmt := range []string{"INSERT INTO allocation_teams(id,name,enabled,created_at) VALUES(1,'Synthetic',1,1)", "INSERT INTO allocation_team_members(team_id,user_id) VALUES(1,2)", "INSERT INTO allocation_schemes(id,name,team_id,group_id,enabled,created_at) VALUES(1,'Synthetic',1,1,1,1)", `INSERT INTO allocation_revisions(scheme_id,effective_at,config) VALUES(1,1,'{"mode":"tokens","period":"day","members":[{"user_id":2,"limit":100}],"rates":[] }')`} {
+	for _, stmt := range []string{"INSERT OR IGNORE INTO group_members(group_id,user_id) VALUES(1,2)", "INSERT INTO allocation_schemes(id,name,group_id,enabled,created_at) VALUES(1,'Synthetic',1,1,1)", `INSERT INTO allocation_revisions(scheme_id,effective_at,config) VALUES(1,1,'{"mode":"tokens","period":"day","members":[{"user_id":2,"limit":100}],"rates":[] }')`} {
 		if _, err = conn.Exec(stmt); err != nil {
 			t.Fatal(err)
 		}
@@ -239,7 +360,7 @@ func TestManagedPoolRequiresSchemeBinding(t *testing.T) {
 	if _, err = keys.Authenticate(ctx, bound.Secret); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = conn.Exec("DELETE FROM allocation_team_members WHERE user_id=2"); err != nil {
+	if _, err = conn.Exec("DELETE FROM group_members WHERE user_id=2"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = keys.Authenticate(ctx, bound.Secret); !errors.Is(err, ErrInvalidKey) {

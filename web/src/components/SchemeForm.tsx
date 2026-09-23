@@ -4,7 +4,6 @@ import { catalogOptions } from '@/lib/catalog'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import {
-  type Team,
   type Scheme,
   type SchemeInput,
   type AllocationMode,
@@ -153,33 +152,27 @@ type RateDraft = {
   priceState?: 'loading' | 'missing' | 'failed'
 }
 export function SchemeForm({
-  teams,
   groups,
+  groupID,
+  onGroupChange,
+  members,
   scheme,
   onSubmit,
   onCancel,
   pending,
-  fixedTeam,
-  resourceMode = false,
 }: {
-  teams: Team[]
   groups: { id: number; name: string; enabled: boolean }[]
+  groupID: number
+  onGroupChange: (id: number) => void
+  members: { id: number; username: string }[]
   scheme?: Scheme
   onSubmit: (input: SchemeInput) => void
   onCancel: () => void
   pending: boolean
-  /** When set, the resource belongs to this team and the team cannot change. */
-  fixedTeam?: Team
-  /** Team resources use a generated name so the form only asks for policy inputs. */
-  resourceMode?: boolean
 }) {
   const { t } = useTranslation()
   const initial = scheme?.next?.config ?? scheme?.config
   const [name, setName] = useState(scheme?.name ?? '')
-  const [teamID, setTeam] = useState(
-    scheme?.team_id ?? fixedTeam?.id ?? teams[0]?.id ?? 0,
-  )
-  const [groupID, setGroup] = useState(scheme?.group_id ?? groups[0]?.id ?? 0)
   const [mode, setMode] = useState<AllocationMode>(initial?.mode ?? 'ratio')
   const [period, setPeriod] = useState(
     initial?.period === 'day' ? 'day' : 'month',
@@ -207,13 +200,10 @@ export function SchemeForm({
   )
   const [advancedRates, setAdvancedRates] = useState(mode !== 'ratio')
   const [invalid, setInvalid] = useState(false)
-  const team = fixedTeam ?? teams.find((v) => v.id === teamID)
-  const group = groups.find((v) => v.id === groupID)
-  const total =
-    team?.members.reduce(
-      (sum, m) => sum + (parseAllocationValue(values[m.id] ?? '', mode) ?? 0),
-      0,
-    ) ?? 0
+  const total = members.reduce(
+    (sum, m) => sum + (parseAllocationValue(values[m.id] ?? '', mode) ?? 0),
+    0,
+  )
   const changeMode = (next: AllocationMode) => {
     if (next !== mode) {
       setMode(next)
@@ -267,7 +257,7 @@ export function SchemeForm({
       (mode !== 'tokens' && rates.some((rate) => rate.priceState === 'loading'))
     )
       return
-    const members = (team?.members ?? [])
+    const shares = members
       .filter((m) => (values[m.id] ?? '').trim() !== '')
       .map((m) => ({
         user_id: m.id,
@@ -289,11 +279,10 @@ export function SchemeForm({
               output: parseAllocationValue(r.output, 'amount') ?? -1,
             }))
     const bad =
-      (!resourceMode && !name.trim()) ||
-      !teamID ||
+      !name.trim() ||
       !groupID ||
-      members.length === 0 ||
-      members.some((m) => m.limit <= 0) ||
+      shares.length === 0 ||
+      shares.some((m) => m.limit <= 0) ||
       (mode === 'ratio' && total > 10000) ||
       (mode === 'amount' &&
         (parsedRates.length === 0 ||
@@ -308,17 +297,14 @@ export function SchemeForm({
     setInvalid(bad)
     if (bad) return
     onSubmit({
-      name: resourceMode
-        ? `${team?.name ?? ''} / ${group?.name ?? ''}`.trim()
-        : name.trim(),
-      team_id: teamID,
+      name: name.trim(),
       group_id: groupID,
       enabled,
       start_next: startNext,
       config: {
         mode,
         period: mode === 'ratio' ? 'upstream' : (period as 'day' | 'month'),
-        members,
+        members: shares,
         rates: parsedRates,
         ...(mode === 'ratio' && allowIdleBorrow
           ? { allow_idle_borrow: true }
@@ -330,47 +316,17 @@ export function SchemeForm({
     <form onSubmit={submit} className="space-y-6" noValidate>
       <fieldset disabled={pending} className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2">
-          {!resourceMode && (
-            <div className="space-y-2 sm:col-span-2">
-              <label htmlFor="scheme-name" className="text-sm font-medium">
-                {t('allocationName')}
-              </label>
-              <Input
-                id="scheme-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={64}
-              />
-            </div>
-          )}
-          {fixedTeam ? (
-            <div className="space-y-2 sm:col-span-2">
-              <span className="text-sm font-medium">{t('personnelTeam')}</span>
-              <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-                {fixedTeam.name}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <label htmlFor="scheme-team" className="text-sm font-medium">
-                {t('personnelTeam')}
-              </label>
-              <SchemeChoice
-                id="scheme-team"
-                label={t('personnelTeam')}
-                value={String(teamID)}
-                disabled={!!scheme || pending}
-                options={teams.map((team) => ({
-                  value: String(team.id),
-                  label: team.name,
-                }))}
-                onChange={(value) => {
-                  setTeam(Number(value))
-                  setValues({})
-                }}
-              />
-            </div>
-          )}
+          <div className="space-y-2 sm:col-span-2">
+            <label htmlFor="scheme-name" className="text-sm font-medium">
+              {t('allocationName')}
+            </label>
+            <Input
+              id="scheme-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={64}
+            />
+          </div>
           <div className="space-y-2">
             <label htmlFor="scheme-pool" className="text-sm font-medium">
               {t('keyGroup')}
@@ -384,7 +340,10 @@ export function SchemeForm({
                 value: String(pool.id),
                 label: pool.name,
               }))}
-              onChange={(value) => setGroup(Number(value))}
+              onChange={(value) => {
+                onGroupChange(Number(value))
+                setValues({})
+              }}
             />
           </div>
         </div>
@@ -448,9 +407,8 @@ export function SchemeForm({
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={!team?.members.length}
+                disabled={!members.length}
                 onClick={() => {
-                  const members = team?.members ?? []
                   setValues(
                     Object.fromEntries(
                       members.map((member, index) => [
@@ -473,7 +431,7 @@ export function SchemeForm({
             {t('allocationBlankHint')}
           </p>
           <div className="divide-y divide-border">
-            {team?.members.map((m) => (
+            {members.map((m) => (
               <div
                 key={m.id}
                 className="flex items-center justify-between gap-4 py-3"

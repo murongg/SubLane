@@ -29,7 +29,7 @@ func TestAdministratorRecoveryUsesExistingDatabaseAndBoundedStdin(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := identity.Setup(ctx, "owner-test", "synthetic-old-pass")
+	session, err := identity.Setup(ctx, "owner-test", "synthetic-old-pass", "Synthetic workspace")
 	if err != nil {
 		t.Fatal(err)
 	}

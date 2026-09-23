@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -55,6 +54,14 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY NOT NULL, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
 		return err
 	}
+	// The consolidated initialization SQL cannot run over the former pre-release schema.
+	var legacy bool
+	if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name='001_settings.sql')`).Scan(&legacy); err != nil {
+		return err
+	}
+	if legacy {
+		return fmt.Errorf("database uses an older pre-release schema; preserve its data directory and start this version with a fresh one")
+	}
 	entries, err := migrations.ReadDir("migrations")
 	if err != nil {
 		return err
@@ -67,31 +74,12 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func apply(ctx context.Context, db *sql.DB, name string) (result error) {
+func apply(ctx context.Context, db *sql.DB, name string) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	rebuild := name == "024_pools.sql"
-	if rebuild {
-		// SQLite cannot remove a referenced table's CHECK constraint in place.
-		// Pin this connection and suspend FK actions before BEGIN so rebuilding the
-		// parent cannot cascade-delete keys, memberships or conversation bindings.
-		var enabled int
-		if err = conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&enabled); err != nil {
-			return err
-		}
-		if _, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
-			return err
-		}
-		defer func() {
-			_, restoreErr := conn.ExecContext(context.Background(), fmt.Sprintf("PRAGMA foreign_keys=%d", enabled))
-			if restoreErr != nil {
-				result = errors.Join(result, restoreErr)
-			}
-		}()
-	}
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -114,20 +102,18 @@ func apply(ctx context.Context, db *sql.DB, name string) (result error) {
 	if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations(name) VALUES (?)", name); err != nil {
 		return err
 	}
-	if rebuild {
-		rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
-		if err != nil {
-			return err
-		}
-		invalid := rows.Next()
-		checkErr := rows.Err()
-		rows.Close()
-		if checkErr != nil {
-			return checkErr
-		}
-		if invalid {
-			return fmt.Errorf("migration %s violates foreign keys", name)
-		}
+	rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return err
+	}
+	invalid := rows.Next()
+	checkErr := rows.Err()
+	rows.Close()
+	if checkErr != nil {
+		return checkErr
+	}
+	if invalid {
+		return fmt.Errorf("migration %s violates foreign keys", name)
 	}
 	// Record the migration in the same transaction so a crash never marks partial work complete.
 	return tx.Commit()

@@ -44,7 +44,7 @@ export function PersonalAllocations({ userID }: { userID: number }) {
             <section key={d.id} className="space-y-3 py-4">
               <h3 className="break-words font-medium">{d.name}</h3>
               <p className="text-sm text-muted-foreground">
-                {d.team_name} · {d.group_name} · {t(modeLabels[d.config.mode])}
+                {d.group_name} · {t(modeLabels[d.config.mode])}
               </p>
               <AllocationBalances detail={d} />
             </section>

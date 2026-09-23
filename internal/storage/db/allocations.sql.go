@@ -20,34 +20,6 @@ func (q *Queries) AccountHasAllocation(ctx context.Context, accountID string) (b
 	return exists, err
 }
 
-const addAllocationTeamGroup = `-- name: AddAllocationTeamGroup :exec
-INSERT INTO allocation_team_groups(team_id,group_id) VALUES(?,?)
-`
-
-type AddAllocationTeamGroupParams struct {
-	TeamID  int64
-	GroupID int64
-}
-
-func (q *Queries) AddAllocationTeamGroup(ctx context.Context, arg AddAllocationTeamGroupParams) error {
-	_, err := q.db.ExecContext(ctx, addAllocationTeamGroup, arg.TeamID, arg.GroupID)
-	return err
-}
-
-const addAllocationTeamMember = `-- name: AddAllocationTeamMember :exec
-INSERT INTO allocation_team_members(team_id,user_id) VALUES(?,?)
-`
-
-type AddAllocationTeamMemberParams struct {
-	TeamID int64
-	UserID int64
-}
-
-func (q *Queries) AddAllocationTeamMember(ctx context.Context, arg AddAllocationTeamMemberParams) error {
-	_, err := q.db.ExecContext(ctx, addAllocationTeamMember, arg.TeamID, arg.UserID)
-	return err
-}
-
 const addAllocationWindowMember = `-- name: AddAllocationWindowMember :exec
 INSERT INTO allocation_window_members(window_id,user_id,allowance) VALUES(?,?,?)
 `
@@ -362,9 +334,10 @@ func (q *Queries) BindKeyAllocation(ctx context.Context, arg BindKeyAllocationPa
 }
 
 const canUseAllocation = `-- name: CanUseAllocation :one
-SELECT EXISTS(SELECT 1 FROM allocation_schemes s JOIN allocation_teams t ON t.id=s.team_id
-JOIN allocation_team_members m ON m.team_id=t.id JOIN users u ON u.id=m.user_id JOIN account_groups g ON g.id=s.group_id
-WHERE s.id=? AND m.user_id=? AND s.enabled=1 AND t.enabled=1 AND u.enabled=1 AND g.enabled=1)
+SELECT EXISTS(SELECT 1 FROM allocation_schemes s
+JOIN group_members m ON m.group_id=s.group_id
+JOIN users u ON u.id=m.user_id JOIN account_groups g ON g.id=s.group_id
+WHERE s.id=? AND m.user_id=? AND s.enabled=1 AND u.enabled=1 AND g.enabled=1)
 `
 
 type CanUseAllocationParams struct {
@@ -379,24 +352,6 @@ func (q *Queries) CanUseAllocation(ctx context.Context, arg CanUseAllocationPara
 	return exists, err
 }
 
-const clearAllocationTeamGroups = `-- name: ClearAllocationTeamGroups :exec
-DELETE FROM allocation_team_groups WHERE team_id=?
-`
-
-func (q *Queries) ClearAllocationTeamGroups(ctx context.Context, teamID int64) error {
-	_, err := q.db.ExecContext(ctx, clearAllocationTeamGroups, teamID)
-	return err
-}
-
-const clearAllocationTeamMembers = `-- name: ClearAllocationTeamMembers :exec
-DELETE FROM allocation_team_members WHERE team_id=?
-`
-
-func (q *Queries) ClearAllocationTeamMembers(ctx context.Context, teamID int64) error {
-	_, err := q.db.ExecContext(ctx, clearAllocationTeamMembers, teamID)
-	return err
-}
-
 const clearAllocationUnassigned = `-- name: ClearAllocationUnassigned :exec
 UPDATE allocation_windows SET unassigned=0 WHERE scheme_id=?
 `
@@ -407,12 +362,11 @@ func (q *Queries) ClearAllocationUnassigned(ctx context.Context, schemeID int64)
 }
 
 const createAllocationScheme = `-- name: CreateAllocationScheme :execlastid
-INSERT INTO allocation_schemes(name,team_id,group_id,enabled,created_at) VALUES(?,?,?,?,?)
+INSERT INTO allocation_schemes(name,group_id,enabled,created_at) VALUES(?,?,?,?)
 `
 
 type CreateAllocationSchemeParams struct {
 	Name      string
-	TeamID    int64
 	GroupID   int64
 	Enabled   int64
 	CreatedAt int64
@@ -421,29 +375,10 @@ type CreateAllocationSchemeParams struct {
 func (q *Queries) CreateAllocationScheme(ctx context.Context, arg CreateAllocationSchemeParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, createAllocationScheme,
 		arg.Name,
-		arg.TeamID,
 		arg.GroupID,
 		arg.Enabled,
 		arg.CreatedAt,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
-}
-
-const createAllocationTeam = `-- name: CreateAllocationTeam :execlastid
-INSERT INTO allocation_teams(name,enabled,created_at) VALUES(?,?,?)
-`
-
-type CreateAllocationTeamParams struct {
-	Name      string
-	Enabled   int64
-	CreatedAt int64
-}
-
-func (q *Queries) CreateAllocationTeam(ctx context.Context, arg CreateAllocationTeamParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, createAllocationTeam, arg.Name, arg.Enabled, arg.CreatedAt)
 	if err != nil {
 		return 0, err
 	}
@@ -671,18 +606,16 @@ func (q *Queries) GetAllocationRevision(ctx context.Context, id int64) (Allocati
 }
 
 const getAllocationScheme = `-- name: GetAllocationScheme :one
-SELECT s.id, s.name, s.team_id, s.group_id, s.enabled, s.created_at,t.name AS team_name,g.name AS group_name FROM allocation_schemes s
-JOIN allocation_teams t ON t.id=s.team_id JOIN account_groups g ON g.id=s.group_id WHERE s.id=?
+SELECT s.id, s.name, s.group_id, s.enabled, s.created_at,g.name AS group_name FROM allocation_schemes s
+JOIN account_groups g ON g.id=s.group_id WHERE s.id=?
 `
 
 type GetAllocationSchemeRow struct {
 	ID        int64
 	Name      string
-	TeamID    int64
 	GroupID   int64
 	Enabled   int64
 	CreatedAt int64
-	TeamName  string
 	GroupName string
 }
 
@@ -692,28 +625,10 @@ func (q *Queries) GetAllocationScheme(ctx context.Context, id int64) (GetAllocat
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.TeamID,
 		&i.GroupID,
 		&i.Enabled,
 		&i.CreatedAt,
-		&i.TeamName,
 		&i.GroupName,
-	)
-	return i, err
-}
-
-const getAllocationTeam = `-- name: GetAllocationTeam :one
-SELECT id, name, enabled, created_at FROM allocation_teams WHERE id=?
-`
-
-func (q *Queries) GetAllocationTeam(ctx context.Context, id int64) (AllocationTeam, error) {
-	row := q.db.QueryRowContext(ctx, getAllocationTeam, id)
-	var i AllocationTeam
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Enabled,
-		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -805,6 +720,39 @@ func (q *Queries) GetRequestAllocationDebits(ctx context.Context, requestID stri
 		return nil, err
 	}
 	return items, nil
+}
+
+const getTenantAllocationScheme = `-- name: GetTenantAllocationScheme :one
+SELECT s.id, s.name, s.group_id, s.enabled, s.created_at,g.name AS group_name FROM allocation_schemes s
+JOIN account_groups g ON g.id=s.group_id WHERE s.id=?1 AND g.tenant_id=?2
+`
+
+type GetTenantAllocationSchemeParams struct {
+	ID       int64
+	TenantID int64
+}
+
+type GetTenantAllocationSchemeRow struct {
+	ID        int64
+	Name      string
+	GroupID   int64
+	Enabled   int64
+	CreatedAt int64
+	GroupName string
+}
+
+func (q *Queries) GetTenantAllocationScheme(ctx context.Context, arg GetTenantAllocationSchemeParams) (GetTenantAllocationSchemeRow, error) {
+	row := q.db.QueryRowContext(ctx, getTenantAllocationScheme, arg.ID, arg.TenantID)
+	var i GetTenantAllocationSchemeRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.GroupID,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.GroupName,
+	)
+	return i, err
 }
 
 const listAllocationDebits = `-- name: ListAllocationDebits :many
@@ -908,23 +856,21 @@ func (q *Queries) ListAllocationPending(ctx context.Context, arg ListAllocationP
 }
 
 const listAllocationSchemes = `-- name: ListAllocationSchemes :many
-SELECT s.id, s.name, s.team_id, s.group_id, s.enabled, s.created_at,t.name AS team_name,g.name AS group_name FROM allocation_schemes s
-JOIN allocation_teams t ON t.id=s.team_id JOIN account_groups g ON g.id=s.group_id ORDER BY s.id
+SELECT s.id, s.name, s.group_id, s.enabled, s.created_at,g.name AS group_name FROM allocation_schemes s
+JOIN account_groups g ON g.id=s.group_id WHERE g.tenant_id=?1 ORDER BY s.id
 `
 
 type ListAllocationSchemesRow struct {
 	ID        int64
 	Name      string
-	TeamID    int64
 	GroupID   int64
 	Enabled   int64
 	CreatedAt int64
-	TeamName  string
 	GroupName string
 }
 
-func (q *Queries) ListAllocationSchemes(ctx context.Context) ([]ListAllocationSchemesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAllocationSchemes)
+func (q *Queries) ListAllocationSchemes(ctx context.Context, tenantID int64) ([]ListAllocationSchemesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllocationSchemes, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -935,100 +881,10 @@ func (q *Queries) ListAllocationSchemes(ctx context.Context) ([]ListAllocationSc
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.TeamID,
 			&i.GroupID,
 			&i.Enabled,
 			&i.CreatedAt,
-			&i.TeamName,
 			&i.GroupName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listAllocationTeamGroups = `-- name: ListAllocationTeamGroups :many
-SELECT tg.group_id FROM allocation_team_groups tg WHERE tg.team_id=?
-AND NOT EXISTS(SELECT 1 FROM allocation_schemes s WHERE s.group_id=tg.group_id)
-ORDER BY tg.group_id
-`
-
-func (q *Queries) ListAllocationTeamGroups(ctx context.Context, teamID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listAllocationTeamGroups, teamID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var group_id int64
-		if err := rows.Scan(&group_id); err != nil {
-			return nil, err
-		}
-		items = append(items, group_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listAllocationTeamMembers = `-- name: ListAllocationTeamMembers :many
-SELECT user_id FROM allocation_team_members WHERE team_id=? ORDER BY user_id
-`
-
-func (q *Queries) ListAllocationTeamMembers(ctx context.Context, teamID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listAllocationTeamMembers, teamID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var user_id int64
-		if err := rows.Scan(&user_id); err != nil {
-			return nil, err
-		}
-		items = append(items, user_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listAllocationTeams = `-- name: ListAllocationTeams :many
-SELECT id, name, enabled, created_at FROM allocation_teams ORDER BY id
-`
-
-func (q *Queries) ListAllocationTeams(ctx context.Context) ([]AllocationTeam, error) {
-	rows, err := q.db.QueryContext(ctx, listAllocationTeams)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AllocationTeam{}
-	for rows.Next() {
-		var i AllocationTeam
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Enabled,
-			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1164,11 +1020,13 @@ func (q *Queries) PruneAllocations(ctx context.Context, before int64) error {
 }
 
 const recoverAllocationEntries = `-- name: RecoverAllocationEntries :exec
-UPDATE allocation_entries SET state='pending' WHERE state='active'
+UPDATE allocation_entries SET state='pending' WHERE state='active' AND EXISTS(
+SELECT 1 FROM allocation_schemes s JOIN account_groups g ON g.id=s.group_id
+WHERE s.id=allocation_entries.scheme_id AND g.tenant_id=?1)
 `
 
-func (q *Queries) RecoverAllocationEntries(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, recoverAllocationEntries)
+func (q *Queries) RecoverAllocationEntries(ctx context.Context, tenantID int64) error {
+	_, err := q.db.ExecContext(ctx, recoverAllocationEntries, tenantID)
 	return err
 }
 
@@ -1241,20 +1099,5 @@ type UpdateAllocationSchemeParams struct {
 
 func (q *Queries) UpdateAllocationScheme(ctx context.Context, arg UpdateAllocationSchemeParams) error {
 	_, err := q.db.ExecContext(ctx, updateAllocationScheme, arg.Name, arg.Enabled, arg.ID)
-	return err
-}
-
-const updateAllocationTeam = `-- name: UpdateAllocationTeam :exec
-UPDATE allocation_teams SET name=?,enabled=? WHERE id=?
-`
-
-type UpdateAllocationTeamParams struct {
-	Name    string
-	Enabled int64
-	ID      int64
-}
-
-func (q *Queries) UpdateAllocationTeam(ctx context.Context, arg UpdateAllocationTeamParams) error {
-	_, err := q.db.ExecContext(ctx, updateAllocationTeam, arg.Name, arg.Enabled, arg.ID)
 	return err
 }

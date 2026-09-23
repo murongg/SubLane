@@ -26,7 +26,7 @@ func TestPersonalRequestsEnforceOwnershipBeforePagination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(ctx, "owner-test", "owner pass 42"); err != nil {
+	if _, err := identity.Setup(ctx, "owner-test", "owner pass 42", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	member, err := identity.CreateMember(ctx, "member-test", "member pass 42")
@@ -37,6 +37,7 @@ func TestPersonalRequestsEnforceOwnershipBeforePagination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureTestPool(t, connection)
 	cookie := func(username, password string) *http.Cookie {
 		login, err := identity.Login(ctx, username, password)
 		if err != nil {

@@ -161,12 +161,13 @@ func runHTTPSimulation(t *testing.T, dir string, seed int64, mismatch bool) {
 		pool, err := f.groups.Save(ctx, 0, groups.Input{Name: fmt.Sprintf("Mock HTTP pool %d", team), Enabled: true, AccountIDs: ids[team*2 : (team+1)*2]})
 		check(err)
 		members := users[team*3 : (team+1)*3]
-		personnel, err := manager.SaveTeam(ctx, 0, allocations.TeamInput{Name: fmt.Sprintf("Mock HTTP team %d", team), Enabled: true, MemberIDs: members})
-		check(err)
+		for _, member := range members {
+			check(f.groups.SetMemberGroups(ctx, member, []int64{pool.ID}))
+		}
 		first := int64(2000 + rng.Intn(2500))
 		second := int64(1500 + rng.Intn(2500))
 		shares := []allocations.Share{{UserID: members[0], Limit: first}, {UserID: members[1], Limit: second}, {UserID: members[2], Limit: 10000 - first - second}}
-		scheme, err := manager.SaveScheme(ctx, 0, allocations.SchemeInput{Name: fmt.Sprintf("Mock HTTP allocation %d", team), TeamID: personnel.ID, GroupID: pool.ID, Enabled: true, Config: allocations.Config{Mode: "ratio", Period: "upstream", Members: shares, Rates: result.Rates}})
+		scheme, err := manager.SaveScheme(ctx, 0, allocations.SchemeInput{Name: fmt.Sprintf("Mock HTTP allocation %d", team), GroupID: pool.ID, Enabled: true, Config: allocations.Config{Mode: "ratio", Period: "upstream", Members: shares, Rates: result.Rates}})
 		check(err)
 		schemes = append(schemes, scheme.ID)
 		check(f.forwarding.RefreshAllocation(ctx, scheme.ID))

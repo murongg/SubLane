@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/vault"
 )
@@ -38,6 +39,13 @@ func TestOAuthStateIsSessionBoundSingleUseAndPKCEProtected(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	identity, err := auth.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-password", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
 	key, err := vault.Open(filepath.Join(dir, "key"), true)
 	if err != nil {
 		t.Fatal(err)
@@ -107,6 +115,13 @@ func TestProviderAuthorizationBindsCallbackSessionAndReauthorization(t *testing.
 				t.Fatal(err)
 			}
 			defer db.Close()
+			identity, err := auth.New(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-password", "Synthetic workspace"); err != nil {
+				t.Fatal(err)
+			}
 			cipher, err := vault.Open(filepath.Join(dir, "key"), true)
 			if err != nil {
 				t.Fatal(err)

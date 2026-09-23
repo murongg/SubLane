@@ -14,6 +14,7 @@ const systemSchema = z.object({
   gateway: z.object({
     provider: z.enum(['codex', 'multi']),
     status: gatewayStatusSchema,
+    has_usable_key: z.boolean(),
   }),
 })
 

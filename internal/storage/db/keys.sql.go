@@ -11,12 +11,14 @@ import (
 
 const authenticateKey = `-- name: AuthenticateKey :one
 SELECT k.id,k.user_id,k.group_id FROM api_keys k JOIN users u ON u.id=k.user_id JOIN account_groups g ON g.id=k.group_id
-WHERE k.token_hash=?1 AND k.revoked_at IS NULL AND k.enabled=1 AND (k.expires_at IS NULL OR k.expires_at>?2) AND u.enabled=1 AND g.enabled=1
+WHERE k.token_hash=?1 AND g.tenant_id=?2
+AND k.revoked_at IS NULL AND k.enabled=1 AND (k.expires_at IS NULL OR k.expires_at>?3) AND u.enabled=1 AND g.enabled=1
 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
 `
 
 type AuthenticateKeyParams struct {
 	TokenHash []byte
+	TenantID  int64
 	Now       *int64
 }
 
@@ -27,18 +29,24 @@ type AuthenticateKeyRow struct {
 }
 
 func (q *Queries) AuthenticateKey(ctx context.Context, arg AuthenticateKeyParams) (AuthenticateKeyRow, error) {
-	row := q.db.QueryRowContext(ctx, authenticateKey, arg.TokenHash, arg.Now)
+	row := q.db.QueryRowContext(ctx, authenticateKey, arg.TokenHash, arg.TenantID, arg.Now)
 	var i AuthenticateKeyRow
 	err := row.Scan(&i.ID, &i.UserID, &i.GroupID)
 	return i, err
 }
 
 const countActiveKeys = `-- name: CountActiveKeys :one
-SELECT count(*) FROM api_keys WHERE user_id = ?1 AND revoked_at IS NULL
+SELECT count(*) FROM api_keys k JOIN account_groups g ON g.id=k.group_id
+WHERE k.user_id = ?1 AND g.tenant_id=?2 AND k.revoked_at IS NULL
 `
 
-func (q *Queries) CountActiveKeys(ctx context.Context, userID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countActiveKeys, userID)
+type CountActiveKeysParams struct {
+	UserID   int64
+	TenantID int64
+}
+
+func (q *Queries) CountActiveKeys(ctx context.Context, arg CountActiveKeysParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countActiveKeys, arg.UserID, arg.TenantID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -83,12 +91,13 @@ CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copy
 CAST(COALESCE((SELECT scheme_id FROM allocation_keys WHERE key_id=k.id),0) AS INTEGER) AS scheme_id,
 CAST(COALESCE((SELECT s.name FROM allocation_keys ak JOIN allocation_schemes s ON s.id=ak.scheme_id WHERE ak.key_id=k.id),'') AS TEXT) AS scheme_name
 FROM api_keys k JOIN account_groups g ON g.id=k.group_id JOIN users u ON u.id=k.user_id
-WHERE k.id=?1 AND k.user_id=?2
+WHERE k.id=?1 AND k.user_id=?2 AND g.tenant_id=?3
 `
 
 type GetKeyParams struct {
-	ID     int64
-	UserID int64
+	ID       int64
+	UserID   int64
+	TenantID int64
 }
 
 type GetKeyRow struct {
@@ -109,7 +118,7 @@ type GetKeyRow struct {
 }
 
 func (q *Queries) GetKey(ctx context.Context, arg GetKeyParams) (GetKeyRow, error) {
-	row := q.db.QueryRowContext(ctx, getKey, arg.ID, arg.UserID)
+	row := q.db.QueryRowContext(ctx, getKey, arg.ID, arg.UserID, arg.TenantID)
 	var i GetKeyRow
 	err := row.Scan(
 		&i.ID,
@@ -141,6 +150,53 @@ func (q *Queries) GetKeyOwnerEnabled(ctx context.Context, userID int64) (bool, e
 	return enabled, err
 }
 
+const listKeyReadinessCandidates = `-- name: ListKeyReadinessCandidates :many
+SELECT DISTINCT k.id,k.group_id FROM api_keys k
+JOIN account_groups g ON g.id=k.group_id
+JOIN users u ON u.id=k.user_id
+JOIN group_accounts ga ON ga.group_id=g.id
+JOIN accounts a ON a.id=ga.account_id
+WHERE k.user_id=?1 AND g.tenant_id=?2
+AND k.revoked_at IS NULL AND k.enabled=1 AND (k.expires_at IS NULL OR k.expires_at>?3)
+AND u.enabled=1 AND g.enabled=1 AND a.enabled=1 AND a.status='ready'
+AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
+ORDER BY k.id DESC LIMIT 20
+`
+
+type ListKeyReadinessCandidatesParams struct {
+	UserID   int64
+	TenantID int64
+	Now      *int64
+}
+
+type ListKeyReadinessCandidatesRow struct {
+	ID      int64
+	GroupID int64
+}
+
+func (q *Queries) ListKeyReadinessCandidates(ctx context.Context, arg ListKeyReadinessCandidatesParams) ([]ListKeyReadinessCandidatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listKeyReadinessCandidates, arg.UserID, arg.TenantID, arg.Now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListKeyReadinessCandidatesRow{}
+	for rows.Next() {
+		var i ListKeyReadinessCandidatesRow
+		if err := rows.Scan(&i.ID, &i.GroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listKeys = `-- name: ListKeys :many
 SELECT k.id,k.group_id,g.name AS group_name,
 CASE WHEN g.enabled=1 AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) THEN 'allowed' ELSE 'blocked' END AS group_access,
@@ -149,12 +205,14 @@ CAST(k.encrypted_secret IS NOT NULL AND k.revoked_at IS NULL AS BOOLEAN) AS copy
 CAST(COALESCE((SELECT scheme_id FROM allocation_keys WHERE key_id=k.id),0) AS INTEGER) AS scheme_id,
 CAST(COALESCE((SELECT s.name FROM allocation_keys ak JOIN allocation_schemes s ON s.id=ak.scheme_id WHERE ak.key_id=k.id),'') AS TEXT) AS scheme_name
 FROM api_keys k JOIN account_groups g ON g.id=k.group_id JOIN users u ON u.id=k.user_id
-WHERE k.user_id=?1 AND (k.id<?2 OR ?2=0)
+WHERE k.user_id=?1 AND g.tenant_id=?2
+AND (k.id<?3 OR ?3=0)
 ORDER BY k.id DESC LIMIT 51
 `
 
 type ListKeysParams struct {
 	UserID   int64
+	TenantID int64
 	BeforeID int64
 }
 
@@ -176,7 +234,7 @@ type ListKeysRow struct {
 }
 
 func (q *Queries) ListKeys(ctx context.Context, arg ListKeysParams) ([]ListKeysRow, error) {
-	rows, err := q.db.QueryContext(ctx, listKeys, arg.UserID, arg.BeforeID)
+	rows, err := q.db.QueryContext(ctx, listKeys, arg.UserID, arg.TenantID, arg.BeforeID)
 	if err != nil {
 		return nil, err
 	}

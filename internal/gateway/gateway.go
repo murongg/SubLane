@@ -43,6 +43,7 @@ type Service struct {
 	db             *sql.DB
 	queries        *db.Queries
 	accounts       *accounts.Service
+	tenantID       int64
 	provider       *upstream.Client
 	slots          chan struct{}
 	mu             sync.Mutex
@@ -64,12 +65,16 @@ type Service struct {
 }
 
 func New(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *upstream.Client, catalogs ...*pricing.Service) *Service {
+	return NewForTenant(ctx, connection, accounts, provider, 1, catalogs...)
+}
+
+func NewForTenant(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *upstream.Client, tenantID int64, catalogs ...*pricing.Service) *Service {
 	runContext, stopRuntime := context.WithCancel(ctx)
 	var catalog *pricing.Service
 	if len(catalogs) > 0 {
 		catalog = catalogs[0]
 	}
-	return &Service{memberActive: make(map[int64]int64), next: make(map[string]int), health: make(map[string]*Runtime), now: time.Now, runContext: runContext, stopRuntime: stopRuntime, db: connection, queries: db.New(connection), accounts: accounts, provider: provider, slots: make(chan struct{}, 8), usage: newUsageCache(ctx), catalog: newCatalogCache(ctx), pricing: catalog}
+	return &Service{memberActive: make(map[int64]int64), next: make(map[string]int), health: make(map[string]*Runtime), now: time.Now, runContext: runContext, stopRuntime: stopRuntime, db: connection, queries: db.New(connection), accounts: accounts, tenantID: tenantID, provider: provider, slots: make(chan struct{}, 8), usage: newUsageCache(ctx), catalog: newCatalogCache(ctx), pricing: catalog}
 }
 
 func (s *Service) Acquire() (func(), error) {

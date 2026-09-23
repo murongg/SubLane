@@ -8,7 +8,8 @@ DELETE FROM request_records WHERE request_records.started_at<sqlc.arg(before_tim
 -- name: ListRequests :many
 SELECT r.*,COALESCE(u.username,'') AS username,COALESCE(k.name,'') AS key_name,COALESCE(g.name,'') AS group_name,COALESCE(a.name,'') AS account_name
 FROM request_records r LEFT JOIN users u ON u.id=r.user_id LEFT JOIN api_keys k ON k.id=r.key_id LEFT JOIN account_groups g ON g.id=r.group_id LEFT JOIN accounts a ON a.id=r.account_id
-WHERE (r.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0) AND (r.id<sqlc.arg(cursor) OR sqlc.arg(cursor)=0) AND (r.account_id=sqlc.arg(account_id) OR sqlc.arg(account_id)='') AND (r.outcome=sqlc.arg(outcome) OR sqlc.arg(outcome)='') AND r.started_at>=sqlc.arg(since)
+WHERE g.tenant_id=sqlc.arg(tenant_id)
+ AND (r.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0) AND (r.id<sqlc.arg(cursor) OR sqlc.arg(cursor)=0) AND (r.account_id=sqlc.arg(account_id) OR sqlc.arg(account_id)='') AND (r.outcome=sqlc.arg(outcome) OR sqlc.arg(outcome)='') AND r.started_at>=sqlc.arg(since)
  AND (r.started_at<sqlc.arg(until_time) OR sqlc.arg(until_time)=0)
  AND (r.user_id=sqlc.arg(member_id) OR sqlc.arg(member_id)=0)
  AND (r.key_id=sqlc.arg(key_id) OR sqlc.arg(key_id)=0)
@@ -21,5 +22,7 @@ SELECT r.user_id, r.key_id, COALESCE(u.username,'') AS username, COALESCE(k.name
 FROM request_records r
 LEFT JOIN users u ON u.id=r.user_id
 LEFT JOIN api_keys k ON k.id=r.key_id
-WHERE (r.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0) AND r.started_at>=sqlc.arg(since)
+JOIN account_groups g ON g.id=r.group_id
+WHERE g.tenant_id=sqlc.arg(tenant_id)
+AND (r.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0) AND r.started_at>=sqlc.arg(since)
 GROUP BY r.user_id,r.key_id ORDER BY username,key_name,r.key_id LIMIT 5000;

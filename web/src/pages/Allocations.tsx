@@ -6,14 +6,13 @@ import { Plus } from 'lucide-react'
 import {
   schemesOptions,
   availableAllocationPools,
-  teamsOptions,
   saveScheme,
   setSchemeEnabled,
   modeLabels,
   allocationErrorKey,
   type Scheme,
 } from '@/lib/allocations'
-import { groupOptions } from '@/lib/groups'
+import { groupOptions, poolMembersOptions } from '@/lib/groups'
 import { SchemeForm } from '@/components/SchemeForm'
 import { AllocationReport } from '@/components/AllocationReport'
 import { Button } from '@/components/ui/Button'
@@ -22,11 +21,11 @@ import { Status } from '@/components/Status'
 export function Allocations() {
   const { t, i18n } = useTranslation()
   const query = useQuery(schemesOptions)
-  const teams = useQuery(teamsOptions)
   const pools = useQuery(groupOptions)
   const client = useQueryClient()
   const [editing, setEditing] = useState<Scheme | null | undefined>()
   const [viewing, setViewing] = useState<number | null>(null)
+  const [formPoolID, setFormPoolID] = useState(0)
   const saved = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['allocations'] }),
@@ -47,12 +46,12 @@ export function Allocations() {
     pools.data?.groups ?? [],
     query.data?.schemes ?? [],
   )
-  const activeTeams =
-    teams.data?.teams.filter(
-      (team) => team.enabled && team.members.length > 0,
-    ) ?? []
-  const loading = query.isPending || teams.isPending || pools.isPending
-  const failed = query.isError || teams.isError || pools.isError
+  const roster = useQuery({
+    ...poolMembersOptions(formPoolID),
+    enabled: editing !== undefined && formPoolID > 0,
+  })
+  const loading = query.isPending || pools.isPending
+  const failed = query.isError || pools.isError
   const date = (n: number) =>
     new Date(n * 1000).toLocaleString(i18n.resolvedLanguage ?? 'en')
   return (
@@ -64,11 +63,10 @@ export function Allocations() {
         </div>
         {editing === undefined && viewing === null && (
           <Button
-            disabled={
-              loading || failed || !activeTeams.length || !freePools.length
-            }
+            disabled={loading || failed || !freePools.length}
             onClick={() => {
               mutation.reset()
+              setFormPoolID(freePools[0].id)
               setEditing(null)
             }}
           >
@@ -81,15 +79,11 @@ export function Allocations() {
         !failed &&
         editing === undefined &&
         viewing === null &&
-        (!freePools.length || !activeTeams.length) && (
+        !freePools.length && (
           <p className="text-sm leading-6 text-muted-foreground">
             {t('allocationPrerequisite')}{' '}
             <Link className="underline underline-offset-4" to="/groups">
               {t('accountGroups')}
-            </Link>{' '}
-            ·{' '}
-            <Link className="underline underline-offset-4" to="/admin/teams">
-              {t('personnelTeams')}
             </Link>
           </p>
         )}
@@ -105,9 +99,7 @@ export function Allocations() {
           <p>{t('allocationFailed')}</p>
           <Button
             variant="outline"
-            onClick={() =>
-              Promise.all([query.refetch(), teams.refetch(), pools.refetch()])
-            }
+            onClick={() => Promise.all([query.refetch(), pools.refetch()])}
           >
             {t('reconnect')}
           </Button>
@@ -119,13 +111,37 @@ export function Allocations() {
           </h2>
           <SchemeForm
             key={editing?.id ?? 'new'}
-            teams={editing ? teams.data.teams : activeTeams}
             groups={editing ? pools.data.groups : freePools}
+            groupID={formPoolID}
+            onGroupChange={setFormPoolID}
+            members={roster.data?.members ?? []}
             scheme={editing ?? undefined}
             onSubmit={(input) => mutation.mutate({ ...input, id: editing?.id })}
             onCancel={() => setEditing(undefined)}
-            pending={mutation.isPending}
+            pending={mutation.isPending || roster.isPending || roster.isError}
           />
+          {roster.isError && (
+            <div
+              role="alert"
+              className="flex items-center gap-3 text-sm text-error"
+            >
+              {t('allocationRosterFailed')}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => roster.refetch()}
+              >
+                {t('reconnect')}
+              </Button>
+            </div>
+          )}
+          {!roster.isPending &&
+            !roster.isError &&
+            roster.data?.members.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                {t('allocationNoGrantedMembers')}
+              </p>
+            )}
           {mutation.isError && (
             <p role="alert" className="text-sm text-error">
               {t(allocationErrorKey(mutation.error))}
@@ -145,7 +161,7 @@ export function Allocations() {
             {t('allocationsEmpty')}
           </p>
           <Button asChild variant="outline">
-            <Link to="/admin/teams">{t('personnelTeams')}</Link>
+            <Link to="/groups">{t('accountGroups')}</Link>
           </Button>
         </div>
       ) : (
@@ -178,7 +194,7 @@ export function Allocations() {
                   </span>
                 </div>
                 <p className="break-words text-sm text-muted-foreground">
-                  {s.team_name} · {s.group_name} ·{' '}
+                  {s.group_name} ·{' '}
                   {t(
                     s.config.period === 'upstream'
                       ? 'allocationUpstreamReset'
@@ -220,6 +236,7 @@ export function Allocations() {
                   aria-label={t('allocationEditNamed', { name: s.name })}
                   onClick={() => {
                     mutation.reset()
+                    setFormPoolID(s.group_id)
                     setEditing(s)
                   }}
                 >

@@ -27,7 +27,7 @@ func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass")
+	session, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.SchemaVersion != 24 || info.Version != "synthetic-version" {
+	if info.SchemaVersion != 1 || info.Version != "synthetic-version" {
 		t.Fatal(info)
 	}
 	verified, err := Verify(ctx, output)

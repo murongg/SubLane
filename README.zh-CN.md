@@ -6,7 +6,7 @@
 </h1>
 
 <p align="center">
-  面向内部团队的极简、自托管订阅网关，优先支持 Codex。
+  轻量级多工作空间订阅网关，优先支持 Codex。
 </p>
 
 <p align="center">
@@ -21,13 +21,13 @@
   <a href="README.md">English</a> · <a href="https://github.com/murongg/SubLane">项目仓库</a> · <a href="brand/README.zh-CN.md">品牌物料</a>
 </p>
 
-SubLane 将团队的 AI 订阅账号整合为统一、自托管的网关，采用 Go + SQLite，内置 Web 管理界面，单进程运行。
+SubLane 将 AI 订阅账号整合为统一网关，并用独立工作空间隔离不同团队。采用 Go + SQLite，内置 Web 管理界面，单进程运行。
 
 ## 功能
 
 - 支持 Codex、Claude、Antigravity 账号，通过 OAuth 授权或导入凭据接入。
 - 提供 OpenAI 兼容 API、[Claude Messages 和 Gemini 原生生成接口](https://sublane.dev/docs/zh/protocols)，支持 HTTP/SSE 及 Responses WebSocket。
-- 成员管理、个人 API 密钥和账号分组权限。
+- 多工作空间隔离成员、订阅账号、账号池、个人 API 密钥、用量与审计记录。
 - 账号池调度、并发限制、冷却恢复和 Codex 额度感知。
 - 请求诊断、用量图表及备份恢复。
 - 中英文界面，支持明暗主题。
@@ -40,7 +40,7 @@ SubLane 将团队的 AI 订阅账号整合为统一、自托管的网关，采�
 curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh | bash
 ```
 
-打开 http://127.0.0.1:8080，创建管理员、接入订阅账号，并将账号加入账号池，再创建个人密钥接入客户端。先按[第一次使用](https://sublane.dev/docs/zh/quickstart)跑通一次调用；默认自由使用，团队共享和额度限制之后再按需设置。
+打开 http://127.0.0.1:8080，按引导创建管理员并为第一个工作空间命名。接入订阅账号并将其加入账号池，再创建个人密钥接入客户端。先按[第一次使用](https://sublane.dev/docs/zh/quickstart)跑通一次调用；更多工作空间和额度限制之后再按需设置。
 
 脚本会在 `./sublane` 安装最新正式版，没有正式版时使用最新预发布版。数据保存在 Docker 数据卷中，不会覆盖已有目录。自定义参数、手动 Compose 部署、HTTPS 和升级步骤见[部署文档](https://sublane.dev/docs/zh/deployment)。
 

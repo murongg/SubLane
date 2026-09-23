@@ -21,9 +21,6 @@ func TestRatioAutomaticallyReconcilesAfterLastRequest(t *testing.T) {
 	s.now = func() time.Time { return time.Unix(f.clock.Load(), 0) }
 	ctx := context.Background()
 	a, _ := auth.New(f.connection)
-	if _, err := a.Setup(ctx, "synthetic-admin", "synthetic-password"); err != nil {
-		t.Fatal(err)
-	}
 	member, err := a.CreateMember(ctx, "synthetic-member", "synthetic-password")
 	if err != nil {
 		t.Fatal(err)
@@ -36,11 +33,10 @@ func TestRatioAutomaticallyReconcilesAfterLastRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager := s.Allocations()
-	team, err := manager.SaveTeam(ctx, 0, allocations.TeamInput{Name: "Synthetic team", Enabled: true, MemberIDs: []int64{member.ID}})
-	if err != nil {
+	if err := groups.New(s.db).SetMemberGroups(ctx, member.ID, []int64{pool.ID}); err != nil {
 		t.Fatal(err)
 	}
-	scheme, err := manager.SaveScheme(ctx, 0, allocations.SchemeInput{Name: "Synthetic share", TeamID: team.ID, GroupID: pool.ID, Enabled: true, Config: allocations.Config{Mode: "ratio", Period: "upstream", Members: []allocations.Share{{UserID: member.ID, Limit: 10000}}, Rates: []allocations.Rate{{Model: "synthetic", Input: 1, Output: 1, Cached: 1}}}})
+	scheme, err := manager.SaveScheme(ctx, 0, allocations.SchemeInput{Name: "Synthetic share", GroupID: pool.ID, Enabled: true, Config: allocations.Config{Mode: "ratio", Period: "upstream", Members: []allocations.Share{{UserID: member.ID, Limit: 10000}}, Rates: []allocations.Rate{{Model: "synthetic", Input: 1, Output: 1, Cached: 1}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,11 +97,10 @@ func TestAllocationKeyUsesOneModeAndSharedLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager := allocations.New(s.db)
-	team, err := manager.SaveTeam(ctx, 0, allocations.TeamInput{Name: "Synthetic team", Enabled: true, MemberIDs: []int64{user}})
-	if err != nil {
+	if err := groups.New(s.db).SetMemberGroups(ctx, user, []int64{pool.ID}); err != nil {
 		t.Fatal(err)
 	}
-	scheme, err := manager.SaveScheme(ctx, 0, allocations.SchemeInput{Name: "Synthetic amount", TeamID: team.ID, GroupID: pool.ID, Enabled: true, Config: allocations.Config{Mode: "amount", Period: "day", Members: []allocations.Share{{UserID: user, Limit: 16}}, Rates: []allocations.Rate{{Model: "synthetic-model", Input: 2000000, Cached: 1000000, Output: 6000000}}}})
+	scheme, err := manager.SaveScheme(ctx, 0, allocations.SchemeInput{Name: "Synthetic amount", GroupID: pool.ID, Enabled: true, Config: allocations.Config{Mode: "amount", Period: "day", Members: []allocations.Share{{UserID: user, Limit: 16}}, Rates: []allocations.Rate{{Model: "synthetic-model", Input: 2000000, Cached: 1000000, Output: 6000000}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

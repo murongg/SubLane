@@ -37,7 +37,7 @@ type Runtime struct {
 
 // Caller holds s.mu. Cached state keeps a failed persistence attempt from reopening a cooling account.
 func (s *Service) loadRuntime(ctx context.Context) error {
-	rows, err := s.queries.ListAccountRuntime(ctx)
+	rows, err := s.queries.ListAccountRuntime(ctx, s.tenantID)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func (s *Service) Runtime(ctx context.Context) ([]Runtime, error) {
 	if err := s.loadRuntime(ctx); err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListAccountRuntime(ctx)
+	rows, err := s.queries.ListAccountRuntime(ctx, s.tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (s *Service) SetConcurrency(ctx context.Context, id string, limit int64) er
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	n, err := q.SetAccountConcurrency(ctx, db.SetAccountConcurrencyParams{ID: id, MaxConcurrency: limit, Now: s.now().Unix()})
+	n, err := q.SetAccountConcurrency(ctx, db.SetAccountConcurrencyParams{ID: id, TenantID: s.tenantID, MaxConcurrency: limit, Now: s.now().Unix()})
 	if err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func (s *Service) Resume(ctx context.Context, id string) error {
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	if err := q.SaveAccountRuntime(ctx, runtimeParams(&next)); err != nil {
+	if err := q.SaveAccountRuntime(ctx, s.runtimeParams(&next)); err != nil {
 		return err
 	}
 	if err := audit.Record(ctx, q, "account.resume", "account", id); err != nil {
@@ -163,10 +163,10 @@ func (s *Service) Resume(ctx context.Context, id string) error {
 	return nil
 }
 func (s *Service) persistRuntime(ctx context.Context, state *Runtime) error {
-	return s.queries.SaveAccountRuntime(ctx, runtimeParams(state))
+	return s.queries.SaveAccountRuntime(ctx, s.runtimeParams(state))
 }
-func runtimeParams(state *Runtime) db.SaveAccountRuntimeParams {
-	return db.SaveAccountRuntimeParams{AccountID: state.ID, CooldownUntil: state.CooldownUntil, Reason: state.Reason, Failures: state.Failures, LastFailureAt: state.lastFailureAt, Revision: state.revision}
+func (s *Service) runtimeParams(state *Runtime) db.SaveAccountRuntimeParams {
+	return db.SaveAccountRuntimeParams{AccountID: state.ID, TenantID: s.tenantID, CooldownUntil: state.CooldownUntil, Reason: state.Reason, Failures: state.Failures, LastFailureAt: state.lastFailureAt, Revision: state.revision}
 }
 func (s *Service) accountAdmission(account accounts.Account) error {
 	if !account.Enabled {

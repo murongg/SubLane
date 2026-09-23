@@ -22,6 +22,7 @@ const messages = {
 
 export function Auth({ mode }: { mode: 'setup' | 'login' }) {
   const creating = mode === 'setup'
+  const [setupStep, setSetupStep] = useState<'account' | 'workspace'>('account')
   const { t } = useTranslation()
   const client = useQueryClient()
   const navigate = useNavigate()
@@ -29,11 +30,22 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
   const [fieldError, setFieldError] = useState<CredentialError | null>(null)
   useEffect(() => {
     if (creating) heading.current?.focus()
-  }, [creating])
+  }, [creating, setupStep])
   const mutation = useMutation({
     // Drop submitted credentials when the authentication form is no longer observed.
     gcTime: 0,
-    mutationFn: creating ? setup : signIn,
+    mutationFn: (input: {
+      username: string
+      password: string
+      workspace_name?: string
+    }) =>
+      creating
+        ? setup({
+            username: input.username,
+            password: input.password,
+            workspace_name: input.workspace_name ?? '',
+          })
+        : signIn({ username: input.username, password: input.password }),
     onSuccess: (state) => replaceAuthState(client, state),
     onError: (error) => {
       if (error instanceof ApiError && error.code === 'already_initialized')
@@ -51,17 +63,40 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
     }
     setFieldError(null)
     mutation.reset()
-    const validation = validateCredentials(
-      input,
-      creating ? String(data.get('confirm') ?? '') : undefined,
-    )
-    if (validation) {
-      setFieldError(validation)
-      const field = form.elements.namedItem(validation.field)
+    if (!creating || setupStep === 'account') {
+      const validation = validateCredentials(
+        input,
+        creating ? String(data.get('confirm') ?? '') : undefined,
+      )
+      if (validation) {
+        setFieldError(validation)
+        const field = form.elements.namedItem(validation.field)
+        if (field instanceof HTMLInputElement) field.focus()
+        return
+      }
+      if (creating) {
+        setSetupStep('workspace')
+        return
+      }
+    }
+    const workspaceName = String(data.get('workspace_name') ?? '').trim()
+    if (
+      creating &&
+      (!workspaceName ||
+        [...workspaceName].length > 64 ||
+        /\p{Cc}/u.test(workspaceName))
+    ) {
+      setFieldError({
+        field: 'workspace_name',
+        message: 'workspaceNameInvalid',
+      })
+      const field = form.elements.namedItem('workspace_name')
       if (field instanceof HTMLInputElement) field.focus()
       return
     }
-    mutation.mutate(input)
+    mutation.mutate(
+      creating ? { ...input, workspace_name: workspaceName } : input,
+    )
   }
   const errorCode =
     mutation.error instanceof ApiError ? mutation.error.code : 'unavailable'
@@ -119,36 +154,94 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
           size="sm"
           className="-ml-2.5 mb-6 text-muted-foreground"
           disabled={mutation.isPending}
-          onClick={() => navigate({ to: '/setup' })}
+          onClick={() => {
+            if (setupStep === 'workspace') {
+              setFieldError(null)
+              setSetupStep('account')
+            } else {
+              navigate({ to: '/setup' })
+            }
+          }}
         >
           <ArrowLeft aria-hidden="true" />
-          {t('backToWelcome')}
+          {t(setupStep === 'workspace' ? 'setupBackToAdmin' : 'backToWelcome')}
         </Button>
+      )}
+      {creating && (
+        <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {t('setupProgress', { current: setupStep === 'account' ? 1 : 2 })}
+        </p>
       )}
       <h1
         ref={heading}
         tabIndex={-1}
         className="text-2xl font-semibold tracking-tight outline-none"
       >
-        {t(creating ? 'createAdministrator' : 'signInTitle')}
+        {t(
+          creating
+            ? setupStep === 'account'
+              ? 'createAdministrator'
+              : 'setupFirstWorkspace'
+            : 'signInTitle',
+        )}
       </h1>
       <p className="mb-7 mt-2 text-sm leading-6 text-muted-foreground">
-        {t(creating ? 'setupDescription' : 'signInDescription')}
+        {t(
+          creating
+            ? setupStep === 'account'
+              ? 'setupDescription'
+              : 'setupFirstWorkspaceDescription'
+            : 'signInDescription',
+        )}
       </p>
       <form noValidate onSubmit={submit} className="space-y-5">
-        {field(
-          'username',
-          'username',
-          'username',
-          creating ? 'usernameHint' : undefined,
+        <div
+          hidden={creating && setupStep === 'workspace'}
+          className="space-y-5"
+        >
+          {field(
+            'username',
+            'username',
+            'username',
+            creating ? 'usernameHint' : undefined,
+          )}
+          {field(
+            'password',
+            'password',
+            creating ? 'new-password' : 'current-password',
+            creating ? 'passwordHint' : undefined,
+          )}
+          {creating && field('confirm', 'confirmPassword', 'new-password')}
+        </div>
+        {creating && (
+          <div hidden={setupStep !== 'workspace'} className="space-y-2">
+            <label
+              htmlFor="auth-workspace-name"
+              className="text-sm font-medium"
+            >
+              {t('workspaceName')}
+            </label>
+            <Input
+              id="auth-workspace-name"
+              name="workspace_name"
+              autoComplete="organization"
+              maxLength={64}
+              required
+              disabled={mutation.isPending}
+              aria-invalid={fieldError?.field === 'workspace_name'}
+              aria-describedby={
+                fieldError?.field === 'workspace_name'
+                  ? 'field-error'
+                  : undefined
+              }
+            />
+            {fieldError?.field === 'workspace_name' && (
+              <p id="field-error" role="alert" className="text-sm text-error">
+                {t(fieldError.message)}
+              </p>
+            )}
+          </div>
         )}
-        {field(
-          'password',
-          'password',
-          creating ? 'new-password' : 'current-password',
-          creating ? 'passwordHint' : undefined,
-        )}
-        {creating && field('confirm', 'confirmPassword', 'new-password')}
         {mutation.isError && (
           <p role="alert" className="text-sm leading-6 text-error">
             {t(errorKey, {
@@ -169,10 +262,12 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
           {t(
             mutation.isPending
               ? creating
-                ? 'creatingAdministrator'
+                ? 'setupFinishing'
                 : 'signingIn'
               : creating
-                ? 'createAdministrator'
+                ? setupStep === 'account'
+                  ? 'setupContinue'
+                  : 'setupFinish'
                 : 'signIn',
           )}
         </Button>

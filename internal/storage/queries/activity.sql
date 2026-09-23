@@ -1,7 +1,7 @@
 -- name: RecordHourlyUsage :exec
-INSERT INTO usage_hourly(hour,user_id,requests,input_tokens,output_tokens,input_reported,output_reported)
-VALUES(sqlc.arg(hour),sqlc.arg(user_id),sqlc.arg(requests),sqlc.arg(input_tokens),sqlc.arg(output_tokens),sqlc.arg(input_reported),sqlc.arg(output_reported))
-ON CONFLICT(hour,user_id) DO UPDATE SET
+INSERT INTO usage_hourly(tenant_id,hour,user_id,requests,input_tokens,output_tokens,input_reported,output_reported)
+VALUES((SELECT tenant_id FROM account_groups WHERE id=sqlc.arg(group_id)),sqlc.arg(hour),sqlc.arg(user_id),sqlc.arg(requests),sqlc.arg(input_tokens),sqlc.arg(output_tokens),sqlc.arg(input_reported),sqlc.arg(output_reported))
+ON CONFLICT(tenant_id,hour,user_id) DO UPDATE SET
 requests=usage_hourly.requests+excluded.requests,
 input_tokens=usage_hourly.input_tokens+excluded.input_tokens,
 output_tokens=usage_hourly.output_tokens+excluded.output_tokens,
@@ -23,5 +23,5 @@ CAST(SUM(h.output_tokens) AS INTEGER) AS output_tokens,
 CAST(SUM(h.input_reported) AS INTEGER) AS input_reported,
 CAST(SUM(h.output_reported) AS INTEGER) AS output_reported
 FROM usage_hourly h
-WHERE h.hour>=sqlc.arg(from_hour) AND h.hour<sqlc.arg(to_hour) AND (h.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0)
+WHERE h.tenant_id=sqlc.arg(tenant_id) AND h.hour>=sqlc.arg(from_hour) AND h.hour<sqlc.arg(to_hour) AND (h.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0)
 GROUP BY 1,2 ORDER BY 1,2 LIMIT 168;

@@ -45,10 +45,15 @@ type Detail struct {
 	AllowedModels []string `json:"allowed_models"`
 }
 type Choice struct {
-	SchemeID   int64  `json:"scheme_id,omitempty"`
-	SchemeName string `json:"scheme_name,omitempty"`
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
+	SchemeID     int64  `json:"scheme_id,omitempty"`
+	SchemeName   string `json:"scheme_name,omitempty"`
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	AccountCount int64  `json:"account_count"`
+}
+type Member struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
 }
 type Input struct {
 	ModelPolicy *ModelPolicy `json:"model_policy,omitempty"`
@@ -59,14 +64,19 @@ type Input struct {
 type Service struct {
 	connection *sql.DB
 	queries    *db.Queries
+	tenantID   int64
 }
 
 func New(connection *sql.DB) *Service {
-	return &Service{connection: connection, queries: db.New(connection)}
+	return NewForTenant(connection, 1)
+}
+
+func NewForTenant(connection *sql.DB, tenantID int64) *Service {
+	return &Service{connection: connection, queries: db.New(connection), tenantID: tenantID}
 }
 
 func (s *Service) List(ctx context.Context) ([]Group, error) {
-	rows, err := s.queries.ListGroups(ctx)
+	rows, err := s.queries.ListGroups(ctx, s.tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +93,7 @@ func (s *Service) Get(ctx context.Context, id int64) (Detail, error) {
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	row, err := q.GetGroup(ctx, id)
+	row, err := q.GetTenantGroup(ctx, db.GetTenantGroupParams{ID: id, TenantID: s.tenantID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Detail{}, ErrNotFound
 	}
@@ -128,13 +138,13 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
 	if id != 0 {
-		if _, err := q.GetGroup(ctx, id); errors.Is(err, sql.ErrNoRows) {
+		if _, err := q.GetTenantGroup(ctx, db.GetTenantGroupParams{ID: id, TenantID: s.tenantID}); errors.Is(err, sql.ErrNoRows) {
 			return Detail{}, ErrNotFound
 		} else if err != nil {
 			return Detail{}, err
 		}
 	}
-	other, err := q.FindGroupName(ctx, name)
+	other, err := q.FindGroupName(ctx, db.FindGroupNameParams{Name: name, TenantID: s.tenantID})
 	if err == nil && other != id {
 		return Detail{}, ErrDuplicate
 	}
@@ -147,7 +157,7 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 			return Detail{}, ErrInput
 		}
 		seen[accountID] = true
-		exists, err := q.GroupAccountExists(ctx, accountID)
+		exists, err := q.GroupAccountExists(ctx, db.GroupAccountExistsParams{AccountID: accountID, TenantID: s.tenantID})
 		if err != nil {
 			return Detail{}, err
 		}
@@ -157,18 +167,18 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 	}
 	now := time.Now().Unix()
 	if id == 0 {
-		count, err := q.CountGroups(ctx)
+		count, err := q.CountGroups(ctx, s.tenantID)
 		if err != nil {
 			return Detail{}, err
 		}
 		if count >= MaxGroups {
 			return Detail{}, ErrLimit
 		}
-		id, err = q.CreateGroup(ctx, db.CreateGroupParams{Name: name, Enabled: input.Enabled, Now: now})
+		id, err = q.CreateGroup(ctx, db.CreateGroupParams{TenantID: s.tenantID, Name: name, Enabled: input.Enabled, Now: now})
 		if err != nil {
 			return Detail{}, err
 		}
-	} else if err := q.UpdateGroup(ctx, db.UpdateGroupParams{ID: id, Name: name, Enabled: input.Enabled, Now: now}); err != nil {
+	} else if err := q.UpdateGroup(ctx, db.UpdateGroupParams{ID: id, TenantID: s.tenantID, Name: name, Enabled: input.Enabled, Now: now}); err != nil {
 		return Detail{}, err
 	}
 	managed := false
@@ -222,23 +232,41 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 	return s.Get(ctx, id)
 }
 func (s *Service) Available(ctx context.Context, userID int64) ([]Choice, error) {
-	rows, err := s.queries.ListAvailableGroups(ctx, userID)
+	rows, err := s.queries.ListAvailableGroups(ctx, db.ListAvailableGroupsParams{UserID: userID, TenantID: s.tenantID})
 	if err != nil {
 		return nil, err
 	}
 	result := make([]Choice, 0, len(rows))
 	for _, r := range rows {
-		result = append(result, Choice{ID: r.ID, Name: r.Name})
+		result = append(result, Choice{ID: r.ID, Name: r.Name, AccountCount: r.AccountCount})
 	}
 	return result, nil
 }
 func (s *Service) MemberGroups(ctx context.Context, userID int64) ([]int64, error) {
-	if _, err := s.queries.GetMember(ctx, userID); errors.Is(err, sql.ErrNoRows) {
+	exists, err := s.queries.MemberExistsInTenant(ctx, db.MemberExistsInTenantParams{TenantID: s.tenantID, UserID: userID})
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrNotFound
+	}
+	return s.queries.ListMemberGroups(ctx, db.ListMemberGroupsParams{UserID: userID, TenantID: s.tenantID})
+}
+func (s *Service) Members(ctx context.Context, groupID int64) ([]Member, error) {
+	if _, err := s.queries.GetTenantGroup(ctx, db.GetTenantGroupParams{ID: groupID, TenantID: s.tenantID}); errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	} else if err != nil {
 		return nil, err
 	}
-	return s.queries.ListMemberGroups(ctx, userID)
+	rows, err := s.queries.ListPoolMembers(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	members := make([]Member, 0, len(rows))
+	for _, row := range rows {
+		members = append(members, Member{ID: row.ID, Username: row.Username})
+	}
+	return members, nil
 }
 func (s *Service) SetMemberGroups(ctx context.Context, userID int64, ids []int64) error {
 	if ids == nil || len(ids) > MaxGroups {
@@ -250,10 +278,12 @@ func (s *Service) SetMemberGroups(ctx context.Context, userID int64, ids []int64
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	if _, err := q.GetMember(ctx, userID); errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	} else if err != nil {
+	exists, err := q.MemberExistsInTenant(ctx, db.MemberExistsInTenantParams{TenantID: s.tenantID, UserID: userID})
+	if err != nil {
 		return err
+	}
+	if !exists {
+		return ErrNotFound
 	}
 	seen := make(map[int64]bool, len(ids))
 	for _, id := range ids {
@@ -261,13 +291,13 @@ func (s *Service) SetMemberGroups(ctx context.Context, userID int64, ids []int64
 			return ErrInput
 		}
 		seen[id] = true
-		if _, err := q.GetGroup(ctx, id); errors.Is(err, sql.ErrNoRows) {
+		if _, err := q.GetTenantGroup(ctx, db.GetTenantGroupParams{ID: id, TenantID: s.tenantID}); errors.Is(err, sql.ErrNoRows) {
 			return ErrInput
 		} else if err != nil {
 			return err
 		}
 	}
-	if err := q.ClearMemberGroups(ctx, userID); err != nil {
+	if err := q.ClearMemberGroups(ctx, db.ClearMemberGroupsParams{UserID: userID, TenantID: s.tenantID}); err != nil {
 		return err
 	}
 	for _, id := range ids {
@@ -281,5 +311,5 @@ func (s *Service) SetMemberGroups(ctx context.Context, userID int64, ids []int64
 	return tx.Commit()
 }
 func (s *Service) Connection(ctx context.Context, userID int64) (string, error) {
-	return s.queries.GroupConnectionStatus(ctx, userID)
+	return s.queries.GroupConnectionStatus(ctx, db.GroupConnectionStatusParams{UserID: userID, TenantID: s.tenantID})
 }

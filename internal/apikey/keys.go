@@ -61,16 +61,38 @@ type Page struct {
 	Keys       []Key `json:"keys"`
 	NextCursor int64 `json:"next_cursor"`
 }
-type Principal struct{ KeyID, UserID, GroupID int64 }
+type Principal struct{ KeyID, UserID, GroupID, TenantID int64 }
 type Service struct {
-	vault   *vault.Vault
-	db      *sql.DB
-	queries *db.Queries
-	now     func() time.Time
+	vault    *vault.Vault
+	db       *sql.DB
+	queries  *db.Queries
+	tenantID int64
+	now      func() time.Time
 }
 
 func New(connection *sql.DB, cipher *vault.Vault) *Service {
-	return &Service{vault: cipher, db: connection, queries: db.New(connection), now: time.Now}
+	return NewForTenant(connection, cipher, 1)
+}
+
+func NewForTenant(connection *sql.DB, cipher *vault.Vault, tenantID int64) *Service {
+	return &Service{vault: cipher, db: connection, queries: db.New(connection), tenantID: tenantID, now: time.Now}
+}
+
+func (s *Service) HasUsableKey(ctx context.Context, userID int64) (bool, error) {
+	now := s.now().Unix()
+	candidates, err := s.queries.ListKeyReadinessCandidates(ctx, db.ListKeyReadinessCandidatesParams{UserID: userID, TenantID: s.tenantID, Now: &now})
+	if err != nil {
+		return false, err
+	}
+	for _, key := range candidates {
+		// A key in a reserved pool is usable only while its bound allowance admits the member.
+		if _, err := allocations.KeyScheme(ctx, s.queries, key.ID, userID, key.GroupID, now); err == nil {
+			return true, nil
+		} else if !errors.Is(err, allocations.ErrUnavailable) {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 // Deprecated: use CreateInGroup or CreateInScheme to choose an explicit scope.
@@ -139,11 +161,14 @@ func (s *Service) create(ctx context.Context, userID, groupID, schemeID int64, n
 			return CreatedKey{}, err
 		}
 	}
-	group, err := queries.GetGroup(ctx, groupID)
+	group, err := queries.GetTenantGroup(ctx, db.GetTenantGroupParams{ID: groupID, TenantID: s.tenantID})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return CreatedKey{}, groups.ErrUnavailable
+		}
 		return CreatedKey{}, err
 	}
-	count, err := queries.CountActiveKeys(ctx, userID)
+	count, err := queries.CountActiveKeys(ctx, db.CountActiveKeysParams{UserID: userID, TenantID: s.tenantID})
 	if err != nil {
 		return CreatedKey{}, err
 	}
@@ -188,7 +213,7 @@ func (s *Service) List(ctx context.Context, userID, beforeID int64) (Page, error
 	if beforeID < 0 {
 		return page, ErrInput
 	}
-	rows, err := s.queries.ListKeys(ctx, db.ListKeysParams{UserID: userID, BeforeID: beforeID})
+	rows, err := s.queries.ListKeys(ctx, db.ListKeysParams{UserID: userID, TenantID: s.tenantID, BeforeID: beforeID})
 	if err != nil {
 		return page, err
 	}
@@ -213,7 +238,7 @@ var ErrInactive = errors.New("api_key_inactive")
 
 // CatalogGroup authorizes model discovery without decrypting the user's gateway key.
 func (s *Service) CatalogGroup(ctx context.Context, userID, keyID int64) (int64, error) {
-	row, err := s.queries.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID})
+	row, err := s.queries.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID, TenantID: s.tenantID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrNotFound
 	}
@@ -247,7 +272,7 @@ func (s *Service) Update(ctx context.Context, userID, keyID int64, input UpdateI
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	row, err := q.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID})
+	row, err := q.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID, TenantID: s.tenantID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Key{}, ErrNotFound
 	}
@@ -278,7 +303,7 @@ func (s *Service) Revoke(ctx context.Context, userID, keyID int64) (Key, error) 
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	row, err := q.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID})
+	row, err := q.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID, TenantID: s.tenantID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Key{}, ErrNotFound
 	}
@@ -310,7 +335,7 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Principal, e
 	digest := sha256.Sum256([]byte(secret))
 	// Recheck membership and pool enablement on every request, including later WebSocket turns.
 	now := s.now().Unix()
-	row, err := s.queries.AuthenticateKey(ctx, db.AuthenticateKeyParams{TokenHash: digest[:], Now: &now})
+	row, err := s.queries.AuthenticateKey(ctx, db.AuthenticateKeyParams{TokenHash: digest[:], TenantID: s.tenantID, Now: &now})
 	if errors.Is(err, sql.ErrNoRows) {
 		return Principal{}, ErrInvalidKey
 	}
@@ -326,5 +351,5 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Principal, e
 	threshold := now - 60
 	// Track usage without writing to SQLite for every request in a burst.
 	err = s.queries.TouchKey(ctx, db.TouchKeyParams{Now: &now, ID: row.ID, Threshold: &threshold})
-	return Principal{KeyID: row.ID, UserID: row.UserID, GroupID: row.GroupID}, err
+	return Principal{KeyID: row.ID, UserID: row.UserID, GroupID: row.GroupID, TenantID: s.tenantID}, err
 }
