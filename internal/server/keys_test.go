@@ -31,7 +31,7 @@ func TestPersonalKeyOwnershipAndGatewayBoundary(t *testing.T) {
 	}
 	h := New(Options{Auth: identity, Keys: newTestKeyService(t, db), Ping: db.PingContext, StartedAt: time.Now()})
 	origin := "http://example.test"
-	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "owner-test", "password": "owner pass 42"}, nil)
+	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "owner-test", "password": "owner pass 42", "workspace_name": "Synthetic workspace"}, nil)
 	owner := setup.Result().Cookies()[0]
 	memberInput := map[string]string{"username": "member-test", "password": "member pass 42"}
 	if got := request(h, "POST", "/api/members", origin, memberInput, owner).Code; got != 201 {
@@ -96,7 +96,6 @@ func TestPersonalKeyOwnershipAndGatewayBoundary(t *testing.T) {
 
 func newTestKeyService(t *testing.T, connection *sql.DB) *apikey.Service {
 	t.Helper()
-	configureTestPool(t, connection)
 	cipher, err := vault.Open(filepath.Join(t.TempDir(), "credentials.key"), true)
 	if err != nil {
 		t.Fatal(err)
@@ -117,7 +116,7 @@ func TestPersonalKeyDisclosureBoundaryAndNoStore(t *testing.T) {
 	keys := newTestKeyService(t, connection)
 	h := New(Options{Auth: identity, Keys: keys, Audit: audit.New(connection)})
 	origin := "http://example.test"
-	owner := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "synthetic-admin", "password": "synthetic-pass"}, nil).Result().Cookies()[0]
+	owner := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "synthetic-admin", "password": "synthetic-pass", "workspace_name": "Synthetic workspace"}, nil).Result().Cookies()[0]
 	member, err := identity.CreateMember(ctx, "synthetic-member", "synthetic-pass")
 	if err != nil {
 		t.Fatal(err)

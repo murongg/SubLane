@@ -8,6 +8,49 @@ import { anonymous, authenticated, system } from './test/fixtures'
 
 const response = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status })
+const workspaces = {
+  tenants: [{ id: 1, name: 'Synthetic studio', status: 'active' }],
+}
+
+it('offers active workspaces when the selected workspace is unavailable', async () => {
+  sessionStorage.setItem('sublane.workspace', '2')
+  const fetchMock = vi.fn().mockImplementation((url: string) => {
+    if (url === '/api/auth/state')
+      return Promise.resolve(
+        response({ initialized: true, user: null, needs_workspace: true }),
+      )
+    if (url === '/api/workspaces')
+      return Promise.resolve(
+        response({
+          tenants: [
+            { id: 1, name: 'First workspace', status: 'active' },
+            { id: 2, name: 'Suspended workspace', status: 'suspended' },
+          ],
+        }),
+      )
+    return Promise.resolve(response({}))
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  try {
+    open()
+    expect(
+      await screen.findByRole('heading', { name: 'Choose a workspace' }),
+    ).toBeTruthy()
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.map(([url]) => url)).toContain(
+        '/api/workspaces',
+      ),
+    )
+    expect(
+      await screen.findByRole('button', { name: 'First workspace' }),
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole('button', { name: 'Suspended workspace' }),
+    ).toBeNull()
+  } finally {
+    sessionStorage.removeItem('sublane.workspace')
+  }
+})
 
 function open(path = '/') {
   render(
@@ -53,20 +96,63 @@ it('welcomes a fresh instance, creates the administrator, and enters the workspa
     screen.getByLabelText('Confirm password'),
     'different passphrase',
   )
-  await user.click(screen.getByRole('button', { name: 'Create administrator' }))
+  await user.click(screen.getByRole('button', { name: 'Continue' }))
   expect(await screen.findByText('Passwords do not match.')).toBeTruthy()
   expect(calls).toHaveLength(0)
   await user.clear(screen.getByLabelText('Confirm password'))
   await user.type(screen.getByLabelText('Confirm password'), 'fake password 42')
-  await user.click(screen.getByRole('button', { name: 'Create administrator' }))
+  await user.click(screen.getByRole('button', { name: 'Continue' }))
+  expect(
+    await screen.findByRole('heading', { name: 'Create your first workspace' }),
+  ).toBeTruthy()
+  expect(calls).toHaveLength(0)
+  await user.type(screen.getByLabelText('Workspace name'), 'Synthetic studio')
+  await user.click(screen.getByRole('button', { name: 'Create workspace' }))
   expect(
     await screen.findByRole('heading', { name: 'Workspace overview' }),
   ).toBeTruthy()
   expect(calls[0].body).toEqual({
     username: 'admin-test',
     password: 'fake password 42',
+    workspace_name: 'Synthetic studio',
   })
   expect(localStorage.getItem('sublane_session')).toBeNull()
+})
+
+it('requires a workspace name before first-time setup can submit', async () => {
+  const setupCalls = vi.fn()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response({ initialized: false, user: null }))
+      if (url === '/api/auth/setup') {
+        setupCalls()
+        return Promise.resolve(response(authenticated, 201))
+      }
+      return Promise.resolve(response(system))
+    }),
+  )
+  const user = userEvent.setup()
+  open('/setup/admin')
+  await screen.findByRole('heading', { name: 'Create administrator' })
+  await user.type(screen.getByLabelText('Username'), 'synthetic-admin')
+  await user.type(
+    screen.getByLabelText('Password', { exact: true }),
+    'synthetic-password',
+  )
+  await user.type(
+    screen.getByLabelText('Confirm password'),
+    'synthetic-password',
+  )
+  await user.click(screen.getByRole('button', { name: 'Continue' }))
+  await screen.findByRole('heading', { name: 'Create your first workspace' })
+  await user.click(screen.getByRole('button', { name: 'Create workspace' }))
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    'Enter a workspace name with up to 64 characters.',
+  )
+  expect(document.activeElement).toBe(screen.getByLabelText('Workspace name'))
+  expect(setupCalls).not.toHaveBeenCalled()
 })
 
 it.each([
@@ -96,12 +182,16 @@ it.each([
   await user.type(screen.getByLabelText('Username'), 'admin-test')
   await user.type(screen.getByLabelText('Password', { exact: true }), password)
   await user.type(screen.getByLabelText('Confirm password'), password)
-  await user.click(screen.getByRole('button', { name: 'Create administrator' }))
+  await user.click(screen.getByRole('button', { name: 'Continue' }))
   if (valid) {
+    await screen.findByRole('heading', { name: 'Create your first workspace' })
+    await user.type(screen.getByLabelText('Workspace name'), 'Synthetic studio')
+    await user.click(screen.getByRole('button', { name: 'Create workspace' }))
     await screen.findByRole('heading', { name: 'Workspace overview' })
     expect(setupCalls).toHaveBeenCalledExactlyOnceWith({
       username: 'admin-test',
       password,
+      workspace_name: 'Synthetic studio',
     })
   } else {
     expect((await screen.findByRole('alert')).textContent).toBe(
@@ -211,6 +301,8 @@ it('revokes access on logout and fetches fresh private data on a new login', asy
         state = authenticated
         return Promise.resolve(response(state))
       }
+      if (url === '/api/workspaces')
+        return Promise.resolve(response(workspaces))
       reads++
       return Promise.resolve(
         response({ ...system, version: 'synthetic-' + reads }),
@@ -266,6 +358,8 @@ it('keeps the workspace and lets the account menu retry a failed sign-out', asyn
       if (url === '/api/auth/state')
         return Promise.resolve(response(authenticated))
       if (url === '/api/auth/logout') return Promise.resolve(response({}, 503))
+      if (url === '/api/workspaces')
+        return Promise.resolve(response(workspaces))
       return Promise.resolve(response(system))
     }),
   )

@@ -8,6 +8,7 @@ import {
   authenticated,
   memberAuthenticated,
   hourlyActivity,
+  workspaces,
 } from '@/test/fixtures'
 
 const metrics = {
@@ -48,6 +49,8 @@ it.each([
     const fetch = vi.fn().mockImplementation((url: string) => {
       if (url === '/api/auth/state')
         return Promise.resolve(new Response(JSON.stringify(session)))
+      if (url === '/api/workspaces')
+        return Promise.resolve(new Response(JSON.stringify(workspaces)))
       if (url === '/api/me/allocations')
         return Promise.resolve(new Response(JSON.stringify({ schemes: [] })))
       if (url === '/api/me/budgets')
@@ -129,6 +132,7 @@ it.each([
       fetch.mock.calls.every(
         ([url]) =>
           url === '/api/auth/state' ||
+          url === '/api/workspaces' ||
           url === '/api/me/limits' ||
           url === '/api/me/budgets' ||
           url === '/api/me/allocations' ||

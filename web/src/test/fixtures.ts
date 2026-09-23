@@ -12,6 +12,10 @@ export const authenticated = {
   user: { id: 1, username: 'admin-test', role: 'admin' as const },
 }
 
+export const workspaces = {
+  tenants: [{ id: 1, name: 'Synthetic studio', status: 'active' }],
+}
+
 export const memberAuthenticated = {
   initialized: true,
   user: { id: 2, username: 'member-test', role: 'member' as const },

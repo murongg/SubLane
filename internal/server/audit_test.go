@@ -27,7 +27,7 @@ func TestAuditBoundaryRedactionAndKeyUpdates(t *testing.T) {
 	}
 	h := New(Options{Auth: identity, Keys: newTestKeyService(t, connection), Audit: audit.New(connection)})
 	origin := "http://example.test"
-	admin := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "synthetic-admin", "password": "synthetic-pass"}, nil).Result().Cookies()[0]
+	admin := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "synthetic-admin", "password": "synthetic-pass", "workspace_name": "Synthetic workspace"}, nil).Result().Cookies()[0]
 	request(h, "POST", "/api/members", origin, map[string]string{"username": "synthetic-member", "password": "synthetic-pass"}, admin)
 	member := request(h, "POST", "/api/auth/login", origin, map[string]string{"username": "synthetic-member", "password": "synthetic-pass"}, nil).Result().Cookies()[0]
 	for _, cookie := range []*http.Cookie{nil, member} {

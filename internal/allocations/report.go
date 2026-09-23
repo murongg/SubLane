@@ -61,7 +61,7 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 	defer tx.Rollback()
 	q := db.New(tx)
 	now := s.now().Unix()
-	scheme, err := readScheme(ctx, q, id, now)
+	scheme, err := readScheme(ctx, q, s.tenantID, id, now)
 	if err != nil {
 		return Detail{}, err
 	}
@@ -210,23 +210,17 @@ func ownShares(all []Share, user int64) []Share {
 }
 func (s *Service) Own(ctx context.Context, user int64) ([]Detail, error) {
 	q := db.New(s.conn)
-	rows, err := q.ListAllocationSchemes(ctx)
+	rows, err := q.ListAllocationSchemes(ctx, s.tenantID)
 	if err != nil {
 		return nil, err
 	}
 	out := []Detail{}
 	for _, row := range rows {
-		ids, err := q.ListAllocationTeamMembers(ctx, row.TeamID)
+		allowed, err := q.CanUseAllocation(ctx, db.CanUseAllocationParams{ID: row.ID, UserID: user})
 		if err != nil {
 			return nil, err
 		}
-		found := false
-		for _, id := range ids {
-			if id == user {
-				found = true
-			}
-		}
-		if !found {
+		if !allowed {
 			continue
 		}
 		d, err := s.Detail(ctx, row.ID, user)
@@ -250,6 +244,9 @@ func (s *Service) ReserveUnassigned(ctx context.Context, scheme, expected int64)
 	}
 	defer tx.Rollback()
 	q := db.New(tx)
+	if _, err := q.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: scheme, TenantID: s.tenantID}); err != nil {
+		return ErrNotFound
+	}
 	current, err := q.AllocationUnassigned(ctx, scheme)
 	if err != nil {
 		return err

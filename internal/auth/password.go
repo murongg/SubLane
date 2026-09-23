@@ -50,7 +50,7 @@ func (s *Service) ResetMemberPassword(ctx context.Context, id int64, password st
 
 // RecoverAdministrator is only exposed by the local maintenance command, never an HTTP route.
 func (s *Service) RecoverAdministrator(ctx context.Context, password string) error {
-	ctx = audit.WithActor(ctx, audit.Actor{ID: 0, Username: "local-cli", Role: "admin", Source: "local"})
+	ctx = audit.WithActor(ctx, audit.Actor{TenantID: 1, ID: 0, Username: "local-cli", Role: "admin", Source: "local"})
 	return s.resetPassword(ctx, 1, RoleAdmin, password)
 }
 

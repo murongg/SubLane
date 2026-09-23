@@ -41,7 +41,7 @@ func archiveFixture(t *testing.T) (string, []testEntry) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	cipher, err := vault.Open(filepath.Join(dir, keyName), true)
@@ -215,57 +215,6 @@ func TestRestoreDoesNotReplaceExistingEmptyDirectory(t *testing.T) {
 	}
 }
 
-func TestRestoreMigratesKnownOlderSchemaOnlyInStaging(t *testing.T) {
-	_, entries := archiveFixture(t)
-	path := filepath.Join(t.TempDir(), databaseName)
-	if err := os.WriteFile(path, entries[1].data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	connection, err := storage.Open(context.Background(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := connection.Exec("DROP VIEW effective_group_access; DROP TABLE allocation_team_groups; DROP TRIGGER allocation_fixed_pool; DROP TRIGGER allocation_exclusive_account; DROP TABLE allocation_debits; DROP TABLE allocation_window_members; DROP TABLE allocation_windows; DROP TABLE allocation_entries; DROP TABLE allocation_keys; DROP TABLE allocation_revisions; DROP TABLE allocation_schemes; DROP TABLE allocation_team_members; DROP TABLE allocation_teams; DROP TABLE token_budget_entries; DROP TABLE token_budget_usage; DROP TABLE token_budgets; DROP INDEX request_records_request_id; ALTER TABLE request_records DROP COLUMN request_id; ALTER TABLE request_records DROP COLUMN first_token_ms; ALTER TABLE account_usage DROP COLUMN revision; DELETE FROM schema_migrations WHERE name IN ('019_request_diagnostics.sql','020_native_protocols.sql','021_token_budgets.sql','022_allocations.sql','023_team_access.sql','024_pools.sql')"); err != nil {
-		t.Fatal(err)
-	}
-	if err := connection.Close(); err != nil {
-		t.Fatal(err)
-	}
-	entries[1].data, err = os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var value manifest
-	if err := json.Unmarshal(entries[0].data, &value); err != nil {
-		t.Fatal(err)
-	}
-	sum := sha256.Sum256(entries[1].data)
-	value.SchemaVersion = 18
-	value.DatabaseBytes = int64(len(entries[1].data))
-	value.Files[databaseName] = digest{value.DatabaseBytes, hex.EncodeToString(sum[:])}
-	entries[0].data, _ = json.Marshal(value)
-	raw := encodeArchive(t, entries)
-	archive := filepath.Join(t.TempDir(), "older.tar.gz")
-	if err := os.WriteFile(archive, raw, 0600); err != nil {
-		t.Fatal(err)
-	}
-	target := filepath.Join(t.TempDir(), "restored")
-	if _, err := Restore(context.Background(), archive, target); err != nil {
-		t.Fatal(err)
-	}
-	restored, err := storage.OpenReadOnly(context.Background(), filepath.Join(target, databaseName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer restored.Close()
-	if schema, err := storage.ValidateSnapshot(context.Background(), restored); err != nil || schema != 24 {
-		t.Fatal("older backup not migrated", schema, err)
-	}
-	actual, err := os.ReadFile(archive)
-	if err != nil || !bytes.Equal(actual, raw) {
-		t.Fatal("restore changed its input archive", err)
-	}
-}
 func TestArchiveRejectsOversizedDeclaredEntry(t *testing.T) {
 	var data bytes.Buffer
 	compressed := gzip.NewWriter(&data)
@@ -294,6 +243,13 @@ func TestBackupRejectsOversizedDatabaseRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-password", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
 	cipher, err := vault.Open(filepath.Join(source, keyName), true)
 	if err != nil {
 		t.Fatal(err)

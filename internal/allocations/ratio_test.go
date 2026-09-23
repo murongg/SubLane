@@ -16,11 +16,7 @@ func TestRatioReportSeparatesWaitingFromExceptionsAndAccounts(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().Unix()
 	s.now = func() time.Time { return unix(now) }
-	team, err := s.SaveTeam(ctx, 0, TeamInput{Name: "Synthetic team", Enabled: true, MemberIDs: []int64{user}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic ratio", TeamID: team.ID, GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}, Rates: []Rate{{Model: "synthetic", Input: 1, Output: 1, Cached: 1}}}})
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic ratio", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}, Rates: []Rate{{Model: "synthetic", Input: 1, Output: 1, Cached: 1}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,11 +74,10 @@ func TestRatioObservedModelWeightsAndDelayedUsage(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	team, err := s.SaveTeam(ctx, 0, TeamInput{Name: "Synthetic ratio team", Enabled: true, MemberIDs: []int64{user, 3, 4}})
-	if err != nil {
+	if err := grantPoolMembers(ctx, conn, 2, 3, 4); err != nil {
 		t.Fatal(err)
 	}
-	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic ratio", TeamID: team.ID, GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 5000}, {UserID: 3, Limit: 3000}, {UserID: 4, Limit: 2000}}, Rates: []Rate{{Model: "model-x", Input: 4000000, Cached: 4000000, Output: 4000000}, {Model: "model-y", Input: 1000000, Cached: 1000000, Output: 1000000}}}})
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic ratio", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 5000}, {UserID: 3, Limit: 3000}, {UserID: 4, Limit: 2000}}, Rates: []Rate{{Model: "model-x", Input: 4000000, Cached: 4000000, Output: 4000000}, {Model: "model-y", Input: 1000000, Cached: 1000000, Output: 1000000}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,11 +205,7 @@ func TestRatioHealthyAccountSurvivesUnavailablePeerAndRevisionChange(t *testing.
 	if _, err := conn.Exec("INSERT INTO group_accounts(group_id,account_id) VALUES(2,'synthetic-unavailable')"); err != nil {
 		t.Fatal(err)
 	}
-	team, err := s.SaveTeam(ctx, 0, TeamInput{Name: "Synthetic", Enabled: true, MemberIDs: []int64{user}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic", TeamID: team.ID, GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}, Rates: []Rate{{Model: "synthetic", Input: 1, Cached: 1, Output: 1}}}})
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}, Rates: []Rate{{Model: "synthetic", Input: 1, Cached: 1, Output: 1}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,11 +248,7 @@ func TestRatioUsesBoundedProvisionalWindowBeforePausing(t *testing.T) {
 	q := db.New(conn)
 	now := int64(1_900_000_000)
 	s.now = func() time.Time { return unix(now) }
-	team, err := s.SaveTeam(ctx, 0, TeamInput{Name: "Synthetic provisional", Enabled: true, MemberIDs: []int64{user}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic provisional", TeamID: team.ID, GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}, Rates: []Rate{{Model: "synthetic", Input: 1, Cached: 1, Output: 1}}}})
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic provisional", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}, Rates: []Rate{{Model: "synthetic", Input: 1, Cached: 1, Output: 1}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,13 +290,12 @@ func TestRatioCanBorrowIdleMemberAllowanceWhenEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := int64(1_900_000_000)
-	s.now = func() time.Time { return unix(now) }
-	team, err := s.SaveTeam(ctx, 0, TeamInput{Name: "Synthetic borrowing", Enabled: true, MemberIDs: []int64{user, otherID}})
-	if err != nil {
+	if err := grantPoolMembers(ctx, conn, 2, otherID); err != nil {
 		t.Fatal(err)
 	}
-	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic borrowing", TeamID: team.ID, GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", AllowIdleBorrow: true, Members: []Share{{UserID: user, Limit: 5000}, {UserID: otherID, Limit: 5000}}, Rates: []Rate{{Model: "synthetic", Input: 1, Cached: 1, Output: 1}}}})
+	now := int64(1_900_000_000)
+	s.now = func() time.Time { return unix(now) }
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic borrowing", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", AllowIdleBorrow: true, Members: []Share{{UserID: user, Limit: 5000}, {UserID: otherID, Limit: 5000}}, Rates: []Rate{{Model: "synthetic", Input: 1, Cached: 1, Output: 1}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

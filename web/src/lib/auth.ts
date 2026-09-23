@@ -5,6 +5,8 @@ import { request } from './request'
 const authSchema = z
   .object({
     initialized: z.boolean(),
+    workspace_count: z.number().int().nonnegative().optional(),
+    needs_workspace: z.boolean().optional(),
     user: z
       .object({
         id: z.number().int().positive(),
@@ -64,7 +66,11 @@ export function signIn(input: { username: string; password: string }) {
   })
 }
 
-export function setup(input: { username: string; password: string }) {
+export function setup(input: {
+  username: string
+  password: string
+  workspace_name: string
+}) {
   return request('/api/auth/setup', authSchema, {
     method: 'POST',
     body: JSON.stringify(input),

@@ -2,8 +2,42 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useState } from 'react'
 import { SchemeForm } from './SchemeForm'
 import { parseAllocationValue } from '@/lib/allocations'
+
+it('assigns a pool allowance directly to its granted members', async () => {
+  const user = userEvent.setup()
+  const submit = vi.fn()
+  render(
+    <SchemeForm
+      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      groupID={2}
+      onGroupChange={() => {}}
+      members={[{ id: 7, username: 'synthetic-member' }]}
+      onSubmit={submit}
+      onCancel={() => {}}
+      pending={false}
+    />,
+  )
+  await user.type(
+    screen.getByLabelText('Resource allowance name'),
+    'Pool allowance',
+  )
+  await user.click(screen.getByLabelText('By tokens'))
+  await user.type(screen.getByLabelText('Allowance for synthetic-member'), '1')
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      group_id: 2,
+      config: expect.objectContaining({
+        members: [{ user_id: 7, limit: 1000000 }],
+      }),
+    }),
+  )
+})
 
 it('splits shares exactly and preserves saved price weights while editing', async () => {
   const user = userEvent.setup()
@@ -30,15 +64,13 @@ it('splits shares exactly and preserves saved price weights while editing', asyn
   ]
   render(
     <SchemeForm
-      teams={[team]}
-      fixedTeam={team}
-      resourceMode
       groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      groupID={2}
+      onGroupChange={() => {}}
+      members={team.members}
       scheme={{
         id: 1,
         name: 'Synthetic',
-        team_id: 1,
-        team_name: team.name,
         group_id: 2,
         group_name: 'Synthetic pool',
         enabled: true,
@@ -91,8 +123,6 @@ it('distinguishes account windows updating normally from blocked reconciliation'
       detail={{
         id: 1,
         name: 'Synthetic',
-        team_id: 1,
-        team_name: 'Synthetic',
         group_id: 2,
         group_name: 'Synthetic',
         enabled: true,
@@ -134,17 +164,10 @@ it('submits exactly one mode and rejects an overallocated ratio', async () => {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <SchemeForm
-        teams={[
-          {
-            id: 1,
-            name: 'Synthetic team',
-            enabled: true,
-            member_ids: [2],
-            members: [{ id: 2, username: 'synthetic-member', enabled: true }],
-            created_at: 1,
-          },
-        ]}
         groups={[{ id: 1, name: 'Synthetic pool', enabled: true }]}
+        groupID={1}
+        onGroupChange={() => {}}
+        members={[{ id: 2, username: 'synthetic-member' }]}
         onSubmit={submit}
         onCancel={() => {}}
         pending={false}
@@ -188,17 +211,10 @@ it('submits exactly one mode and rejects an overallocated ratio', async () => {
 it('keeps automatic ratio pricing out of the default form', () => {
   render(
     <SchemeForm
-      teams={[
-        {
-          id: 1,
-          name: 'Synthetic team',
-          enabled: true,
-          member_ids: [2],
-          members: [{ id: 2, username: 'synthetic-member', enabled: true }],
-          created_at: 1,
-        },
-      ]}
       groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      groupID={2}
+      onGroupChange={() => {}}
+      members={[{ id: 2, username: 'synthetic-member' }]}
       onSubmit={() => {}}
       onCancel={() => {}}
       pending={false}
@@ -223,14 +239,18 @@ it('makes idle share borrowing an explicit ratio option', async () => {
   }
   render(
     <SchemeForm
-      teams={[team]}
-      fixedTeam={team}
-      resourceMode
       groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      groupID={2}
+      onGroupChange={() => {}}
+      members={team.members}
       pending={false}
       onCancel={() => {}}
       onSubmit={submit}
     />,
+  )
+  await user.type(
+    screen.getByLabelText('Resource allowance name'),
+    'Synthetic allowance',
   )
   await user.type(screen.getByLabelText('Allowance for synthetic-member'), '50')
   await user.click(
@@ -268,8 +288,6 @@ it('does not label a paused scheme balance as active', async () => {
       detail={{
         id: 1,
         name: 'Synthetic',
-        team_id: 1,
-        team_name: 'Synthetic',
         group_id: 2,
         group_name: 'Synthetic',
         enabled: false,
@@ -306,43 +324,37 @@ it('does not label a paused scheme balance as active', async () => {
   expect(screen.getByText('Unavailable')).toBeTruthy()
 })
 
-it('changes team, pool and period with accessible dropdowns and clears old shares', async () => {
+it('changes pool and period with accessible dropdowns and clears old shares', async () => {
   const user = userEvent.setup()
   const submit = vi.fn()
-  const team = (id: number, name: string) => ({
-    id,
-    name,
-    enabled: true,
-    member_ids: [2],
-    members: [{ id: 2, username: 'synthetic-member', enabled: true }],
-    created_at: 1,
-  })
-  render(
-    <SchemeForm
-      teams={[
-        team(1, 'Synthetic first team'),
-        team(2, 'Synthetic second team'),
-      ]}
-      groups={[
-        { id: 2, name: 'Synthetic first pool', enabled: true },
-        { id: 3, name: 'Synthetic second pool', enabled: true },
-      ]}
-      onSubmit={submit}
-      onCancel={() => {}}
-      pending={false}
-    />,
-  )
+  function Harness() {
+    const [groupID, setGroupID] = useState(2)
+    return (
+      <SchemeForm
+        groups={[
+          { id: 2, name: 'Synthetic first pool', enabled: true },
+          { id: 3, name: 'Synthetic second pool', enabled: true },
+        ]}
+        groupID={groupID}
+        onGroupChange={setGroupID}
+        members={[{ id: 2, username: 'synthetic-member' }]}
+        onSubmit={submit}
+        onCancel={() => {}}
+        pending={false}
+      />
+    )
+  }
+  render(<Harness />)
   await user.type(screen.getByLabelText('Resource allowance name'), 'Synthetic')
   await user.click(screen.getByLabelText('By tokens'))
   await user.type(
     screen.getByLabelText('Allowance for synthetic-member'),
     '1.5',
   )
-  await user.click(screen.getByRole('button', { name: 'Personnel team' }))
-  await user.keyboard('{End}{Enter}')
-  expect(
-    screen.getByRole('button', { name: 'Personnel team' }).textContent,
-  ).toContain('Synthetic second team')
+  await user.click(screen.getByRole('button', { name: 'Account group' }))
+  await user.click(
+    screen.getByRole('menuitemradio', { name: 'Synthetic second pool' }),
+  )
   expect(
     (
       screen.getByLabelText(
@@ -351,12 +363,6 @@ it('changes team, pool and period with accessible dropdowns and clears old share
     ).value,
   ).toBe('')
   await user.type(screen.getByLabelText('Allowance for synthetic-member'), '2')
-  await user.click(screen.getByRole('button', { name: 'Account group' }))
-  await user.click(
-    screen.getByRole('menuitemradio', {
-      name: 'Synthetic second pool',
-    }),
-  )
   await user.click(screen.getByRole('button', { name: 'Reset period' }))
   await user.click(screen.getByRole('menuitemradio', { name: 'Daily · UTC' }))
   await user.click(
@@ -364,7 +370,6 @@ it('changes team, pool and period with accessible dropdowns and clears old share
   )
   expect(submit).toHaveBeenCalledWith(
     expect.objectContaining({
-      team_id: 2,
       group_id: 3,
       config: {
         mode: 'tokens',
@@ -401,24 +406,15 @@ function mountModelPrices(savedModel?: string) {
   render(
     <QueryClientProvider client={client}>
       <SchemeForm
-        teams={[
-          {
-            id: 1,
-            name: 'Synthetic team',
-            enabled: true,
-            created_at: 1,
-            member_ids: [2],
-            members: [{ id: 2, username: 'synthetic-member', enabled: true }],
-          },
-        ]}
         groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+        groupID={2}
+        onGroupChange={() => {}}
+        members={[{ id: 2, username: 'synthetic-member' }]}
         scheme={
           savedModel
             ? {
                 id: 1,
                 name: 'Synthetic saved',
-                team_id: 1,
-                team_name: 'Synthetic team',
                 group_id: 2,
                 group_name: 'Synthetic pool',
                 enabled: true,

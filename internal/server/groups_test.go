@@ -31,8 +31,9 @@ func TestGroupHTTPManagementAndPersonalChoices(t *testing.T) {
 	}
 	h := New(Options{Auth: identity, Keys: newTestKeyService(t, connection), Groups: groups.New(connection), Ping: connection.PingContext})
 	origin := "http://example.test"
-	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "synthetic-admin", "password": "synthetic-pass"}, nil)
+	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "synthetic-admin", "password": "synthetic-pass", "workspace_name": "Synthetic workspace"}, nil)
 	owner := setup.Result().Cookies()[0]
+	configureTestPool(t, connection)
 	credentials := map[string]string{"username": "synthetic-member", "password": "synthetic-pass"}
 	created := request(h, "POST", "/api/members", origin, credentials, owner)
 	var member auth.Member
@@ -65,6 +66,14 @@ func TestGroupHTTPManagementAndPersonalChoices(t *testing.T) {
 	}
 	if got := request(h, "PUT", grantPath, origin, map[string]any{"group_ids": []int64{pool.ID}}, owner).Code; got != 200 {
 		t.Fatal("grant failed", got)
+	}
+	poolMembersPath := fmt.Sprintf("/api/groups/%d/members", pool.ID)
+	if got := request(h, "GET", poolMembersPath, "", nil, memberCookie).Code; got != 403 {
+		t.Fatalf("member viewed pool grant roster: %d", got)
+	}
+	roster := request(h, "GET", poolMembersPath, "", nil, owner)
+	if roster.Code != 200 || !strings.Contains(roster.Body.String(), `"username":"synthetic-member"`) {
+		t.Fatalf("pool grant roster: %d %s", roster.Code, roster.Body.String())
 	}
 	choices = request(h, "GET", "/api/keys/groups?user_id=1", "", nil, memberCookie)
 	if choices.Code != 200 || !strings.Contains(choices.Body.String(), "Private project") || strings.Contains(choices.Body.String(), "Default") {

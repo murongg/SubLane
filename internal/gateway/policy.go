@@ -2,9 +2,11 @@ package gateway
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 
 	"github.com/murongg/SubLane/internal/groups"
+	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/upstream"
 )
 
@@ -16,6 +18,12 @@ func (s *Service) modelPolicy(ctx context.Context, userID, groupID int64) (group
 		return groups.ModelPolicy{}, err
 	}
 	defer tx.Rollback()
+	if _, err := s.queries.WithTx(tx).GetTenantGroup(ctx, db.GetTenantGroupParams{ID: groupID, TenantID: s.tenantID}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return groups.ModelPolicy{}, groups.ErrUnavailable
+		}
+		return groups.ModelPolicy{}, err
+	}
 	policy, err := groups.ReadPolicy(ctx, s.queries.WithTx(tx), userID, groupID)
 	if err != nil {
 		return policy, err

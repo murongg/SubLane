@@ -17,6 +17,7 @@ var ErrInput = errors.New("invalid_audit_input")
 
 type Actor struct {
 	ID                     int64
+	TenantID               int64
 	Username, Role, Source string
 }
 type actorKey struct{}
@@ -50,14 +51,19 @@ type Page struct {
 type Service struct {
 	connection *sql.DB
 	queries    *db.Queries
+	tenantID   int64
 }
 
 func New(connection *sql.DB) *Service {
-	return &Service{connection: connection, queries: db.New(connection)}
+	return NewForTenant(connection, 1)
+}
+
+func NewForTenant(connection *sql.DB, tenantID int64) *Service {
+	return &Service{connection: connection, queries: db.New(connection), tenantID: tenantID}
 }
 
 var actions = map[string]string{
-	"team.save": "team", "allocation.save": "allocation", "allocation.settle": "allocation", "allocation.reconcile": "allocation",
+	"allocation.save": "allocation", "allocation.settle": "allocation", "allocation.reconcile": "allocation",
 	"backup.export": "backup", "backup.prepare": "backup", "backup.verify": "backup",
 	"settings.update": "settings",
 	"key.reveal":      "key", "key.create": "key", "key.update": "key", "key.revoke": "key",
@@ -99,7 +105,7 @@ func record(ctx context.Context, q *db.Queries, action, resource, id string, sta
 	if !ok {
 		return nil
 	}
-	if actor.ID < 0 || len(actor.Username) > 64 || actor.Username == "" || strings.ContainsAny(actor.Username, "\r\n") || (actor.Source != "user" && actor.Source != "local") || (actor.Role != "admin" && actor.Role != "member") {
+	if actor.TenantID <= 0 || actor.ID < 0 || len(actor.Username) > 64 || actor.Username == "" || strings.ContainsAny(actor.Username, "\r\n") || (actor.Source != "user" && actor.Source != "local") || (actor.Role != "admin" && actor.Role != "member") {
 		return ErrInput
 	}
 	outcome := "success"
@@ -107,10 +113,10 @@ func record(ctx context.Context, q *db.Queries, action, resource, id string, sta
 		outcome = "failure"
 	}
 	now := time.Now().Unix()
-	if err := q.CreateAuditEvent(ctx, db.CreateAuditEventParams{ActorID: actor.ID, ActorName: actor.Username, ActorRole: actor.Role, Source: actor.Source, Action: action, Resource: resource, ResourceID: id, Outcome: outcome, HttpStatus: status, CreatedAt: now}); err != nil {
+	if err := q.CreateAuditEvent(ctx, db.CreateAuditEventParams{TenantID: actor.TenantID, ActorID: actor.ID, ActorName: actor.Username, ActorRole: actor.Role, Source: actor.Source, Action: action, Resource: resource, ResourceID: id, Outcome: outcome, HttpStatus: status, CreatedAt: now}); err != nil {
 		return err
 	}
-	return q.PruneAuditEvents(ctx, now-int64((90*24*time.Hour)/time.Second))
+	return q.PruneAuditEvents(ctx, db.PruneAuditEventsParams{ScopeTenantID: actor.TenantID, Oldest: now - int64((90*24*time.Hour)/time.Second)})
 }
 
 // Observation audits disclosure and filesystem preparation without changing live domain records.
@@ -147,7 +153,7 @@ func (s *Service) List(ctx context.Context, f Filter) (Page, error) {
 		return page, ErrInput
 	}
 	switch f.Resource {
-	case "", "team", "allocation", "key", "group", "member", "user", "account", "settings", "backup":
+	case "", "allocation", "key", "group", "member", "user", "account", "settings", "backup":
 	default:
 		return page, ErrInput
 	}
@@ -157,10 +163,10 @@ func (s *Service) List(ctx context.Context, f Filter) (Page, error) {
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	if err := q.PruneAuditEvents(ctx, time.Now().Add(-90*24*time.Hour).Unix()); err != nil {
+	if err := q.PruneAuditEvents(ctx, db.PruneAuditEventsParams{ScopeTenantID: s.tenantID, Oldest: time.Now().Add(-90 * 24 * time.Hour).Unix()}); err != nil {
 		return page, err
 	}
-	rows, err := q.ListAuditEvents(ctx, db.ListAuditEventsParams{BeforeID: f.BeforeID, Resource: f.Resource, Outcome: f.Outcome})
+	rows, err := q.ListAuditEvents(ctx, db.ListAuditEventsParams{TenantID: s.tenantID, BeforeID: f.BeforeID, Resource: f.Resource, Outcome: f.Outcome})
 	if err != nil {
 		return page, err
 	}

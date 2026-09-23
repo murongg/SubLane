@@ -71,7 +71,7 @@ func (s *Service) statistics(ctx context.Context, userID, days int64) (Statistic
 	if err := q.PruneHourlyUsage(ctx, today-89*86400); err != nil {
 		return page, err
 	}
-	page.Activity, err = readActivity(ctx, q, userID, page.FromDay, page.ToDay, now.Unix())
+	page.Activity, err = readActivity(ctx, q, s.tenantID, userID, page.FromDay, page.ToDay, now.Unix())
 	if err != nil {
 		return page, err
 	}
@@ -84,13 +84,13 @@ func (s *Service) statistics(ctx context.Context, userID, days int64) (Statistic
 	if err != nil {
 		return page, err
 	}
-	totals, err := q.GetStatisticsTotals(ctx, db.GetStatisticsTotalsParams{FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID})
+	totals, err := q.GetStatisticsTotals(ctx, db.GetStatisticsTotalsParams{TenantID: s.tenantID, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID})
 	if err != nil {
 		return page, err
 	}
 	page.Totals = Metrics(totals)
 	list := func(dimension string, maxRows int64) ([]Statistic, error) {
-		rows, err := q.ListStatistics(ctx, db.ListStatisticsParams{Dimension: dimension, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID, MaxRows: maxRows})
+		rows, err := q.ListStatistics(ctx, db.ListStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID, MaxRows: maxRows})
 		if err != nil {
 			return nil, err
 		}
@@ -138,7 +138,7 @@ func recordStatistics(ctx context.Context, q *db.Queries, r db.RecordRequestPara
 		model = r.Provider + "/" + strings.TrimPrefix(model, r.Provider+"/")
 	}
 	// Model names are client-controlled. Bound new labels while retaining every request in totals.
-	tracked, err := q.CanTrackStatisticsModel(ctx, db.CanTrackStatisticsModelParams{Day: r.StartedAt - r.StartedAt%86400, UserID: r.UserID, Model: model})
+	tracked, err := q.CanTrackStatisticsModel(ctx, db.CanTrackStatisticsModelParams{GroupID: r.GroupID, Day: r.StartedAt - r.StartedAt%86400, UserID: r.UserID, Model: model})
 	if err != nil {
 		return err
 	}
@@ -173,5 +173,5 @@ func recordStatistics(ctx context.Context, q *db.Queries, r db.RecordRequestPara
 	if err := q.RecordStatistics(ctx, entry); err != nil {
 		return err
 	}
-	return q.RecordHourlyUsage(ctx, db.RecordHourlyUsageParams{Hour: r.StartedAt - r.StartedAt%3600, UserID: r.UserID, Requests: entry.Requests, InputTokens: entry.InputTokens, OutputTokens: entry.OutputTokens, InputReported: entry.InputReported, OutputReported: entry.OutputReported})
+	return q.RecordHourlyUsage(ctx, db.RecordHourlyUsageParams{GroupID: r.GroupID, Hour: r.StartedAt - r.StartedAt%3600, UserID: r.UserID, Requests: entry.Requests, InputTokens: entry.InputTokens, OutputTokens: entry.OutputTokens, InputReported: entry.InputReported, OutputReported: entry.OutputReported})
 }

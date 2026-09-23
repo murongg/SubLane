@@ -22,7 +22,7 @@ func (h *memberHTTP) ownLimits(w http.ResponseWriter, r *http.Request) {
 }
 func (h *memberHTTP) limits(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
-	if err != nil || id <= 1 {
+	if err != nil || id <= 0 {
 		accountError(w, accounts.ErrInput)
 		return
 	}
@@ -44,7 +44,7 @@ func (h *memberHTTP) updateLimits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := pathID(r)
-	if err != nil || id <= 1 {
+	if err != nil || id <= 0 {
 		accountError(w, accounts.ErrInput)
 		return
 	}

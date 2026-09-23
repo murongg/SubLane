@@ -49,7 +49,7 @@ func providerFixture(t *testing.T, transport http.RoundTripper, known bool, vers
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+	if _, err = identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	cipher, err := vault.Open(filepath.Join(dir, "key"), true)

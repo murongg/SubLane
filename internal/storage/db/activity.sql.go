@@ -29,11 +29,12 @@ CAST(SUM(h.output_tokens) AS INTEGER) AS output_tokens,
 CAST(SUM(h.input_reported) AS INTEGER) AS input_reported,
 CAST(SUM(h.output_reported) AS INTEGER) AS output_reported
 FROM usage_hourly h
-WHERE h.hour>=?1 AND h.hour<?2 AND (h.user_id=?3 OR ?3=0)
+WHERE h.tenant_id=?1 AND h.hour>=?2 AND h.hour<?3 AND (h.user_id=?4 OR ?4=0)
 GROUP BY 1,2 ORDER BY 1,2 LIMIT 168
 `
 
 type ListHourlyActivityParams struct {
+	TenantID int64
 	FromHour int64
 	ToHour   int64
 	UserID   int64
@@ -50,7 +51,12 @@ type ListHourlyActivityRow struct {
 }
 
 func (q *Queries) ListHourlyActivity(ctx context.Context, arg ListHourlyActivityParams) ([]ListHourlyActivityRow, error) {
-	rows, err := q.db.QueryContext(ctx, listHourlyActivity, arg.FromHour, arg.ToHour, arg.UserID)
+	rows, err := q.db.QueryContext(ctx, listHourlyActivity,
+		arg.TenantID,
+		arg.FromHour,
+		arg.ToHour,
+		arg.UserID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -90,9 +96,9 @@ func (q *Queries) PruneHourlyUsage(ctx context.Context, beforeHour int64) error 
 }
 
 const recordHourlyUsage = `-- name: RecordHourlyUsage :exec
-INSERT INTO usage_hourly(hour,user_id,requests,input_tokens,output_tokens,input_reported,output_reported)
-VALUES(?1,?2,?3,?4,?5,?6,?7)
-ON CONFLICT(hour,user_id) DO UPDATE SET
+INSERT INTO usage_hourly(tenant_id,hour,user_id,requests,input_tokens,output_tokens,input_reported,output_reported)
+VALUES((SELECT tenant_id FROM account_groups WHERE id=?1),?2,?3,?4,?5,?6,?7,?8)
+ON CONFLICT(tenant_id,hour,user_id) DO UPDATE SET
 requests=usage_hourly.requests+excluded.requests,
 input_tokens=usage_hourly.input_tokens+excluded.input_tokens,
 output_tokens=usage_hourly.output_tokens+excluded.output_tokens,
@@ -101,6 +107,7 @@ output_reported=usage_hourly.output_reported+excluded.output_reported
 `
 
 type RecordHourlyUsageParams struct {
+	GroupID        int64
 	Hour           int64
 	UserID         int64
 	Requests       int64
@@ -112,6 +119,7 @@ type RecordHourlyUsageParams struct {
 
 func (q *Queries) RecordHourlyUsage(ctx context.Context, arg RecordHourlyUsageParams) error {
 	_, err := q.db.ExecContext(ctx, recordHourlyUsage,
+		arg.GroupID,
 		arg.Hour,
 		arg.UserID,
 		arg.Requests,

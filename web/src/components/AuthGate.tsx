@@ -4,8 +4,10 @@ import { LoaderCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { authOptions } from '@/lib/auth'
 import { canAccess } from '@/lib/access'
+import { selectedWorkspace } from '@/lib/workspace'
 import { Forbidden } from '@/pages/Forbidden'
 import { AuthShell } from './AuthShell'
+import { WorkspaceChooser } from './WorkspaceChooser'
 import { Layout } from './Layout'
 import { Button } from './ui/Button'
 
@@ -45,10 +47,17 @@ export function AuthGate() {
     )
   if (!query.data.initialized)
     return isSetup ? <Outlet /> : <Navigate to="/setup" replace />
+  if (query.data.needs_workspace) return <WorkspaceChooser />
   if (!query.data.user)
     return path === '/login' ? <Outlet /> : <Navigate to="/login" replace />
   if (isSetup || path === '/login') return <Navigate to="/" replace />
-  if (!canAccess(path, query.data.user.role))
+  if (
+    !canAccess(
+      path,
+      query.data.user.role,
+      query.data.user.id === 1 && selectedWorkspace() === 1,
+    )
+  )
     return (
       <Layout>
         <Forbidden />

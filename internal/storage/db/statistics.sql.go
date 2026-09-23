@@ -11,19 +11,29 @@ import (
 
 const canTrackStatisticsModel = `-- name: CanTrackStatisticsModel :one
 SELECT CAST(
- EXISTS(SELECT 1 FROM usage_daily s WHERE s.day=?1 AND s.user_id=?2 AND s.model=?3)
- OR (SELECT COUNT(DISTINCT s.model) FROM usage_daily s WHERE s.day=?1 AND s.user_id=?2 AND s.model!='[other models]')<64
+ EXISTS(SELECT 1 FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
+ WHERE g.tenant_id=(SELECT target.tenant_id FROM account_groups target WHERE target.id=?1)
+ AND s.day=?2 AND s.user_id=?3 AND s.model=?4)
+ OR (SELECT COUNT(DISTINCT s.model) FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
+ WHERE g.tenant_id=(SELECT target.tenant_id FROM account_groups target WHERE target.id=?1)
+ AND s.day=?2 AND s.user_id=?3 AND s.model!='[other models]')<64
 AS INTEGER)
 `
 
 type CanTrackStatisticsModelParams struct {
-	Day    int64
-	UserID int64
-	Model  string
+	GroupID int64
+	Day     int64
+	UserID  int64
+	Model   string
 }
 
 func (q *Queries) CanTrackStatisticsModel(ctx context.Context, arg CanTrackStatisticsModelParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, canTrackStatisticsModel, arg.Day, arg.UserID, arg.Model)
+	row := q.db.QueryRowContext(ctx, canTrackStatisticsModel,
+		arg.GroupID,
+		arg.Day,
+		arg.UserID,
+		arg.Model,
+	)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -54,14 +64,15 @@ CAST(COALESCE(SUM(s.cached_tokens),0) AS INTEGER) AS cached_tokens,
 CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
-FROM usage_daily s
-WHERE s.day>=?1 AND s.day<?2 AND (s.user_id=?3 OR ?3=0)
+FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
+WHERE g.tenant_id=?1 AND s.day>=?2 AND s.day<?3 AND (s.user_id=?4 OR ?4=0)
 `
 
 type GetStatisticsTotalsParams struct {
-	FromDay int64
-	ToDay   int64
-	UserID  int64
+	TenantID int64
+	FromDay  int64
+	ToDay    int64
+	UserID   int64
 }
 
 type GetStatisticsTotalsRow struct {
@@ -81,7 +92,12 @@ type GetStatisticsTotalsRow struct {
 }
 
 func (q *Queries) GetStatisticsTotals(ctx context.Context, arg GetStatisticsTotalsParams) (GetStatisticsTotalsRow, error) {
-	row := q.db.QueryRowContext(ctx, getStatisticsTotals, arg.FromDay, arg.ToDay, arg.UserID)
+	row := q.db.QueryRowContext(ctx, getStatisticsTotals,
+		arg.TenantID,
+		arg.FromDay,
+		arg.ToDay,
+		arg.UserID,
+	)
 	var i GetStatisticsTotalsRow
 	err := row.Scan(
 		&i.Requests,
@@ -117,13 +133,14 @@ CAST(COALESCE(SUM(s.cached_tokens),0) AS INTEGER) AS cached_tokens,
 CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
-FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id LEFT JOIN account_groups g ON g.id=s.group_id
-WHERE s.day>=?2 AND s.day<?3 AND (s.user_id=?4 OR ?4=0)
-GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT ?5
+FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id JOIN account_groups g ON g.id=s.group_id
+WHERE g.tenant_id=?2 AND s.day>=?3 AND s.day<?4 AND (s.user_id=?5 OR ?5=0)
+GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT ?6
 `
 
 type ListStatisticsParams struct {
 	Dimension string
+	TenantID  int64
 	FromDay   int64
 	ToDay     int64
 	UserID    int64
@@ -151,6 +168,7 @@ type ListStatisticsRow struct {
 func (q *Queries) ListStatistics(ctx context.Context, arg ListStatisticsParams) ([]ListStatisticsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listStatistics,
 		arg.Dimension,
+		arg.TenantID,
 		arg.FromDay,
 		arg.ToDay,
 		arg.UserID,

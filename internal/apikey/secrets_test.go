@@ -39,14 +39,14 @@ func TestEncryptedKeyDisclosureOwnershipAndLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(base, "synthetic-admin", "synthetic-pass"); err != nil {
+	if _, err := identity.Setup(base, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	member, err := identity.CreateMember(base, "synthetic-member", "synthetic-pass")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := audit.WithActor(base, audit.Actor{ID: member.ID, Username: member.Username, Role: "member", Source: "user"})
+	ctx := audit.WithActor(base, audit.Actor{TenantID: 1, ID: member.ID, Username: member.Username, Role: "member", Source: "user"})
 	keyPath := filepath.Join(directory, "credentials.key")
 	cipher, err := vault.Open(keyPath, true)
 	if err != nil {
@@ -156,7 +156,7 @@ func TestLegacyKeysAndCorruptSecretsFailDisclosure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	keys := newTestKeys(t, connection)

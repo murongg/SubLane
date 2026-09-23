@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/tenants"
 )
 
 const sessionCookie = "sublane_session"
@@ -21,6 +22,8 @@ const sessionCookie = "sublane_session"
 type authHTTP struct {
 	audit     *audit.Service
 	service   *auth.Service
+	tenants   *tenants.Service
+	tenantID  int64
 	publicURL string
 	limiter   *loginLimiter
 }
@@ -28,6 +31,12 @@ type authHTTP struct {
 type credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type setupCredentials struct {
+	Username      string `json:"username"`
+	Password      string `json:"password"`
+	WorkspaceName string `json:"workspace_name"`
 }
 
 func (h *authHTTP) register(router chi.Router) {
@@ -140,7 +149,7 @@ func decodeJSONLimit(w http.ResponseWriter, r *http.Request, into any, limitByte
 }
 
 func (h *authHTTP) state(w http.ResponseWriter, r *http.Request) {
-	state, err := h.service.State(r.Context(), token(r))
+	state, err := h.stateForTenant(r.Context(), token(r))
 	if err != nil {
 		authError(w, err)
 		return
@@ -148,16 +157,58 @@ func (h *authHTTP) state(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, state)
 }
 
+func (h *authHTTP) stateForTenant(ctx context.Context, sessionToken string) (auth.State, error) {
+	state, err := h.service.State(ctx, sessionToken)
+	if err != nil || state.User == nil {
+		return state, err
+	}
+	if h.tenants == nil {
+		if h.tenantID > 1 {
+			state.User = nil
+			state.NeedsWorkspace = true
+		}
+		return state, nil
+	}
+	membership, active, err := h.tenants.Membership(ctx, h.tenantID, state.User.ID)
+	if err != nil {
+		return auth.State{}, err
+	}
+	if !active {
+		state.User = nil
+		state.NeedsWorkspace = true
+		return state, nil
+	}
+	if membership.Role == tenants.RoleOwner || membership.Role == tenants.RoleAdmin {
+		state.User.Role = auth.RoleAdmin
+	} else {
+		state.User.Role = auth.RoleMember
+	}
+	workspaces, err := h.tenants.List(ctx, state.User.ID)
+	if err != nil {
+		return auth.State{}, err
+	}
+	state.WorkspaceCount = len(workspaces)
+	return state, nil
+}
+
 func (h *authHTTP) authenticate(w http.ResponseWriter, r *http.Request, setup bool) {
 	var input credentials
-	if !decodeJSON(w, r, &input) {
+	var workspaceName string
+	if setup {
+		var initial setupCredentials
+		if !decodeJSON(w, r, &initial) {
+			return
+		}
+		input = credentials{Username: initial.Username, Password: initial.Password}
+		workspaceName = initial.WorkspaceName
+	} else if !decodeJSON(w, r, &input) {
 		return
 	}
 	var session auth.Session
 	var err error
 	status := 200
 	if setup {
-		session, err = h.service.Setup(r.Context(), input.Username, input.Password)
+		session, err = h.service.Setup(r.Context(), input.Username, input.Password, workspaceName)
 		status = 201
 	} else {
 		session, err = h.service.Login(r.Context(), input.Username, input.Password)
@@ -166,8 +217,18 @@ func (h *authHTTP) authenticate(w http.ResponseWriter, r *http.Request, setup bo
 		authError(w, err)
 		return
 	}
+	scoped, err := h.stateForTenant(r.Context(), session.Token)
+	if err != nil {
+		authError(w, err)
+		return
+	}
+	if scoped.User == nil && !scoped.NeedsWorkspace {
+		_ = h.service.Revoke(r.Context(), session.Token)
+		writeJSON(w, 403, map[string]string{"error": "forbidden"})
+		return
+	}
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: session.Token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: h.secure(r), MaxAge: int(auth.SessionTTL.Seconds()), Expires: session.ExpiresAt})
-	writeJSON(w, status, auth.State{Initialized: true, User: &session.User})
+	writeJSON(w, status, scoped)
 }
 
 func (h *authHTTP) logout(w http.ResponseWriter, r *http.Request) {
@@ -205,6 +266,18 @@ func requireAdminRole(next http.Handler) http.Handler {
 	})
 }
 
+func requirePlatformAdmin(tenantID int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if tenantID != 1 || sessionUser(r).ID != 1 {
+				writeJSON(w, 403, map[string]string{"error": "forbidden"})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func (h *authHTTP) requireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !h.available(w) {
@@ -213,7 +286,7 @@ func (h *authHTTP) requireUser(next http.Handler) http.Handler {
 		if r.Method != "GET" && r.Method != "HEAD" && !h.sameOrigin(w, r) {
 			return
 		}
-		state, err := h.service.State(r.Context(), token(r))
+		state, err := h.stateForTenant(r.Context(), token(r))
 		if err != nil {
 			authError(w, err)
 			return
@@ -223,7 +296,7 @@ func (h *authHTTP) requireUser(next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), sessionUserKey{}, *state.User)
-		ctx = audit.WithActor(ctx, audit.Actor{ID: state.User.ID, Username: state.User.Username, Role: string(state.User.Role), Source: "user"})
+		ctx = audit.WithActor(ctx, audit.Actor{TenantID: h.tenantID, ID: state.User.ID, Username: state.User.Username, Role: string(state.User.Role), Source: "user"})
 		h.auditRequest(next, w, r.WithContext(ctx))
 	})
 }

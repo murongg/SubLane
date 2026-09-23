@@ -3,14 +3,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LoaderCircle, Plus, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getMembers, setMemberEnabled } from '@/lib/members'
+import { authOptions } from '@/lib/auth'
+import { selectedWorkspace } from '@/lib/workspace'
 import { Button } from '@/components/ui/Button'
 import { Status } from '@/components/Status'
 import { CreateMember } from '@/components/CreateMember'
+import { GroupAccess } from '@/components/GroupAccess'
 import { MemberActions } from '@/components/MemberActions'
 
 export function Members() {
   const { t, i18n } = useTranslation()
   const client = useQueryClient()
+  const session = useQuery(authOptions())
+  const canResetPasswords =
+    session.data?.user?.id === 1 && selectedWorkspace() === 1
   const [cursors, setCursors] = useState([0])
   const cursor = cursors[cursors.length - 1]
   const [creating, setCreating] = useState(false)
@@ -161,9 +167,14 @@ export function Members() {
                           )}
                         {t(member.enabled ? 'disableMember' : 'enableMember')}
                       </Button>
+                      <GroupAccess member={member} />
                       <MemberActions
                         member={member}
-                        onPasswordReset={() => setResetName(member.username)}
+                        onPasswordReset={
+                          canResetPasswords
+                            ? () => setResetName(member.username)
+                            : undefined
+                        }
                       />
                     </div>
                   </td>

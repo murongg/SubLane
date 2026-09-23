@@ -1,27 +1,16 @@
--- name: ListAllocationTeams :many
-SELECT * FROM allocation_teams ORDER BY id;
--- name: GetAllocationTeam :one
-SELECT * FROM allocation_teams WHERE id=?;
--- name: CreateAllocationTeam :execlastid
-INSERT INTO allocation_teams(name,enabled,created_at) VALUES(?,?,?);
--- name: UpdateAllocationTeam :exec
-UPDATE allocation_teams SET name=?,enabled=? WHERE id=?;
--- name: ListAllocationTeamMembers :many
-SELECT user_id FROM allocation_team_members WHERE team_id=? ORDER BY user_id;
--- name: ClearAllocationTeamMembers :exec
-DELETE FROM allocation_team_members WHERE team_id=?;
--- name: AddAllocationTeamMember :exec
-INSERT INTO allocation_team_members(team_id,user_id) VALUES(?,?);
 -- name: ListAllocationSchemes :many
-SELECT s.*,t.name AS team_name,g.name AS group_name FROM allocation_schemes s
-JOIN allocation_teams t ON t.id=s.team_id JOIN account_groups g ON g.id=s.group_id ORDER BY s.id;
+SELECT s.*,g.name AS group_name FROM allocation_schemes s
+JOIN account_groups g ON g.id=s.group_id WHERE g.tenant_id=sqlc.arg(tenant_id) ORDER BY s.id;
 -- name: GetAllocationScheme :one
-SELECT s.*,t.name AS team_name,g.name AS group_name FROM allocation_schemes s
-JOIN allocation_teams t ON t.id=s.team_id JOIN account_groups g ON g.id=s.group_id WHERE s.id=?;
+SELECT s.*,g.name AS group_name FROM allocation_schemes s
+JOIN account_groups g ON g.id=s.group_id WHERE s.id=?;
+-- name: GetTenantAllocationScheme :one
+SELECT s.*,g.name AS group_name FROM allocation_schemes s
+JOIN account_groups g ON g.id=s.group_id WHERE s.id=sqlc.arg(id) AND g.tenant_id=sqlc.arg(tenant_id);
 -- name: GetPoolAllocation :one
 SELECT id FROM allocation_schemes WHERE group_id=?;
 -- name: CreateAllocationScheme :execlastid
-INSERT INTO allocation_schemes(name,team_id,group_id,enabled,created_at) VALUES(?,?,?,?,?);
+INSERT INTO allocation_schemes(name,group_id,enabled,created_at) VALUES(?,?,?,?);
 -- name: UpdateAllocationScheme :exec
 UPDATE allocation_schemes SET name=?,enabled=? WHERE id=?;
 -- name: CurrentAllocationRevision :one
@@ -38,9 +27,10 @@ DELETE FROM allocation_revisions WHERE scheme_id=? AND effective_at>?;
 SELECT a.id,a.provider,a.models_revision,(SELECT count(*) FROM group_accounts other WHERE other.account_id=a.id AND other.group_id<>ga.group_id) AS shared
 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id WHERE ga.group_id=? ORDER BY a.id;
 -- name: CanUseAllocation :one
-SELECT EXISTS(SELECT 1 FROM allocation_schemes s JOIN allocation_teams t ON t.id=s.team_id
-JOIN allocation_team_members m ON m.team_id=t.id JOIN users u ON u.id=m.user_id JOIN account_groups g ON g.id=s.group_id
-WHERE s.id=? AND m.user_id=? AND s.enabled=1 AND t.enabled=1 AND u.enabled=1 AND g.enabled=1);
+SELECT EXISTS(SELECT 1 FROM allocation_schemes s
+JOIN group_members m ON m.group_id=s.group_id
+JOIN users u ON u.id=m.user_id JOIN account_groups g ON g.id=s.group_id
+WHERE s.id=? AND m.user_id=? AND s.enabled=1 AND u.enabled=1 AND g.enabled=1);
 -- name: BindKeyAllocation :exec
 INSERT INTO allocation_keys(key_id,scheme_id) VALUES(?,?);
 -- name: GetKeyAllocation :one
@@ -53,7 +43,9 @@ SELECT * FROM allocation_entries WHERE request_id=?;
 -- name: FinishAllocationEntry :exec
 UPDATE allocation_entries SET finished_at=?,state=?,input_tokens=?,output_tokens=?,cached_tokens=?,cost=?,manual=? WHERE request_id=?;
 -- name: RecoverAllocationEntries :exec
-UPDATE allocation_entries SET state='pending' WHERE state='active';
+UPDATE allocation_entries SET state='pending' WHERE state='active' AND EXISTS(
+SELECT 1 FROM allocation_schemes s JOIN account_groups g ON g.id=s.group_id
+WHERE s.id=allocation_entries.scheme_id AND g.tenant_id=sqlc.arg(tenant_id));
 -- name: AllocationMemberUsage :one
 SELECT CAST(COALESCE(sum(cost),0) AS INTEGER) AS used,CAST(COALESCE(sum(input_tokens+output_tokens),0) AS INTEGER) AS tokens
 FROM allocation_entries WHERE scheme_id=? AND user_id=? AND window_start=? AND mode=?;
@@ -133,12 +125,3 @@ SELECT EXISTS(SELECT 1 FROM group_accounts ga JOIN allocation_schemes s ON s.gro
 
 -- name: RevalidateAllocationWindow :exec
 UPDATE allocation_windows SET account_revision=? WHERE id=?;
-
--- name: ListAllocationTeamGroups :many
-SELECT tg.group_id FROM allocation_team_groups tg WHERE tg.team_id=?
-AND NOT EXISTS(SELECT 1 FROM allocation_schemes s WHERE s.group_id=tg.group_id)
-ORDER BY tg.group_id;
--- name: ClearAllocationTeamGroups :exec
-DELETE FROM allocation_team_groups WHERE team_id=?;
--- name: AddAllocationTeamGroup :exec
-INSERT INTO allocation_team_groups(team_id,group_id) VALUES(?,?);

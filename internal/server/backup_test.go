@@ -31,7 +31,7 @@ func TestBackupManagementExportsVerifiesAndPreparesIsolatedRestore(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass")
+	admin, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace")
 	if err != nil {
 		t.Fatal(err)
 	}

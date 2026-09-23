@@ -45,7 +45,7 @@ export function AllocationReport({ id }: { id: number }) {
         <div>
           <h2 className="break-words text-lg font-semibold">{d.name}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {d.team_name} · {d.group_name} · {t(modeLabels[d.config.mode])}
+            {d.group_name} · {t(modeLabels[d.config.mode])}
           </p>
         </div>
         <Button

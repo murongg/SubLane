@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/audit"
+	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/storage"
 )
 
@@ -19,6 +20,13 @@ func TestVersionPrecedencePersistenceAndMonotonicSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-password", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
 	clock := atomic.Int64{}
 	clock.Store(1900000000)
 	latest := "0.200.0"
@@ -39,7 +47,7 @@ func TestVersionPrecedencePersistenceAndMonotonicSync(t *testing.T) {
 	if s.Current() != "0.200.0" || s.View().Source != "synced" {
 		t.Fatal(s.View())
 	}
-	actor := audit.WithActor(ctx, audit.Actor{ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
+	actor := audit.WithActor(ctx, audit.Actor{TenantID: 1, ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
 	if _, err := s.Save(actor, Config{ManualVersion: "0.150.0", AutoSync: true}); err != nil {
 		t.Fatal(err)
 	}

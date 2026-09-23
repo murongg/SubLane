@@ -2,6 +2,8 @@ package audit
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -9,13 +11,54 @@ import (
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
+func seedAuditTenant(t *testing.T, connection *sql.DB, tenantID int64) {
+	t.Helper()
+	role := "member"
+	if tenantID == 1 {
+		role = "admin"
+	}
+	if _, err := connection.Exec(`INSERT INTO users(id,username,role,password_hash,enabled,created_at)
+		VALUES(?,?,?,'synthetic-hash',1,1)`, tenantID, fmt.Sprintf("synthetic-user-%d", tenantID), role); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connection.Exec(`INSERT INTO tenants(id,name,owner_user_id,created_at) VALUES(?,?,?,1)`, tenantID, "Synthetic workspace", tenantID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connection.Exec(`INSERT INTO memberships(tenant_id,user_id,role,created_at) VALUES(?,?,'owner',1)`, tenantID, tenantID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestManagementAuditIsScopedToWorkspace(t *testing.T) {
+	connection, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	seedAuditTenant(t, connection, 1)
+	seedAuditTenant(t, connection, 2)
+	for _, tenantID := range []int64{1, 2} {
+		ctx := WithActor(context.Background(), Actor{TenantID: tenantID, ID: tenantID, Username: "synthetic-actor", Role: "admin", Source: "user"})
+		if err := Record(ctx, db.New(connection), "group.create", "group", ID(tenantID)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tenantID := range []int64{1, 2} {
+		page, err := NewForTenant(connection, tenantID).List(context.Background(), Filter{})
+		if err != nil || len(page.Events) != 1 || page.Events[0].ResourceID != ID(tenantID) {
+			t.Fatalf("management audit leaked across workspaces: %+v, %v", page, err)
+		}
+	}
+}
+
 func TestAuditTransactionAndBoundedListing(t *testing.T) {
-	ctx := WithActor(context.Background(), Actor{ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
+	ctx := WithActor(context.Background(), Actor{TenantID: 1, ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
 	connection, err := storage.Open(ctx, filepath.Join(t.TempDir(), "audit.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer connection.Close()
+	seedAuditTenant(t, connection, 1)
 	q := db.New(connection)
 	tx, err := connection.BeginTx(ctx, nil)
 	if err != nil {
@@ -71,12 +114,13 @@ func TestAuditTransactionAndBoundedListing(t *testing.T) {
 }
 
 func TestAuditCountLimitPreservesMonotonicCursor(t *testing.T) {
-	ctx := WithActor(context.Background(), Actor{ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
+	ctx := WithActor(context.Background(), Actor{TenantID: 1, ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
 	connection, err := storage.Open(ctx, filepath.Join(t.TempDir(), "limit.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer connection.Close()
+	seedAuditTenant(t, connection, 1)
 	_, err = connection.Exec(`WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<10001)
  INSERT INTO audit_events(actor_id,actor_name,actor_role,source,action,resource,resource_id,outcome,created_at)
  SELECT 1,'synthetic-admin','admin','user','key.create','key',CAST(x AS TEXT),'success',unixepoch() FROM n`)

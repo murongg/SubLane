@@ -28,15 +28,12 @@ func TestAllocationManagementRolesAndPersonalIsolation(t *testing.T) {
 	adminCookie := &http.Cookie{Name: sessionCookie, Value: owner.Token}
 	memberCookie := &http.Cookie{Name: sessionCookie, Value: member.Token}
 	h := f.server.Config.Handler
-	body := map[string]any{"name": "Synthetic team", "enabled": true, "member_ids": []int64{f.userID}}
-	if r := request(h, "POST", "/api/teams", "http://example.test", body, memberCookie); r.Code != 403 {
+	body := map[string]any{"name": "Synthetic allocation"}
+	if r := request(h, "POST", "/api/allocations", "http://example.test", body, memberCookie); r.Code != 403 {
 		t.Fatal("member management", r.Code)
 	}
-	if r := request(h, "POST", "/api/teams", "http://foreign.example.test", body, adminCookie); r.Code != 403 {
+	if r := request(h, "POST", "/api/allocations", "http://foreign.example.test", body, adminCookie); r.Code != 403 {
 		t.Fatal("origin", r.Code)
-	}
-	if r := request(h, "POST", "/api/teams", "http://example.test", body, adminCookie); r.Code != 201 {
-		t.Fatal("team create", r.Code, r.Body.String())
 	}
 	if r := request(h, "GET", "/api/me/allocations?user_id=1", "", nil, memberCookie); r.Code != 200 || r.Body.String() != "{\"schemes\":[]}\n" {
 		t.Fatal("own scope", r.Code, r.Body.String())
@@ -65,14 +62,15 @@ func TestSchemeKeysIsolateTeamsAcrossHTTPAndWebSocket(t *testing.T) {
 	manager := f.forwarding.Allocations()
 	secrets := []string{}
 	schemeIDs := []int64{}
+	grantedPools := []int64{}
 	for i, account := range []string{original[0].ID, second.ID} {
 		name := fmt.Sprintf("Synthetic %d", i)
 		pool, err := f.groups.Save(ctx, 0, groups.Input{Name: name, Enabled: true, AccountIDs: []string{account}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		team, err := manager.SaveTeam(ctx, 0, allocations.TeamInput{Name: name, Enabled: true, MemberIDs: []int64{f.userID}})
-		if err != nil {
+		grantedPools = append(grantedPools, pool.ID)
+		if err := f.groups.SetMemberGroups(ctx, f.userID, grantedPools); err != nil {
 			t.Fatal(err)
 		}
 		config := allocations.Config{Mode: "tokens", Period: "day", Members: []allocations.Share{{UserID: f.userID, Limit: 5}}}
@@ -81,7 +79,7 @@ func TestSchemeKeysIsolateTeamsAcrossHTTPAndWebSocket(t *testing.T) {
 			config.Members[0].Limit = 18
 			config.Rates = []allocations.Rate{{Model: "synthetic-model", Input: 2000000, Cached: 1000000, Output: 6000000}}
 		}
-		scheme, err := manager.SaveScheme(ctx, 0, allocations.SchemeInput{Name: name, TeamID: team.ID, GroupID: pool.ID, Enabled: true, Config: config})
+		scheme, err := manager.SaveScheme(ctx, 0, allocations.SchemeInput{Name: name, GroupID: pool.ID, Enabled: true, Config: config})
 		if err != nil {
 			t.Fatal(err)
 		}

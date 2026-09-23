@@ -6,7 +6,7 @@
 </h1>
 
 <p align="center">
-  A minimal, self-hosted subscription gateway for internal teams. Codex first.
+  A lightweight, multi-workspace subscription gateway. Codex first.
 </p>
 
 <p align="center">
@@ -21,13 +21,13 @@
   <a href="README.zh-CN.md">简体中文</a> · <a href="https://github.com/murongg/SubLane">Repository</a> · <a href="brand/README.md">Brand materials</a>
 </p>
 
-SubLane brings your team's AI subscriptions into one self-hosted gateway. It runs as a single Go service with SQLite and a built-in web dashboard.
+SubLane brings AI subscriptions into one gateway with isolated workspaces for different teams. It runs as a single Go service with SQLite and a built-in web dashboard.
 
 ## Features
 
 - Codex, Claude and Antigravity accounts through OAuth or credential import.
 - OpenAI-compatible APIs, [native Claude Messages and Gemini generation](https://sublane.dev/docs/protocols), with HTTP/SSE and Responses WebSocket support.
-- Team members, personal API keys and account-group permissions.
+- Isolated workspaces with their own members, accounts, pools, personal API keys, usage and audit records.
 - Account pooling, concurrency limits, cooldowns and Codex quota awareness.
 - Request diagnostics, usage charts, and backup and restore.
 - English and Simplified Chinese, with light and dark themes.
@@ -40,7 +40,7 @@ With Docker, Compose, curl and jq installed, run:
 curl -fsSL https://raw.githubusercontent.com/murongg/SubLane/main/scripts/install.sh | bash
 ```
 
-Open http://127.0.0.1:8080, create the administrator, connect a subscription and add it to an account pool, then create a personal key. Follow [First request](https://sublane.dev/docs/quickstart) to complete the connection; team sharing and usage limits can wait until you need them.
+Open http://127.0.0.1:8080, create the administrator, and name your first workspace in the guided setup. Connect a subscription, add it to an account pool, then create a personal key. Follow [First request](https://sublane.dev/docs/quickstart) to complete the connection; additional workspaces and usage limits can wait until you need them.
 
 The script installs the latest stable release, or the newest prerelease if no stable release exists, in `./sublane`. Data stays in a Docker volume; existing directories are left unchanged. For options, manual Compose deployment, HTTPS and upgrades, see the [deployment guide](https://sublane.dev/docs/deployment).
 

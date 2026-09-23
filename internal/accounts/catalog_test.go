@@ -20,6 +20,7 @@ func TestCatalogPersistsAndRejectsObsoleteAuthorization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	seedInitialTenant(t, connection)
 	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
 	if err != nil {
 		t.Fatal(err)
@@ -91,6 +92,7 @@ func TestCatalogRejectsInvalidModelsWithoutReplacingSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer connection.Close()
+	seedInitialTenant(t, connection)
 	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
 	if err != nil {
 		t.Fatal(err)

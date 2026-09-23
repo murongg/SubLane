@@ -14,6 +14,7 @@ import (
 
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/storage"
+	"github.com/murongg/SubLane/internal/tenants"
 )
 
 func authFixture(t *testing.T, publicURL string) http.Handler {
@@ -28,7 +29,7 @@ func authFixture(t *testing.T, publicURL string) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(Options{Auth: a, PublicURL: publicURL, Ping: db.PingContext, StartedAt: time.Now(), Version: "test"})
+	return New(Options{Auth: a, Tenants: tenants.New(db), PublicURL: publicURL, Ping: db.PingContext, StartedAt: time.Now(), Version: "test"})
 }
 
 func request(h http.Handler, method, path, origin string, body any, cookie *http.Cookie) *httptest.ResponseRecorder {
@@ -62,7 +63,7 @@ func TestAuthenticationHTTPFlow(t *testing.T) {
 	if got := request(h, "GET", "/api/system", "", nil, nil).Code; got != 401 {
 		t.Fatalf("unprotected system: %d", got)
 	}
-	body := map[string]string{"username": "admin-test", "password": "fake password 42"}
+	body := map[string]string{"username": "admin-test", "password": "fake password 42", "workspace_name": "Synthetic workspace"}
 	setup := request(h, "POST", "/api/auth/setup", "http://example.test", body, nil)
 	if setup.Code != 201 {
 		t.Fatalf("setup: %d %s", setup.Code, setup.Body.String())
@@ -103,9 +104,33 @@ func TestAuthenticationHTTPFlow(t *testing.T) {
 	}
 }
 
+func TestSetupRequiresNamedWorkspace(t *testing.T) {
+	h := authFixture(t, "")
+	credentials := map[string]string{"username": "synthetic-admin", "password": "synthetic-password"}
+	if result := request(h, http.MethodPost, "/api/auth/setup", "http://example.test", credentials, nil); result.Code != http.StatusBadRequest {
+		t.Fatalf("setup without workspace name: %d %s", result.Code, result.Body.String())
+	}
+	credentials["workspace_name"] = "  "
+	if result := request(h, http.MethodPost, "/api/auth/setup", "http://example.test", credentials, nil); result.Code != http.StatusBadRequest {
+		t.Fatalf("setup with blank workspace name: %d %s", result.Code, result.Body.String())
+	}
+	if state := request(h, http.MethodGet, "/api/auth/state", "", nil, nil); !strings.Contains(state.Body.String(), `"initialized":false`) {
+		t.Fatalf("rejected workspace initialized the instance: %s", state.Body.String())
+	}
+	credentials["workspace_name"] = "  Synthetic studio  "
+	created := request(h, http.MethodPost, "/api/auth/setup", "http://example.test", credentials, nil)
+	if created.Code != http.StatusCreated || len(created.Result().Cookies()) != 1 {
+		t.Fatalf("named workspace setup: %d %s", created.Code, created.Body.String())
+	}
+	listed := request(h, http.MethodGet, "/api/tenants", "", nil, created.Result().Cookies()[0])
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"name":"Synthetic studio"`) {
+		t.Fatalf("first workspace name was not persisted: %d %s", listed.Code, listed.Body.String())
+	}
+}
+
 func TestAuthOriginAndBodyProtection(t *testing.T) {
 	h := authFixture(t, "")
-	body := map[string]string{"username": "admin-test", "password": "fake password 42"}
+	body := map[string]string{"username": "admin-test", "password": "fake password 42", "workspace_name": "Synthetic workspace"}
 	for _, origin := range []string{"", "null", "https://evil.example.test", "http://example.test.evil.test"} {
 		if got := request(h, "POST", "/api/auth/setup", origin, body, nil).Code; got != 403 {
 			t.Fatalf("origin %q accepted: %d", origin, got)
@@ -142,7 +167,7 @@ func TestAuthOriginAndBodyProtection(t *testing.T) {
 
 func TestConfiguredOriginUsesSecureCookie(t *testing.T) {
 	h := authFixture(t, "https://gateway.example.test")
-	body := map[string]string{"username": "admin-test", "password": "fake password 42"}
+	body := map[string]string{"username": "admin-test", "password": "fake password 42", "workspace_name": "Synthetic workspace"}
 	if got := request(h, "POST", "/api/auth/setup", "http://example.test", body, nil).Code; got != 403 {
 		t.Fatal("proxy backend origin trusted")
 	}

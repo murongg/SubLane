@@ -36,6 +36,13 @@ func newQuotaFixture(t *testing.T) *quotaFixture {
 	f := &quotaFixture{path: filepath.Join(t.TempDir(), "quota.db"), keyPath: filepath.Join(t.TempDir(), "key")}
 	f.clock.Store(time.Now().Unix())
 	f.open(t)
+	identity, err := auth.New(f.connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(context.Background(), "synthetic-admin", "synthetic-password", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
 	row, err := f.accounts.Authorize(context.Background(), "Synthetic subscription", accounts.Credential{AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", AccountID: "synthetic-account", ExpiresAt: time.Now().Add(24 * time.Hour).Unix()}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -267,13 +274,6 @@ func TestTrafficQuotaRefreshDoesNotWaitAndBoundsWorkers(t *testing.T) {
 	f := newQuotaFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	identity, err := auth.New(f.connection)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
-		t.Fatal(err)
-	}
 	for _, id := range []string{"synthetic-second", "synthetic-third"} {
 		if _, err := f.accounts.Authorize(ctx, id, accounts.Credential{AccountID: id, AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", ExpiresAt: time.Now().Add(time.Hour).Unix()}, ""); err != nil {
 			t.Fatal(err)

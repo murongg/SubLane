@@ -16,11 +16,12 @@ import {
 import { useTranslation } from 'react-i18next'
 import { authOptions } from '@/lib/auth'
 import { canAccess } from '@/lib/access'
+import { selectedWorkspace } from '@/lib/workspace'
 import { LanguageSelect, ThemeSelect } from './Preferences'
 import { Logo } from './Logo'
 import { Session } from './Session'
+import { WorkspaceSelect } from './WorkspaceSelect'
 import { Button } from './ui/Button'
-import { Separator } from './ui/Separator'
 import {
   Sidebar,
   SidebarContent,
@@ -56,7 +57,6 @@ const navigation = [
     items: [
       { to: '/accounts', label: 'accounts', icon: Workflow },
       { to: '/groups', label: 'accountGroups', icon: FolderClosed },
-      { to: '/admin/teams', label: 'personnelTeams', icon: Users },
       { to: '/admin/requests', label: 'allRequests', icon: ListChecks },
       { to: '/admin/usage', label: 'teamUsage', icon: ChartNoAxesCombined },
       { to: '/members', label: 'members', icon: Users },
@@ -160,28 +160,27 @@ function Navigation() {
   const { data } = useQuery(authOptions())
   return (
     <Sidebar className="border-r border-border">
-      <SidebarHeader className="px-4 py-5">
-        <Link
-          to="/"
-          className="flex items-center gap-2.5 rounded-md focus-visible:outline-2 focus-visible:outline-ring"
-          aria-label="SubLane"
-          onClick={() => setOpenMobile(false)}
-        >
-          <Logo />
-          <div>
-            <span className="text-base font-semibold tracking-tight">
-              SubLane
-            </span>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {t('internalGateway')}
-            </p>
-          </div>
-        </Link>
+      <SidebarHeader className="px-3 py-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link
+            to="/"
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-foreground text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [@media(pointer:coarse)]:size-11"
+            aria-label="SubLane"
+            onClick={() => setOpenMobile(false)}
+          >
+            <Logo className="size-6" />
+          </Link>
+          <WorkspaceSelect />
+        </div>
       </SidebarHeader>
       <SidebarContent className="gap-5">
         {navigation.map((group) => {
           const items = group.items.filter(({ to }) =>
-            canAccess(to, data?.user?.role),
+            canAccess(
+              to,
+              data?.user?.role,
+              data?.user?.id === 1 && selectedWorkspace() === 1,
+            ),
           )
           if (!items.length) return null
           return (
@@ -229,10 +228,6 @@ export function Layout({ children }: { children?: ReactNode }) {
         <header className="flex min-h-16 items-center justify-between gap-3 px-4 md:px-6">
           <div className="flex items-center gap-3">
             <SidebarTrigger className="size-7 text-muted-foreground [@media(pointer:coarse)]:size-11" />
-            <Separator orientation="vertical" className="h-6" />
-            <span className="hidden text-sm text-muted-foreground sm:inline">
-              {t('workspace')}
-            </span>
           </div>
           <div className="flex items-center gap-1">
             <LanguageSelect compact />

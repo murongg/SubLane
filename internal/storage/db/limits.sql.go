@@ -10,8 +10,16 @@ import (
 )
 
 const getMemberLimits = `-- name: GetMemberLimits :one
-SELECT id,role,enabled,requests_per_minute,max_concurrency FROM users WHERE id=?1
+SELECT u.id,m.role,u.enabled,m.requests_per_minute,m.max_concurrency
+FROM memberships m JOIN users u ON u.id=m.user_id JOIN tenants t ON t.id=m.tenant_id
+WHERE m.tenant_id=?1 AND m.user_id=?2
+AND m.enabled=1 AND t.status='active'
 `
+
+type GetMemberLimitsParams struct {
+	TenantID int64
+	UserID   int64
+}
 
 type GetMemberLimitsRow struct {
 	ID                int64
@@ -21,8 +29,8 @@ type GetMemberLimitsRow struct {
 	MaxConcurrency    int64
 }
 
-func (q *Queries) GetMemberLimits(ctx context.Context, userID int64) (GetMemberLimitsRow, error) {
-	row := q.db.QueryRowContext(ctx, getMemberLimits, userID)
+func (q *Queries) GetMemberLimits(ctx context.Context, arg GetMemberLimitsParams) (GetMemberLimitsRow, error) {
+	row := q.db.QueryRowContext(ctx, getMemberLimits, arg.TenantID, arg.UserID)
 	var i GetMemberLimitsRow
 	err := row.Scan(
 		&i.ID,
@@ -35,34 +43,46 @@ func (q *Queries) GetMemberLimits(ctx context.Context, userID int64) (GetMemberL
 }
 
 const getMemberWindow = `-- name: GetMemberWindow :one
-SELECT window_start,requests FROM member_rate WHERE user_id=?1
+SELECT window_start,requests FROM member_rate
+WHERE tenant_id=?1 AND user_id=?2
 `
+
+type GetMemberWindowParams struct {
+	TenantID int64
+	UserID   int64
+}
 
 type GetMemberWindowRow struct {
 	WindowStart int64
 	Requests    int64
 }
 
-func (q *Queries) GetMemberWindow(ctx context.Context, userID int64) (GetMemberWindowRow, error) {
-	row := q.db.QueryRowContext(ctx, getMemberWindow, userID)
+func (q *Queries) GetMemberWindow(ctx context.Context, arg GetMemberWindowParams) (GetMemberWindowRow, error) {
+	row := q.db.QueryRowContext(ctx, getMemberWindow, arg.TenantID, arg.UserID)
 	var i GetMemberWindowRow
 	err := row.Scan(&i.WindowStart, &i.Requests)
 	return i, err
 }
 
 const setMemberLimits = `-- name: SetMemberLimits :execrows
-UPDATE users SET requests_per_minute=?1,max_concurrency=?2
-WHERE id=?3 AND role='member'
+UPDATE memberships SET requests_per_minute=?1,max_concurrency=?2
+WHERE tenant_id=?3 AND user_id=?4 AND role='member'
 `
 
 type SetMemberLimitsParams struct {
 	RequestsPerMinute int64
 	MaxConcurrency    int64
+	TenantID          int64
 	UserID            int64
 }
 
 func (q *Queries) SetMemberLimits(ctx context.Context, arg SetMemberLimitsParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, setMemberLimits, arg.RequestsPerMinute, arg.MaxConcurrency, arg.UserID)
+	result, err := q.db.ExecContext(ctx, setMemberLimits,
+		arg.RequestsPerMinute,
+		arg.MaxConcurrency,
+		arg.TenantID,
+		arg.UserID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -70,20 +90,27 @@ func (q *Queries) SetMemberLimits(ctx context.Context, arg SetMemberLimitsParams
 }
 
 const takeMemberRate = `-- name: TakeMemberRate :execrows
-INSERT INTO member_rate(user_id,window_start,requests)
-SELECT ?1,?2,1
-WHERE NOT EXISTS(SELECT 1 FROM member_rate r WHERE r.user_id=?1 AND r.window_start=?2 AND r.requests>=?3)
-ON CONFLICT(user_id) DO UPDATE SET window_start=excluded.window_start,requests=CASE WHEN member_rate.window_start=excluded.window_start THEN member_rate.requests+1 ELSE 1 END
+INSERT INTO member_rate(tenant_id,user_id,window_start,requests)
+SELECT ?1,?2,?3,1
+WHERE NOT EXISTS(SELECT 1 FROM member_rate r WHERE r.tenant_id=?1
+AND r.user_id=?2 AND r.window_start=?3 AND r.requests>=?4)
+ON CONFLICT(tenant_id,user_id) DO UPDATE SET window_start=excluded.window_start,requests=CASE WHEN member_rate.window_start=excluded.window_start THEN member_rate.requests+1 ELSE 1 END
 `
 
 type TakeMemberRateParams struct {
+	TenantID    int64
 	UserID      int64
 	WindowStart int64
 	RateLimit   int64
 }
 
 func (q *Queries) TakeMemberRate(ctx context.Context, arg TakeMemberRateParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, takeMemberRate, arg.UserID, arg.WindowStart, arg.RateLimit)
+	result, err := q.db.ExecContext(ctx, takeMemberRate,
+		arg.TenantID,
+		arg.UserID,
+		arg.WindowStart,
+		arg.RateLimit,
+	)
 	if err != nil {
 		return 0, err
 	}

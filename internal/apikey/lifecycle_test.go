@@ -23,10 +23,10 @@ func TestKeyLifecycleAndExpiryBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
-	ctx = audit.WithActor(ctx, audit.Actor{ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
+	ctx = audit.WithActor(ctx, audit.Actor{TenantID: 1, ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
 	keys := newTestKeys(t, connection)
 	now := time.Now().Unix()
 	keys.now = func() time.Time { return time.Unix(now, 0) }

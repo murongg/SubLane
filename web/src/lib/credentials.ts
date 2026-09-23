@@ -1,10 +1,11 @@
 export type CredentialError = {
-  field: 'username' | 'password' | 'confirm'
+  field: 'username' | 'password' | 'confirm' | 'workspace_name'
   message:
     | 'usernameHint'
     | 'passwordRequired'
     | 'passwordHint'
     | 'passwordMismatch'
+    | 'workspaceNameInvalid'
 }
 
 export function validateCredentials(

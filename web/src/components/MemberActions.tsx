@@ -18,7 +18,7 @@ export function MemberActions({
   onPasswordReset,
 }: {
   member: Member
-  onPasswordReset: () => void
+  onPasswordReset?: () => void
 }) {
   const { t } = useTranslation()
   const [action, setAction] = useState<
@@ -48,10 +48,12 @@ export function MemberActions({
             <Gauge aria-hidden="true" />
             {t('tokenBudgets')}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setAction('password')}>
-            <KeyRound aria-hidden="true" />
-            {t('resetPassword')}
-          </DropdownMenuItem>
+          {onPasswordReset && (
+            <DropdownMenuItem onSelect={() => setAction('password')}>
+              <KeyRound aria-hidden="true" />
+              {t('resetPassword')}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       {action === 'limits' && (
@@ -68,7 +70,7 @@ export function MemberActions({
           returnFocus={focus}
         />
       )}
-      {action === 'password' && (
+      {action === 'password' && onPasswordReset && (
         <PasswordDialog
           member={member}
           onClose={() => setAction(null)}

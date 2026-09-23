@@ -11,7 +11,7 @@ import (
 
 func openVault(ctx context.Context, connection *sql.DB, directory string) (*vault.Vault, error) {
 	q := db.New(connection)
-	accounts, err := q.CountAccounts(ctx)
+	accounts, err := q.CountAllAccounts(ctx)
 	if err != nil {
 		return nil, err
 	}

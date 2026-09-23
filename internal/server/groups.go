@@ -28,6 +28,7 @@ func (h *groupHTTP) register(router chi.Router) {
 	router.Get("/", h.list)
 	router.Post("/", h.create)
 	router.Get("/{id}", h.get)
+	router.Get("/{id}/members", h.poolMembers)
 	router.Get("/{id}/models", h.catalog)
 	router.Patch("/{id}", h.update)
 	router.Get("/members/{id}", h.memberGroups)
@@ -53,6 +54,19 @@ func (h *groupHTTP) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, value)
+}
+func (h *groupHTTP) poolMembers(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil || id <= 0 {
+		groupError(w, groups.ErrInput)
+		return
+	}
+	values, err := h.service.Members(r.Context(), id)
+	if err != nil {
+		groupError(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"members": values})
 }
 func (h *groupHTTP) create(w http.ResponseWriter, r *http.Request) { h.save(w, r, 0) }
 func (h *groupHTTP) update(w http.ResponseWriter, r *http.Request) {

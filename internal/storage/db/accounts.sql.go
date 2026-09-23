@@ -10,24 +10,36 @@ import (
 )
 
 const countAccounts = `-- name: CountAccounts :one
+SELECT count(*) FROM accounts WHERE tenant_id = ?1
+`
+
+func (q *Queries) CountAccounts(ctx context.Context, tenantID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAccounts, tenantID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countAllAccounts = `-- name: CountAllAccounts :one
 SELECT count(*) FROM accounts
 `
 
-func (q *Queries) CountAccounts(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countAccounts)
+func (q *Queries) CountAllAccounts(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAllAccounts)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const createAccount = `-- name: CreateAccount :execrows
-INSERT INTO accounts(id, provider, name, account_id, email, plan, enabled, status, credential, expires_at, created_at, updated_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8, ?9, ?10, ?11)
-ON CONFLICT(provider, account_id) DO NOTHING
+INSERT INTO accounts(id, tenant_id, provider, name, account_id, email, plan, enabled, status, credential, expires_at, created_at, updated_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?9, ?10, ?11, ?12)
+ON CONFLICT(tenant_id, provider, account_id) DO NOTHING
 `
 
 type CreateAccountParams struct {
 	ID         string
+	TenantID   int64
 	Provider   string
 	Name       string
 	AccountID  string
@@ -43,6 +55,7 @@ type CreateAccountParams struct {
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, createAccount,
 		arg.ID,
+		arg.TenantID,
 		arg.Provider,
 		arg.Name,
 		arg.AccountID,
@@ -61,11 +74,16 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (i
 }
 
 const deleteAccount = `-- name: DeleteAccount :execrows
-DELETE FROM accounts WHERE id = ?1
+DELETE FROM accounts WHERE id = ?1 AND tenant_id = ?2
 `
 
-func (q *Queries) DeleteAccount(ctx context.Context, id string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteAccount, id)
+type DeleteAccountParams struct {
+	ID       string
+	TenantID int64
+}
+
+func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteAccount, arg.ID, arg.TenantID)
 	if err != nil {
 		return 0, err
 	}
@@ -73,11 +91,16 @@ func (q *Queries) DeleteAccount(ctx context.Context, id string) (int64, error) {
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at, max_concurrency, models_snapshot, models_revision FROM accounts WHERE id = ?1
+SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at, max_concurrency, models_snapshot, models_revision, tenant_id FROM accounts WHERE id = ?1 AND tenant_id = ?2
 `
 
-func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
-	row := q.db.QueryRowContext(ctx, getAccount, id)
+type GetAccountParams struct {
+	ID       string
+	TenantID int64
+}
+
+func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (Account, error) {
+	row := q.db.QueryRowContext(ctx, getAccount, arg.ID, arg.TenantID)
 	var i Account
 	err := row.Scan(
 		&i.ID,
@@ -95,6 +118,7 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 		&i.MaxConcurrency,
 		&i.ModelsSnapshot,
 		&i.ModelsRevision,
+		&i.TenantID,
 	)
 	return i, err
 }
@@ -102,7 +126,7 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 const listAccounts = `-- name: ListAccounts :many
 SELECT id, provider, name, email, plan, enabled, status, expires_at, created_at, updated_at, max_concurrency,
  (SELECT count(*) FROM group_accounts ga WHERE ga.account_id=accounts.id) AS group_count
-FROM accounts ORDER BY created_at DESC, id DESC LIMIT 100
+FROM accounts WHERE tenant_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 100
 `
 
 type ListAccountsRow struct {
@@ -120,8 +144,8 @@ type ListAccountsRow struct {
 	GroupCount     int64
 }
 
-func (q *Queries) ListAccounts(ctx context.Context) ([]ListAccountsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAccounts)
+func (q *Queries) ListAccounts(ctx context.Context, tenantID int64) ([]ListAccountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAccounts, tenantID)
 	if err != nil {
 		return nil, err
 	}

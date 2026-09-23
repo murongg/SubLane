@@ -11,7 +11,7 @@ import (
 func TestMemberHTTPAuthorizationAndRevocation(t *testing.T) {
 	h := authFixture(t, "")
 	origin := "http://example.test"
-	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "owner-test", "password": "fake password 42"}, nil)
+	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "owner-test", "password": "fake password 42", "workspace_name": "Synthetic workspace"}, nil)
 	if setup.Code != 201 {
 		t.Fatal(setup.Body.String())
 	}
@@ -65,8 +65,8 @@ func TestMemberHTTPAuthorizationAndRevocation(t *testing.T) {
 	if got := request(h, "GET", "/api/system", "", nil, cookie).Code; got != 401 {
 		t.Fatalf("disabled session still authenticates: %d", got)
 	}
-	if got := request(h, "POST", "/api/auth/login", origin, input, nil).Code; got != 401 {
-		t.Fatalf("disabled member logged in: %d", got)
+	if result := request(h, "POST", "/api/auth/login", origin, input, nil); result.Code != 200 || !strings.Contains(result.Body.String(), `"needs_workspace":true`) {
+		t.Fatalf("disabled workspace member did not reach the workspace chooser: %d %s", result.Code, result.Body.String())
 	}
 	if got := request(h, "PATCH", path, origin, map[string]bool{"enabled": true}, owner).Code; got != 200 {
 		t.Fatal("enable failed")
@@ -82,7 +82,7 @@ func TestMemberHTTPAuthorizationAndRevocation(t *testing.T) {
 func TestMemberHTTPValidationAndOwnerProtection(t *testing.T) {
 	h := authFixture(t, "")
 	origin := "http://example.test"
-	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "owner-test", "password": "fake password 42"}, nil)
+	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "owner-test", "password": "fake password 42", "workspace_name": "Synthetic workspace"}, nil)
 	cookie := setup.Result().Cookies()[0]
 	forged := map[string]string{"username": "member-test", "password": "member pass 42", "role": "admin"}
 	if got := request(h, "POST", "/api/members", origin, forged, cookie).Code; got != 400 {

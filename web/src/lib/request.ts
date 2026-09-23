@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { selectedWorkspace } from './workspace'
 
 export class ApiError extends Error {
   constructor(
@@ -22,6 +23,7 @@ export async function request<T>(
       Accept: 'application/json',
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
       ...init?.headers,
+      'X-SubLane-Workspace': String(selectedWorkspace()),
     },
   })
   if (!response.ok) {

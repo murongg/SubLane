@@ -22,13 +22,14 @@ func (q *Queries) CountEncryptedKeys(ctx context.Context) (int64, error) {
 
 const getKeySecret = `-- name: GetKeySecret :one
 SELECT k.id,k.user_id,k.token_hash,k.revoked_at,k.encrypted_secret AS secret
-FROM api_keys k JOIN users u ON u.id=k.user_id
-WHERE k.id=?1 AND k.user_id=?2 AND u.enabled=1
+FROM api_keys k JOIN users u ON u.id=k.user_id JOIN account_groups g ON g.id=k.group_id
+WHERE k.id=?1 AND k.user_id=?2 AND g.tenant_id=?3 AND u.enabled=1
 `
 
 type GetKeySecretParams struct {
-	ID     int64
-	UserID int64
+	ID       int64
+	UserID   int64
+	TenantID int64
 }
 
 type GetKeySecretRow struct {
@@ -40,7 +41,7 @@ type GetKeySecretRow struct {
 }
 
 func (q *Queries) GetKeySecret(ctx context.Context, arg GetKeySecretParams) (GetKeySecretRow, error) {
-	row := q.db.QueryRowContext(ctx, getKeySecret, arg.ID, arg.UserID)
+	row := q.db.QueryRowContext(ctx, getKeySecret, arg.ID, arg.UserID, arg.TenantID)
 	var i GetKeySecretRow
 	err := row.Scan(
 		&i.ID,

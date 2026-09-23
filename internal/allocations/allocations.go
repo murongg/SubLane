@@ -1,4 +1,4 @@
-// Package allocations owns personnel teams, exclusive pool schemes and their accounting.
+// Package allocations owns exclusive pool schemes and their accounting.
 package allocations
 
 import (
@@ -34,23 +34,6 @@ var (
 	ErrSettlement   = errors.New("invalid_allocation_settlement")
 )
 
-type TeamInput struct {
-	Name      string  `json:"name"`
-	Enabled   bool    `json:"enabled"`
-	MemberIDs []int64 `json:"member_ids"`
-	GroupIDs  []int64 `json:"group_ids"`
-}
-type TeamMember struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	Enabled  bool   `json:"enabled"`
-}
-type Team struct {
-	Members []TeamMember `json:"members"`
-	TeamInput
-	ID        int64 `json:"id"`
-	CreatedAt int64 `json:"created_at"`
-}
 type Share struct {
 	UserID int64 `json:"user_id"`
 	Limit  int64 `json:"limit"`
@@ -72,7 +55,6 @@ type Config struct {
 }
 type SchemeInput struct {
 	Name      string `json:"name"`
-	TeamID    int64  `json:"team_id"`
 	GroupID   int64  `json:"group_id"`
 	Enabled   bool   `json:"enabled"`
 	StartNext bool   `json:"start_next"`
@@ -86,8 +68,6 @@ type Revision struct {
 type Scheme struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
-	TeamID    int64  `json:"team_id"`
-	TeamName  string `json:"team_name"`
 	GroupID   int64  `json:"group_id"`
 	GroupName string `json:"group_name"`
 	Enabled   bool   `json:"enabled"`
@@ -96,14 +76,21 @@ type Scheme struct {
 	Next *Revision `json:"next"`
 }
 type Service struct {
-	conn    *sql.DB
-	now     func() time.Time
-	pricing *pricing.Service
+	conn     *sql.DB
+	tenantID int64
+	now      func() time.Time
+	pricing  *pricing.Service
 }
 
-func New(conn *sql.DB) *Service { return &Service{conn: conn, now: time.Now} }
+func New(conn *sql.DB) *Service { return NewForTenant(conn, 1) }
+func NewForTenant(conn *sql.DB, tenantID int64) *Service {
+	return &Service{conn: conn, tenantID: tenantID, now: time.Now}
+}
 func NewWithPricing(conn *sql.DB, catalog *pricing.Service) *Service {
-	return &Service{conn: conn, now: time.Now, pricing: catalog}
+	return NewForTenantWithPricing(conn, 1, catalog)
+}
+func NewForTenantWithPricing(conn *sql.DB, tenantID int64, catalog *pricing.Service) *Service {
+	return &Service{conn: conn, tenantID: tenantID, now: time.Now, pricing: catalog}
 }
 func validName(v string) bool {
 	return v == strings.TrimSpace(v) && utf8.ValidString(v) && utf8.RuneCountInString(v) > 0 && utf8.RuneCountInString(v) <= 64 && strings.IndexFunc(v, unicode.IsControl) < 0
@@ -113,133 +100,6 @@ func bit(v bool) int64 {
 		return 1
 	}
 	return 0
-}
-func (s *Service) Teams(ctx context.Context) ([]Team, error) {
-	q := db.New(s.conn)
-	rows, err := q.ListAllocationTeams(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]Team, 0, len(rows))
-	for _, r := range rows {
-		ids, err := q.ListAllocationTeamMembers(ctx, r.ID)
-		if err != nil {
-			return nil, err
-		}
-		groupIDs, err := q.ListAllocationTeamGroups(ctx, r.ID)
-		if err != nil {
-			return nil, err
-		}
-		members := []TeamMember{}
-		for _, id := range ids {
-			m, e := q.GetMember(ctx, id)
-			if e != nil {
-				return nil, e
-			}
-			members = append(members, TeamMember{ID: m.ID, Username: m.Username, Enabled: m.Enabled})
-		}
-		out = append(out, Team{Members: members, TeamInput: TeamInput{Name: r.Name, Enabled: r.Enabled == 1, MemberIDs: ids, GroupIDs: groupIDs}, ID: r.ID, CreatedAt: r.CreatedAt})
-	}
-	return out, nil
-}
-func (s *Service) SaveTeam(ctx context.Context, id int64, in TeamInput) (Team, error) {
-	if id < 0 || !validName(in.Name) || in.MemberIDs == nil || len(in.MemberIDs) > 100 || len(in.GroupIDs) > 32 {
-		return Team{}, ErrInput
-	}
-	tx, err := s.conn.BeginTx(ctx, nil)
-	if err != nil {
-		return Team{}, err
-	}
-	defer tx.Rollback()
-	q := db.New(tx)
-	all, err := q.ListAllocationTeams(ctx)
-	if err != nil {
-		return Team{}, err
-	}
-	if id == 0 && len(all) >= 64 {
-		return Team{}, ErrInput
-	}
-	for _, v := range all {
-		if strings.EqualFold(v.Name, in.Name) && v.ID != id {
-			return Team{}, ErrInput
-		}
-	}
-	seen := map[int64]bool{}
-	for _, uid := range in.MemberIDs {
-		if uid <= 1 || seen[uid] {
-			return Team{}, ErrInput
-		}
-		seen[uid] = true
-		if _, err := q.GetMember(ctx, uid); err != nil {
-			return Team{}, ErrInput
-		}
-	}
-	// Omitted group_ids preserve existing grants for older clients; [] explicitly clears them.
-	if in.GroupIDs == nil {
-		in.GroupIDs, err = q.ListAllocationTeamGroups(ctx, id)
-		if err != nil {
-			return Team{}, err
-		}
-	}
-	groupSeen := map[int64]bool{}
-	for _, group := range in.GroupIDs {
-		if group <= 0 || groupSeen[group] {
-			return Team{}, ErrInput
-		}
-		groupSeen[group] = true
-		if _, err := q.GetGroup(ctx, group); errors.Is(err, sql.ErrNoRows) {
-			return Team{}, ErrInput
-		} else if err != nil {
-			return Team{}, err
-		}
-		if _, err := q.GetPoolAllocation(ctx, group); err == nil {
-			return Team{}, ErrPoolConflict
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return Team{}, err
-		}
-	}
-	created := s.now().Unix()
-	if id == 0 {
-		id, err = q.CreateAllocationTeam(ctx, db.CreateAllocationTeamParams{Name: in.Name, Enabled: bit(in.Enabled), CreatedAt: created})
-	} else {
-		old, e := q.GetAllocationTeam(ctx, id)
-		if e != nil {
-			return Team{}, ErrNotFound
-		}
-		created = old.CreatedAt
-		err = q.UpdateAllocationTeam(ctx, db.UpdateAllocationTeamParams{ID: id, Name: in.Name, Enabled: bit(in.Enabled)})
-	}
-	if err != nil {
-		return Team{}, err
-	}
-	if err = q.ClearAllocationTeamMembers(ctx, id); err != nil {
-		return Team{}, err
-	}
-	for _, uid := range in.MemberIDs {
-		if err = q.AddAllocationTeamMember(ctx, db.AddAllocationTeamMemberParams{TeamID: id, UserID: uid}); err != nil {
-			return Team{}, err
-		}
-	}
-	if err = q.ClearAllocationTeamGroups(ctx, id); err != nil {
-		return Team{}, err
-	}
-	for _, group := range in.GroupIDs {
-		if err = q.AddAllocationTeamGroup(ctx, db.AddAllocationTeamGroupParams{TeamID: id, GroupID: group}); err != nil {
-			return Team{}, err
-		}
-	}
-	if err = audit.Record(ctx, q, "team.save", "team", audit.ID(id)); err != nil {
-		return Team{}, err
-	}
-	members := []TeamMember{}
-	for _, uid := range in.MemberIDs {
-		m, e := q.GetMember(ctx, uid)
-		if e != nil {
-			return Team{}, e
-		}
-		members = append(members, TeamMember{ID: m.ID, Username: m.Username, Enabled: m.Enabled})
-	}
-	return Team{Members: members, TeamInput: in, ID: id, CreatedAt: created}, tx.Commit()
 }
 func normalize(c *Config) error {
 	if (c.Mode != "tokens" && c.Mode != "amount" && c.Mode != "ratio") || len(c.Members) == 0 || len(c.Members) > 100 || len(c.Rates) > 128 {
@@ -255,7 +115,7 @@ func normalize(c *Config) error {
 	seen := map[int64]bool{}
 	var total int64
 	for _, m := range c.Members {
-		if m.UserID <= 1 || seen[m.UserID] || m.Limit <= 0 || m.Limit > 1_000_000_000_000 {
+		if m.UserID <= 0 || seen[m.UserID] || m.Limit <= 0 || m.Limit > 1_000_000_000_000 {
 			return ErrInput
 		}
 		seen[m.UserID] = true
@@ -321,13 +181,13 @@ func Window(now time.Time, period string) (int64, int64) {
 }
 func (s *Service) Schemes(ctx context.Context) ([]Scheme, error) {
 	q := db.New(s.conn)
-	rows, err := q.ListAllocationSchemes(ctx)
+	rows, err := q.ListAllocationSchemes(ctx, s.tenantID)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]Scheme, 0, len(rows))
 	for _, r := range rows {
-		v, err := readScheme(ctx, q, r.ID, s.now().Unix())
+		v, err := readScheme(ctx, q, s.tenantID, r.ID, s.now().Unix())
 		if err != nil {
 			return nil, err
 		}
@@ -335,12 +195,12 @@ func (s *Service) Schemes(ctx context.Context) ([]Scheme, error) {
 	}
 	return out, nil
 }
-func readScheme(ctx context.Context, q *db.Queries, id, now int64) (Scheme, error) {
-	r, err := q.GetAllocationScheme(ctx, id)
+func readScheme(ctx context.Context, q *db.Queries, tenantID, id, now int64) (Scheme, error) {
+	r, err := q.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: id, TenantID: tenantID})
 	if err != nil {
 		return Scheme{}, ErrNotFound
 	}
-	out := Scheme{ID: r.ID, Name: r.Name, TeamID: r.TeamID, TeamName: r.TeamName, GroupID: r.GroupID, GroupName: r.GroupName, Enabled: r.Enabled == 1, CreatedAt: r.CreatedAt}
+	out := Scheme{ID: r.ID, Name: r.Name, GroupID: r.GroupID, GroupName: r.GroupName, Enabled: r.Enabled == 1, CreatedAt: r.CreatedAt}
 	out.Revision, err = Current(ctx, q, id, now)
 	if err != nil && !errors.Is(err, ErrUnavailable) {
 		return out, err
@@ -361,7 +221,7 @@ func readScheme(ctx context.Context, q *db.Queries, id, now int64) (Scheme, erro
 	return out, nil
 }
 func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Scheme, error) {
-	if id < 0 || !validName(in.Name) || in.TeamID <= 0 || in.GroupID <= 0 {
+	if id < 0 || !validName(in.Name) || in.GroupID <= 0 {
 		return Scheme{}, ErrInput
 	}
 	if in.Config.Mode == "ratio" {
@@ -382,15 +242,18 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 	defer tx.Rollback()
 	q := db.New(tx)
 	now := s.now().Unix()
-	if _, err = q.GetAllocationTeam(ctx, in.TeamID); err != nil {
-		return Scheme{}, ErrInput
-	}
-	ids, err := q.ListAllocationTeamMembers(ctx, in.TeamID)
-	if err != nil {
+	if _, err := q.GetTenantGroup(ctx, db.GetTenantGroupParams{ID: in.GroupID, TenantID: s.tenantID}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Scheme{}, ErrInput
+		}
 		return Scheme{}, err
 	}
 	for _, m := range in.Config.Members {
-		if !slices.Contains(ids, m.UserID) {
+		allowed, err := q.CanUseGroup(ctx, db.CanUseGroupParams{UserID: m.UserID, GroupID: in.GroupID})
+		if err != nil {
+			return Scheme{}, err
+		}
+		if !allowed {
 			return Scheme{}, ErrInput
 		}
 	}
@@ -422,14 +285,14 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return Scheme{}, err
 		}
-		rows, e := q.ListAllocationSchemes(ctx)
+		rows, e := q.ListAllocationSchemes(ctx, s.tenantID)
 		if e != nil {
 			return Scheme{}, e
 		}
 		if len(rows) >= 32 {
 			return Scheme{}, ErrInput
 		}
-		id, err = q.CreateAllocationScheme(ctx, db.CreateAllocationSchemeParams{Name: in.Name, TeamID: in.TeamID, GroupID: in.GroupID, Enabled: bit(in.Enabled), CreatedAt: now})
+		id, err = q.CreateAllocationScheme(ctx, db.CreateAllocationSchemeParams{Name: in.Name, GroupID: in.GroupID, Enabled: bit(in.Enabled), CreatedAt: now})
 		if err != nil {
 			return Scheme{}, err
 		}
@@ -440,11 +303,11 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 			}
 		}
 	} else {
-		old, err := q.GetAllocationScheme(ctx, id)
+		old, err := q.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: id, TenantID: s.tenantID})
 		if err != nil {
 			return Scheme{}, ErrNotFound
 		}
-		if old.GroupID != in.GroupID || old.TeamID != in.TeamID {
+		if old.GroupID != in.GroupID {
 			return Scheme{}, ErrInput
 		}
 		if err = q.UpdateAllocationScheme(ctx, db.UpdateAllocationSchemeParams{ID: id, Name: in.Name, Enabled: bit(in.Enabled)}); err != nil {
@@ -479,7 +342,7 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 	if err = audit.Record(ctx, q, "allocation.save", "allocation", audit.ID(id)); err != nil {
 		return Scheme{}, err
 	}
-	out, err := readScheme(ctx, q, id, now)
+	out, err := readScheme(ctx, q, s.tenantID, id, now)
 	if err != nil {
 		return Scheme{}, err
 	}
@@ -614,7 +477,7 @@ func (s *Service) SetEnabled(ctx context.Context, id int64, enabled bool) error 
 	}
 	defer tx.Rollback()
 	q := db.New(tx)
-	row, err := q.GetAllocationScheme(ctx, id)
+	row, err := q.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: id, TenantID: s.tenantID})
 	if err != nil {
 		return ErrNotFound
 	}

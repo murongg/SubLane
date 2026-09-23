@@ -18,6 +18,7 @@ import (
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/oauth"
+	"github.com/murongg/SubLane/internal/tenants"
 	"github.com/murongg/SubLane/internal/versions"
 )
 
@@ -34,6 +35,8 @@ type Options struct {
 	OAuth         *oauth.Flow
 	Gateway       *gateway.Service
 	Groups        *groups.Service
+	Tenants       *tenants.Service
+	TenantID      int64
 	PublicURL     string
 	CodexVersions *versions.Service
 }
@@ -46,7 +49,11 @@ func New(o Options) http.Handler {
 		middleware.SetHeader("X-Frame-Options", "DENY"),
 	)
 	routeErrors(router)
-	login := &authHTTP{audit: o.Audit, service: o.Auth, publicURL: o.PublicURL, limiter: newLoginLimiter()}
+	tenantID := o.TenantID
+	if tenantID == 0 {
+		tenantID = 1
+	}
+	login := &authHTTP{audit: o.Audit, service: o.Auth, tenants: o.Tenants, tenantID: tenantID, publicURL: o.PublicURL, limiter: newLoginLimiter()}
 	keys := &keyHTTP{groups: o.Groups, service: o.Keys, gateway: o.Gateway, publicURL: o.PublicURL, sockets: make(chan struct{}, 8)}
 	accountManagement := &accountHTTP{service: o.Accounts, oauth: o.OAuth, gateway: o.Gateway}
 	memberManagement := &memberHTTP{gateway: o.Gateway}
@@ -94,6 +101,11 @@ func New(o Options) http.Handler {
 	router.Route("/api", func(api chi.Router) {
 		routeErrors(api)
 		api.Route("/auth", login.register)
+		api.Route("/tenants", func(workspaces chi.Router) {
+			routeErrors(workspaces)
+			workspaces.Use(login.requireUser)
+			(&tenantHTTP{service: o.Tenants}).register(workspaces)
+		})
 		api.Route("/connection", func(common chi.Router) {
 			routeErrors(common)
 			common.Use(login.requireUser)
@@ -146,12 +158,17 @@ func New(o Options) http.Handler {
 		})
 		management.Get("/usage", memberManagement.usage)
 		management.Get("/audit", (&auditHTTP{service: o.Audit}).list)
-		management.Route("/settings/backup", (&backupHTTP{directory: o.DataDir, version: o.Version, auth: o.Auth, audit: o.Audit, slots: make(chan struct{}, 1)}).register)
-		management.Route("/settings/codex", (&versionHTTP{service: o.CodexVersions}).register)
+		management.Route("/settings/backup", func(settings chi.Router) {
+			settings.Use(requirePlatformAdmin(tenantID))
+			(&backupHTTP{directory: o.DataDir, version: o.Version, auth: o.Auth, audit: o.Audit, slots: make(chan struct{}, 1)}).register(settings)
+		})
+		management.Route("/settings/codex", func(settings chi.Router) {
+			settings.Use(requirePlatformAdmin(tenantID))
+			(&versionHTTP{service: o.CodexVersions}).register(settings)
+		})
 		management.Route("/accounts", accountManagement.register)
 		management.Get("/requests", accountManagement.requests)
 		management.Get("/requests/filters", accountManagement.requestFilters)
-		management.Route("/teams", allocationManagement.registerTeams)
 		management.Route("/allocations", allocationManagement.register)
 		management.Route("/groups", (&groupHTTP{service: o.Groups, gateway: o.Gateway}).register)
 		api.Mount("/", management)

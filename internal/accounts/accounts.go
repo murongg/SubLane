@@ -46,20 +46,25 @@ type Account struct {
 }
 
 type Service struct {
-	db      *sql.DB
-	queries *db.Queries
-	vault   *vault.Vault
-	now     func() time.Time
+	db       *sql.DB
+	queries  *db.Queries
+	vault    *vault.Vault
+	tenantID int64
+	now      func() time.Time
 	// Refresh and administrator mutations share one owner; no model stream holds this lock.
 	mu sync.Mutex
 }
 
 func New(connection *sql.DB, cipher *vault.Vault) *Service {
-	return &Service{db: connection, queries: db.New(connection), vault: cipher, now: time.Now}
+	return NewForTenant(connection, cipher, 1)
+}
+
+func NewForTenant(connection *sql.DB, cipher *vault.Vault, tenantID int64) *Service {
+	return &Service{db: connection, queries: db.New(connection), vault: cipher, tenantID: tenantID, now: time.Now}
 }
 
 func (s *Service) List(ctx context.Context) ([]Account, error) {
-	rows, err := s.queries.ListAccounts(ctx)
+	rows, err := s.queries.ListAccounts(ctx, s.tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -144,14 +149,14 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	}
 	defer tx.Rollback()
 	queries := s.queries.WithTx(tx)
-	count, err := queries.CountAccounts(ctx)
+	count, err := queries.CountAccounts(ctx, s.tenantID)
 	if err != nil {
 		return Account{}, err
 	}
 	if count >= 100 {
 		return Account{}, ErrLimit
 	}
-	n, err := queries.CreateAccount(ctx, db.CreateAccountParams{ID: id, Provider: credential.Kind(), Name: name, AccountID: credential.AccountID, Email: credential.Email, Plan: credential.Plan, Status: status, Credential: encrypted, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now})
+	n, err := queries.CreateAccount(ctx, db.CreateAccountParams{ID: id, TenantID: s.tenantID, Provider: credential.Kind(), Name: name, AccountID: credential.AccountID, Email: credential.Email, Plan: credential.Plan, Status: status, Credential: encrypted, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		return Account{}, err
 	}
@@ -200,6 +205,11 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
+	if _, err := q.GetAccount(ctx, db.GetAccountParams{ID: id, TenantID: s.tenantID}); errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
 	locked, err := q.AccountHasAllocation(ctx, id)
 	if err != nil {
 		return err
@@ -207,7 +217,7 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if locked {
 		return ErrAllocated
 	}
-	n, err := q.DeleteAccount(ctx, id)
+	n, err := q.DeleteAccount(ctx, db.DeleteAccountParams{ID: id, TenantID: s.tenantID})
 	if err != nil {
 		return err
 	}
@@ -308,7 +318,7 @@ func (s *Service) persist(ctx context.Context, q *db.Queries, id string, c Crede
 }
 
 func (s *Service) get(ctx context.Context, id string) (db.Account, error) {
-	row, err := s.queries.GetAccount(ctx, id)
+	row, err := s.queries.GetAccount(ctx, db.GetAccountParams{ID: id, TenantID: s.tenantID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return row, ErrNotFound
 	}
@@ -371,7 +381,7 @@ func (s *Service) RecordUse(ctx context.Context, id, usedToken string, accepted 
 
 // Verify fails startup before serving traffic if the encryption key no longer matches persisted credentials.
 func (s *Service) Verify(ctx context.Context) error {
-	rows, err := s.queries.ListAccounts(ctx)
+	rows, err := s.queries.ListAccounts(ctx, s.tenantID)
 	if err != nil {
 		return err
 	}

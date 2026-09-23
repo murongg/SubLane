@@ -142,6 +142,61 @@ it('creates a member and toggles their access using the management API', async (
   await screen.findByRole('button', { name: 'Disable member-test' })
 })
 
+it('grants resource group access directly to a member', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/members?cursor=0')
+        return Promise.resolve(
+          response({ members: [syntheticMember], next_cursor: 0 }),
+        )
+      if (url === '/api/groups')
+        return Promise.resolve(
+          response({
+            groups: [
+              {
+                id: 3,
+                name: 'Synthetic pool',
+                enabled: true,
+                is_default: false,
+                restricted_models: false,
+                created_at: 1,
+                updated_at: 1,
+                account_count: 0,
+                member_count: 0,
+              },
+            ],
+          }),
+        )
+      if (url === '/api/groups/members/2')
+        return Promise.resolve(
+          response({ group_ids: init?.method === 'PUT' ? [3] : [] }),
+        )
+      return Promise.resolve(response({}))
+    })
+  vi.stubGlobal('fetch', fetchMock)
+  const user = userEvent.setup()
+  open()
+  await user.click(
+    await screen.findByRole('button', {
+      name: 'Manage groups for member-test',
+    }),
+  )
+  const dialog = await screen.findByRole('dialog', { name: 'Group access' })
+  await user.click(
+    within(dialog).getByRole('checkbox', { name: 'Synthetic pool' }),
+  )
+  await user.click(within(dialog).getByRole('button', { name: 'Save access' }))
+  await waitFor(() =>
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/groups/members/2',
+      expect.objectContaining({ method: 'PUT', body: '{"group_ids":[3]}' }),
+    ),
+  )
+})
+
 it('keeps the create form usable after a duplicate username and validates confirmation', async () => {
   const create = vi
     .fn()

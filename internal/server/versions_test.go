@@ -30,7 +30,7 @@ func TestCodexVersionSettingsRequireAdminAndAuditChanges(t *testing.T) {
 	defer config.Close()
 	h := New(Options{Auth: identity, Audit: audit.New(connection), CodexVersions: config})
 	origin := "http://example.test"
-	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "synthetic-admin", "password": "synthetic-pass"}, nil)
+	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "synthetic-admin", "password": "synthetic-pass", "workspace_name": "Synthetic workspace"}, nil)
 	admin := setup.Result().Cookies()[0]
 	memberInput := map[string]string{"username": "synthetic-member", "password": "synthetic-pass"}
 	if result := request(h, "POST", "/api/members", origin, memberInput, admin); result.Code != 201 {

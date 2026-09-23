@@ -4,7 +4,12 @@ import { createMemoryHistory } from '@tanstack/react-router'
 import { expect, it, vi } from 'vitest'
 import { App } from './App'
 import { createAppRouter } from './router'
-import { authenticated, memberAuthenticated, system } from './test/fixtures'
+import {
+  authenticated,
+  memberAuthenticated,
+  system,
+  workspaces,
+} from './test/fixtures'
 
 function open(path: string) {
   render(
@@ -16,6 +21,8 @@ function open(path: string) {
 
 function memberSession() {
   const fetchMock = vi.fn().mockImplementation((url: string) => {
+    if (url === '/api/workspaces')
+      return Promise.resolve(new Response(JSON.stringify(workspaces)))
     if (url !== '/api/auth/state')
       return Promise.reject(new Error('Unexpected management request'))
     return Promise.resolve(new Response(JSON.stringify(memberAuthenticated)))
@@ -36,9 +43,11 @@ it('gives members their own workspace without management navigation or requests'
   expect(screen.queryByRole('group', { name: 'Administration' })).toBeNull()
   await user.click(screen.getByRole('link', { name: 'Preferences' }))
   await screen.findByRole('heading', { name: 'Preferences' })
-  expect(fetchMock.mock.calls.every(([url]) => url === '/api/auth/state')).toBe(
-    true,
-  )
+  expect(
+    fetchMock.mock.calls.every(
+      ([url]) => url === '/api/auth/state' || url === '/api/workspaces',
+    ),
+  ).toBe(true)
 })
 
 it('groups common and administrator navigation separately for administrators', async () => {
@@ -90,7 +99,9 @@ it.each([
     await user.click(screen.getByRole('link', { name: 'Back to overview' }))
     await screen.findByRole('heading', { name: 'Your workspace' })
     expect(
-      fetchMock.mock.calls.every(([url]) => url === '/api/auth/state'),
+      fetchMock.mock.calls.every(
+        ([url]) => url === '/api/auth/state' || url === '/api/workspaces',
+      ),
     ).toBe(true)
   },
 )

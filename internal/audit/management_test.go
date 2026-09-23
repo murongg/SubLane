@@ -27,7 +27,7 @@ func TestManualManagementAuditAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(base, "synthetic-admin", "synthetic-pass"); err != nil {
+	if _, err := identity.Setup(base, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	member, err := identity.CreateMember(base, "synthetic-member", "synthetic-pass")
@@ -46,7 +46,7 @@ func TestManualManagementAuditAndRollback(t *testing.T) {
 	}
 	forwarding := gateway.New(base, connection, subscriptions, nil)
 	defer forwarding.Close()
-	ctx := audit.WithActor(base, audit.Actor{ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
+	ctx := audit.WithActor(base, audit.Actor{TenantID: 1, ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
 	operations := []struct {
 		action string
 		run    func() error

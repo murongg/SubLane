@@ -62,7 +62,7 @@ func newForwardingFixture(t *testing.T, provider string, handler http.HandlerFun
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(ctx, "owner-test", "owner pass 42"); err != nil {
+	if _, err := identity.Setup(ctx, "owner-test", "owner pass 42", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	member, err := identity.CreateMember(ctx, "member-test", "member pass 42")
@@ -102,6 +102,7 @@ func newForwardingFixture(t *testing.T, provider string, handler http.HandlerFun
 		return http.DefaultTransport.RoundTrip(copy)
 	}))
 	t.Cleanup(client.Close)
+	configureTestPool(t, db)
 	keys := newTestKeyService(t, db)
 	created, err := keys.CreateInGroup(ctx, member.ID, 1, "Synthetic client")
 	if err != nil {

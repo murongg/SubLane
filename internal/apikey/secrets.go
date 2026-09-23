@@ -20,7 +20,7 @@ func (s *Service) Reveal(ctx context.Context, userID, keyID int64) (string, erro
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	row, err := q.GetKeySecret(ctx, db.GetKeySecretParams{ID: keyID, UserID: userID})
+	row, err := q.GetKeySecret(ctx, db.GetKeySecretParams{ID: keyID, UserID: userID, TenantID: s.tenantID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrNotFound
 	}

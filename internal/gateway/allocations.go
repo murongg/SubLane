@@ -12,12 +12,12 @@ import (
 )
 
 func (s *Service) Allocations() *allocations.Service {
-	return allocations.NewWithPricing(s.db, s.pricing)
+	return allocations.NewForTenantWithPricing(s.db, s.tenantID, s.pricing)
 }
 
 func (s *Service) Pricing() *pricing.Service { return s.pricing }
 func (s *Service) RefreshAllocation(ctx context.Context, id int64) error {
-	row, err := s.queries.GetAllocationScheme(ctx, id)
+	row, err := s.queries.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: id, TenantID: s.tenantID})
 	if err != nil {
 		return allocations.ErrNotFound
 	}
@@ -48,7 +48,7 @@ func (s *Service) refreshAllocation(ctx context.Context, e *observation) error {
 		return nil
 	}
 	// The metadata request runs outside both admission lock and database transaction.
-	row, err := s.queries.GetAllocationScheme(ctx, id)
+	row, err := s.queries.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: id, TenantID: s.tenantID})
 	if err != nil {
 		return err
 	}

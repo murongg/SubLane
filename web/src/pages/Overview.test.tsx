@@ -4,7 +4,7 @@ import { createMemoryHistory } from '@tanstack/react-router'
 import { expect, it, vi } from 'vitest'
 import { App } from '@/App'
 import { createAppRouter } from '@/router'
-import { authenticated, system } from '@/test/fixtures'
+import { authenticated, system, workspaces } from '@/test/fixtures'
 
 function open() {
   render(
@@ -52,6 +52,8 @@ it('preserves the last successful status when refresh fails and recovers on retr
     vi.fn().mockImplementation((url: string) => {
       if (url === '/api/auth/state')
         return Promise.resolve(new Response(JSON.stringify(authenticated)))
+      if (url === '/api/workspaces')
+        return Promise.resolve(new Response(JSON.stringify(workspaces)))
       reads++
       return Promise.resolve(
         reads === 2

@@ -24,7 +24,7 @@ func TestMissingVaultKeyIsNotRecreatedForGatewaySecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass"); err != nil {
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "credentials.key")

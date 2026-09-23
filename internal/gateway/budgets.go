@@ -81,17 +81,17 @@ func (s *Service) recoverBudgets(ctx context.Context) error {
 	if s.budgetsReady {
 		return nil
 	}
-	if err := s.queries.RecoverTokenBudgetEntries(ctx); err != nil {
+	if err := s.queries.RecoverTokenBudgetEntries(ctx, s.tenantID); err != nil {
 		return ErrTokenAccounting
 	}
-	if err := s.queries.RecoverAllocationEntries(ctx); err != nil {
+	if err := s.queries.RecoverAllocationEntries(ctx, s.tenantID); err != nil {
 		return ErrTokenAccounting
 	}
 	s.budgetsReady = true
 	return nil
 }
-func readBudgets(ctx context.Context, q *db.Queries, user int64, now time.Time) ([]Budget, error) {
-	rows, err := q.ListTokenBudgets(ctx, user)
+func readBudgets(ctx context.Context, q *db.Queries, tenantID, user int64, now time.Time) ([]Budget, error) {
+	rows, err := q.ListTokenBudgets(ctx, db.ListTokenBudgetsParams{TenantID: tenantID, UserID: user})
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (s *Service) Budgets(ctx context.Context, user int64) (BudgetPage, error) {
 	if err := s.recoverBudgets(ctx); err != nil {
 		return page, err
 	}
-	if _, err := s.queries.GetMemberLimits(ctx, user); err != nil {
+	if _, err := s.queries.GetMemberLimits(ctx, db.GetMemberLimitsParams{TenantID: s.tenantID, UserID: user}); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return page, auth.ErrMemberNotFound
 		}
@@ -132,11 +132,11 @@ func (s *Service) Budgets(ctx context.Context, user int64) (BudgetPage, error) {
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	page.Rules, err = readBudgets(ctx, q, user, s.now())
+	page.Rules, err = readBudgets(ctx, q, s.tenantID, user, s.now())
 	if err != nil {
 		return page, err
 	}
-	pending, err := q.ListPendingTokenRequests(ctx, user)
+	pending, err := q.ListPendingTokenRequests(ctx, db.ListPendingTokenRequestsParams{TenantID: s.tenantID, UserID: user})
 	if err != nil {
 		return page, err
 	}
@@ -150,7 +150,7 @@ func (s *Service) Budgets(ctx context.Context, user int64) (BudgetPage, error) {
 }
 func (s *Service) SaveBudget(ctx context.Context, user int64, input BudgetInput) (Budget, error) {
 	var empty Budget
-	if user <= 1 || input.GroupID < 0 || input.Limit < 1 || input.Limit > 1_000_000_000_000 || (input.Period != "day" && input.Period != "month") {
+	if user <= 0 || input.GroupID < 0 || input.Limit < 1 || input.Limit > 1_000_000_000_000 || (input.Period != "day" && input.Period != "month") {
 		return empty, accounts.ErrInput
 	}
 	if input.Model != "" {
@@ -173,21 +173,21 @@ func (s *Service) SaveBudget(ctx context.Context, user int64, input BudgetInput)
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	if _, err := q.GetMember(ctx, user); err != nil {
+	if _, err := q.GetMemberLimits(ctx, db.GetMemberLimitsParams{TenantID: s.tenantID, UserID: user}); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return empty, auth.ErrMemberNotFound
 		}
 		return empty, err
 	}
 	if input.GroupID != 0 {
-		if _, err := q.GetGroup(ctx, input.GroupID); err != nil {
+		if _, err := q.GetTenantGroup(ctx, db.GetTenantGroupParams{ID: input.GroupID, TenantID: s.tenantID}); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return empty, accounts.ErrInput
 			}
 			return empty, err
 		}
 	}
-	rules, err := q.ListTokenBudgets(ctx, user)
+	rules, err := q.ListTokenBudgets(ctx, db.ListTokenBudgetsParams{TenantID: s.tenantID, UserID: user})
 	if err != nil {
 		return empty, err
 	}
@@ -204,14 +204,14 @@ func (s *Service) SaveBudget(ctx context.Context, user int64, input BudgetInput)
 	if input.Enabled {
 		enabled = 1
 	}
-	id, err := q.SaveTokenBudget(ctx, db.SaveTokenBudgetParams{UserID: user, GroupID: input.GroupID, Model: input.Model, Period: input.Period, TokenLimit: input.Limit, Enabled: enabled, CreatedAt: s.now().Unix()})
+	id, err := q.SaveTokenBudget(ctx, db.SaveTokenBudgetParams{TenantID: s.tenantID, UserID: user, GroupID: input.GroupID, Model: input.Model, Period: input.Period, TokenLimit: input.Limit, Enabled: enabled, CreatedAt: s.now().Unix()})
 	if err != nil {
 		return empty, err
 	}
 	if err := audit.Record(ctx, q, "member.budget", "member", audit.ID(user)); err != nil {
 		return empty, err
 	}
-	result, err := readBudgets(ctx, q, user, s.now())
+	result, err := readBudgets(ctx, q, s.tenantID, user, s.now())
 	if err != nil {
 		return empty, err
 	}
@@ -246,11 +246,11 @@ func (s *Service) admitBudget(ctx context.Context, e *observation, model string)
 	if scheme != 0 {
 		return tx.Commit()
 	}
-	rules, err := readBudgets(ctx, q, e.record.UserID, e.started)
+	rules, err := readBudgets(ctx, q, s.tenantID, e.record.UserID, e.started)
 	if err != nil {
 		return ErrTokenAccounting
 	}
-	pending, err := q.ListPendingTokenRequests(ctx, e.record.UserID)
+	pending, err := q.ListPendingTokenRequests(ctx, db.ListPendingTokenRequestsParams{TenantID: s.tenantID, UserID: e.record.UserID})
 	if err != nil {
 		return ErrTokenAccounting
 	}
@@ -295,7 +295,7 @@ func (e *observation) settleBudget(ctx context.Context, q *db.Queries) error {
 	if !e.budgetTracked {
 		return nil
 	}
-	entries, err := q.ListTokenBudgetEntries(ctx, db.ListTokenBudgetEntriesParams{RequestID: e.record.RequestID, UserID: e.record.UserID})
+	entries, err := q.ListTokenBudgetEntries(ctx, db.ListTokenBudgetEntriesParams{TenantID: e.service.tenantID, RequestID: e.record.RequestID, UserID: e.record.UserID})
 	if err != nil {
 		return err
 	}
@@ -335,7 +335,7 @@ func pruneBudgets(ctx context.Context, q *db.Queries, now time.Time) error {
 	return q.PruneTokenBudgetUsage(ctx, before)
 }
 func (s *Service) ResolveBudget(ctx context.Context, user int64, requestID string, tokens int64) error {
-	if user <= 1 || !safeRequestID.MatchString(requestID) || tokens < 0 || tokens > 2_000_000_000 {
+	if user <= 0 || !safeRequestID.MatchString(requestID) || tokens < 0 || tokens > 2_000_000_000 {
 		return accounts.ErrInput
 	}
 	s.mu.Lock()
@@ -349,7 +349,7 @@ func (s *Service) ResolveBudget(ctx context.Context, user int64, requestID strin
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	entries, err := q.ListTokenBudgetEntries(ctx, db.ListTokenBudgetEntriesParams{RequestID: requestID, UserID: user})
+	entries, err := q.ListTokenBudgetEntries(ctx, db.ListTokenBudgetEntriesParams{TenantID: s.tenantID, RequestID: requestID, UserID: user})
 	if err != nil {
 		return err
 	}

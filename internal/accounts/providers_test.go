@@ -18,6 +18,7 @@ func TestProviderImportsIsolateIdentityAndDiscardEndpointSettings(t *testing.T) 
 		t.Fatal(err)
 	}
 	defer connection.Close()
+	seedInitialTenant(t, connection)
 	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
 	if err != nil {
 		t.Fatal(err)
@@ -68,6 +69,7 @@ func TestFailedProviderRefreshCannotPublishUncommittedCredential(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	seedInitialTenant(t, db)
 	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
 	if err != nil {
 		t.Fatal(err)

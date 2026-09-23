@@ -20,6 +20,7 @@ type Account struct {
 	MaxConcurrency int64
 	ModelsSnapshot []byte
 	ModelsRevision int64
+	TenantID       int64
 }
 
 type AccountGroup struct {
@@ -29,6 +30,7 @@ type AccountGroup struct {
 	CreatedAt        int64
 	UpdatedAt        int64
 	RestrictedModels bool
+	TenantID         int64
 }
 
 type AllocationEntry struct {
@@ -58,13 +60,6 @@ type AllocationRevision struct {
 	Config      string
 }
 
-type AllocationTeam struct {
-	ID        int64
-	Name      string
-	Enabled   int64
-	CreatedAt int64
-}
-
 type AllocationWindow struct {
 	ID              int64
 	SchemeID        int64
@@ -80,6 +75,7 @@ type AllocationWindow struct {
 
 type AuditEvent struct {
 	ID         int64
+	TenantID   int64
 	ActorID    int64
 	ActorName  string
 	ActorRole  string

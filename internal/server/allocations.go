@@ -61,48 +61,6 @@ func allocationError(w http.ResponseWriter, err error) {
 	}
 	writeJSON(w, status, map[string]string{"error": code})
 }
-func (h *allocationHTTP) registerTeams(r chi.Router) {
-	r.Get("/", h.teams)
-	r.Post("/", func(w http.ResponseWriter, r *http.Request) { h.saveTeam(w, r, 0) })
-	r.Patch("/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id, err := pathID(r)
-		if err != nil || id <= 0 {
-			allocationError(w, allocations.ErrInput)
-			return
-		}
-		h.saveTeam(w, r, id)
-	})
-}
-func (h *allocationHTTP) teams(w http.ResponseWriter, r *http.Request) {
-	if !h.available(w, r) {
-		return
-	}
-	rows, err := h.gateway.Allocations().Teams(r.Context())
-	if err != nil {
-		allocationError(w, err)
-		return
-	}
-	writeJSON(w, 200, map[string]any{"teams": rows})
-}
-func (h *allocationHTTP) saveTeam(w http.ResponseWriter, r *http.Request, id int64) {
-	if !h.available(w, r) {
-		return
-	}
-	var in allocations.TeamInput
-	if !decodeJSON(w, r, &in) {
-		return
-	}
-	value, err := h.gateway.Allocations().SaveTeam(r.Context(), id, in)
-	if err != nil {
-		allocationError(w, err)
-		return
-	}
-	status := 200
-	if id == 0 {
-		status = 201
-	}
-	writeJSON(w, status, value)
-}
 func (h *allocationHTTP) register(r chi.Router) {
 	r.Get("/prices", h.prices)
 	r.Get("/", h.list)

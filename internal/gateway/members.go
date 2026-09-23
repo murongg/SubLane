@@ -34,7 +34,7 @@ type MemberLimit struct {
 func (s *Service) MemberLimits(ctx context.Context, userID int64) (MemberLimit, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	policy, err := s.queries.GetMemberLimits(ctx, userID)
+	policy, err := s.queries.GetMemberLimits(ctx, db.GetMemberLimitsParams{TenantID: s.tenantID, UserID: userID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return MemberLimit{}, auth.ErrMemberNotFound
 	}
@@ -43,7 +43,7 @@ func (s *Service) MemberLimits(ctx context.Context, userID int64) (MemberLimit, 
 	}
 	now := s.now().Unix()
 	value := MemberLimit{UserID: userID, RequestsPerMinute: policy.RequestsPerMinute, MaxConcurrency: policy.MaxConcurrency, InFlight: s.memberActive[userID], ResetAt: now - now%60 + 60}
-	window, err := s.queries.GetMemberWindow(ctx, userID)
+	window, err := s.queries.GetMemberWindow(ctx, db.GetMemberWindowParams{TenantID: s.tenantID, UserID: userID})
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return MemberLimit{}, err
 	}
@@ -54,7 +54,7 @@ func (s *Service) MemberLimits(ctx context.Context, userID int64) (MemberLimit, 
 }
 
 func (s *Service) SetMemberLimits(ctx context.Context, userID, rpm, concurrency int64) error {
-	if userID <= 1 || rpm < 0 || rpm > 6000 || concurrency < 0 || concurrency > 8 {
+	if userID <= 0 || rpm < 0 || rpm > 6000 || concurrency < 0 || concurrency > 8 {
 		return accounts.ErrInput
 	}
 	s.mu.Lock()
@@ -65,7 +65,7 @@ func (s *Service) SetMemberLimits(ctx context.Context, userID, rpm, concurrency 
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
-	n, err := q.SetMemberLimits(ctx, db.SetMemberLimitsParams{UserID: userID, RequestsPerMinute: rpm, MaxConcurrency: concurrency})
+	n, err := q.SetMemberLimits(ctx, db.SetMemberLimitsParams{TenantID: s.tenantID, UserID: userID, RequestsPerMinute: rpm, MaxConcurrency: concurrency})
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func (s *Service) SetMemberLimits(ctx context.Context, userID, rpm, concurrency 
 
 // Called with s.mu held. All keys, transports and groups consume the same member lease.
 func (s *Service) admitMember(ctx context.Context, userID int64) error {
-	policy, err := s.queries.GetMemberLimits(ctx, userID)
+	policy, err := s.queries.GetMemberLimits(ctx, db.GetMemberLimitsParams{TenantID: s.tenantID, UserID: userID})
 	if errors.Is(err, sql.ErrNoRows) || err == nil && !policy.Enabled {
 		return groups.ErrUnavailable
 	}
@@ -93,7 +93,7 @@ func (s *Service) admitMember(ctx context.Context, userID int64) error {
 	if policy.RequestsPerMinute > 0 {
 		now := s.now().Unix()
 		start := now - now%60
-		n, err := s.queries.TakeMemberRate(ctx, db.TakeMemberRateParams{UserID: userID, WindowStart: start, RateLimit: policy.RequestsPerMinute})
+		n, err := s.queries.TakeMemberRate(ctx, db.TakeMemberRateParams{TenantID: s.tenantID, UserID: userID, WindowStart: start, RateLimit: policy.RequestsPerMinute})
 		if err != nil {
 			return err
 		}

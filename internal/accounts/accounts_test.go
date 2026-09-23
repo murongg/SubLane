@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -14,6 +15,70 @@ import (
 	"github.com/murongg/SubLane/internal/vault"
 )
 
+func seedInitialTenant(t *testing.T, connection *sql.DB) {
+	t.Helper()
+	if _, err := connection.Exec(`INSERT INTO users(id,username,role,password_hash,enabled,created_at)
+		VALUES(1,'synthetic-admin','admin','synthetic-hash',1,1);
+		INSERT INTO tenants(id,name,owner_user_id,created_at) VALUES(1,'Synthetic workspace',1,1);
+		INSERT INTO memberships(tenant_id,user_id,role,created_at) VALUES(1,1,'owner',1)`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAccountsAreScopedToWorkspace(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	connection, err := storage.Open(ctx, filepath.Join(dir, "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	seedInitialTenant(t, connection)
+	if _, err := connection.Exec(`INSERT INTO users(id,username,role,password_hash,enabled,created_at)
+		VALUES(2,'synthetic-second','member','synthetic-hash',1,1);
+		INSERT INTO tenants(id,name,owner_user_id,created_at) VALUES(2,'Second workspace',2,1);
+		INSERT INTO memberships(tenant_id,user_id,role,created_at) VALUES(2,2,'owner',1)`); err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := New(connection, cipher)
+	second := NewForTenant(connection, cipher, 2)
+	credential := Credential{AccountID: "shared-upstream-subject", AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	a, err := first.Authorize(ctx, "First account", credential, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := second.Authorize(ctx, "Second account", credential, "")
+	if err != nil {
+		t.Fatalf("same upstream subject in another workspace was rejected: %v", err)
+	}
+	for _, check := range []struct {
+		service *Service
+		own     string
+		other   string
+	}{{first, a.ID, b.ID}, {second, b.ID, a.ID}} {
+		values, err := check.service.List(ctx)
+		if err != nil || len(values) != 1 || values[0].ID != check.own {
+			t.Fatalf("workspace account list leaked: %+v, %v", values, err)
+		}
+		if _, err := check.service.Get(ctx, check.other); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("foreign workspace account was readable: %v", err)
+		}
+	}
+	if err := second.Delete(ctx, a.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("foreign workspace account was deleted: %v", err)
+	}
+	if _, err := first.Get(ctx, a.ID); err != nil {
+		t.Fatalf("foreign delete removed the owner's account: %v", err)
+	}
+	if _, err := second.Catalog(ctx, a.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("foreign workspace model catalog was readable: %v", err)
+	}
+}
+
 func TestAccountCredentialsAndLifecycle(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -22,6 +87,7 @@ func TestAccountCredentialsAndLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer connection.Close()
+	seedInitialTenant(t, connection)
 	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
 	if err != nil {
 		t.Fatal(err)

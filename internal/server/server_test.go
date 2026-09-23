@@ -63,7 +63,7 @@ func TestDatabaseFailureIsNotHealthyOrExposed(t *testing.T) {
 
 func TestAPIMethodAndFallbackBoundaries(t *testing.T) {
 	h := authFixture(t, "")
-	setup := request(h, "POST", "/api/auth/setup", "http://example.test", map[string]string{"username": "owner-test", "password": "owner pass 42"}, nil)
+	setup := request(h, "POST", "/api/auth/setup", "http://example.test", map[string]string{"username": "owner-test", "password": "owner pass 42", "workspace_name": "Synthetic workspace"}, nil)
 	if setup.Code != 201 {
 		t.Fatalf("setup: %d", setup.Code)
 	}
