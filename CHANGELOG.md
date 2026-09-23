@@ -6,6 +6,15 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 
 ### Added
 
+- Show Codex reset cards in compact cards
+
+### Changed
+
+- **BREAKING:** Isolate tenant data and complete setup — Replace the pre-release SQLite migrations with one initialization schema. Existing development databases are not upgraded automatically; start with a fresh data directory. Personnel-team APIs and UI are removed.
+## [0.1.0-rc.3] - 2026-09-22
+
+### Added
+
 - Add scoped member token budgets
 - Add team access and exclusive usage allowances
 - Select pool models and snapshot allowance rates
@@ -57,7 +66,8 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 - Distinguish remaining quota with status colors
 - Restore version-gated model discovery
 
-[Unreleased]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.2...HEAD
+[Unreleased]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.3...HEAD
+[0.1.0-rc.3]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.2...v0.1.0-rc.3
 [0.1.0-rc.2]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.1...v0.1.0-rc.2
 [0.1.0-rc.1]: https://github.com/murongg/SubLane/releases/tag/v0.1.0-rc.1
 
