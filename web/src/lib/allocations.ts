@@ -133,6 +133,25 @@ export function lookupModelPrice(model: string) {
     z.object({ prices: z.record(z.string(), priceSchema) }),
   ).then((result) => result.prices[model] ?? Object.values(result.prices)[0])
 }
+export async function lookupModelPrices(models: string[]) {
+  const batches = []
+  for (let i = 0; i < models.length; i += 32) {
+    const params = new URLSearchParams()
+    for (const model of models.slice(i, i + 32)) params.append('model', model)
+    batches.push(
+      request(
+        `/api/allocations/prices?${params}`,
+        z.object({
+          prices: z.record(z.string(), priceSchema),
+        }),
+      ).then((result) => result.prices),
+    )
+  }
+  return Object.assign({}, ...(await Promise.all(batches))) as Record<
+    string,
+    z.infer<typeof priceSchema>
+  >
+}
 export function refreshAllocation(id: number) {
   return request(`/api/allocations/${id}/refresh`, allocationDetailSchema, {
     method: 'POST',
