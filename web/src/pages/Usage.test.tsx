@@ -8,6 +8,7 @@ import {
   authenticated,
   memberAuthenticated,
   hourlyActivity,
+  system,
   workspaces,
 } from '@/test/fixtures'
 
@@ -41,7 +42,7 @@ const summary = {
 }
 
 it.each([
-  ['/usage', memberAuthenticated, '/api/me/usage'],
+  ['/', memberAuthenticated, '/api/me/usage'],
   ['/admin/usage', authenticated, '/api/usage'],
 ] as const)(
   'shows honest usage totals at %s and changes the period',
@@ -84,15 +85,24 @@ it.each([
       />,
     )
     await screen.findByRole('heading', {
-      name: path === '/usage' ? 'Your usage' : 'Team usage',
+      name: path === '/' ? 'Your usage' : 'Team usage',
     })
+    if (path === '/') {
+      expect(
+        screen.getByRole('heading', { name: 'Your workspace', level: 1 }),
+      ).toBeTruthy()
+      expect(
+        screen.getByRole('heading', { name: 'Your usage', level: 2 }),
+      ).toBeTruthy()
+      expect(screen.queryByRole('link', { name: 'Usage' })).toBeNull()
+    }
     await screen.findByText(
       'Some calls did not report token usage; totals include reported values only.',
     )
     await screen.findByRole('img', { name: 'Daily · Requests' })
     await screen.findByRole('region', { name: 'Activity by time' })
     expect(screen.getAllByRole('gridcell')).toHaveLength(168)
-    if (path === '/usage')
+    if (path === '/')
       await screen.findByText(
         'No token budgets for keys outside resource allowances.',
       )
@@ -103,7 +113,11 @@ it.each([
     const reads = fetch.mock.calls.filter(
       ([url]) => url === endpoint + '?days=7',
     ).length
-    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    await user.click(
+      screen.getByRole('button', {
+        name: path === '/' ? 'Your usage: Refresh' : 'Refresh',
+      }),
+    )
     await waitFor(() =>
       expect(
         fetch.mock.calls.filter(([url]) => url === endpoint + '?days=7').length,
@@ -141,3 +155,123 @@ it.each([
     ).toBe(true)
   },
 )
+
+it('shows personal usage beneath the administrator overview', async () => {
+  const fetch = vi.fn().mockImplementation((url: string) => {
+    if (url === '/api/auth/state')
+      return Promise.resolve(new Response(JSON.stringify(authenticated)))
+    if (url === '/api/workspaces')
+      return Promise.resolve(new Response(JSON.stringify(workspaces)))
+    if (url === '/api/system')
+      return Promise.resolve(new Response(JSON.stringify(system)))
+    if (url.startsWith('/api/me/usage?'))
+      return Promise.resolve(new Response(JSON.stringify(summary)))
+    if (url === '/api/me/allocations')
+      return Promise.resolve(new Response(JSON.stringify({ schemes: [] })))
+    if (url === '/api/me/budgets')
+      return Promise.resolve(
+        new Response(JSON.stringify({ rules: [], pending: [] })),
+      )
+    if (url === '/api/me/limits')
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            user_id: 1,
+            requests_per_minute: 0,
+            max_concurrency: 0,
+            in_flight: 0,
+            requests_this_minute: 0,
+            reset_at: 1900000060,
+          }),
+        ),
+      )
+    return Promise.reject(new Error(`Unexpected request: ${url}`))
+  })
+  vi.stubGlobal('fetch', fetch)
+  render(
+    <App
+      router={createAppRouter(createMemoryHistory({ initialEntries: ['/'] }))}
+    />,
+  )
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Workspace overview',
+      level: 1,
+    }),
+  ).toBeTruthy()
+  expect(
+    await screen.findByRole('heading', { name: 'Your usage', level: 2 }),
+  ).toBeTruthy()
+  expect(
+    await screen.findByRole('img', { name: 'Daily · Requests' }),
+  ).toBeTruthy()
+  expect(screen.queryByRole('heading', { name: 'Service' })).toBeNull()
+  expect(screen.getByRole('heading', { name: 'Gateway setup' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'Instance status' })).toBeTruthy()
+  expect(
+    screen
+      .getByRole('heading', { name: 'Gateway setup' })
+      .compareDocumentPosition(
+        screen.getByRole('heading', { name: 'Your usage' }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy()
+  expect(
+    screen
+      .getByText(
+        'Some calls did not report token usage; totals include reported values only.',
+      )
+      .compareDocumentPosition(
+        screen.getByRole('heading', { name: 'My resource allowances' }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy()
+  expect(screen.queryByRole('link', { name: 'Usage' })).toBeNull()
+  expect(screen.getByRole('link', { name: 'Team usage' })).toBeTruthy()
+  expect(fetch.mock.calls.some(([url]) => url === '/api/me/usage?days=7')).toBe(
+    true,
+  )
+})
+
+it('redirects the former personal usage URL to the combined home page', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(
+          new Response(JSON.stringify(memberAuthenticated)),
+        )
+      if (url === '/api/workspaces')
+        return Promise.resolve(new Response(JSON.stringify(workspaces)))
+      if (url.startsWith('/api/me/usage?'))
+        return Promise.resolve(new Response(JSON.stringify(summary)))
+      if (url === '/api/me/allocations')
+        return Promise.resolve(new Response(JSON.stringify({ schemes: [] })))
+      if (url === '/api/me/budgets')
+        return Promise.resolve(
+          new Response(JSON.stringify({ rules: [], pending: [] })),
+        )
+      if (url === '/api/me/limits')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              user_id: 2,
+              requests_per_minute: 0,
+              max_concurrency: 0,
+              in_flight: 0,
+              requests_this_minute: 0,
+              reset_at: 1900000060,
+            }),
+          ),
+        )
+      return Promise.reject(new Error(`Unexpected request: ${url}`))
+    }),
+  )
+  const router = createAppRouter(
+    createMemoryHistory({ initialEntries: ['/usage'] }),
+  )
+  render(<App router={router} />)
+  await screen.findByRole('heading', { name: 'Your workspace' })
+  expect(router.state.location.pathname).toBe('/')
+  expect(
+    await screen.findByRole('heading', { name: 'Your usage' }),
+  ).toBeTruthy()
+})

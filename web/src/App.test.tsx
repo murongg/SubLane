@@ -6,6 +6,8 @@ import { App } from './App'
 import { createAppRouter } from './router'
 import { anonymous, authenticated, system } from './test/fixtures'
 
+vi.mock('./pages/Usage', () => ({ Usage: () => null, TeamUsage: () => null }))
+
 it('places the selected workspace in the upper-left sidebar', async () => {
   vi.stubGlobal(
     'fetch',
@@ -107,6 +109,7 @@ it('loads service data, navigates accounts, and persists the theme', async () =>
       router={createAppRouter(createMemoryHistory({ initialEntries: ['/'] }))}
     />,
   )
+  await user.click(await screen.findByRole('link', { name: 'Instance status' }))
   expect(await screen.findByText('synthetic-version')).toBeTruthy()
   await user.click(screen.getByRole('link', { name: 'Accounts' }))
   expect(
@@ -156,7 +159,9 @@ it('shows a failed connection and allows recovery', async () => {
   )
   expect(await screen.findByRole('alert')).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'Reconnect' }))
-  expect(await screen.findByText('synthetic-version')).toBeTruthy()
+  expect(
+    await screen.findByRole('heading', { name: 'Gateway setup' }),
+  ).toBeTruthy()
   expect(systemCalls).toBe(2)
 })
 

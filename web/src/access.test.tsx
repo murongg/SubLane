@@ -11,6 +11,8 @@ import {
   workspaces,
 } from './test/fixtures'
 
+vi.mock('./pages/Usage', () => ({ Usage: () => null, TeamUsage: () => null }))
+
 function open(path: string) {
   render(
     <App

@@ -30,6 +30,11 @@ const routes = root.addChildren([
       'Allocations',
     ),
   }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/admin/instance',
+    component: lazyRouteComponent(() => import('@/pages/Overview'), 'Overview'),
+  }),
   settings.addChildren([
     createRoute({
       getParentRoute: () => settings,
@@ -66,7 +71,10 @@ const routes = root.addChildren([
   createRoute({
     getParentRoute: () => root,
     path: '/usage',
-    component: lazyRouteComponent(() => import('@/pages/Usage'), 'Usage'),
+    beforeLoad: () => {
+      // Keep saved personal usage links working after moving the report home.
+      throw redirect({ to: '/', replace: true })
+    },
   }),
   createRoute({
     getParentRoute: () => root,

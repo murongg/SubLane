@@ -850,6 +850,8 @@ export const en = {
   foundation: 'Foundation',
   internalGateway: 'Team subscription gateway',
   overviewTitle: 'Workspace overview',
+  homeDescription: 'Your model usage and gateway access.',
+  instanceStatus: 'Instance status',
   overviewDescription:
     'Instance health and progress toward your first request.',
   gatewaySetup: 'Gateway setup',

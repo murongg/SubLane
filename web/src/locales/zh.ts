@@ -775,6 +775,8 @@ export const zh: Record<keyof typeof en, string> = {
   foundation: '基础框架',
   internalGateway: '团队订阅网关',
   overviewTitle: '工作空间概览',
+  homeDescription: '查看个人模型用量与网关接入情况。',
+  instanceStatus: '实例状态',
   overviewDescription: '查看实例状态与首次调用的接入进度。',
   gatewaySetup: '网关接入',
   gatewaySetupDescription: '管理员已就绪，下一步是接入团队的第一个订阅账号。',
