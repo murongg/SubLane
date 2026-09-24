@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router'
 import { AuthGate } from '@/components/AuthGate'
 import { Auth } from '@/pages/Auth'
+import { Invite } from '@/pages/Invite'
 import { Setup } from '@/pages/Setup'
 import { NotFound } from '@/pages/NotFound'
 
@@ -81,6 +82,11 @@ const routes = root.addChildren([
     getParentRoute: () => root,
     path: '/login',
     component: () => <Auth mode="login" />,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: '/invite',
+    component: Invite,
   }),
   createRoute({
     getParentRoute: () => root,

@@ -47,6 +47,7 @@ func (h *authHTTP) register(router chi.Router) {
 		public.Get("/state", h.state)
 		public.With(h.requireOrigin, h.throttleLogin).Post("/setup", func(w http.ResponseWriter, r *http.Request) { h.authenticate(w, r, true) })
 		public.With(h.requireOrigin, h.throttleLogin).Post("/login", func(w http.ResponseWriter, r *http.Request) { h.authenticate(w, r, false) })
+		public.With(h.requireOrigin, h.throttleLogin).Post("/register", h.registerInvitation)
 		public.With(h.requireOrigin).Post("/logout", h.logout)
 	})
 }
@@ -245,6 +246,34 @@ func (h *authHTTP) logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, auth.State{Initialized: true})
 }
 
+func (h *authHTTP) registerInvitation(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Token    string `json:"token"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	session, err := h.service.RegisterInvitation(r.Context(), h.tenantID, input.Token, input.Username, input.Password)
+	if err != nil {
+		authError(w, err)
+		return
+	}
+	state, err := h.stateForTenant(r.Context(), session.Token)
+	if err != nil {
+		authError(w, err)
+		return
+	}
+	if state.User == nil {
+		_ = h.service.Revoke(r.Context(), session.Token)
+		writeJSON(w, 403, map[string]string{"error": "forbidden"})
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: session.Token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: h.secure(r), MaxAge: int(auth.SessionTTL.Seconds()), Expires: session.ExpiresAt})
+	writeJSON(w, 201, state)
+}
+
 type sessionUserKey struct{}
 
 func sessionUser(r *http.Request) auth.User {
@@ -321,6 +350,8 @@ func authError(w http.ResponseWriter, err error) {
 		status, code = 409, "username_taken"
 	case errors.Is(err, auth.ErrMemberNotFound):
 		status, code = 404, "member_not_found"
+	case errors.Is(err, auth.ErrInvitationInvalid):
+		status, code = 410, "invitation_invalid"
 	}
 	writeJSON(w, status, map[string]string{"error": code})
 }

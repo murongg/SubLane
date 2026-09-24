@@ -22,8 +22,8 @@ export async function request<T>(
     headers: {
       Accept: 'application/json',
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers,
       'X-SubLane-Workspace': String(selectedWorkspace()),
+      ...init?.headers,
     },
   })
   if (!response.ok) {

@@ -15,6 +15,18 @@ const pageSchema = z.object({
 })
 export type Member = z.infer<typeof memberSchema>
 
+const invitationSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  expires_at: z.iso.datetime({ offset: true }),
+})
+
+export function createInvitation() {
+  return request('/api/members/invitations', invitationSchema, {
+    method: 'POST',
+    body: '{}',
+  })
+}
+
 export function getMembers(cursor: number, signal?: AbortSignal) {
   return request(`/api/members?cursor=${cursor}`, pageSchema, { signal })
 }

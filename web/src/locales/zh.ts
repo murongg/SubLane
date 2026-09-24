@@ -685,6 +685,21 @@ export const zh: Record<keyof typeof en, string> = {
   membersDescription:
     '管理本工作空间的成员权限。停用成员会立即阻止其在此空间使用 Key，不影响其他工作空间。',
   addMember: '添加成员',
+  createInviteLink: '创建邀请链接',
+  invitationLink: '邀请链接',
+  inviteLinkHint:
+    '链接 7 天内有效，且只能使用一次。请私下分享，新成员将自行设置登录账号。',
+  copyInviteLink: '复制链接',
+  inviteCopied: '邀请链接已复制。',
+  inviteCopyFailed: '复制失败，请手动选中并复制链接。',
+  inviteCreateFailed: '创建邀请链接失败，请重试。',
+  inviteJoinTitle: '加入工作空间',
+  inviteJoinDescription: '创建账号，加入邀请你的工作空间。',
+  inviteInvalid: '邀请链接无效、已过期或已被使用，请向管理员索取新链接。',
+  inviteRegisterFailed: '创建账号失败，请重试。',
+  inviteCreateAccount: '创建账号',
+  inviteRegistering: '正在创建账号…',
+  inviteBackToLogin: '已有账号？前往登录',
   memberExistingAdd: '添加已有账号',
   memberExistingDescription:
     '输入已有登录账号的用户名，设置其在当前工作空间的角色。账号已在本空间时，请从成员列表修改角色。',

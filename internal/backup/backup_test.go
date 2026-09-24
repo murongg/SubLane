@@ -59,7 +59,11 @@ func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.SchemaVersion != 1 || info.Version != "synthetic-version" {
+	schemaVersion, err := storage.CurrentSchemaVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.SchemaVersion != schemaVersion || info.Version != "synthetic-version" {
 		t.Fatal(info)
 	}
 	verified, err := Verify(ctx, output)

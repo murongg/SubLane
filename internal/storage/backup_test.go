@@ -44,8 +44,9 @@ func TestSnapshotIncludesCommittedWALWithoutChangingSource(t *testing.T) {
 		t.Fatal("read-only database accepted writes")
 	}
 	schema, err := ValidateSnapshot(ctx, restored)
-	if err != nil || schema != 1 {
-		t.Fatal("schema validation", schema, err)
+	wantSchema, versionErr := CurrentSchemaVersion()
+	if err != nil || versionErr != nil || schema != wantSchema {
+		t.Fatal("schema validation", schema, wantSchema, err, versionErr)
 	}
 	if err := Snapshot(ctx, source, target, 4<<20); err == nil {
 		t.Fatal("snapshot overwrote existing file")
