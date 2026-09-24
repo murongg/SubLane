@@ -76,7 +76,7 @@ func NewWithTransport(transport http.RoundTripper, version ...func() string) *Cl
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-	client := &Client{http: &http.Client{Transport: transport, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}, tokenURL: "https://auth.openai.com/oauth/token", baseURL: "https://chatgpt.com/backend-api/codex", registry: builtin.Registry()}
+	client := &Client{http: &http.Client{Transport: &proxyTransport{base: transport}, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}, tokenURL: "https://auth.openai.com/oauth/token", baseURL: "https://chatgpt.com/backend-api/codex", registry: builtin.Registry()}
 	if len(version) > 0 {
 		client.version = version[0]
 	}
@@ -93,6 +93,7 @@ func (c *Client) Exchange(ctx context.Context, code, verifier string) (accounts.
 }
 
 func (c *Client) Refresh(ctx context.Context, old accounts.Credential) (accounts.Credential, error) {
+	ctx = credentialContext(ctx, old)
 	if old.Kind() != "codex" {
 		// Refresh is also called after a 401, even when the advertised expiry is still in the future.
 		next, err := c.providerTokens(ctx, old.Kind(), "", "", "", old)
@@ -173,6 +174,7 @@ type Discovery struct {
 }
 
 func (c *Client) Discover(ctx context.Context, credential accounts.Credential) (Discovery, error) {
+	ctx = credentialContext(ctx, credential)
 	version := c.codexVersion()
 	models, err := c.models(ctx, credential, version)
 	return Discovery{Models: models, Source: catalogSource(credential.Kind(), version)}, err
@@ -246,6 +248,7 @@ func (c *Client) Chat(ctx context.Context, credential accounts.Credential, raw [
 }
 
 func (c *Client) execute(ctx context.Context, credential accounts.Credential, raw []byte, headers http.Header, format translator.Format, compact bool) (*Stream, error) {
+	ctx = credentialContext(ctx, credential)
 	var input map[string]json.RawMessage
 	if len(raw) > MaxBody || json.Unmarshal(raw, &input) != nil || input == nil {
 		return nil, ErrInput

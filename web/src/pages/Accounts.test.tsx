@@ -195,6 +195,61 @@ it('keeps quota, identity and accessible actions together for each account', asy
   ).toBeTruthy()
 })
 
+it('binds an account to a named network proxy', async () => {
+  const proxy = {
+    id: 'synthetic-proxy',
+    name: 'Synthetic exit',
+    endpoint: 'http://127.0.0.1:18080',
+    account_count: 0,
+    created_at: 1,
+    updated_at: 1,
+  }
+  let current = { ...account, proxy_id: '' }
+  const fetch = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/proxies')
+        return Promise.resolve(response({ proxies: [proxy] }))
+      if (
+        url === '/api/accounts/synthetic-account/proxy' &&
+        init?.method === 'PUT'
+      ) {
+        expect(JSON.parse(String(init.body))).toEqual({ proxy_id: proxy.id })
+        current = { ...current, proxy_id: proxy.id }
+        return Promise.resolve(response(current))
+      }
+      if (url === '/api/accounts')
+        return Promise.resolve(response({ accounts: [current] }))
+      return Promise.resolve(response({ accounts: [] }))
+    })
+  vi.stubGlobal('fetch', fetch)
+  const user = userEvent.setup()
+  open()
+  const row = await screen.findByRole('article', { name: 'Test subscription' })
+  await user.click(
+    within(row).getByRole('button', { name: 'Actions for Test subscription' }),
+  )
+  await user.click(
+    await screen.findByRole('menuitem', { name: 'Network proxy' }),
+  )
+  const dialog = await screen.findByRole('dialog')
+  await user.click(
+    within(dialog).getByRole('radio', { name: 'Synthetic exit' }),
+  )
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Save proxy binding' }),
+  )
+  await waitFor(() =>
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/accounts/synthetic-account/proxy',
+      expect.objectContaining({ method: 'PUT' }),
+    ),
+  )
+  await screen.findByText('Network proxy: Synthetic exit')
+})
+
 it('chooses a provider and starts its authorization without reusing Codex URLs', async () => {
   const fetch = vi
     .fn()

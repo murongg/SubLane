@@ -32,6 +32,7 @@ var (
 
 type Account struct {
 	GroupCount     *int64 `json:"group_count,omitempty"`
+	ProxyID        string `json:"proxy_id,omitempty"`
 	ID             string `json:"id"`
 	Provider       string `json:"provider"`
 	Name           string `json:"name"`
@@ -70,7 +71,11 @@ func (s *Service) List(ctx context.Context) ([]Account, error) {
 	}
 	result := make([]Account, 0, len(rows))
 	for _, row := range rows {
-		result = append(result, Account{ID: row.ID, Provider: row.Provider, Name: row.Name, Email: row.Email, Plan: row.Plan, Enabled: row.Enabled, Status: row.Status, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, MaxConcurrency: row.MaxConcurrency, GroupCount: &row.GroupCount})
+		account := Account{ID: row.ID, Provider: row.Provider, Name: row.Name, Email: row.Email, Plan: row.Plan, Enabled: row.Enabled, Status: row.Status, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, MaxConcurrency: row.MaxConcurrency, GroupCount: &row.GroupCount}
+		if row.ProxyID != nil {
+			account.ProxyID = *row.ProxyID
+		}
+		result = append(result, account)
 	}
 	return result, nil
 }
@@ -79,18 +84,25 @@ func (s *Service) Import(ctx context.Context, name string, raw []byte, replaceID
 	return s.ImportProvider(ctx, "codex", name, raw, replaceID)
 }
 func (s *Service) ImportProvider(ctx context.Context, provider, name string, raw []byte, replaceID string) (Account, error) {
+	return s.ImportProviderWithProxy(ctx, provider, name, raw, replaceID, "")
+}
+func (s *Service) ImportProviderWithProxy(ctx context.Context, provider, name string, raw []byte, replaceID, proxyID string) (Account, error) {
 	credential, err := ParseFor(provider, raw)
 	if err != nil {
 		return Account{}, err
 	}
-	return s.save(ctx, name, credential, replaceID, "unverified")
+	return s.save(ctx, name, credential, replaceID, proxyID, "unverified")
 }
 
 func (s *Service) Authorize(ctx context.Context, name string, credential Credential, replaceID string) (Account, error) {
-	return s.save(ctx, name, credential, replaceID, "ready")
+	return s.AuthorizeWithProxy(ctx, name, credential, replaceID, "")
 }
 
-func (s *Service) save(ctx context.Context, name string, credential Credential, replaceID, status string) (Account, error) {
+func (s *Service) AuthorizeWithProxy(ctx context.Context, name string, credential Credential, replaceID, proxyID string) (Account, error) {
+	return s.save(ctx, name, credential, replaceID, proxyID, "ready")
+}
+
+func (s *Service) save(ctx context.Context, name string, credential Credential, replaceID, proxyID, status string) (Account, error) {
 	if err := credential.validate(); err != nil {
 		return Account{}, err
 	}
@@ -110,6 +122,9 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 		// Existing continuations must never be rebound to a different upstream identity.
 		if row.AccountID != credential.AccountID || row.Provider != credential.Kind() {
 			return Account{}, ErrIdentity
+		}
+		if proxyID != "" && (row.ProxyID == nil || *row.ProxyID != proxyID) {
+			return Account{}, ErrProxyInput
 		}
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
@@ -149,6 +164,15 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	}
 	defer tx.Rollback()
 	queries := s.queries.WithTx(tx)
+	var selectedProxy *string
+	if proxyID != "" {
+		if _, err := queries.GetProxy(ctx, db.GetProxyParams{ID: proxyID, TenantID: s.tenantID}); errors.Is(err, sql.ErrNoRows) {
+			return Account{}, ErrProxyNotFound
+		} else if err != nil {
+			return Account{}, err
+		}
+		selectedProxy = &proxyID
+	}
 	count, err := queries.CountAccounts(ctx, s.tenantID)
 	if err != nil {
 		return Account{}, err
@@ -156,7 +180,7 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	if count >= 100 {
 		return Account{}, ErrLimit
 	}
-	n, err := queries.CreateAccount(ctx, db.CreateAccountParams{ID: id, TenantID: s.tenantID, Provider: credential.Kind(), Name: name, AccountID: credential.AccountID, Email: credential.Email, Plan: credential.Plan, Status: status, Credential: encrypted, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now})
+	n, err := queries.CreateAccount(ctx, db.CreateAccountParams{ID: id, TenantID: s.tenantID, Provider: credential.Kind(), Name: name, AccountID: credential.AccountID, Email: credential.Email, Plan: credential.Plan, Status: status, Credential: encrypted, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now, ProxyID: selectedProxy})
 	if err != nil {
 		return Account{}, err
 	}
@@ -169,7 +193,7 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	if err := tx.Commit(); err != nil {
 		return Account{}, err
 	}
-	return Account{ID: id, Provider: credential.Kind(), Name: name, Email: credential.Email, Plan: credential.Plan, Enabled: true, Status: status, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now, MaxConcurrency: 2}, nil
+	return Account{ID: id, Provider: credential.Kind(), Name: name, Email: credential.Email, Plan: credential.Plan, Enabled: true, Status: status, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now, MaxConcurrency: 2, ProxyID: proxyID}, nil
 }
 
 func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) (Account, error) {
@@ -258,6 +282,12 @@ func (s *Service) prepare(ctx context.Context, id, rejectedToken string, refresh
 	if err != nil {
 		return Credential{}, err
 	}
+	if row.ProxyID != nil {
+		credential.ProxyURL, err = s.proxyURL(ctx, *row.ProxyID)
+		if err != nil {
+			return Credential{}, err
+		}
+	}
 	// Another request may already have rotated the rejected token while this one was waiting.
 	minimumValidity := 2 * time.Minute
 	// Antigravity may refresh internally within five minutes of expiry. Reserve the full ten-minute request budget too.
@@ -302,6 +332,7 @@ func (s *Service) prepare(ctx context.Context, id, rejectedToken string, refresh
 	if err := s.persist(ctx, s.queries, id, updated, "ready"); err != nil {
 		return Credential{}, err
 	}
+	updated.ProxyURL = credential.ProxyURL
 	return updated, nil
 }
 
@@ -326,7 +357,11 @@ func (s *Service) get(ctx context.Context, id string) (db.Account, error) {
 }
 
 func metadata(row db.Account) Account {
-	return Account{ID: row.ID, Provider: row.Provider, Name: row.Name, Email: row.Email, Plan: row.Plan, Enabled: row.Enabled, Status: row.Status, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, MaxConcurrency: row.MaxConcurrency}
+	account := Account{ID: row.ID, Provider: row.Provider, Name: row.Name, Email: row.Email, Plan: row.Plan, Enabled: row.Enabled, Status: row.Status, ExpiresAt: row.ExpiresAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, MaxConcurrency: row.MaxConcurrency}
+	if row.ProxyID != nil {
+		account.ProxyID = *row.ProxyID
+	}
+	return account
 }
 
 func NormalizeName(name string) (string, error) {
@@ -391,6 +426,15 @@ func (s *Service) Verify(ctx context.Context) error {
 			return err
 		}
 		if _, err := s.decrypt(row); err != nil {
+			return err
+		}
+	}
+	proxies, err := s.queries.ListProxies(ctx, s.tenantID)
+	if err != nil {
+		return err
+	}
+	for _, proxy := range proxies {
+		if _, err := s.openProxy(proxy.ID, proxy.Address); err != nil {
 			return err
 		}
 	}

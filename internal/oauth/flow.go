@@ -6,12 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"github.com/murongg/SubLane/internal/upstream"
 	"net/url"
 	"sync"
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/upstream"
 )
 
 var (
@@ -39,9 +39,9 @@ type Authorization struct {
 }
 
 type pending struct {
-	owner                               [32]byte
-	verifier, name, replaceID, provider string
-	expires                             time.Time
+	owner                                        [32]byte
+	verifier, name, replaceID, provider, proxyID string
+	expires                                      time.Time
 }
 
 type Flow struct {
@@ -60,6 +60,9 @@ func (f *Flow) Begin(ctx context.Context, session, name, replaceID string) (Auth
 	return f.BeginProvider(ctx, "codex", session, name, replaceID)
 }
 func (f *Flow) BeginProvider(ctx context.Context, provider, session, name, replaceID string) (Authorization, error) {
+	return f.BeginProviderWithProxy(ctx, provider, session, name, replaceID, "")
+}
+func (f *Flow) BeginProviderWithProxy(ctx context.Context, provider, session, name, replaceID, proxyID string) (Authorization, error) {
 	if provider == "" {
 		provider = "codex"
 	}
@@ -81,6 +84,13 @@ func (f *Flow) BeginProvider(ctx context.Context, provider, session, name, repla
 		if account.Provider != provider {
 			return Authorization{}, accounts.ErrIdentity
 		}
+		if proxyID != "" && proxyID != account.ProxyID {
+			return Authorization{}, accounts.ErrProxyInput
+		}
+		proxyID = account.ProxyID
+	}
+	if _, err := f.accounts.ProxyURL(ctx, proxyID); err != nil {
+		return Authorization{}, err
 	}
 	owner := sha256.Sum256([]byte(session))
 	state, verifier := randomToken(), randomToken()
@@ -95,7 +105,7 @@ func (f *Flow) BeginProvider(ctx context.Context, provider, session, name, repla
 	if len(f.pending) >= 8 {
 		return Authorization{}, ErrBusy
 	}
-	f.pending[state] = pending{provider: provider, owner: owner, verifier: verifier, name: name, replaceID: replaceID, expires: expires}
+	f.pending[state] = pending{provider: provider, owner: owner, verifier: verifier, name: name, replaceID: replaceID, proxyID: proxyID, expires: expires}
 	challenge := sha256.Sum256([]byte(verifier))
 	url := f.provider.AuthorizationURL(state, base64.RawURLEncoding.EncodeToString(challenge[:]))
 	if provider != "codex" {
@@ -136,6 +146,18 @@ func (f *Flow) Finish(ctx context.Context, session, state, callback string) (acc
 	if err != nil {
 		return accounts.Account{}, err
 	}
+	if entry.replaceID != "" {
+		account, err := f.accounts.Get(ctx, entry.replaceID)
+		if err != nil {
+			return accounts.Account{}, err
+		}
+		entry.proxyID = account.ProxyID
+	}
+	address, err := f.accounts.ProxyURL(ctx, entry.proxyID)
+	if err != nil {
+		return accounts.Account{}, err
+	}
+	ctx = upstream.WithProxyURL(ctx, address)
 	var credential accounts.Credential
 	if entry.provider == "codex" {
 		credential, err = f.provider.Exchange(ctx, code, entry.verifier)
@@ -145,7 +167,7 @@ func (f *Flow) Finish(ctx context.Context, session, state, callback string) (acc
 	if err != nil {
 		return accounts.Account{}, err
 	}
-	return f.accounts.Authorize(ctx, entry.name, credential, entry.replaceID)
+	return f.accounts.AuthorizeWithProxy(ctx, entry.name, credential, entry.replaceID, entry.proxyID)
 }
 
 func (f *Flow) Cancel(session, state string) error {

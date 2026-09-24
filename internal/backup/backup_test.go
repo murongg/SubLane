@@ -132,3 +132,66 @@ func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
 		}
 	}
 }
+
+func TestFormerProxyCheckArchiveStillRestores(t *testing.T) {
+	ctx := context.Background()
+	source := t.TempDir()
+	connection, err := storage.Open(ctx, filepath.Join(source, databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-pass", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := vault.Open(filepath.Join(source, keyName), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := accounts.New(connection, cipher).CreateProxy(ctx, "Synthetic exit", "http://127.0.0.1:18080"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connection.ExecContext(ctx, "INSERT INTO schema_migrations(name) VALUES('004_proxy_checks.sql')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := connection.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stat, err := os.Stat(filepath.Join(source, databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := Info{CreatedAt: time.Now().UTC().Truncate(time.Second), Version: "synthetic-version", SchemaVersion: 4, DatabaseBytes: stat.Size()}
+	archive := filepath.Join(t.TempDir(), "former-proxy.sublane-backup.tar.gz")
+	if err := writeArchive(ctx, source, archive, info); err != nil {
+		t.Fatal(err)
+	}
+	verified, err := Verify(ctx, archive)
+	if err != nil || verified.SchemaVersion != 4 {
+		t.Fatalf("former archive verification: %+v %v", verified, err)
+	}
+	target := filepath.Join(t.TempDir(), "restored")
+	if _, err := Restore(ctx, archive, target); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := storage.Open(ctx, filepath.Join(target, databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restored.Close()
+	var migrationCount int
+	if err := restored.QueryRowContext(ctx, "SELECT count(*) FROM schema_migrations").Scan(&migrationCount); err != nil || migrationCount != 3 {
+		t.Fatalf("restored migration history: %d %v", migrationCount, err)
+	}
+	restoredVault, err := vault.Open(filepath.Join(target, keyName), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxies, err := accounts.New(restored, restoredVault).ListProxies(ctx)
+	if err != nil || len(proxies) != 1 || proxies[0].Endpoint != "http://127.0.0.1:18080" {
+		t.Fatalf("restored proxy: %+v %v", proxies, err)
+	}
+}

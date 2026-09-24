@@ -31,6 +31,12 @@ export const auditActions: Record<string, keyof typeof en> = {
   'account.delete': 'auditAccountDelete',
   'account.concurrency': 'auditAccountConcurrency',
   'account.resume': 'auditAccountResume',
+  'account.proxy': 'auditAccountProxy',
+  'proxy.create': 'auditProxyCreate',
+  'proxy.update': 'auditProxyUpdate',
+  'proxy.delete': 'auditProxyDelete',
+  'proxy.import': 'auditProxyImport',
+  'proxy.prune': 'auditProxyPrune',
 }
 export const auditResources = {
   allocation: 'allocationSchemes',
@@ -41,6 +47,7 @@ export const auditResources = {
   member: 'auditMember',
   user: 'auditUser',
   account: 'auditAccount',
+  proxy: 'accountProxy',
 } as const
 export type AuditResource = '' | keyof typeof auditResources
 export type AuditOutcome = '' | 'success' | 'failure'
@@ -58,6 +65,7 @@ const eventSchema = z.object({
     'member',
     'user',
     'account',
+    'proxy',
     'settings',
     'backup',
   ]),

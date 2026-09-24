@@ -32,8 +32,8 @@ func (q *Queries) CountAllAccounts(ctx context.Context) (int64, error) {
 }
 
 const createAccount = `-- name: CreateAccount :execrows
-INSERT INTO accounts(id, tenant_id, provider, name, account_id, email, plan, enabled, status, credential, expires_at, created_at, updated_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?9, ?10, ?11, ?12)
+INSERT INTO accounts(id, tenant_id, provider, name, account_id, email, plan, enabled, status, credential, expires_at, created_at, updated_at, proxy_id)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?9, ?10, ?11, ?12, ?13)
 ON CONFLICT(tenant_id, provider, account_id) DO NOTHING
 `
 
@@ -50,6 +50,7 @@ type CreateAccountParams struct {
 	ExpiresAt  int64
 	CreatedAt  int64
 	UpdatedAt  int64
+	ProxyID    *string
 }
 
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (int64, error) {
@@ -66,6 +67,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (i
 		arg.ExpiresAt,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.ProxyID,
 	)
 	if err != nil {
 		return 0, err
@@ -91,7 +93,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) (i
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at, max_concurrency, models_snapshot, models_revision, tenant_id FROM accounts WHERE id = ?1 AND tenant_id = ?2
+SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at, max_concurrency, models_snapshot, models_revision, tenant_id, proxy_id FROM accounts WHERE id = ?1 AND tenant_id = ?2
 `
 
 type GetAccountParams struct {
@@ -119,12 +121,13 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (Account
 		&i.ModelsSnapshot,
 		&i.ModelsRevision,
 		&i.TenantID,
+		&i.ProxyID,
 	)
 	return i, err
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, provider, name, email, plan, enabled, status, expires_at, created_at, updated_at, max_concurrency,
+SELECT id, provider, name, email, plan, enabled, status, expires_at, created_at, updated_at, max_concurrency, proxy_id,
  (SELECT count(*) FROM group_accounts ga WHERE ga.account_id=accounts.id) AS group_count
 FROM accounts WHERE tenant_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 100
 `
@@ -141,6 +144,7 @@ type ListAccountsRow struct {
 	CreatedAt      int64
 	UpdatedAt      int64
 	MaxConcurrency int64
+	ProxyID        *string
 	GroupCount     int64
 }
 
@@ -165,6 +169,7 @@ func (q *Queries) ListAccounts(ctx context.Context, tenantID int64) ([]ListAccou
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.MaxConcurrency,
+			&i.ProxyID,
 			&i.GroupCount,
 		); err != nil {
 			return nil, err

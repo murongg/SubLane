@@ -25,6 +25,7 @@ func (h *accountHTTP) register(router chi.Router) {
 		accounts.Get("/", h.list)
 		accounts.Get("/runtime", h.runtime)
 		accounts.Patch("/{id}/limits", h.limits)
+		accounts.Put("/{id}/proxy", h.bindProxy)
 		accounts.Post("/{id}/resume", h.resume)
 		accounts.Post("/import", h.importCredential)
 		accounts.Post("/oauth", h.beginOAuth)
@@ -65,11 +66,12 @@ func (h *accountHTTP) importCredential(w http.ResponseWriter, r *http.Request) {
 		Provider  string `json:"provider"`
 		AuthJSON  string `json:"auth_json"`
 		ReplaceID string `json:"replace_id"`
+		ProxyID   string `json:"proxy_id"`
 	}
 	if !decodeJSONLimit(w, r, &input, 128<<10) {
 		return
 	}
-	account, err := h.service.ImportProvider(r.Context(), input.Provider, input.Name, []byte(input.AuthJSON), input.ReplaceID)
+	account, err := h.service.ImportProviderWithProxy(r.Context(), input.Provider, input.Name, []byte(input.AuthJSON), input.ReplaceID, input.ProxyID)
 	if err != nil {
 		accountError(w, err)
 		return
@@ -89,11 +91,12 @@ func (h *accountHTTP) beginOAuth(w http.ResponseWriter, r *http.Request) {
 		Name      string `json:"name"`
 		Provider  string `json:"provider"`
 		ReplaceID string `json:"replace_id"`
+		ProxyID   string `json:"proxy_id"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	pending, err := h.oauth.BeginProvider(r.Context(), input.Provider, token(r), input.Name, input.ReplaceID)
+	pending, err := h.oauth.BeginProviderWithProxy(r.Context(), input.Provider, token(r), input.Name, input.ReplaceID, input.ProxyID)
 	if err != nil {
 		accountError(w, err)
 		return
@@ -160,6 +163,21 @@ func (h *accountHTTP) setEnabled(w http.ResponseWriter, r *http.Request) {
 	if h.gateway != nil && row.Enabled {
 		_, _ = h.gateway.AccountCatalog(r.Context(), row.ID, false)
 	}
+}
+
+func (h *accountHTTP) bindProxy(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ProxyID string `json:"proxy_id"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	account, err := h.service.BindProxy(r.Context(), chi.URLParam(r, "id"), input.ProxyID)
+	if err != nil {
+		accountError(w, err)
+		return
+	}
+	writeJSON(w, 200, account)
 }
 
 func (h *accountHTTP) remove(w http.ResponseWriter, r *http.Request) {
@@ -238,6 +256,18 @@ func accountError(w http.ResponseWriter, err error) {
 		status, code = 400, "provider_usage_unsupported"
 	case errors.Is(err, accounts.ErrInput):
 		status, code = 400, "invalid_account_input"
+	case errors.Is(err, accounts.ErrProxyInput):
+		status, code = 400, "invalid_proxy_input"
+	case errors.Is(err, accounts.ErrProxyNotFound):
+		status, code = 404, "proxy_not_found"
+	case errors.Is(err, accounts.ErrProxyInUse):
+		status, code = 409, "proxy_in_use"
+	case errors.Is(err, accounts.ErrProxyDuplicate):
+		status, code = 409, "proxy_exists"
+	case errors.Is(err, accounts.ErrProxyLimit):
+		status, code = 409, "proxy_limit"
+	case errors.Is(err, accounts.ErrProxyChanged):
+		status, code = 409, "proxy_changed"
 	case errors.Is(err, accounts.ErrIdentity):
 		status, code = 409, "account_identity_mismatch"
 	case errors.Is(err, accounts.ErrDuplicate):

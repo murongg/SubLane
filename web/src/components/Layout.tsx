@@ -10,6 +10,7 @@ import {
   ListChecks,
   KeyRound,
   LayoutDashboard,
+  Route,
   Settings,
   Users,
   Workflow,
@@ -57,6 +58,7 @@ const navigation = [
     label: 'administration',
     items: [
       { to: '/accounts', label: 'accounts', icon: Workflow },
+      { to: '/admin/proxies', label: 'proxiesTitle', icon: Route },
       { to: '/groups', label: 'accountGroups', icon: FolderClosed },
       { to: '/admin/requests', label: 'allRequests', icon: ListChecks },
       { to: '/admin/usage', label: 'teamUsage', icon: ChartNoAxesCombined },

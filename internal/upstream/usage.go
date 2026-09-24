@@ -48,6 +48,7 @@ type usageWindow struct {
 }
 
 func (c *Client) Usage(ctx context.Context, credential accounts.Credential) (Usage, error) {
+	ctx = credentialContext(ctx, credential)
 	if credential.Kind() != "codex" {
 		return Usage{}, ErrUsageUnsupported
 	}

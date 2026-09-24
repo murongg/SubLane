@@ -72,6 +72,7 @@ var actions = map[string]string{
 	"invitation.create": "invitation",
 	"user.password":     "user", "user.recover": "user",
 	"account.create": "account", "account.authorize": "account", "account.update": "account", "account.delete": "account", "account.concurrency": "account", "account.resume": "account",
+	"account.proxy": "account", "proxy.create": "proxy", "proxy.update": "proxy", "proxy.delete": "proxy", "proxy.import": "proxy", "proxy.prune": "proxy",
 }
 var numericID = regexp.MustCompile(`^[1-9][0-9]{0,18}$`)
 var accountID = regexp.MustCompile(`^[a-f0-9]{32}$`)
@@ -84,7 +85,7 @@ func ValidTarget(action, resource, id string) bool {
 	if id == "" {
 		return true
 	}
-	if resource == "account" {
+	if resource == "account" || resource == "proxy" {
 		return accountID.MatchString(id)
 	}
 	if resource == "settings" {
@@ -154,7 +155,7 @@ func (s *Service) List(ctx context.Context, f Filter) (Page, error) {
 		return page, ErrInput
 	}
 	switch f.Resource {
-	case "", "allocation", "key", "group", "member", "user", "account", "settings", "backup":
+	case "", "allocation", "key", "group", "member", "user", "account", "proxy", "settings", "backup":
 	default:
 		return page, ErrInput
 	}

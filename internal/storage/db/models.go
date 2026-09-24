@@ -21,6 +21,7 @@ type Account struct {
 	ModelsSnapshot []byte
 	ModelsRevision int64
 	TenantID       int64
+	ProxyID        *string
 }
 
 type AccountGroup struct {
@@ -86,6 +87,24 @@ type AuditEvent struct {
 	Outcome    string
 	HttpStatus *int64
 	CreatedAt  int64
+}
+
+type Proxy struct {
+	ID         string
+	TenantID   int64
+	Name       string
+	Address    []byte
+	CreatedAt  int64
+	UpdatedAt  int64
+	Revision   int64
+	CheckedAt  int64
+	Reachable  int64
+	ExitIp     string
+	Country    string
+	Region     string
+	City       string
+	LatencyMs  int64
+	CheckError string
 }
 
 type TokenBudgetEntry struct {

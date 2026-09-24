@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -68,5 +69,22 @@ func TestAuditBoundaryRedactionAndKeyUpdates(t *testing.T) {
 	}
 	if request(h, "GET", "/api/audit?resource=unknown", "", nil, admin).Code != 400 {
 		t.Fatal("invalid filter accepted")
+	}
+}
+
+func TestProxyAuditTargets(t *testing.T) {
+	id := strings.Repeat("a", 32)
+	for _, check := range []struct{ method, path, action, resource, id string }{
+		{http.MethodPost, "/api/proxies", "proxy.create", "proxy", ""},
+		{http.MethodPost, "/api/proxies/import", "proxy.import", "proxy", ""},
+		{http.MethodPost, "/api/proxies/prune", "proxy.prune", "proxy", ""},
+		{http.MethodPut, "/api/proxies/" + id, "proxy.update", "proxy", id},
+		{http.MethodDelete, "/api/proxies/" + id, "proxy.delete", "proxy", id},
+		{http.MethodPut, "/api/accounts/" + id + "/proxy", "account.proxy", "account", id},
+	} {
+		action, resource, target := auditTarget(httptest.NewRequest(check.method, check.path, nil))
+		if action != check.action || resource != check.resource || target != check.id {
+			t.Fatalf("%s %s: %q %q %q", check.method, check.path, action, resource, target)
+		}
 	}
 }

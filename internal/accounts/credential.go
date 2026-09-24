@@ -10,6 +10,7 @@ import (
 
 // Credential is internal secret material. HTTP responses must use Account instead.
 type Credential struct {
+	ProxyURL     string                     `json:"-"`
 	Provider     string                     `json:"provider,omitempty"`
 	Metadata     map[string]json.RawMessage `json:"metadata,omitempty"`
 	AccessToken  string                     `json:"access_token"`

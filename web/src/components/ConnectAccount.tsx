@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, Check, Copy, LoaderCircle, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -15,6 +15,7 @@ import {
   callbackURLs,
 } from '@/lib/accounts'
 import { ProviderLogo } from './ProviderLogo'
+import { proxyOptions } from '@/lib/proxies'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Textarea } from './ui/Textarea'
@@ -46,6 +47,8 @@ export function ConnectAccount({
   )
   const [method, setMethod] = useState<'oauth' | 'import'>('oauth')
   const [name, setName] = useState(account?.name ?? '')
+  const [proxyID, setProxyID] = useState(account?.proxy_id ?? '')
+  const proxies = useQuery({ ...proxyOptions, enabled: !account })
   const [authJSON, setAuthJSON] = useState('')
   const [callback, setCallback] = useState('')
   const [error, setError] = useState<
@@ -114,7 +117,12 @@ export function ConnectAccount({
     finish.reset()
     setCallback('')
     setCopied(false)
-    begin.mutate({ provider, name: value, replace_id: account?.id })
+    begin.mutate({
+      provider,
+      name: value,
+      replace_id: account?.id,
+      proxy_id: proxyID || undefined,
+    })
   }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -153,6 +161,7 @@ export function ConnectAccount({
       name: name.trim(),
       auth_json: authJSON,
       replace_id: account?.id,
+      proxy_id: proxyID || undefined,
     })
   }
   const readFile = async (file?: File) => {
@@ -279,6 +288,48 @@ export function ConnectAccount({
               aria-invalid={error === 'name'}
             />
           </div>
+          {!account && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">
+                {t('accountProxy')}
+              </legend>
+              {proxies.isPending ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {t('loadingProxies')}
+                </p>
+              ) : proxies.isError ? (
+                <p role="alert" className="text-sm text-error">
+                  {t('proxiesLoadFailed')}
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: '', name: t('directConnection') },
+                    ...proxies.data.proxies,
+                  ].map((proxy) => (
+                    <label
+                      key={proxy.id}
+                      className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm has-[:checked]:border-foreground has-[:checked]:bg-muted"
+                    >
+                      <input
+                        type="radio"
+                        name="new-account-proxy"
+                        value={proxy.id}
+                        checked={proxyID === proxy.id}
+                        onChange={() => setProxyID(proxy.id)}
+                        disabled={busy || Boolean(begin.data)}
+                        className="accent-foreground"
+                      />
+                      <span>{proxy.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs leading-5 text-muted-foreground">
+                {t('accountProxyHint')}
+              </p>
+            </fieldset>
+          )}
           {!begin.data && (
             <div
               role="group"
