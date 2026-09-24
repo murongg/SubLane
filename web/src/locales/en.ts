@@ -83,6 +83,8 @@ export const en = {
   allocationRateCached: 'Cached input · USD / M',
   allocationRateOutput: 'Output · USD / M',
   allocationAddRate: 'Add model price',
+  allocationAddAllRates: 'Add all available models ({{count}})',
+  allocationRateLimit: 'Up to 128 model prices can be configured.',
   allocationRemoveRate: 'Remove model price {{index}}',
   allocationRemove: 'Remove',
   allocationModelID: 'Model ID',

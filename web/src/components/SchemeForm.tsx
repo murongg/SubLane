@@ -11,6 +11,7 @@ import {
   parseAllocationValue,
   allocationValue,
   lookupModelPrice,
+  lookupModelPrices,
 } from '@/lib/allocations'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -151,6 +152,93 @@ type RateDraft = {
   output: string
   priceState?: 'loading' | 'missing' | 'failed'
 }
+function AddAllModels({
+  groupID,
+  rates,
+  pending,
+  onAdd,
+}: {
+  groupID: number
+  rates: RateDraft[]
+  pending: boolean
+  onAdd: (models: string[]) => Promise<void>
+}) {
+  const { t } = useTranslation()
+  const client = useQueryClient()
+  const query = useQuery(catalogOptions(client, { kind: 'group', id: groupID }))
+  const selected = new Set(rates.map((rate) => rate.model))
+  const missing = [...new Set(query.data?.models ?? [])].filter(
+    (model) => !selected.has(model),
+  )
+  const overLimit = missing.length > 128 - rates.length
+  const unavailable =
+    query.isPending ||
+    query.isError ||
+    query.isFetching ||
+    !query.data?.known ||
+    !query.data.usable ||
+    query.data.partial ||
+    query.data.stale ||
+    query.data.refreshing ||
+    query.data.refresh_failed
+  const catalogStatus =
+    query.isError || query.data?.refresh_failed
+      ? 'catalogLoadFailed'
+      : query.data?.partial
+        ? 'catalogPartial'
+        : query.data && !query.data.known
+          ? 'catalogUnknownHint'
+          : query.data?.known && query.data.models.length === 0
+            ? 'catalogEmptyGroup'
+            : query.data?.stale
+              ? 'catalogStale'
+              : query.data?.refreshing
+                ? 'catalogRefreshing'
+                : null
+  return (
+    <div className="space-y-2">
+      <Button
+        type="button"
+        variant="outline"
+        disabled={pending || unavailable || overLimit || missing.length === 0}
+        onClick={() => onAdd(missing)}
+      >
+        {t('allocationAddAllRates', { count: missing.length })}
+      </Button>
+      {overLimit && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {t('allocationRateLimit')}
+        </p>
+      )}
+      {rates.length === 0 && catalogStatus && (
+        <p
+          role="status"
+          className={
+            catalogStatus === 'catalogLoadFailed'
+              ? 'text-xs text-warning'
+              : 'text-xs text-muted-foreground'
+          }
+        >
+          {t(catalogStatus)}
+        </p>
+      )}
+      {(query.isError ||
+        query.data?.refresh_failed ||
+        query.data?.models.length === 0) &&
+        rates.length === 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pending || query.isFetching}
+            onClick={() => query.refetch()}
+          >
+            {t('catalogReload')}
+          </Button>
+        )}
+    </div>
+  )
+}
 export function SchemeForm({
   groups,
   groupID,
@@ -198,7 +286,9 @@ export function SchemeForm({
       output: allocationValue(r.output, 'amount'),
     })) ?? [],
   )
-  const [advancedRates, setAdvancedRates] = useState(mode !== 'ratio')
+  const [advancedRates, setAdvancedRates] = useState(
+    mode !== 'ratio' || (!!scheme && (initial?.rates.length ?? 0) > 0),
+  )
   const [invalid, setInvalid] = useState(false)
   const total = members.reduce(
     (sum, m) => sum + (parseAllocationValue(values[m.id] ?? '', mode) ?? 0),
@@ -246,6 +336,40 @@ export function SchemeForm({
       setRates((all) =>
         all.map((rate) =>
           rate === draft ? { ...rate, priceState: 'failed' } : rate,
+        ),
+      )
+    }
+  }
+  const fillAllPrices = async (models: string[]) => {
+    const drafts: RateDraft[] = models.map((model) => ({
+      model,
+      input: '',
+      cached: '',
+      output: '',
+      priceState: 'loading',
+    }))
+    setRates((all) => [...all, ...drafts])
+    try {
+      const prices = await lookupModelPrices(models)
+      setRates((all) =>
+        all.map((rate) => {
+          // Removed or reselected rows no longer match their original drafts.
+          const index = drafts.indexOf(rate)
+          if (index < 0) return rate
+          const price = prices[models[index]]
+          return {
+            model: rate.model,
+            input: price ? allocationValue(price.input, 'amount') : '',
+            cached: price ? allocationValue(price.cached, 'amount') : '',
+            output: price ? allocationValue(price.output, 'amount') : '',
+            priceState: price ? undefined : 'missing',
+          }
+        }),
+      )
+    } catch {
+      setRates((all) =>
+        all.map((rate) =>
+          drafts.includes(rate) ? { ...rate, priceState: 'failed' } : rate,
         ),
       )
     }
@@ -517,7 +641,9 @@ export function SchemeForm({
         )}
         <details
           className="space-y-4 border-t border-border pt-4"
-          open={mode === 'ratio' ? undefined : true}
+          open={
+            mode !== 'ratio' || !!scheme || advancedRates ? true : undefined
+          }
         >
           <summary className="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
             {t('allocationSettings')}
@@ -602,19 +728,27 @@ export function SchemeForm({
                   )}
                 </div>
               ))}
-              <Button
-                type="button"
-                variant="outline"
-                disabled={rates.length >= 128}
-                onClick={() =>
-                  setRates((all) => [
-                    ...all,
-                    { model: '', input: '', cached: '', output: '' },
-                  ])
-                }
-              >
-                {t('allocationAddRate')}
-              </Button>
+              <div className="flex flex-wrap items-start gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={rates.length >= 128}
+                  onClick={() =>
+                    setRates((all) => [
+                      ...all,
+                      { model: '', input: '', cached: '', output: '' },
+                    ])
+                  }
+                >
+                  {t('allocationAddRate')}
+                </Button>
+                <AddAllModels
+                  groupID={groupID}
+                  rates={rates}
+                  pending={pending}
+                  onAdd={fillAllPrices}
+                />
+              </div>
             </section>
           )}
           <div className="space-y-3 border-t border-border pt-5">

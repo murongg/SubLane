@@ -42,6 +42,13 @@ it('assigns a pool allowance directly to its granted members', async () => {
 it('splits shares exactly and preserves saved price weights while editing', async () => {
   const user = userEvent.setup()
   const submit = vi.fn()
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  client.setQueryData(['auth'], {
+    initialized: true,
+    user: { id: 1, username: 'synthetic-admin', role: 'admin' },
+  })
   const team = {
     id: 1,
     name: 'Synthetic team',
@@ -63,27 +70,34 @@ it('splits shares exactly and preserves saved price weights while editing', asyn
     },
   ]
   render(
-    <SchemeForm
-      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
-      groupID={2}
-      onGroupChange={() => {}}
-      members={team.members}
-      scheme={{
-        id: 1,
-        name: 'Synthetic',
-        group_id: 2,
-        group_name: 'Synthetic pool',
-        enabled: true,
-        created_at: 1,
-        effective_at: 1,
-        next: null,
-        config: { mode: 'ratio', period: 'upstream', members: [], rates },
-      }}
-      pending={false}
-      onCancel={() => {}}
-      onSubmit={submit}
-    />,
+    <QueryClientProvider client={client}>
+      <SchemeForm
+        groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+        groupID={2}
+        onGroupChange={() => {}}
+        members={team.members}
+        scheme={{
+          id: 1,
+          name: 'Synthetic',
+          group_id: 2,
+          group_name: 'Synthetic pool',
+          enabled: true,
+          created_at: 1,
+          effective_at: 1,
+          next: null,
+          config: { mode: 'ratio', period: 'upstream', members: [], rates },
+        }}
+        pending={false}
+        onCancel={() => {}}
+        onSubmit={submit}
+      />
+    </QueryClientProvider>,
   )
+  expect(
+    screen.getByText('Metering and activation settings').closest('details')
+      ?.open,
+  ).toBe(true)
+  expect(screen.getByLabelText('Model ID')).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'Split equally' }))
   await user.click(
     screen.getByRole('button', { name: 'Save resource allowance' }),
@@ -456,6 +470,88 @@ async function openModelPrices(user: ReturnType<typeof userEvent.setup>) {
   )
   await user.click(screen.getByRole('button', { name: 'Model ID' }))
 }
+it('adds every missing pool model while preserving edited prices', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url.includes('/models'))
+        return new Response(JSON.stringify(modelCatalog))
+      const models = new URL(url, 'http://example.test').searchParams.getAll(
+        'model',
+      )
+      return new Response(
+        JSON.stringify({
+          prices: Object.fromEntries(
+            models.map((model) => [
+              model,
+              {
+                input: model === 'synthetic-pro' ? 5000000 : 1000000,
+                cached: 100000,
+                output: 8000000,
+                source: 'synthetic',
+              },
+            ]),
+          ),
+        }),
+      )
+    }),
+  )
+  const user = userEvent.setup()
+  const submit = mountModelPrices()
+  await user.click(screen.getByLabelText('By amount'))
+  await user.click(screen.getByRole('button', { name: 'Add model price' }))
+  await user.click(screen.getByRole('button', { name: 'Model ID' }))
+  await user.click(
+    await screen.findByRole('menuitemradio', { name: 'synthetic-basic' }),
+  )
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText('Input · USD / M') as HTMLInputElement).value,
+    ).toBe('1'),
+  )
+  await user.clear(screen.getByLabelText('Input · USD / M'))
+  await user.type(screen.getByLabelText('Input · USD / M'), '2')
+  await user.click(
+    screen.getByRole('button', { name: 'Add all available models (1)' }),
+  )
+  await waitFor(() =>
+    expect(screen.getAllByRole('button', { name: 'Model ID' })).toHaveLength(2),
+  )
+  expect(
+    (screen.getAllByLabelText('Input · USD / M')[0] as HTMLInputElement).value,
+  ).toBe('2')
+  await waitFor(() =>
+    expect(
+      (screen.getAllByLabelText('Input · USD / M')[1] as HTMLInputElement)
+        .value,
+    ).toBe('5'),
+  )
+  await user.type(screen.getByLabelText('Resource allowance name'), 'Synthetic')
+  await user.type(screen.getByLabelText('Allowance for synthetic-member'), '10')
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: expect.objectContaining({
+        rates: [
+          {
+            model: 'synthetic-basic',
+            input: 2000000,
+            cached: 100000,
+            output: 8000000,
+          },
+          {
+            model: 'synthetic-pro',
+            input: 5000000,
+            cached: 100000,
+            output: 8000000,
+          },
+        ],
+      }),
+    }),
+  )
+})
 it('selects pool models and replaces prices when changing the selected model', async () => {
   vi.stubGlobal(
     'fetch',
@@ -584,6 +680,13 @@ it('reports a failed catalog and can retry before selecting a model', async () =
       'Could not retrieve the model catalog. Try again later.',
     ),
   ).toBeTruthy()
+  expect(
+    (
+      screen.getByRole('button', {
+        name: /Add all available models/,
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true)
   fetch.mockResolvedValue(new Response(JSON.stringify(modelCatalog)))
   await user.click(screen.getByRole('button', { name: 'Refresh list' }))
   await waitFor(() =>
@@ -596,6 +699,63 @@ it('reports a failed catalog and can retry before selecting a model', async () =
   expect(
     screen.getByRole('menuitemradio', { name: 'synthetic-basic' }),
   ).toBeTruthy()
+})
+
+it('does not bulk add an incomplete pool catalog', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ...modelCatalog, unknown_accounts: 1 })),
+      ),
+  )
+  const user = userEvent.setup()
+  mountModelPrices()
+  await user.click(screen.getByLabelText('By amount'))
+  expect(
+    await screen.findByText(
+      'Some account catalogs are unavailable. This list may be incomplete.',
+    ),
+  ).toBeTruthy()
+  expect(
+    (
+      screen.getByRole('button', {
+        name: 'Add all available models (2)',
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true)
+})
+
+it('explains when the pool catalog exceeds the model price limit', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...modelCatalog,
+          models: Array.from({ length: 129 }, (_, index) => ({
+            id: `synthetic-${index}`,
+            object: 'model',
+            owned_by: 'synthetic',
+          })),
+        }),
+      ),
+    ),
+  )
+  const user = userEvent.setup()
+  mountModelPrices()
+  await user.click(screen.getByLabelText('By amount'))
+  expect(
+    await screen.findByText('Up to 128 model prices can be configured.'),
+  ).toBeTruthy()
+  expect(
+    (
+      screen.getByRole('button', {
+        name: 'Add all available models (129)',
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true)
 })
 
 it('retains a saved model and its custom prices when the catalog no longer lists it', async () => {
@@ -706,6 +866,16 @@ it('shows an empty pool catalog honestly and allows reloading it', async () => {
   const user = userEvent.setup()
   mountModelPrices()
   await user.click(screen.getByLabelText('By amount'))
+  expect(
+    await screen.findByText('No models are currently available to this pool.'),
+  ).toBeTruthy()
+  expect(
+    (
+      screen.getByRole('button', {
+        name: 'Add all available models (0)',
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true)
   await user.click(screen.getByRole('button', { name: 'Add model price' }))
   expect(
     await screen.findByText('No models are currently available to this pool.'),

@@ -80,6 +80,8 @@ export const zh: Record<keyof typeof en, string> = {
   allocationRateCached: '缓存输入 · USD / M',
   allocationRateOutput: '输出 · USD / M',
   allocationAddRate: '添加模型价格',
+  allocationAddAllRates: '添加全部可用模型（{{count}}）',
+  allocationRateLimit: '最多只能配置 128 个模型价格。',
   allocationRemoveRate: '移除第 {{index}} 项模型价格',
   allocationRemove: '移除',
   allocationModelID: '模型 ID',
