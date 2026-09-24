@@ -155,7 +155,7 @@ func (s *Service) List(ctx context.Context, f Filter) (Page, error) {
 		return page, ErrInput
 	}
 	switch f.Resource {
-	case "", "allocation", "key", "group", "member", "user", "account", "proxy", "settings", "backup":
+	case "", "allocation", "key", "group", "member", "user", "account", "proxy", "settings", "backup", "invitation":
 	default:
 		return page, ErrInput
 	}
