@@ -77,15 +77,15 @@ it('creates a pool with only selected accounts', async () => {
       )}
     />,
   )
-  await screen.findByRole('heading', { name: 'Account groups' })
+  await screen.findByRole('heading', { name: 'Account pools' })
   const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Create group' }))
+  await user.click(screen.getByRole('button', { name: 'Create account pool' }))
   const dialog = await screen.findByRole('dialog')
-  await user.type(within(dialog).getByLabelText('Group name'), 'Project alpha')
+  await user.type(within(dialog).getByLabelText('Pool name'), 'Project alpha')
   await user.click(
     await within(dialog).findByRole('checkbox', { name: /Synthetic account/ }),
   )
-  await user.click(within(dialog).getByRole('button', { name: 'Save group' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Save pool' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   await screen.findByText('Project alpha')
 })
@@ -133,7 +133,7 @@ it('edits an exact model allowlist and makes an empty list explicitly deny all',
   expect(
     within(dialog).getByText('No models are allowed while this list is empty.'),
   ).toBeTruthy()
-  await user.click(within(dialog).getByRole('button', { name: 'Save group' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Save pool' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 })
 
@@ -171,13 +171,13 @@ it('shows a renamed first pool and allows editing its name and enabled state', a
     await screen.findByRole('button', { name: 'Edit Synthetic renamed pool' }),
   )
   const dialog = await screen.findByRole('dialog')
-  await user.clear(await within(dialog).findByLabelText('Group name'))
+  await user.clear(await within(dialog).findByLabelText('Pool name'))
   await user.type(
-    within(dialog).getByLabelText('Group name'),
+    within(dialog).getByLabelText('Pool name'),
     'Synthetic updated pool',
   )
-  await user.click(within(dialog).getByLabelText('Group enabled'))
-  await user.click(within(dialog).getByRole('button', { name: 'Save group' }))
+  await user.click(within(dialog).getByLabelText('Pool enabled'))
+  await user.click(within(dialog).getByRole('button', { name: 'Save pool' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(pool.name).toBe('Synthetic updated pool')
   expect(pool.enabled).toBe(false)

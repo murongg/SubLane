@@ -62,7 +62,7 @@ make dev
 从[分步入门教程](https://sublane.dev/docs/zh/guide/installation)开始。使用文档统一维护在[文档仓库](https://github.com/murongg/sublane-website)。
 
 - [部署与升级](https://sublane.dev/docs/zh/deployment) · [备份恢复](https://sublane.dev/docs/zh/backup)
-- [服务商接入](https://sublane.dev/docs/zh/providers) · [API 密钥](https://sublane.dev/docs/zh/api-keys) · [账号分组](https://sublane.dev/docs/zh/groups)
+- [服务商接入](https://sublane.dev/docs/zh/providers) · [API 密钥](https://sublane.dev/docs/zh/api-keys) · [账号池](https://sublane.dev/docs/zh/groups)
 - [开发指南](https://sublane.dev/docs/zh/development) · [系统架构](https://sublane.dev/docs/zh/architecture)
 - [发版说明](https://sublane.dev/docs/zh/releases) · [更新日志](CHANGELOG.md)
 - [参与贡献](CONTRIBUTING.md) · [安全说明](SECURITY.md)

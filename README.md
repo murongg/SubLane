@@ -62,7 +62,7 @@ Open http://127.0.0.1:5173. Run `make check` to test and build the project.
 Follow the [step-by-step tutorial](https://sublane.dev/docs/guide/installation). Guides are maintained in the [documentation repository](https://github.com/murongg/sublane-website).
 
 - [Deployment](https://sublane.dev/docs/deployment) · [Backup and restore](https://sublane.dev/docs/backup)
-- [Providers](https://sublane.dev/docs/providers) · [API keys](https://sublane.dev/docs/api-keys) · [Account groups](https://sublane.dev/docs/groups)
+- [Providers](https://sublane.dev/docs/providers) · [API keys](https://sublane.dev/docs/api-keys) · [Account pools](https://sublane.dev/docs/groups)
 - [Development](https://sublane.dev/docs/development) · [Architecture](https://sublane.dev/docs/architecture)
 - [Releases](https://sublane.dev/docs/releases) · [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)

@@ -164,7 +164,7 @@ it('creates a member and toggles their access using the management API', async (
   await screen.findByRole('button', { name: 'Disable member-test' })
   expect(
     screen.getAllByRole('button', {
-      name: 'Manage groups for member-test',
+      name: 'Manage pools for member-test',
     }),
   ).toHaveLength(2)
   const created = fetchMock.mock.calls.find(
@@ -180,7 +180,7 @@ it('creates a member and toggles their access using the management API', async (
   await screen.findByRole('button', { name: 'Disable member-test' })
 })
 
-it('grants resource group access directly to a member', async () => {
+it('grants resource pool access directly to a member', async () => {
   const fetchMock = vi
     .fn()
     .mockImplementation((url: string, init?: RequestInit) => {
@@ -219,10 +219,10 @@ it('grants resource group access directly to a member', async () => {
   open()
   await user.click(
     await screen.findByRole('button', {
-      name: 'Manage groups for member-test',
+      name: 'Manage pools for member-test',
     }),
   )
-  const dialog = await screen.findByRole('dialog', { name: 'Group access' })
+  const dialog = await screen.findByRole('dialog', { name: 'Pool access' })
   await user.click(
     within(dialog).getByRole('checkbox', { name: 'Synthetic pool' }),
   )
@@ -341,7 +341,7 @@ it('adds an existing login as an administrator and changes its workspace role', 
   )
   expect(
     screen.getAllByRole('button', {
-      name: 'Manage groups for member-test',
+      name: 'Manage pools for member-test',
     }),
   ).toHaveLength(2)
   expect(
@@ -376,7 +376,7 @@ it('offers a pool grant immediately when an older linked login is outside the cu
   await user.click(within(dialog).getByRole('button', { name: 'Save access' }))
   expect(
     await screen.findByRole('button', {
-      name: 'Manage groups for member-test',
+      name: 'Manage pools for member-test',
     }),
   ).toBeTruthy()
 })
