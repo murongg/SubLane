@@ -185,16 +185,20 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
             : 'signInTitle',
         )}
       </h1>
-      <p className="mb-7 mt-2 text-sm leading-6 text-muted-foreground">
-        {t(
-          creating
-            ? setupStep === 'account'
+      {creating && (
+        <p className="mb-7 mt-2 text-sm leading-6 text-muted-foreground">
+          {t(
+            setupStep === 'account'
               ? 'setupDescription'
-              : 'setupFirstWorkspaceDescription'
-            : 'signInDescription',
-        )}
-      </p>
-      <form noValidate onSubmit={submit} className="space-y-5">
+              : 'setupFirstWorkspaceDescription',
+          )}
+        </p>
+      )}
+      <form
+        noValidate
+        onSubmit={submit}
+        className={creating ? 'space-y-5' : 'mt-7 space-y-5'}
+      >
         <div
           hidden={creating && setupStep === 'workspace'}
           className="space-y-5"

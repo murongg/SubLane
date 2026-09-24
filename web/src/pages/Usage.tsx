@@ -117,13 +117,6 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
               {t('teamUsage')}
             </h1>
           )}
-          <p className="page-description">
-            {t(
-              scope === 'personal'
-                ? 'personalUsageDescription'
-                : 'teamUsageDescription',
-            )}
-          </p>
         </div>
         <Button
           variant="outline"

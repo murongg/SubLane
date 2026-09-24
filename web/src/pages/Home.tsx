@@ -20,7 +20,6 @@ export function Home() {
         <div className="max-w-3xl space-y-8">
           <div>
             <h1 className="page-title">{t('memberOverviewTitle')}</h1>
-            <p className="page-description">{t('memberOverviewDescription')}</p>
           </div>
           <section className="rounded-xl border border-border bg-card p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -66,7 +65,6 @@ function AdminHome() {
     <div className="space-y-6">
       <div>
         <h1 className="page-title">{t('overviewTitle')}</h1>
-        <p className="page-description">{t('homeDescription')}</p>
       </div>
       {query.isPending ? (
         <p role="status" className="text-sm text-muted-foreground">

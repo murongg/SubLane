@@ -37,9 +37,6 @@ function BackupPage({ userID }: { userID: number }) {
       <h2 id="backup-title" className="font-medium">
         {t('backupTitle')}
       </h2>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        {t('backupDescription')}
-      </p>
       {query.isPending ? (
         <p role="status" className="mt-6 text-sm text-muted-foreground">
           {t('loading')}

@@ -119,7 +119,6 @@ export function Proxies() {
           <h1 ref={heading} tabIndex={-1} className="page-title outline-none">
             {t('proxiesTitle')}
           </h1>
-          <p className="page-description">{t('proxiesDescription')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setImporting(true)}>
