@@ -467,8 +467,7 @@ export const zh: Record<keyof typeof en, string> = {
   resetPassword: '重置密码',
   resetPasswordFor: '重置 {{username}} 的密码',
   savePassword: '保存密码',
-  passwordSessionNotice:
-    '保存后该用户的所有网页登录将退出；API 密钥仍有效。',
+  passwordSessionNotice: '保存后该用户的所有网页登录将退出；API 密钥仍有效。',
   currentPasswordInvalid: '当前密码不正确。',
   passwordChangedRetry: '密码或账号状态已变更，请重新登录后重试。',
   passwordRateLimited: '密码操作过于频繁，请稍等一分钟后重试。',
@@ -591,8 +590,7 @@ export const zh: Record<keyof typeof en, string> = {
   gatewayNeedsAttention: '需要处理',
   gatewayReadyDescription: '网关已就绪，可使用个人 API 密钥接入客户端。',
   gatewayKeyNeeded: '还需密钥',
-  gatewayKeyNeededDescription:
-    '为已就绪的账号池创建或恢复密钥。',
+  gatewayKeyNeededDescription: '为已就绪的账号池创建或恢复密钥。',
   gatewayNoKey: '暂无可用密钥',
   gatewayKeySetupDescription: '首次调用前，请为已就绪的账号池创建个人密钥。',
   clientGuideTitle: '接入客户端',
@@ -618,13 +616,11 @@ export const zh: Record<keyof typeof en, string> = {
   connectionNotConfigured: '请先让管理员接入并验证订阅账号。',
   checkingSession: '正在检查登录状态…',
   setupWelcome: '欢迎使用 SubLane',
-  setupWelcomeDescription:
-    '两步完成工作空间初始化。',
+  setupWelcomeDescription: '两步完成工作空间初始化。',
   setupAccountStep: '创建管理员账号',
   setupAccountDetail: '设置管理员登录信息。',
   setupWorkspaceStep: '创建第一个工作空间',
-  setupWorkspaceDetail:
-    '为账号、成员、密钥和用量创建独立空间。',
+  setupWorkspaceDetail: '为账号、成员、密钥和用量创建独立空间。',
   startSetup: '开始设置',
   backToWelcome: '返回欢迎页',
   setupBackToAdmin: '返回管理员设置',
@@ -637,8 +633,7 @@ export const zh: Record<keyof typeof en, string> = {
   setupFinishing: '正在创建工作空间…',
   createAdministrator: '创建管理员',
   creatingAdministrator: '正在创建管理员…',
-  setupDescription:
-    '先设置登录信息；完成下一步后一起创建。',
+  setupDescription: '先设置登录信息；完成下一步后一起创建。',
   username: '用户名',
   usernameHint: '使用 3–32 个字母、数字、下划线或连字符，以字母或数字开头。',
   password: '密码',
@@ -686,8 +681,7 @@ export const zh: Record<keyof typeof en, string> = {
     '确认撤销「{{name}}」？使用此密钥的客户端将失去访问权限，此操作无法撤销。',
   keyRevokeFailed: '撤销密钥失败，请重试。',
   manageKeys: '管理 API 密钥',
-  membersDescription:
-    '停用成员会立即阻止其在本空间使用密钥，不影响其他空间。',
+  membersDescription: '停用成员会立即阻止其在本空间使用密钥，不影响其他空间。',
   addMember: '添加成员',
   createInviteLink: '创建邀请链接',
   invitationLink: '邀请链接',
@@ -858,8 +852,7 @@ export const zh: Record<keyof typeof en, string> = {
     '导入所选服务商的 CLIProxyAPI 凭据 JSON，凭据会加密保存在当前实例。',
   providerQuotaUnsupported: '暂未支持该服务商的额度查询。',
   accountGroups: '账号池',
-  groupsAssignmentHint:
-    '新账号默认未分配；加入账号池并授权成员后即可使用。',
+  groupsAssignmentHint: '新账号默认未分配；加入账号池并授权成员后即可使用。',
   accountUnassigned: '未分配',
   accountAssignGroup: '加入账号池',
   groupsEmpty: '还没有账号池。创建一个账号池，并选择要使用的订阅账号。',
@@ -928,8 +921,7 @@ export const zh: Record<keyof typeof en, string> = {
     '最近 7 天 · 全站最多 5,000 条。不保存请求和响应正文。',
   requestKey: 'API 密钥',
   requestGroup: '账号池',
-  requestsDescription:
-    '最近 7 天 · 最多 5,000 条。不保存请求和响应正文。',
+  requestsDescription: '最近 7 天 · 最多 5,000 条。不保存请求和响应正文。',
   requestAccountFilter: '筛选账号',
   requestResultFilter: '筛选结果',
   allRequestAccounts: '全部账号',
@@ -972,8 +964,7 @@ export const zh: Record<keyof typeof en, string> = {
   reasonUnknown: '请求失败',
   reasonContextLimit: '对话上下文超出限制',
   proxiesTitle: '网络代理',
-  proxiesUsageHint:
-    '绑定代理后，账号的服务端请求使用该出口。',
+  proxiesUsageHint: '绑定代理后，账号的服务端请求使用该出口。',
   addProxy: '添加代理',
   editProxy: '编辑代理',
   deleteProxy: '删除代理',

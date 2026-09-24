@@ -676,14 +676,11 @@ export const en = {
     'Ask an administrator to connect and verify a subscription account first.',
   checkingSession: 'Checking your session…',
   setupWelcome: 'Welcome to SubLane',
-  setupWelcomeDescription:
-    'Set up your workspace in two steps.',
+  setupWelcomeDescription: 'Set up your workspace in two steps.',
   setupAccountStep: 'Create your administrator',
-  setupAccountDetail:
-    'Set your login for this instance.',
+  setupAccountDetail: 'Set your login for this instance.',
   setupWorkspaceStep: 'Create your first workspace',
-  setupWorkspaceDetail:
-    'Name the space for accounts, members, keys and usage.',
+  setupWorkspaceDetail: 'Name the space for accounts, members, keys and usage.',
   startSetup: 'Start setup',
   backToWelcome: 'Back to welcome',
   setupBackToAdmin: 'Back to administrator',
@@ -843,8 +840,7 @@ export const en = {
   overviewTitle: 'Workspace overview',
   instanceStatus: 'Instance status',
   gatewaySetup: 'Gateway setup',
-  gatewaySetupDescription:
-    'Connect your team’s first subscription account.',
+  gatewaySetupDescription: 'Connect your team’s first subscription account.',
   adminReadyDescription:
     'Sign-in and management access are set up for this instance.',
   codexSetupDescription:
