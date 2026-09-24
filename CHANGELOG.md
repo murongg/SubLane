@@ -6,6 +6,20 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 
 ### Added
 
+- Combine overview and personal usage (#29)
+
+### Changed
+
+- **BREAKING:** Focus setup on Codex with searchable proxies (#28) — Existing Claude and Antigravity accounts cannot serve requests until those providers are re-enabled.
+
+### Fixed
+
+- Render invitation records (#30)
+- Trim redundant console text (#31)
+## [0.1.0-rc.5] - 2026-09-24
+
+### Added
+
 - Add one-time invitation registration (#22)
 - Add fixed account proxy pool (#24)
 - Add bulk model prices and expand saved rates (#25)
@@ -78,7 +92,8 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 - Distinguish remaining quota with status colors
 - Restore version-gated model discovery
 
-[Unreleased]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.4...HEAD
+[Unreleased]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.5...HEAD
+[0.1.0-rc.5]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.4...v0.1.0-rc.5
 [0.1.0-rc.4]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.3...v0.1.0-rc.4
 [0.1.0-rc.3]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.2...v0.1.0-rc.3
 [0.1.0-rc.2]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.1...v0.1.0-rc.2
