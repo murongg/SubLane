@@ -1,8 +1,13 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { LoaderCircle, Plus, Users } from 'lucide-react'
+import { Copy, Link2, LoaderCircle, Plus, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { getMembers, setMemberEnabled, type Member } from '@/lib/members'
+import {
+  createInvitation,
+  getMembers,
+  setMemberEnabled,
+  type Member,
+} from '@/lib/members'
 import { authOptions } from '@/lib/auth'
 import { selectedWorkspace } from '@/lib/workspace'
 import { Button } from '@/components/ui/Button'
@@ -27,6 +32,14 @@ export function Members() {
   const [createdMember, setCreatedMember] = useState<Member | null>(null)
   const [accessSaved, setAccessSaved] = useState<Member | null>(null)
   const [resetName, setResetName] = useState('')
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>(
+    'idle',
+  )
+  const invitation = useMutation({ mutationFn: createInvitation, gcTime: 0 })
+  // The fragment keeps the secret out of the HTTP request that loads the registration page.
+  const invitationLink = invitation.data
+    ? `${window.location.origin}/invite?workspace=${selectedWorkspace()}#${invitation.data.token}`
+    : ''
   const query = useQuery({
     queryKey: ['members', cursor],
     queryFn: ({ signal }) => getMembers(cursor, signal),
@@ -43,6 +56,24 @@ export function Members() {
           <p className="page-description">{t('membersDescription')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            disabled={invitation.isPending}
+            onClick={() => {
+              setCopyState('idle')
+              invitation.mutate()
+            }}
+          >
+            {invitation.isPending ? (
+              <LoaderCircle
+                className="motion-safe:animate-spin"
+                aria-hidden="true"
+              />
+            ) : (
+              <Link2 aria-hidden="true" />
+            )}
+            {t('createInviteLink')}
+          </Button>
           <Button variant="outline" onClick={() => setMembershipTarget('new')}>
             {t('memberExistingAdd')}
           </Button>
@@ -57,6 +88,62 @@ export function Members() {
           </Button>
         </div>
       </div>
+      {invitation.isError && (
+        <p role="alert" className="text-sm text-error">
+          {t('inviteCreateFailed')}
+        </p>
+      )}
+      {invitation.data && (
+        <section
+          className="space-y-3 rounded-xl border border-border bg-card p-4"
+          aria-label={t('invitationLink')}
+        >
+          <div>
+            <h2 className="text-sm font-medium">{t('invitationLink')}</h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              {t('inviteLinkHint')}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <label htmlFor="member-invitation" className="sr-only">
+              {t('invitationLink')}
+            </label>
+            <input
+              id="member-invitation"
+              className="min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              readOnly
+              value={invitationLink}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(invitationLink)
+                  setCopyState('copied')
+                } catch {
+                  setCopyState('failed')
+                }
+              }}
+            >
+              <Copy aria-hidden="true" />
+              {t('copyInviteLink')}
+            </Button>
+          </div>
+          {copyState !== 'idle' && (
+            <p
+              role={copyState === 'failed' ? 'alert' : 'status'}
+              className={
+                copyState === 'failed'
+                  ? 'text-sm text-error'
+                  : 'text-sm text-success'
+              }
+            >
+              {t(copyState === 'failed' ? 'inviteCopyFailed' : 'inviteCopied')}
+            </p>
+          )}
+        </section>
+      )}
       {createdMember && (
         <div
           role="status"

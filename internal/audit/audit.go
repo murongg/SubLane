@@ -69,7 +69,8 @@ var actions = map[string]string{
 	"key.reveal":      "key", "key.create": "key", "key.update": "key", "key.revoke": "key",
 	"group.create": "group", "group.update": "group",
 	"member.budget": "member", "member.budget_settle": "member", "member.create": "member", "member.update": "member", "member.groups": "member", "member.limits": "member", "member.password": "member",
-	"user.password": "user", "user.recover": "user",
+	"invitation.create": "invitation",
+	"user.password":     "user", "user.recover": "user",
 	"account.create": "account", "account.authorize": "account", "account.update": "account", "account.delete": "account", "account.concurrency": "account", "account.resume": "account",
 }
 var numericID = regexp.MustCompile(`^[1-9][0-9]{0,18}$`)

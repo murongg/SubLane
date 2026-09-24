@@ -93,6 +93,39 @@ function open() {
   )
 }
 
+it('creates a one-time invitation link for the selected workspace', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/members/invitations' && init?.method === 'POST')
+        return Promise.resolve(
+          response(
+            {
+              token: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              expires_at: '2030-01-01T08:00:00+08:00',
+            },
+            201,
+          ),
+        )
+      return Promise.resolve(response({ members: [], next_cursor: 0 }))
+    })
+  vi.stubGlobal('fetch', fetchMock)
+  open()
+  const user = userEvent.setup()
+  await user.click(
+    await screen.findByRole('button', { name: 'Create invite link' }),
+  )
+  const link = await screen.findByRole<HTMLInputElement>('textbox', {
+    name: 'Invitation link',
+  })
+  expect(link.value).toContain(
+    '/invite?workspace=1#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  )
+  expect(screen.getByText(/valid for 7 days/i)).toBeTruthy()
+})
+
 it('creates a member and toggles their access using the management API', async () => {
   let members: (typeof syntheticMember)[] = []
   const fetchMock = vi

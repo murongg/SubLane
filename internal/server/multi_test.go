@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,69 @@ import (
 	"github.com/murongg/SubLane/internal/tenants"
 	"github.com/murongg/SubLane/internal/vault"
 )
+
+func TestInvitationRegistrationSelectsItsWorkspace(t *testing.T) {
+	ctx := context.Background()
+	connection, err := storage.Open(ctx, filepath.Join(t.TempDir(), "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := identity.Setup(ctx, "owner-test", "synthetic-pass", "First workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenancy := tenants.New(connection)
+	second, err := tenancy.Create(ctx, owner.User.ID, "Second workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewMulti(connection, identity, tenancy, "", func(id int64) http.Handler {
+		return New(Options{Auth: identity, Tenants: tenancy, TenantID: id, Ping: connection.PingContext})
+	})
+	call := func(path string, body any, workspace int64, cookie *http.Cookie) *httptest.ResponseRecorder {
+		var payload strings.Builder
+		if err := json.NewEncoder(&payload).Encode(body); err != nil {
+			t.Fatal(err)
+		}
+		r := httptest.NewRequest(http.MethodPost, "http://example.test"+path, strings.NewReader(payload.String()))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Origin", "http://example.test")
+		r.Header.Set(workspaceHeader, fmt.Sprint(workspace))
+		if cookie != nil {
+			r.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	created := call("/api/members/invitations", struct{}{}, second.ID, &http.Cookie{Name: sessionCookie, Value: owner.Token})
+	if created.Code != 201 {
+		t.Fatalf("create invitation: %d %s", created.Code, created.Body.String())
+	}
+	var invitation struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &invitation); err != nil {
+		t.Fatal(err)
+	}
+	input := map[string]string{"token": invitation.Token, "username": "invited-test", "password": "synthetic-pass"}
+	if wrong := call("/api/auth/register", input, 1, nil); wrong.Code != 410 {
+		t.Fatalf("wrong workspace accepted: %d %s", wrong.Code, wrong.Body.String())
+	}
+	registered := call("/api/auth/register", input, second.ID, nil)
+	if registered.Code != 201 || !strings.Contains(registered.Body.String(), `"role":"member"`) {
+		t.Fatalf("selected workspace registration: %d %s", registered.Code, registered.Body.String())
+	}
+	var firstMembership int
+	if err := connection.QueryRowContext(ctx, "SELECT count(*) FROM memberships WHERE tenant_id=1 AND user_id=(SELECT id FROM users WHERE username='invited-test')").Scan(&firstMembership); err != nil || firstMembership != 0 {
+		t.Fatalf("invited member leaked into first workspace: %d %v", firstMembership, err)
+	}
+}
 
 func TestWorkspaceDispatchUsesKeyForGatewayAndSelectionForManagement(t *testing.T) {
 	ctx := context.Background()

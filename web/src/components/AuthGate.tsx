@@ -16,6 +16,7 @@ export function AuthGate() {
   const query = useQuery(authOptions())
   const path = useRouterState({ select: (state) => state.location.pathname })
   const isSetup = path === '/setup' || path === '/setup/admin'
+  const isInvite = path === '/invite'
   if (query.isPending)
     return (
       <AuthShell>
@@ -49,8 +50,13 @@ export function AuthGate() {
     return isSetup ? <Outlet /> : <Navigate to="/setup" replace />
   if (query.data.needs_workspace) return <WorkspaceChooser />
   if (!query.data.user)
-    return path === '/login' ? <Outlet /> : <Navigate to="/login" replace />
-  if (isSetup || path === '/login') return <Navigate to="/" replace />
+    return path === '/login' || isInvite ? (
+      <Outlet />
+    ) : (
+      <Navigate to="/login" replace />
+    )
+  if (isSetup || path === '/login' || isInvite)
+    return <Navigate to="/" replace />
   if (
     !canAccess(
       path,

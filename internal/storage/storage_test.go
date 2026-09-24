@@ -38,8 +38,51 @@ func TestOpenInitializesSchemaAndPreservesData(t *testing.T) {
 		t.Fatalf("value=%q err=%v", value, err)
 	}
 	var migrations int
-	if err := db.QueryRow("SELECT count(*) FROM schema_migrations").Scan(&migrations); err != nil || migrations != 1 {
-		t.Fatalf("migrations=%d err=%v", migrations, err)
+	wantMigrations, versionErr := CurrentSchemaVersion()
+	if err := db.QueryRow("SELECT count(*) FROM schema_migrations").Scan(&migrations); err != nil || versionErr != nil || migrations != wantMigrations {
+		t.Fatalf("migrations=%d want=%d err=%v versionErr=%v", migrations, wantMigrations, err, versionErr)
+	}
+}
+
+func TestOpenAddsInvitationMigrationToExistingSchema(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "synthetic-previous.db")
+	previous, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial, err := migrations.ReadFile("migrations/001_schema.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := previous.ExecContext(ctx, `CREATE TABLE schema_migrations (name TEXT PRIMARY KEY NOT NULL, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := previous.ExecContext(ctx, string(initial)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := previous.ExecContext(ctx, `INSERT INTO schema_migrations(name) VALUES('001_schema.sql'); INSERT INTO settings(key,value) VALUES('synthetic.migration','retained')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := previous.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer upgraded.Close()
+	var retained string
+	if err := upgraded.QueryRowContext(ctx, `SELECT value FROM settings WHERE key='synthetic.migration'`).Scan(&retained); err != nil || retained != "retained" {
+		t.Fatalf("previous data: %q %v", retained, err)
+	}
+	var table string
+	if err := upgraded.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name='invitations'`).Scan(&table); err != nil || table != "invitations" {
+		t.Fatalf("invitation table: %q %v", table, err)
+	}
+	var applied int
+	if err := upgraded.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations WHERE name='002_invitations.sql'`).Scan(&applied); err != nil || applied != 1 {
+		t.Fatalf("migration record: %d %v", applied, err)
 	}
 }
 

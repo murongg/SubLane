@@ -13,9 +13,27 @@ func (h *authHTTP) registerMembers(router chi.Router) {
 	routeErrors(router)
 	router.Get("/", h.listMembers)
 	router.Post("/", h.createMember)
+	router.With(h.requireOrigin).Post("/invitations", h.createInvitation)
 	router.Patch("/{id}", h.memberStatus)
 	router.Patch("/{id}/role", h.memberRole)
 	router.With(h.throttleLogin).Post("/{id}/password", h.resetMemberPassword)
+}
+
+func (h *authHTTP) createInvitation(w http.ResponseWriter, r *http.Request) {
+	var input struct{}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	invitation, err := h.service.CreateInvitation(r.Context(), h.tenantID, sessionUser(r).ID)
+	if err != nil {
+		if errors.Is(err, tenants.ErrForbidden) {
+			writeJSON(w, 403, map[string]string{"error": "forbidden"})
+		} else {
+			authError(w, err)
+		}
+		return
+	}
+	writeJSON(w, 201, invitation)
 }
 
 func (h *authHTTP) memberRole(w http.ResponseWriter, r *http.Request) {

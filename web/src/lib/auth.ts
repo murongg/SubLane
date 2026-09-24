@@ -66,6 +66,23 @@ export function signIn(input: { username: string; password: string }) {
   })
 }
 
+export function registerInvitation(input: {
+  token: string
+  username: string
+  password: string
+  workspace: number
+}) {
+  return request('/api/auth/register', authSchema, {
+    method: 'POST',
+    headers: { 'X-SubLane-Workspace': String(input.workspace) },
+    body: JSON.stringify({
+      token: input.token,
+      username: input.username,
+      password: input.password,
+    }),
+  })
+}
+
 export function setup(input: {
   username: string
   password: string

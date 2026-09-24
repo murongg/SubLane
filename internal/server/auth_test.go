@@ -104,6 +104,47 @@ func TestAuthenticationHTTPFlow(t *testing.T) {
 	}
 }
 
+func TestInvitationHTTPFlow(t *testing.T) {
+	h := authFixture(t, "")
+	setup := request(h, "POST", "/api/auth/setup", "http://example.test", map[string]string{
+		"username": "owner-test", "password": "synthetic-pass", "workspace_name": "Synthetic workspace",
+	}, nil)
+	if setup.Code != 201 {
+		t.Fatalf("setup: %d %s", setup.Code, setup.Body.String())
+	}
+	owner := setup.Result().Cookies()[0]
+	if got := request(h, "POST", "/api/members/invitations", "http://example.test", map[string]string{}, nil).Code; got != 401 {
+		t.Fatalf("anonymous invitation creation: %d", got)
+	}
+	created := request(h, "POST", "/api/members/invitations", "http://example.test", map[string]string{}, owner)
+	if created.Code != 201 {
+		t.Fatalf("create invitation: %d %s", created.Code, created.Body.String())
+	}
+	var invitation struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &invitation); err != nil || invitation.Token == "" {
+		t.Fatalf("invalid invitation response: %v %s", err, created.Body.String())
+	}
+	input := map[string]string{"token": invitation.Token, "username": "invited-test", "password": "synthetic-pass"}
+	if got := request(h, "POST", "/api/auth/register", "https://other.example.test", input, nil).Code; got != 403 {
+		t.Fatalf("cross-origin registration: %d", got)
+	}
+	registered := request(h, "POST", "/api/auth/register", "http://example.test", input, nil)
+	if registered.Code != 201 || !strings.Contains(registered.Body.String(), `"role":"member"`) || len(registered.Result().Cookies()) != 1 {
+		t.Fatalf("registration: %d %s", registered.Code, registered.Body.String())
+	}
+	if got := request(h, "POST", "/api/auth/register", "http://example.test", map[string]string{
+		"token": invitation.Token, "username": "second-test", "password": "synthetic-pass",
+	}, nil).Code; got != 410 {
+		t.Fatalf("reused invitation: %d", got)
+	}
+	member := registered.Result().Cookies()[0]
+	if got := request(h, "POST", "/api/members/invitations", "http://example.test", map[string]string{}, member).Code; got != 403 {
+		t.Fatalf("member invitation creation: %d", got)
+	}
+}
+
 func TestSetupRequiresNamedWorkspace(t *testing.T) {
 	h := authFixture(t, "")
 	credentials := map[string]string{"username": "synthetic-admin", "password": "synthetic-password"}

@@ -753,6 +753,23 @@ export const en = {
   membersDescription:
     'Manage access to this workspace. Disabling a member blocks their keys here without affecting other workspaces.',
   addMember: 'Add member',
+  createInviteLink: 'Create invite link',
+  invitationLink: 'Invitation link',
+  inviteLinkHint:
+    'This link is valid for 7 days and can be used once. Share it privately; the new member will create their own login.',
+  copyInviteLink: 'Copy link',
+  inviteCopied: 'Invitation link copied.',
+  inviteCopyFailed: 'Could not copy the link. Select and copy it manually.',
+  inviteCreateFailed: 'Could not create an invitation. Please try again.',
+  inviteJoinTitle: 'Join workspace',
+  inviteJoinDescription:
+    'Create your account to join the workspace that invited you.',
+  inviteInvalid:
+    'This invitation is invalid, expired, or already used. Ask an administrator for a new link.',
+  inviteRegisterFailed: 'Could not create your account. Please try again.',
+  inviteCreateAccount: 'Create account',
+  inviteRegistering: 'Creating account…',
+  inviteBackToLogin: 'Already have an account? Sign in',
   memberExistingAdd: 'Add existing account',
   memberExistingDescription:
     'Enter an existing login and choose its role in this workspace. If the account is already here, change its role from the member list.',

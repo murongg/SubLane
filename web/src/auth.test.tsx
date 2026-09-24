@@ -60,6 +60,64 @@ function open(path = '/') {
   )
 }
 
+it('registers a member through an invitation link', async () => {
+  const calls: Array<{
+    url: string
+    body: unknown
+    workspace: string | undefined
+  }> = []
+  const fetchMock = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state') return Promise.resolve(response(anonymous))
+      if (url === '/api/auth/register') {
+        calls.push({
+          url,
+          body: JSON.parse(String(init?.body)),
+          workspace: (init?.headers as Record<string, string>)?.[
+            'X-SubLane-Workspace'
+          ],
+        })
+        return Promise.resolve(
+          response(
+            {
+              initialized: true,
+              user: { id: 2, username: 'invited-test', role: 'member' },
+            },
+            201,
+          ),
+        )
+      }
+      return Promise.resolve(response(system))
+    })
+  vi.stubGlobal('fetch', fetchMock)
+  const user = userEvent.setup()
+  open('/invite?workspace=2#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+  await screen.findByRole('heading', { name: 'Join workspace' })
+  await user.type(screen.getByLabelText('Username'), 'invited-test')
+  await user.type(
+    screen.getByLabelText('Password', { exact: true }),
+    'synthetic-pass',
+  )
+  await user.type(screen.getByLabelText('Confirm password'), 'synthetic-pass')
+  await user.click(screen.getByRole('button', { name: 'Create account' }))
+  await waitFor(() =>
+    expect(calls).toEqual([
+      {
+        url: '/api/auth/register',
+        body: {
+          token: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          username: 'invited-test',
+          password: 'synthetic-pass',
+        },
+        workspace: '2',
+      },
+    ]),
+  )
+  expect(sessionStorage.getItem('sublane.workspace')).toBe('2')
+  sessionStorage.removeItem('sublane.workspace')
+})
+
 it('welcomes a fresh instance, creates the administrator, and enters the workspace', async () => {
   const calls: Array<{ url: string; body: unknown }> = []
   vi.stubGlobal(
