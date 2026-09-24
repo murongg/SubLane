@@ -252,8 +252,6 @@ export const en = {
   auditSettingsUpdate: 'Updated instance settings',
   auditSettings: 'Instance settings',
   backupTitle: 'Backup and restore',
-  backupDescription:
-    'Save your instance data or prepare an independent restored directory.',
   backupExportTitle: 'Create a backup',
   backupExportDescription:
     'Export a consistent database snapshot and its encryption key while SubLane is running. The archive contains credentials; keep it private.',
@@ -296,7 +294,7 @@ export const en = {
   auditBackupPrepare: 'Prepared restored data',
   auditBackupVerify: 'Verified backup',
   systemSettings: 'System settings',
-  systemSettingsDescription: 'Manage instance-wide settings for your team.',
+  systemSettingsDescription: 'Applies to every workspace.',
   codexVersionTitle: 'Codex client version',
   codexVersionDescription:
     'Instance-wide settings for Codex model discovery and requests. Version checks read official release metadata; they do not install software.',
@@ -429,7 +427,6 @@ export const en = {
   groupRestrictedModels: 'Model allowlist',
   reasonModelNotAllowed: 'Model not allowed by this pool',
   auditLog: 'Audit log',
-  auditDescription: 'Track changes to accounts, members and access policies.',
   auditResourceFilter: 'Resource type',
   auditAllResources: 'All resources',
   auditMember: 'Member',
@@ -505,7 +502,7 @@ export const en = {
   resetPasswordFor: 'Reset password for {{username}}',
   savePassword: 'Save password',
   passwordSessionNotice:
-    'Use 8–20 characters. Saving signs this user out of all browser sessions. Existing API keys remain valid.',
+    'Saving signs this user out of all browser sessions. API keys stay valid.',
   currentPasswordInvalid: 'The current password is incorrect.',
   passwordChangedRetry:
     'The password or account status changed. Sign in again and retry.',
@@ -537,9 +534,6 @@ export const en = {
   usageSummary: 'Usage',
   yourUsage: 'Your usage',
   teamUsage: 'Team usage',
-  personalUsageDescription: 'Review your model calls and reported token usage.',
-  teamUsageDescription:
-    'Review team activity by day, member, model and account pool.',
   usagePeriod: 'Usage period',
   usageToday: 'Today',
   usageLastDays: 'Last {{days}} days',
@@ -654,7 +648,7 @@ export const en = {
     'Your gateway is ready. Connect a client using a personal API key.',
   gatewayKeyNeeded: 'Key needed',
   gatewayKeyNeededDescription:
-    'A subscription is connected, but no usable personal key is ready. Create or reactivate a key for a ready pool.',
+    'Create or reactivate a key for a ready account pool.',
   gatewayNoKey: 'No usable key',
   gatewayKeySetupDescription:
     'Create a personal key for a ready account pool before your first request.',
@@ -683,13 +677,13 @@ export const en = {
   checkingSession: 'Checking your session…',
   setupWelcome: 'Welcome to SubLane',
   setupWelcomeDescription:
-    'A lightweight subscription gateway for internal teams. Let’s get your workspace ready.',
+    'Set up your workspace in two steps.',
   setupAccountStep: 'Create your administrator',
   setupAccountDetail:
-    'Choose the username and password you’ll use to manage this instance.',
+    'Set your login for this instance.',
   setupWorkspaceStep: 'Create your first workspace',
   setupWorkspaceDetail:
-    'Name the space for your accounts, members, keys and usage. Setup finishes only after this step.',
+    'Name the space for accounts, members, keys and usage.',
   startSetup: 'Start setup',
   backToWelcome: 'Back to welcome',
   setupBackToAdmin: 'Back to administrator',
@@ -697,13 +691,13 @@ export const en = {
   setupContinue: 'Continue',
   setupFirstWorkspace: 'Create your first workspace',
   setupFirstWorkspaceDescription:
-    'Choose the name shown in the workspace switcher. Your administrator account and this workspace will be created together.',
+    'This name appears in the switcher. Your account and workspace are created together.',
   setupFinish: 'Create workspace',
   setupFinishing: 'Creating workspace…',
   createAdministrator: 'Create administrator',
   creatingAdministrator: 'Creating administrator…',
   setupDescription:
-    'Choose your administrator credentials. Next, you’ll name your first workspace before either is created.',
+    'Set your login. Your account and workspace are created after the next step.',
   username: 'Username',
   usernameHint:
     'Use 3–32 letters, numbers, underscores, or hyphens. Start with a letter or number.',
@@ -713,7 +707,6 @@ export const en = {
   passwordRequired: 'Enter your password.',
   passwordMismatch: 'Passwords do not match.',
   signInTitle: 'Sign in to SubLane',
-  signInDescription: 'Use your SubLane account to access the workspace.',
   signIn: 'Sign in',
   signingIn: 'Signing in…',
   signOut: 'Sign out',
@@ -723,9 +716,8 @@ export const en = {
   members: 'Members',
   apiKeys: 'API keys',
   apiKey: 'API key',
-  apiKeysDescription: 'Manage the gateway keys owned by your account.',
   gatewayKeysNotice:
-    'Use these personal keys for model requests. Subscription credentials are managed separately by an administrator.',
+    'Personal keys access models; administrators manage subscription credentials.',
   createKey: 'Create key',
   createKeyTitle: 'Create API key',
   createKeyDescription:
@@ -759,7 +751,7 @@ export const en = {
   keyRevokeFailed: 'Could not revoke this key. Please try again.',
   manageKeys: 'Manage API keys',
   membersDescription:
-    'Manage access to this workspace. Disabling a member blocks their keys here without affecting other workspaces.',
+    'Disabling a member immediately blocks their keys in this workspace only.',
   addMember: 'Add member',
   createInviteLink: 'Create invite link',
   invitationLink: 'Invitation link',
@@ -825,7 +817,6 @@ export const en = {
   disabled: 'Disabled',
   yourAccount: 'Your account',
   memberOverviewTitle: 'Your workspace',
-  memberOverviewDescription: 'Your account and gateway access.',
   memberAccessDescription:
     'Create a personal API key and configure your client to use this gateway.',
   accessDenied: 'Access denied',
@@ -850,13 +841,10 @@ export const en = {
   foundation: 'Foundation',
   internalGateway: 'Team subscription gateway',
   overviewTitle: 'Workspace overview',
-  homeDescription: 'Your model usage and gateway access.',
   instanceStatus: 'Instance status',
-  overviewDescription:
-    'Instance health and progress toward your first request.',
   gatewaySetup: 'Gateway setup',
   gatewaySetupDescription:
-    'Your administrator account is ready. Next, connect your team’s first subscription.',
+    'Connect your team’s first subscription account.',
   adminReadyDescription:
     'Sign-in and management access are set up for this instance.',
   codexSetupDescription:
@@ -893,23 +881,18 @@ export const en = {
   codexTitle: 'Subscription access',
   viewAccounts: 'View accounts',
   accountsTitle: 'Subscription accounts',
-  accountsDescription: 'Manage the subscription accounts used by your team.',
   accountEmptyTitle: 'No subscription accounts',
   accountEmptyDescription:
     'Connect a Codex account using browser authorization or a credential JSON file.',
   providerDisabled: 'This provider is temporarily disabled.',
   backToOverview: 'Back to overview',
-  preferencesDescription: 'Make this workspace feel familiar.',
   appearance: 'Appearance',
-  appearanceDescription: 'Choose a light, dark, or system theme.',
   theme: 'Theme',
   themeLabel: 'Interface theme',
   light: 'Light',
   dark: 'Dark',
   system: 'System',
   language: 'Language',
-  languageDescription:
-    'Your choice is saved in this browser. English is the default.',
   navigation: 'Navigation',
   navigationDescription: 'Navigate between workspace pages.',
   toggleNavigation: 'Toggle navigation',
@@ -958,10 +941,8 @@ export const en = {
   providerQuotaUnsupported:
     'Quota reporting is not available for this provider yet.',
   accountGroups: 'Account pools',
-  groupsDescription:
-    'Organize subscription accounts into pools, then grant access to members.',
   groupsAssignmentHint:
-    'New accounts remain unassigned until you add them to a pool. Grant pool access directly to members, then optionally configure an allowance.',
+    'New accounts start unassigned. Add them to a pool and grant member access.',
   accountUnassigned: 'Unassigned',
   accountAssignGroup: 'Assign to an account pool',
   groupsEmpty:
@@ -1032,11 +1013,11 @@ export const en = {
   allRequests: 'All requests',
   yourRequests: 'Your requests',
   personalRequestsDescription:
-    'Your model calls from the last 7 days, within the instance-wide limit of 5,000 records. Request and response bodies are never recorded.',
+    'Last 7 days · up to 5,000 records instance-wide. Request and response bodies are not stored.',
   requestKey: 'API key',
   requestGroup: 'Pool',
   requestsDescription:
-    'Completed model calls from the last 7 days, up to 5,000 records. Request and response bodies are never recorded.',
+    'Last 7 days · up to 5,000 records. Request and response bodies are not stored.',
   requestAccountFilter: 'Account filter',
   requestResultFilter: 'Result filter',
   allRequestAccounts: 'All accounts',
@@ -1080,10 +1061,8 @@ export const en = {
   reasonUnknown: 'Request failed',
   reasonContextLimit: 'Conversation context limit',
   proxiesTitle: 'Network proxies',
-  proxiesDescription:
-    'Manage outbound proxy endpoints for subscription accounts in this workspace.',
   proxiesUsageHint:
-    'Assign one proxy to each account. Its server requests keep that exit until you change the binding.',
+    'Bind a proxy to route an account’s server requests through that exit.',
   addProxy: 'Add proxy',
   editProxy: 'Edit proxy',
   deleteProxy: 'Delete proxy',

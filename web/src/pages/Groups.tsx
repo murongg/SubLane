@@ -29,7 +29,6 @@ export function Groups() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="page-title">{t('accountGroups')}</h1>
-          <p className="page-description">{t('groupsDescription')}</p>
         </div>
         <Button onClick={() => setEditing(0)}>
           <Plus aria-hidden="true" />

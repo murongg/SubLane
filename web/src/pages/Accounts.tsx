@@ -101,7 +101,6 @@ export function Accounts() {
           <h1 ref={heading} tabIndex={-1} className="page-title outline-none">
             {t('accountsTitle')}
           </h1>
-          <p className="page-description">{t('accountsDescription')}</p>
         </div>
         <Button
           onClick={() => {

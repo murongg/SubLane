@@ -42,7 +42,6 @@ function AuditLog() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="page-title">{t('auditLog')}</h1>
-          <p className="page-description">{t('auditDescription')}</p>
         </div>
         <Button
           variant="outline"

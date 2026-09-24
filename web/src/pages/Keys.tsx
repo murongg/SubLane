@@ -50,7 +50,6 @@ function KeyManager({ userID }: { userID: number }) {
           <h1 ref={heading} tabIndex={-1} className="page-title outline-none">
             {t('apiKeys')}
           </h1>
-          <p className="page-description">{t('apiKeysDescription')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ClientGuide userID={userID} />
