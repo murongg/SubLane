@@ -243,13 +243,16 @@ func accountSummary(ctx context.Context, service *accounts.Service) (map[string]
 	if service == nil {
 		return summary, nil
 	}
+	if !service.ProviderEnabled("claude") {
+		summary["provider"] = "codex"
+	}
 	list, err := service.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 	enabled, ready := 0, 0
 	for _, account := range list {
-		if account.Enabled {
+		if account.Enabled && service.ProviderEnabled(account.Provider) {
 			enabled++
 			if account.Status == "ready" {
 				ready++

@@ -214,7 +214,11 @@ export function Accounts() {
                       aria-label={t('verifyAccountConnection', {
                         name: account.name,
                       })}
-                      disabled={pending || !account.enabled}
+                      disabled={
+                        pending ||
+                        !account.enabled ||
+                        account.provider !== 'codex'
+                      }
                       onClick={() => {
                         clear()
                         check.mutate(account.id)
@@ -258,33 +262,37 @@ export function Accounts() {
                           <SlidersHorizontal aria-hidden="true" />
                           {t('accountScheduling')}
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="[@media(pointer:coarse)]:min-h-11"
-                          onSelect={() => {
-                            clear()
-                            setConnecting(account)
-                          }}
-                        >
-                          <RefreshCw aria-hidden="true" />
-                          {t('reauthorizeAccount')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="[@media(pointer:coarse)]:min-h-11"
-                          onSelect={() => {
-                            clear()
-                            update.mutate({
-                              id: account.id,
-                              enabled: !account.enabled,
-                            })
-                          }}
-                        >
-                          <Power aria-hidden="true" />
-                          {t(
-                            account.enabled
-                              ? 'disableAccount'
-                              : 'enableAccount',
-                          )}
-                        </DropdownMenuItem>
+                        {account.provider === 'codex' && (
+                          <>
+                            <DropdownMenuItem
+                              className="[@media(pointer:coarse)]:min-h-11"
+                              onSelect={() => {
+                                clear()
+                                setConnecting(account)
+                              }}
+                            >
+                              <RefreshCw aria-hidden="true" />
+                              {t('reauthorizeAccount')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="[@media(pointer:coarse)]:min-h-11"
+                              onSelect={() => {
+                                clear()
+                                update.mutate({
+                                  id: account.id,
+                                  enabled: !account.enabled,
+                                })
+                              }}
+                            >
+                              <Power aria-hidden="true" />
+                              {t(
+                                account.enabled
+                                  ? 'disableAccount'
+                                  : 'enableAccount',
+                              )}
+                            </DropdownMenuItem>
+                          </>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-error focus:bg-error-muted focus:text-error [@media(pointer:coarse)]:min-h-11"
@@ -313,11 +321,13 @@ export function Accounts() {
                         </h3>
                         <p className="text-sm leading-5 text-muted-foreground">
                           {t(
-                            account.enabled
-                              ? account.status === 'reauth_required'
-                                ? 'accountReauthorizeHint'
-                                : 'providerQuotaUnsupported'
-                              : 'accountDisabledHint',
+                            account.provider !== 'codex'
+                              ? 'providerDisabled'
+                              : account.enabled
+                                ? account.status === 'reauth_required'
+                                  ? 'accountReauthorizeHint'
+                                  : 'providerQuotaUnsupported'
+                                : 'accountDisabledHint',
                           )}
                         </p>
                       </div>
@@ -404,6 +414,7 @@ export function Accounts() {
                         target={{ kind: 'account', id: account.id }}
                         name={account.name}
                         disabled={
+                          account.provider !== 'codex' ||
                           !account.enabled ||
                           account.status === 'reauth_required'
                         }
@@ -460,7 +471,7 @@ function AccountStatus({ account }: { account: Account }) {
   return (
     <Status
       kind={
-        !account.enabled
+        account.provider !== 'codex' || !account.enabled
           ? 'neutral'
           : account.status === 'ready'
             ? 'success'
@@ -470,13 +481,15 @@ function AccountStatus({ account }: { account: Account }) {
       }
     >
       {t(
-        !account.enabled
-          ? 'disabled'
-          : account.status === 'ready'
-            ? 'accountVerified'
-            : account.status === 'reauth_required'
-              ? 'accountNeedsAuth'
-              : 'accountUnverified',
+        account.provider !== 'codex'
+          ? 'providerDisabled'
+          : !account.enabled
+            ? 'disabled'
+            : account.status === 'ready'
+              ? 'accountVerified'
+              : account.status === 'reauth_required'
+                ? 'accountNeedsAuth'
+                : 'accountUnverified',
       )}
     </Status>
   )

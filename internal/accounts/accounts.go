@@ -19,15 +19,16 @@ import (
 )
 
 var (
-	ErrAllocated   = errors.New("allocation_pool_locked")
-	ErrInput       = errors.New("invalid_account_input")
-	ErrDuplicate   = errors.New("account_exists")
-	ErrIdentity    = errors.New("account_identity_mismatch")
-	ErrNotFound    = errors.New("account_not_found")
-	ErrDisabled    = errors.New("account_disabled")
-	ErrReauthorize = errors.New("account_reauthorization_required")
-	ErrRefresh     = errors.New("account_refresh_failed")
-	ErrLimit       = errors.New("account_limit")
+	ErrAllocated        = errors.New("allocation_pool_locked")
+	ErrInput            = errors.New("invalid_account_input")
+	ErrDuplicate        = errors.New("account_exists")
+	ErrIdentity         = errors.New("account_identity_mismatch")
+	ErrNotFound         = errors.New("account_not_found")
+	ErrDisabled         = errors.New("account_disabled")
+	ErrProviderDisabled = errors.New("provider_disabled")
+	ErrReauthorize      = errors.New("account_reauthorization_required")
+	ErrRefresh          = errors.New("account_refresh_failed")
+	ErrLimit            = errors.New("account_limit")
 )
 
 type Account struct {
@@ -47,13 +48,21 @@ type Account struct {
 }
 
 type Service struct {
-	db       *sql.DB
-	queries  *db.Queries
-	vault    *vault.Vault
-	tenantID int64
-	now      func() time.Time
+	db        *sql.DB
+	queries   *db.Queries
+	vault     *vault.Vault
+	tenantID  int64
+	now       func() time.Time
+	codexOnly bool
 	// Refresh and administrator mutations share one owner; no model stream holds this lock.
 	mu sync.Mutex
+}
+
+// RestrictToCodex is set during runtime construction, before the service handles requests.
+func (s *Service) RestrictToCodex() { s.codexOnly = true }
+
+func (s *Service) ProviderEnabled(provider string) bool {
+	return !s.codexOnly || provider == "codex"
 }
 
 func New(connection *sql.DB, cipher *vault.Vault) *Service {
@@ -87,6 +96,12 @@ func (s *Service) ImportProvider(ctx context.Context, provider, name string, raw
 	return s.ImportProviderWithProxy(ctx, provider, name, raw, replaceID, "")
 }
 func (s *Service) ImportProviderWithProxy(ctx context.Context, provider, name string, raw []byte, replaceID, proxyID string) (Account, error) {
+	if provider == "" {
+		provider = "codex"
+	}
+	if !s.ProviderEnabled(provider) {
+		return Account{}, ErrProviderDisabled
+	}
 	credential, err := ParseFor(provider, raw)
 	if err != nil {
 		return Account{}, err
@@ -103,6 +118,9 @@ func (s *Service) AuthorizeWithProxy(ctx context.Context, name string, credentia
 }
 
 func (s *Service) save(ctx context.Context, name string, credential Credential, replaceID, proxyID, status string) (Account, error) {
+	if !s.ProviderEnabled(credential.Kind()) {
+		return Account{}, ErrProviderDisabled
+	}
 	if err := credential.validate(); err != nil {
 		return Account{}, err
 	}
@@ -203,6 +221,9 @@ func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) (Acco
 	if err != nil {
 		return Account{}, err
 	}
+	if enabled && !s.ProviderEnabled(row.Provider) {
+		return Account{}, ErrProviderDisabled
+	}
 	row.Enabled = enabled
 	row.UpdatedAt = s.now().Unix()
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -271,6 +292,9 @@ func (s *Service) prepare(ctx context.Context, id, rejectedToken string, refresh
 	row, err := s.get(ctx, id)
 	if err != nil {
 		return Credential{}, err
+	}
+	if !s.ProviderEnabled(row.Provider) {
+		return Credential{}, ErrProviderDisabled
 	}
 	if !row.Enabled {
 		return Credential{}, ErrDisabled

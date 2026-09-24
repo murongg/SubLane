@@ -90,6 +90,36 @@ func TestOAuthStateIsSessionBoundSingleUseAndPKCEProtected(t *testing.T) {
 	}
 }
 
+func TestCodexOnlyPolicyRejectsOtherProviderOAuth(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	connection, err := storage.Open(ctx, filepath.Join(dir, "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-password", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := accounts.New(connection, cipher)
+	service.RestrictToCodex()
+	flow := New(service, &fakeProvider{})
+	if _, err := flow.BeginProvider(ctx, "claude", "synthetic-session", "Synthetic account", ""); !errors.Is(err, accounts.ErrProviderDisabled) {
+		t.Fatal("other provider OAuth started", err)
+	}
+	if _, err := flow.BeginProvider(ctx, "codex", "synthetic-session", "Synthetic account", ""); err != nil {
+		t.Fatal("Codex OAuth blocked", err)
+	}
+}
+
 func TestOAuthStartsWithWorkspaceProxyBinding(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

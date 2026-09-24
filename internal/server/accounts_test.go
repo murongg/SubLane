@@ -6,12 +6,44 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/vault"
 )
+
+func TestAccountSummaryExcludesPausedProviders(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	connection, err := storage.Open(ctx, filepath.Join(dir, "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-password", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := accounts.New(connection, cipher)
+	if _, err := legacy.Authorize(ctx, "Synthetic Claude", accounts.Credential{Provider: "claude", AccountID: "synthetic-claude", AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", ExpiresAt: time.Now().Add(time.Hour).Unix()}, ""); err != nil {
+		t.Fatal(err)
+	}
+	service := accounts.New(connection, cipher)
+	service.RestrictToCodex()
+	summary, err := accountSummary(ctx, service)
+	if err != nil || summary["accounts_total"] != 1 || summary["accounts_enabled"] != 0 || summary["status"] != "not_configured" {
+		t.Fatal("paused provider counted as ready", summary, err)
+	}
+}
 
 func TestAccountManagementIsAdministratorOnlyAndNeverReturnsTokens(t *testing.T) {
 	ctx := context.Background()

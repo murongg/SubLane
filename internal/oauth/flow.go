@@ -69,6 +69,9 @@ func (f *Flow) BeginProviderWithProxy(ctx context.Context, provider, session, na
 	if !accounts.ValidProvider(provider) {
 		return Authorization{}, accounts.ErrInput
 	}
+	if !f.accounts.ProviderEnabled(provider) {
+		return Authorization{}, accounts.ErrProviderDisabled
+	}
 	if session == "" {
 		return Authorization{}, ErrState
 	}
@@ -134,6 +137,11 @@ func (f *Flow) Finish(ctx context.Context, session, state, callback string) (acc
 		}
 		f.mu.Unlock()
 		return accounts.Account{}, ErrState
+	}
+	if !f.accounts.ProviderEnabled(entry.provider) {
+		delete(f.pending, state)
+		f.mu.Unlock()
+		return accounts.Account{}, accounts.ErrProviderDisabled
 	}
 	code, err := callbackCodeFor(entry.provider, callback, state)
 	if errors.Is(err, ErrCallback) {

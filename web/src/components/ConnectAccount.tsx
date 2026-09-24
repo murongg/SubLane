@@ -11,10 +11,12 @@ import {
   type Account,
   type Provider,
   providers,
+  enabledProviders,
   providerLabels,
   callbackURLs,
 } from '@/lib/accounts'
 import { ProviderLogo } from './ProviderLogo'
+import { ProxyPicker } from './ProxyPicker'
 import { proxyOptions } from '@/lib/proxies'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -248,7 +250,17 @@ export function ConnectAccount({
                   variant="ghost"
                   aria-label={providerLabels[id]}
                   aria-pressed={provider === id}
-                  disabled={busy || Boolean(account) || Boolean(begin.data)}
+                  disabled={
+                    busy ||
+                    Boolean(account) ||
+                    Boolean(begin.data) ||
+                    !enabledProviders.includes(id)
+                  }
+                  title={
+                    !enabledProviders.includes(id)
+                      ? t('providerDisabled')
+                      : undefined
+                  }
                   className="relative h-auto min-w-0 flex-col gap-2 rounded-lg border border-border bg-card px-2 py-3 shadow-none hover:bg-muted aria-pressed:border-foreground aria-pressed:bg-muted dark:hover:bg-muted"
                   onClick={() => {
                     if (provider === id) return
@@ -289,10 +301,7 @@ export function ConnectAccount({
             />
           </div>
           {!account && (
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">
-                {t('accountProxy')}
-              </legend>
+            <div className="space-y-2">
               {proxies.isPending ? (
                 <p role="status" className="text-sm text-muted-foreground">
                   {t('loadingProxies')}
@@ -302,33 +311,17 @@ export function ConnectAccount({
                   {t('proxiesLoadFailed')}
                 </p>
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { id: '', name: t('directConnection') },
-                    ...proxies.data.proxies,
-                  ].map((proxy) => (
-                    <label
-                      key={proxy.id}
-                      className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm has-[:checked]:border-foreground has-[:checked]:bg-muted"
-                    >
-                      <input
-                        type="radio"
-                        name="new-account-proxy"
-                        value={proxy.id}
-                        checked={proxyID === proxy.id}
-                        onChange={() => setProxyID(proxy.id)}
-                        disabled={busy || Boolean(begin.data)}
-                        className="accent-foreground"
-                      />
-                      <span>{proxy.name}</span>
-                    </label>
-                  ))}
-                </div>
+                <ProxyPicker
+                  value={proxyID}
+                  onChange={setProxyID}
+                  proxies={proxies.data.proxies}
+                  disabled={busy || Boolean(begin.data)}
+                />
               )}
               <p className="text-xs leading-5 text-muted-foreground">
                 {t('accountProxyHint')}
               </p>
-            </fieldset>
+            </div>
           )}
           {!begin.data && (
             <div

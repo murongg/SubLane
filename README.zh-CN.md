@@ -25,7 +25,7 @@ SubLane 将 AI 订阅账号整合为统一网关，并用独立工作空间隔�
 
 ## 功能
 
-- 支持 Codex、Claude、Antigravity 账号，通过 OAuth 授权或导入凭据接入。
+- 当前仅开放 Codex 账号，可通过 OAuth 授权或导入凭据接入。Claude 和 Antigravity 暂时停用，已有账号记录保留。
 - 提供 OpenAI 兼容 API、[Claude Messages 和 Gemini 原生生成接口](https://sublane.dev/docs/zh/protocols)，支持 HTTP/SSE 及 Responses WebSocket。
 - 多工作空间隔离成员、订阅账号、账号池、个人 API 密钥、用量与审计记录。
 - 账号池调度、并发限制、冷却恢复和 Codex 额度感知。

@@ -27,6 +27,9 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 	if userID <= 0 || groupID <= 0 {
 		return "", digest, upstream.ErrInput
 	}
+	if provider != "" && !s.accounts.ProviderEnabled(provider) {
+		return "", digest, accounts.ErrProviderDisabled
+	}
 	if err := s.loadRuntime(ctx); err != nil {
 		return "", digest, err
 	}
@@ -101,6 +104,9 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 			if bound == nil {
 				return id, digest, accounts.ErrNotFound
 			}
+			if !s.accounts.ProviderEnabled(bound.Provider) {
+				return id, digest, accounts.ErrProviderDisabled
+			}
 			if kind == Compact && bound.Provider != "codex" {
 				return id, digest, upstream.ErrInput
 			}
@@ -151,7 +157,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 	var cooling, quotaWait int64
 	var allocationErr error
 	for _, account := range available {
-		if !allowed[account.ID] || !account.Enabled || account.Status == "reauth_required" || (provider != "" && account.Provider != provider) || (kind == Compact && account.Provider != "codex") {
+		if !s.accounts.ProviderEnabled(account.Provider) || !allowed[account.ID] || !account.Enabled || account.Status == "reauth_required" || (provider != "" && account.Provider != provider) || (kind == Compact && account.Provider != "codex") {
 			continue
 		}
 		if model != "" && !policy.Allows(account.Provider+"/"+model) {

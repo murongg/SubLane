@@ -63,6 +63,16 @@ func TestRuntimeRoutesManagementToOwnedWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	paused := httptest.NewRequest(http.MethodPost, "/api/accounts/import", strings.NewReader(`{"provider":"claude","name":"Synthetic paused","auth_json":"{}"}`))
+	paused.Header.Set("X-SubLane-Workspace", strconv.FormatInt(workspace.ID, 10))
+	paused.Header.Set("Origin", "http://example.com")
+	paused.Header.Set("Content-Type", "application/json")
+	paused.AddCookie(&http.Cookie{Name: "sublane_session", Value: owner.Token})
+	pausedResponse := httptest.NewRecorder()
+	h.ServeHTTP(pausedResponse, paused)
+	if pausedResponse.Code != http.StatusConflict || !strings.Contains(pausedResponse.Body.String(), "provider_disabled") {
+		t.Fatalf("paused provider import: %d %s", pausedResponse.Code, pausedResponse.Body.String())
+	}
 	for _, check := range []struct {
 		workspace int64
 		token     string

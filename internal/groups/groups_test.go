@@ -245,6 +245,29 @@ func TestConnectionReadinessOnlyUsesAuthorizedGroups(t *testing.T) {
 	}
 }
 
+func TestConnectionReadinessExcludesPausedProviders(t *testing.T) {
+	connection, service, member, account := fixture(t)
+	ctx := context.Background()
+	if _, err := connection.ExecContext(ctx, "UPDATE accounts SET provider='claude' WHERE id=?", account.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Save(ctx, 0, groups.Input{Name: "Synthetic pool", Enabled: true, AccountIDs: []string{account.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	choices, err := service.Available(ctx, 1)
+	if err != nil || len(choices) != 1 || choices[0].AccountCount != 0 {
+		t.Fatal("paused account counted as available", choices, err)
+	}
+	status, err := service.Connection(ctx, 1)
+	if err != nil || status != "not_configured" {
+		t.Fatal("paused provider made gateway appear ready", status, err)
+	}
+	status, err = service.Connection(ctx, member.ID)
+	if err != nil || status != "not_configured" {
+		t.Fatal("paused provider made member ready", status, err)
+	}
+}
+
 func TestPoolMembersListsOnlyDirectEnabledGrants(t *testing.T) {
 	_, service, member, _ := assignedFixture(t)
 	values, err := service.Members(context.Background(), 1)

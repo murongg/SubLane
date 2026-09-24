@@ -3,6 +3,7 @@ import { ApiError, request } from './request'
 
 export const providers = ['codex', 'claude', 'antigravity'] as const
 export type Provider = (typeof providers)[number]
+export const enabledProviders: readonly Provider[] = ['codex']
 export const providerLabels: Record<Provider, string> = {
   codex: 'Codex',
   claude: 'Claude',
@@ -136,6 +137,7 @@ const messages = {
   account_identity_mismatch: 'accountIdentityMismatch',
   account_limit: 'accountLimitReached',
   account_disabled: 'accountDisabledHint',
+  provider_disabled: 'providerDisabled',
   account_reauthorization_required: 'accountReauthorizeHint',
   account_refresh_failed: 'accountRefreshFailed',
   invalid_proxy_input: 'proxyInvalidInput',

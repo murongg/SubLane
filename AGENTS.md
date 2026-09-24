@@ -2,7 +2,7 @@
 
 ## Context
 
-Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and [the architecture guide](https://sublane.dev/docs/architecture) for implementation boundaries before making significant changes. Local account access, Codex, Claude, and Antigravity OAuth/import, encrypted credentials, and gateway forwarding are implemented. Live subscription and desktop compatibility require separate evidence; see [the Codex guide](https://sublane.dev/docs/codex).
+Read `PRODUCT.md` for product scope, `DESIGN.md` for interface rules, and [the architecture guide](https://sublane.dev/docs/architecture) for implementation boundaries before making significant changes. Local account access and Codex OAuth/import, encrypted credentials, and gateway forwarding are active. Claude and Antigravity integrations are retained but temporarily disabled. Live subscription and desktop compatibility require separate evidence; see [the Codex guide](https://sublane.dev/docs/codex).
 
 Use English for code comments, `PRODUCT.md`, and primary developer documentation. Keep the English and Simplified Chinese UI dictionaries complete. English is the default interface language.
 
