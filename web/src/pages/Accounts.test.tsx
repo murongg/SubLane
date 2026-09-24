@@ -236,7 +236,14 @@ it('binds an account to a named network proxy', async () => {
   )
   const dialog = await screen.findByRole('dialog')
   await user.click(
-    within(dialog).getByRole('radio', { name: 'Synthetic exit' }),
+    within(dialog).getByRole('button', { name: /Network proxy/ }),
+  )
+  await user.type(
+    screen.getByRole('searchbox', { name: 'Search proxies' }),
+    'exit',
+  )
+  await user.click(
+    screen.getByRole('menuitemradio', { name: 'Synthetic exit' }),
   )
   await user.click(
     within(dialog).getByRole('button', { name: 'Save proxy binding' }),
@@ -250,21 +257,98 @@ it('binds an account to a named network proxy', async () => {
   await screen.findByText('Network proxy: Synthetic exit')
 })
 
-it('chooses a provider and starts its authorization without reusing Codex URLs', async () => {
+it('searches network proxies when connecting an account and submits the selected id', async () => {
+  const proxies = [
+    {
+      id: 'mock-east',
+      name: 'Mock East',
+      endpoint: 'http://east.example.test',
+      account_count: 0,
+      created_at: 1,
+      updated_at: 1,
+    },
+    {
+      id: 'mock-west',
+      name: 'Mock West',
+      endpoint: 'http://west.example.test',
+      account_count: 0,
+      created_at: 1,
+      updated_at: 1,
+    },
+  ]
+  let imported: Record<string, string> | undefined
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/proxies') return Promise.resolve(response({ proxies }))
+      if (url === '/api/accounts/import') {
+        imported = JSON.parse(String(init?.body)) as Record<string, string>
+        return Promise.resolve(
+          response({ ...account, proxy_id: imported.proxy_id }, 201),
+        )
+      }
+      return Promise.resolve(response({ accounts: [] }))
+    }),
+  )
+  const user = userEvent.setup()
+  open()
+  await screen.findByText('No subscription accounts')
+  await user.click(screen.getByRole('button', { name: 'Add account' }))
+  const dialog = await screen.findByRole('dialog')
+  await user.click(
+    within(dialog).getByRole('button', { name: /Network proxy/ }),
+  )
+  const search = screen.getByRole('searchbox', { name: 'Search proxies' })
+  await user.type(search, 'missing')
+  expect(screen.getByText('No matching proxies.')).toBeTruthy()
+  await user.clear(search)
+  await user.type(search, 'west')
+  expect(screen.getByRole('menuitemradio', { name: 'Mock West' })).toBeTruthy()
+  expect(screen.queryByRole('menuitemradio', { name: 'Mock East' })).toBeNull()
+  await user.keyboard('{ArrowDown}{Enter}')
+  expect(
+    within(dialog).getByRole('button', { name: 'Network proxy: Mock West' }),
+  ).toBeTruthy()
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Network proxy: Mock West' }),
+  )
+  await user.keyboard('{Escape}')
+  expect(screen.queryByRole('searchbox', { name: 'Search proxies' })).toBeNull()
+  expect(screen.getByRole('dialog')).toBeTruthy()
+  await user.type(
+    within(dialog).getByLabelText('Account name'),
+    'Synthetic account',
+  )
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Import auth.json' }),
+  )
+  await user.click(within(dialog).getByLabelText('auth.json contents'))
+  await user.paste(
+    '{"access_token":"synthetic-access","refresh_token":"synthetic-refresh","account_id":"synthetic-id"}',
+  )
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Import account' }),
+  )
+  await waitFor(() => expect(imported?.proxy_id).toBe('mock-west'))
+})
+
+it('shows three providers with only Codex selectable and starts its authorization', async () => {
   const fetch = vi
     .fn()
     .mockImplementation((url: string, init?: RequestInit) => {
       if (url === '/api/auth/state')
         return Promise.resolve(response(authenticated))
       if (url === '/api/accounts/oauth') {
-        expect(JSON.parse(String(init?.body)).provider).toBe('claude')
+        expect(JSON.parse(String(init?.body)).provider).toBe('codex')
         return Promise.resolve(
           response(
             {
-              url: 'https://claude.ai/oauth/authorize?state=synthetic-state',
+              url: 'https://auth.openai.com/oauth/authorize?state=synthetic-state',
               state: 'synthetic-state',
               expires_at: 9999999999,
-              callback_url: 'http://localhost:54545/callback',
+              callback_url: 'http://localhost:1455/auth/callback',
             },
             201,
           ),
@@ -282,23 +366,70 @@ it('chooses a provider and starts its authorization without reusing Codex URLs',
   expect(
     within(choices).getByRole('button', { name: 'Codex', pressed: true }),
   ).toBeTruthy()
-  await user.click(within(choices).getByRole('button', { name: 'Claude' }))
   expect(
-    within(choices).getByRole('button', { name: 'Claude', pressed: true }),
-  ).toBeTruthy()
-  await user.type(screen.getByLabelText('Account name'), 'Synthetic Claude')
+    (
+      within(choices).getByRole('button', {
+        name: 'Claude',
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true)
+  expect(
+    (
+      within(choices).getByRole('button', {
+        name: 'Antigravity (Gemini)',
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true)
+  await user.type(screen.getByLabelText('Account name'), 'Synthetic Codex')
   await user.click(screen.getByRole('button', { name: 'Start authorization' }))
   expect(
     (
       await screen.findByRole('link', { name: 'Open provider authorization' })
     ).getAttribute('href'),
-  ).toContain('claude.ai/oauth/authorize')
+  ).toContain('auth.openai.com/oauth/authorize')
   expect(
-    screen.getByPlaceholderText('http://localhost:54545/callback?...'),
+    screen.getByPlaceholderText('http://localhost:1455/auth/callback?...'),
   ).toBeTruthy()
   for (const button of within(choices).getAllByRole('button')) {
     expect((button as HTMLButtonElement).disabled).toBe(true)
   }
+})
+
+it('shows a stored legacy account as unavailable without reconnect actions', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      return Promise.resolve(
+        response({
+          accounts: [{ ...account, provider: 'claude', status: 'ready' }],
+        }),
+      )
+    }),
+  )
+  open()
+  const card = (await screen.findByText('Test subscription')).closest(
+    'article',
+  )!
+  expect(
+    within(card).getAllByText('This provider is temporarily disabled.'),
+  ).toHaveLength(2)
+  expect(
+    (
+      within(card).getByRole('button', {
+        name: 'Verify connection for Test subscription',
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true)
+  await userEvent.setup().click(
+    within(card).getByRole('button', {
+      name: 'Actions for Test subscription',
+    }),
+  )
+  expect(screen.queryByRole('menuitem', { name: 'Reauthorize' })).toBeNull()
+  expect(screen.queryByRole('menuitem', { name: 'Enable account' })).toBeNull()
+  expect(screen.getByRole('menuitem', { name: 'Remove account' })).toBeTruthy()
 })
 
 it('updates an account concurrency limit from scheduling settings', async () => {

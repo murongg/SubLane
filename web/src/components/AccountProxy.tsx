@@ -4,6 +4,7 @@ import { LoaderCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { accountErrorKey, bindAccountProxy, type Account } from '@/lib/accounts'
 import { proxyOptions } from '@/lib/proxies'
+import { ProxyPicker } from './ProxyPicker'
 import { Button } from './ui/Button'
 import {
   Dialog,
@@ -83,31 +84,12 @@ export function AccountProxy({
               </Button>
             </div>
           ) : (
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">
-                {t('accountProxy')}
-              </legend>
-              {[
-                { id: '', name: t('directConnection') },
-                ...query.data.proxies,
-              ].map((proxy) => (
-                <label
-                  key={proxy.id}
-                  className="flex min-h-10 items-center gap-3 rounded-md border border-border px-3 py-2 text-sm has-[:checked]:border-foreground has-[:checked]:bg-muted"
-                >
-                  <input
-                    type="radio"
-                    name="proxy"
-                    value={proxy.id}
-                    checked={proxyID === proxy.id}
-                    onChange={() => setProxyID(proxy.id)}
-                    disabled={save.isPending}
-                    className="accent-foreground"
-                  />
-                  <span className="min-w-0 break-words">{proxy.name}</span>
-                </label>
-              ))}
-            </fieldset>
+            <ProxyPicker
+              value={proxyID}
+              onChange={setProxyID}
+              proxies={query.data.proxies}
+              disabled={save.isPending}
+            />
           )}
           {save.isError && (
             <p role="alert" className="text-sm text-error">

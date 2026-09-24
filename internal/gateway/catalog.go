@@ -98,6 +98,9 @@ func (s *Service) AccountCatalog(ctx context.Context, id string, force bool) (Ca
 	if err != nil {
 		return CatalogSnapshot{}, err
 	}
+	if !s.accounts.ProviderEnabled(account.Provider) {
+		return CatalogSnapshot{}, accounts.ErrProviderDisabled
+	}
 	if !account.Enabled {
 		return CatalogSnapshot{}, accounts.ErrDisabled
 	}
@@ -284,7 +287,7 @@ func (s *Service) warmCatalogs(ctx context.Context, userID, groupID int64, provi
 	}
 	ids := []string{}
 	for _, account := range rows {
-		if !allowed[account.ID] || !account.Enabled || account.Status == "reauth_required" || !policyHasProvider(policy, account.Provider) || (provider != "" && account.Provider != provider) {
+		if !s.accounts.ProviderEnabled(account.Provider) || !allowed[account.ID] || !account.Enabled || account.Status == "reauth_required" || !policyHasProvider(policy, account.Provider) || (provider != "" && account.Provider != provider) {
 			continue
 		}
 		ids = append(ids, account.ID)
@@ -329,7 +332,7 @@ func (s *Service) GroupCatalog(ctx context.Context, userID, groupID int64, wait 
 	}
 	seen := map[string]int{}
 	for _, account := range rows {
-		if !policyHasProvider(policy, account.Provider) {
+		if !s.accounts.ProviderEnabled(account.Provider) || !policyHasProvider(policy, account.Provider) {
 			continue
 		}
 		saved, err := accounts.DecodeCatalog(account.ModelsSnapshot, account.ModelsRevision)

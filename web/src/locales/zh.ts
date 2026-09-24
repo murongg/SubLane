@@ -810,8 +810,8 @@ export const zh: Record<keyof typeof en, string> = {
   accountsTitle: '订阅账号',
   accountsDescription: '管理团队使用的订阅账号。',
   accountEmptyTitle: '还没有订阅账号',
-  accountEmptyDescription:
-    '通过浏览器授权或凭据 JSON 文件，接入 Codex、Claude 或 Antigravity 账号。',
+  accountEmptyDescription: '通过浏览器授权或凭据 JSON 文件接入 Codex 账号。',
+  providerDisabled: '该服务商暂时停用。',
   backToOverview: '返回概览',
   preferencesDescription: '按你的习惯调整工作空间。',
   appearance: '外观',
@@ -1013,6 +1013,8 @@ export const zh: Record<keyof typeof en, string> = {
   accountProxyHint:
     '服务端请求使用所选出口；浏览器授权页面仍在你的浏览器中打开。',
   directConnection: '默认网络出口',
+  proxySearch: '搜索代理',
+  proxyNoMatch: '没有匹配的代理。',
   saveProxyBinding: '保存代理绑定',
   proxyAssigned: '已绑定',
   importProxies: '批量导入代理',

@@ -53,6 +53,7 @@ func (r *tenantRegistry) Handler(id int64) http.Handler {
 		return runtime.handler
 	}
 	accountService := accounts.NewForTenant(r.db, r.vault, id)
+	accountService.RestrictToCodex()
 	forwarding := gateway.NewForTenant(r.ctx, r.db, accountService, r.provider, id, r.pricing)
 	dataDir := ""
 	var codexVersions *versions.Service

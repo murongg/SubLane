@@ -894,7 +894,8 @@ export const en = {
   accountsDescription: 'Manage the subscription accounts used by your team.',
   accountEmptyTitle: 'No subscription accounts',
   accountEmptyDescription:
-    'Connect Codex, Claude, or Antigravity using browser authorization or a credential JSON file.',
+    'Connect a Codex account using browser authorization or a credential JSON file.',
+  providerDisabled: 'This provider is temporarily disabled.',
   backToOverview: 'Back to overview',
   preferencesDescription: 'Make this workspace feel familiar.',
   appearance: 'Appearance',
@@ -1109,6 +1110,8 @@ export const en = {
   accountProxyHint:
     'Server requests use the selected exit. Browser authorization still opens in your browser.',
   directConnection: 'Default network route',
+  proxySearch: 'Search proxies',
+  proxyNoMatch: 'No matching proxies.',
   saveProxyBinding: 'Save proxy binding',
   proxyAssigned: 'Assigned',
   importProxies: 'Import proxies',

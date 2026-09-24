@@ -24,6 +24,37 @@ func providerGateway(t *testing.T, transport http.RoundTripper) (*Service, map[s
 	return providerFixture(t, transport, true)
 }
 
+func TestCodexOnlyPolicyExcludesStoredProvidersAndCatalogs(t *testing.T) {
+	s, ids := providerGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("unexpected upstream request")
+		return nil, errors.New("unexpected")
+	}))
+	ctx := context.Background()
+	s.accounts.RestrictToCodex()
+	if id, _, err := s.selectAccount(ctx, 1, 1, "", "", "synthetic-model", Responses); err != nil || id != ids["codex"] {
+		t.Fatal("selected inactive provider", id, err)
+	}
+	if _, _, err := s.selectAccount(ctx, 1, 1, "", "claude", "synthetic-model", Responses); !errors.Is(err, accounts.ErrProviderDisabled) {
+		t.Fatal("explicit inactive provider accepted", err)
+	}
+	if _, _, err := s.selectAccount(ctx, 1, 1, "legacy-session", "", "synthetic-model", Responses); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.ExecContext(ctx, "UPDATE account_affinity SET account_id = ? WHERE account_id = ?", ids["claude"], ids["codex"]); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.selectAccount(ctx, 1, 1, "legacy-session", "", "synthetic-model", Responses); !errors.Is(err, accounts.ErrProviderDisabled) {
+		t.Fatal("inactive affinity accepted", err)
+	}
+	if _, err := s.AccountCatalog(ctx, ids["claude"], false); !errors.Is(err, accounts.ErrProviderDisabled) {
+		t.Fatal("inactive catalog refreshed", err)
+	}
+	group, err := s.GroupCatalog(ctx, 1, 1, false)
+	if err != nil || len(group.Models) != 1 || group.KnownAccounts != 1 {
+		t.Fatal("inactive model published", group, err)
+	}
+}
+
 // Codex protocol fixtures must not accidentally execute their synthetic SSE through another provider.
 func codexGateway(t *testing.T, transport http.RoundTripper) (*Service, map[string]string) {
 	t.Helper()

@@ -256,6 +256,8 @@ func accountError(w http.ResponseWriter, err error) {
 		status, code = 400, "provider_usage_unsupported"
 	case errors.Is(err, accounts.ErrInput):
 		status, code = 400, "invalid_account_input"
+	case errors.Is(err, accounts.ErrProviderDisabled):
+		status, code = 409, "provider_disabled"
 	case errors.Is(err, accounts.ErrProxyInput):
 		status, code = 400, "invalid_proxy_input"
 	case errors.Is(err, accounts.ErrProxyNotFound):

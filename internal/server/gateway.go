@@ -316,7 +316,7 @@ func gatewayFailure(err error) (int, string) {
 		return 429, "account_busy"
 	case errors.Is(err, gateway.ErrBusy), errors.Is(err, gateway.ErrAffinityLimit):
 		return 429, "gateway_busy"
-	case errors.Is(err, accounts.ErrDisabled), errors.Is(err, accounts.ErrNotFound):
+	case errors.Is(err, accounts.ErrDisabled), errors.Is(err, accounts.ErrProviderDisabled), errors.Is(err, accounts.ErrNotFound):
 		return 503, "account_unavailable"
 	case errors.Is(err, accounts.ErrReauthorize):
 		return 503, "account_reauthorization_required"

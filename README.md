@@ -25,7 +25,7 @@ SubLane brings AI subscriptions into one gateway with isolated workspaces for di
 
 ## Features
 
-- Codex, Claude and Antigravity accounts through OAuth or credential import.
+- Codex accounts through OAuth or credential import. Claude and Antigravity are temporarily disabled; existing account records are retained.
 - OpenAI-compatible APIs, [native Claude Messages and Gemini generation](https://sublane.dev/docs/protocols), with HTTP/SSE and Responses WebSocket support.
 - Isolated workspaces with their own members, accounts, pools, personal API keys, usage and audit records.
 - Account pooling, concurrency limits, cooldowns and Codex quota awareness.
