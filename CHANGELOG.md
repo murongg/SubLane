@@ -6,6 +6,18 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 
 ### Added
 
+- Add one-time invitation registration (#22)
+- Add fixed account proxy pool (#24)
+- Add bulk model prices and expand saved rates (#25)
+
+### Fixed
+
+- Unify account pool terminology (#23)
+- Rename Chinese allocation UI to usage allocation (#26)
+## [0.1.0-rc.4] - 2026-09-23
+
+### Added
+
 - Show Codex reset cards in compact cards
 
 ### Changed
@@ -66,7 +78,8 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 - Distinguish remaining quota with status colors
 - Restore version-gated model discovery
 
-[Unreleased]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.3...HEAD
+[Unreleased]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.4...HEAD
+[0.1.0-rc.4]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.3...v0.1.0-rc.4
 [0.1.0-rc.3]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.2...v0.1.0-rc.3
 [0.1.0-rc.2]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.1...v0.1.0-rc.2
 [0.1.0-rc.1]: https://github.com/murongg/SubLane/releases/tag/v0.1.0-rc.1
