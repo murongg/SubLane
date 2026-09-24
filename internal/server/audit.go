@@ -81,6 +81,12 @@ func auditTarget(r *http.Request) (string, string, string) {
 		action, resource = "member.create", "member"
 	case path == "/api/groups" && r.Method == "POST":
 		action, resource = "group.create", "group"
+	case path == "/api/proxies" && r.Method == "POST":
+		action, resource = "proxy.create", "proxy"
+	case path == "/api/proxies/import" && r.Method == "POST":
+		action, resource = "proxy.import", "proxy"
+	case path == "/api/proxies/prune" && r.Method == "POST":
+		action, resource = "proxy.prune", "proxy"
 	case path == "/api/me/password" && r.Method == "POST":
 		action, resource, id = "user.password", "user", audit.ID(sessionUser(r).ID)
 	case (path == "/api/accounts/import" || path == "/api/accounts/oauth/complete") && r.Method == "POST":
@@ -147,6 +153,9 @@ func auditTarget(r *http.Request) (string, string, string) {
 			}
 		case "accounts":
 			resource = "account"
+			if tail == "proxy" && r.Method == "PUT" {
+				action = "account.proxy"
+			}
 			if tail == "" && r.Method == "PATCH" {
 				action = "account.update"
 			}
@@ -158,6 +167,14 @@ func auditTarget(r *http.Request) (string, string, string) {
 			}
 			if tail == "resume" && r.Method == "POST" {
 				action = "account.resume"
+			}
+		case "proxies":
+			resource = "proxy"
+			if tail == "" && r.Method == "PUT" {
+				action = "proxy.update"
+			}
+			if tail == "" && r.Method == "DELETE" {
+				action = "proxy.delete"
 			}
 		}
 	}

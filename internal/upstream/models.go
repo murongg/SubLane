@@ -53,7 +53,7 @@ func (c *Client) providerModels(ctx context.Context, credential accounts.Credent
 	if err != nil {
 		return nil, err
 	}
-	response, err := executor.HttpRequest(c.sdkContext(ctx), sdkAuth(credential), req)
+	response, err := executor.HttpRequest(c.sdkContext(ctx, credential), sdkAuth(credential), req)
 	if err != nil {
 		return nil, sdkError(err)
 	}
@@ -110,7 +110,7 @@ func (c *Client) prepareProject(ctx context.Context, credential accounts.Credent
 	if !ok || !preparer.ShouldPrepareRequestAuth(auth) {
 		return credential, nil
 	}
-	updated, err := preparer.PrepareRequestAuth(c.sdkContext(ctx), auth)
+	updated, err := preparer.PrepareRequestAuth(c.sdkContext(ctx, credential), auth)
 	if err != nil {
 		return accounts.Credential{}, sdkError(err)
 	}

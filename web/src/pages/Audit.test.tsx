@@ -82,3 +82,49 @@ it('never requests audit records for members, including direct navigation', asyn
     false,
   )
 })
+
+it('renders and filters network proxy audit records', async () => {
+  const fetch = vi.fn().mockImplementation((url: string) => {
+    if (url === '/api/auth/state')
+      return Promise.resolve(response(authenticated))
+    if (url.startsWith('/api/audit'))
+      return Promise.resolve(
+        response({
+          events: [
+            {
+              id: 1,
+              actor_id: 1,
+              actor_name: 'synthetic-admin',
+              actor_role: 'admin',
+              source: 'user',
+              action: 'proxy.create',
+              resource: 'proxy',
+              resource_id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              outcome: 'success',
+              http_status: null,
+              created_at: 1900000000,
+            },
+          ],
+          next_cursor: 0,
+        }),
+      )
+    return Promise.reject(new Error('Unexpected request'))
+  })
+  vi.stubGlobal('fetch', fetch)
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/admin/audit'] }),
+      )}
+    />,
+  )
+  await screen.findByText('Created network proxy')
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Resource type' }))
+  await user.click(screen.getByRole('menuitemradio', { name: 'Network proxy' }))
+  await waitFor(() =>
+    expect(
+      fetch.mock.calls.some(([url]) => url.includes('resource=proxy')),
+    ).toBe(true),
+  )
+})

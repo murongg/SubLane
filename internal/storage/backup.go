@@ -177,17 +177,24 @@ func ValidateSnapshot(ctx context.Context, connection *sql.DB) (int, error) {
 		return 0, err
 	}
 	version := 0
+	formerProxyHistory := false
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
 			rows.Close()
 			return 0, err
 		}
-		if version >= len(entries) || entries[version].Name() != name {
-			rows.Close()
-			return 0, errors.New("backup has an unknown or incomplete migration history")
+		if version < len(entries) && entries[version].Name() == name {
+			version++
+			continue
 		}
-		version++
+		if len(entries) >= 3 && version == 3 && name == formerProxyChecksMigration {
+			formerProxyHistory = true
+			version++
+			continue
+		}
+		rows.Close()
+		return 0, errors.New("backup has an unknown or incomplete migration history")
 	}
 	err = rows.Err()
 	rows.Close()
@@ -196,6 +203,11 @@ func ValidateSnapshot(ctx context.Context, connection *sql.DB) (int, error) {
 	}
 	if version == 0 {
 		return 0, errors.New("backup has no SubLane schema")
+	}
+	if formerProxyHistory {
+		if err := verifyProxyCheckColumns(ctx, connection); err != nil {
+			return 0, errors.New("backup has an incomplete proxy check schema")
+		}
 	}
 	var integrity string
 	if err := connection.QueryRowContext(ctx, "PRAGMA integrity_check(1)").Scan(&integrity); err != nil {

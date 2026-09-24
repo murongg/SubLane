@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/murongg/SubLane/internal/storage"
@@ -48,6 +49,24 @@ func TestManagementAuditIsScopedToWorkspace(t *testing.T) {
 		if err != nil || len(page.Events) != 1 || page.Events[0].ResourceID != ID(tenantID) {
 			t.Fatalf("management audit leaked across workspaces: %+v, %v", page, err)
 		}
+	}
+}
+
+func TestProxyAuditCanBeFiltered(t *testing.T) {
+	ctx := WithActor(context.Background(), Actor{TenantID: 1, ID: 1, Username: "synthetic-admin", Role: "admin", Source: "user"})
+	connection, err := storage.Open(ctx, filepath.Join(t.TempDir(), "audit.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	seedAuditTenant(t, connection, 1)
+	id := strings.Repeat("a", 32)
+	if err := Record(ctx, db.New(connection), "proxy.create", "proxy", id); err != nil {
+		t.Fatal(err)
+	}
+	page, err := New(connection).List(ctx, Filter{Resource: "proxy"})
+	if err != nil || len(page.Events) != 1 || page.Events[0].ResourceID != id {
+		t.Fatalf("proxy filter: %+v %v", page, err)
 	}
 }
 

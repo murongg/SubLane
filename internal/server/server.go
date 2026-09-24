@@ -19,6 +19,7 @@ import (
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/oauth"
 	"github.com/murongg/SubLane/internal/tenants"
+	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/versions"
 )
 
@@ -39,6 +40,7 @@ type Options struct {
 	TenantID      int64
 	PublicURL     string
 	CodexVersions *versions.Service
+	ProxyCheck    func(context.Context, string) (upstream.ProxyCheck, error)
 }
 
 func New(o Options) http.Handler {
@@ -176,6 +178,7 @@ func New(o Options) http.Handler {
 			(&versionHTTP{service: o.CodexVersions}).register(settings)
 		})
 		management.Route("/accounts", accountManagement.register)
+		management.Route("/proxies", (&proxyHTTP{service: o.Accounts, check: o.ProxyCheck}).register)
 		management.Get("/requests", accountManagement.requests)
 		management.Get("/requests/filters", accountManagement.requestFilters)
 		management.Route("/allocations", allocationManagement.register)

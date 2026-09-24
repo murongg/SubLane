@@ -60,6 +60,11 @@ const routes = root.addChildren([
   }),
   createRoute({
     getParentRoute: () => root,
+    path: '/admin/proxies',
+    component: lazyRouteComponent(() => import('@/pages/Proxies'), 'Proxies'),
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: '/usage',
     component: lazyRouteComponent(() => import('@/pages/Usage'), 'Usage'),
   }),

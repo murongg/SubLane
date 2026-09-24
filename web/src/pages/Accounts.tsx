@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   Plus,
   Power,
+  Route,
   RefreshCw,
   SlidersHorizontal,
   Trash2,
@@ -27,7 +28,9 @@ import { ConnectAccount } from '@/components/ConnectAccount'
 import { DeleteAccount } from '@/components/DeleteAccount'
 import { Status } from '@/components/Status'
 import { AccountLimits } from '@/components/AccountLimits'
+import { AccountProxy } from '@/components/AccountProxy'
 import { runtimeOptions } from '@/lib/runtime'
+import { proxyOptions } from '@/lib/proxies'
 import { ProviderLogo } from '@/components/ProviderLogo'
 import { Button } from '@/components/ui/Button'
 import {
@@ -42,8 +45,14 @@ export function Accounts() {
   const { t, i18n } = useTranslation()
   const client = useQueryClient()
   const query = useQuery(accountOptions)
+  const proxies = useQuery({
+    ...proxyOptions,
+    enabled:
+      query.data?.accounts.some((account) => account.proxy_id !== '') ?? false,
+  })
   const runtime = useQuery(runtimeOptions)
   const [limits, setLimits] = useState<Account | null>(null)
+  const [proxyAccount, setProxyAccount] = useState<Account | null>(null)
   const [connecting, setConnecting] = useState<Account | 'new' | null>(null)
   const [removing, setRemoving] = useState<Account | null>(null)
   const [verified, setVerified] = useState<{
@@ -54,6 +63,7 @@ export function Accounts() {
   const invalidate = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['accounts'] }),
+      client.invalidateQueries({ queryKey: ['proxies'] }),
       client.invalidateQueries({ queryKey: ['groups'] }),
       client.invalidateQueries({ queryKey: ['model-catalog'] }),
       client.invalidateQueries({ queryKey: ['account-runtime'] }),
@@ -184,6 +194,14 @@ export function Accounts() {
                           {account.email}
                         </p>
                       )}
+                      {account.proxy_id && (
+                        <p className="break-words text-xs text-muted-foreground">
+                          {t('accountProxy')}:{' '}
+                          {proxies.data?.proxies.find(
+                            (proxy) => proxy.id === account.proxy_id,
+                          )?.name ?? t('proxyAssigned')}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -230,6 +248,12 @@ export function Accounts() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onSelect={() => setProxyAccount(account)}
+                        >
+                          <Route aria-hidden="true" />
+                          {t('accountProxy')}
+                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setLimits(account)}>
                           <SlidersHorizontal aria-hidden="true" />
                           {t('accountScheduling')}
@@ -399,6 +423,14 @@ export function Accounts() {
             (state) => state.id === limits.id,
           )}
           onClose={() => setLimits(null)}
+          onChanged={invalidate}
+          restoreFocus={restoreFocus}
+        />
+      )}
+      {proxyAccount && (
+        <AccountProxy
+          account={proxyAccount}
+          onClose={() => setProxyAccount(null)}
           onChanged={invalidate}
           restoreFocus={restoreFocus}
         />

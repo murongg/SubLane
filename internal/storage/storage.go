@@ -62,6 +62,9 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if legacy {
 		return fmt.Errorf("database uses an older pre-release schema; preserve its data directory and start this version with a fresh one")
 	}
+	if err := reconcileProxyMigrations(ctx, db); err != nil {
+		return err
+	}
 	entries, err := migrations.ReadDir("migrations")
 	if err != nil {
 		return err

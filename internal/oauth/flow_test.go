@@ -90,6 +90,46 @@ func TestOAuthStateIsSessionBoundSingleUseAndPKCEProtected(t *testing.T) {
 	}
 }
 
+func TestOAuthStartsWithWorkspaceProxyBinding(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	connection, err := storage.Open(ctx, filepath.Join(dir, "synthetic.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	identity, err := auth.New(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := identity.Setup(ctx, "synthetic-admin", "synthetic-password", "Synthetic workspace"); err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := vault.Open(filepath.Join(dir, "key"), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := accounts.New(connection, cipher)
+	proxy, err := service.CreateProxy(ctx, "Synthetic exit", "http://127.0.0.1:18080")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := &fakeProvider{}
+	flow := New(service, provider)
+	if _, err := flow.BeginProviderWithProxy(ctx, "codex", "synthetic-owner", "Synthetic account", "", "missing"); !errors.Is(err, accounts.ErrProxyNotFound) {
+		t.Fatalf("accepted unknown proxy: %v", err)
+	}
+	started, err := flow.BeginProviderWithProxy(ctx, "codex", "synthetic-owner", "Synthetic account", "", proxy.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	callback := started.CallbackURL + "?state=" + started.State + "&code=synthetic-code"
+	account, err := flow.Finish(ctx, "synthetic-owner", started.State, callback)
+	if err != nil || account.ProxyID != proxy.ID {
+		t.Fatalf("OAuth binding: %+v %v", account, err)
+	}
+}
+
 type subscriptionProvider struct {
 	fakeProvider
 	kind string

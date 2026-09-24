@@ -200,9 +200,9 @@ func sdkAuth(c accounts.Credential) *core.Auth {
 	metadata["expired"] = time.Unix(c.ExpiresAt, 0).UTC().Format(time.RFC3339)
 	return &core.Auth{ID: c.Kind() + ":" + c.AccountID, Provider: c.Kind(), Status: core.StatusActive, Metadata: metadata}
 }
-func (c *Client) sdkContext(ctx context.Context) context.Context {
+func (c *Client) sdkContext(ctx context.Context, credential accounts.Credential) context.Context {
 	// This is the public SDK's documented per-request transport hook; it also provides a synthetic test seam.
-	return context.WithValue(ctx, "cliproxy.roundtripper", &engineTransport{base: c.http.Transport, codexVersion: c.codexVersion()})
+	return context.WithValue(ctx, "cliproxy.roundtripper", &engineTransport{base: &boundTransport{base: c.http.Transport, address: credential.ProxyURL}, codexVersion: c.codexVersion()})
 }
 func sdkError(err error) error {
 	if err == nil {
@@ -232,12 +232,13 @@ func sdkError(err error) error {
 	return ErrUpstream
 }
 func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, body []byte, headers http.Header, opts exec.Options) (*http.Response, error) {
+	ctx = credentialContext(ctx, credential)
 	executor, err := c.executor(credential.Kind())
 	if err != nil {
 		return nil, err
 	}
 	version := c.codexVersion()
-	transport := &engineTransport{base: c.http.Transport, codexVersion: version}
+	transport := &engineTransport{base: &boundTransport{base: c.http.Transport, address: credential.ProxyURL}, codexVersion: version}
 	transport.validateGeminiStream = credential.Kind() == "antigravity" && (opts.SourceFormat == translator.FormatClaude || opts.SourceFormat == translator.FormatGemini)
 	if !opts.Stream {
 		transport.maxResponseBytes = MaxBody

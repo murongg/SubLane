@@ -16,6 +16,7 @@ export const callbackURLs: Record<Provider, string> = {
 
 export const accountSchema = z.object({
   id: z.string().min(1),
+  proxy_id: z.string().default(''),
   provider: z.enum(providers).default('codex'),
   max_concurrency: z.number().int().min(1).max(8).default(2),
   name: z.string(),
@@ -65,6 +66,7 @@ export function importAccount(input: {
   name: string
   auth_json: string
   replace_id?: string
+  proxy_id?: string
 }) {
   return request('/api/accounts/import', accountSchema, {
     method: 'POST',
@@ -75,6 +77,7 @@ export function beginAuthorization(input: {
   provider?: Provider
   name: string
   replace_id?: string
+  proxy_id?: string
 }) {
   return request('/api/accounts/oauth', authorizationSchema, {
     method: 'POST',
@@ -104,6 +107,14 @@ export function setAccountEnabled(input: { id: string; enabled: boolean }) {
     { method: 'PATCH', body: JSON.stringify({ enabled: input.enabled }) },
   )
 }
+
+export function bindAccountProxy(input: { id: string; proxy_id: string }) {
+  return request(
+    `/api/accounts/${encodeURIComponent(input.id)}/proxy`,
+    accountSchema,
+    { method: 'PUT', body: JSON.stringify({ proxy_id: input.proxy_id }) },
+  )
+}
 export function deleteAccount(id: string) {
   return request(`/api/accounts/${encodeURIComponent(id)}`, z.undefined(), {
     method: 'DELETE',
@@ -127,6 +138,8 @@ const messages = {
   account_disabled: 'accountDisabledHint',
   account_reauthorization_required: 'accountReauthorizeHint',
   account_refresh_failed: 'accountRefreshFailed',
+  invalid_proxy_input: 'proxyInvalidInput',
+  proxy_not_found: 'proxyNotFound',
   oauth_state_invalid: 'oauthStateInvalid',
   oauth_callback_invalid: 'oauthCallbackInvalid',
   oauth_access_denied: 'oauthAccessDenied',
