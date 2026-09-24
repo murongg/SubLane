@@ -372,7 +372,7 @@ it('identifies an unassigned account and offers pool setup', async () => {
   await screen.findByText('Unassigned')
   expect(
     screen
-      .getByRole('link', { name: 'Assign to an account group' })
+      .getByRole('link', { name: 'Assign to an account pool' })
       .getAttribute('href'),
   ).toBe('/groups')
 })
