@@ -425,6 +425,7 @@ export const zh: Record<keyof typeof en, string> = {
   auditMemberGroups: '修改账号池权限',
   auditMemberLimits: '修改成员限流',
   auditMemberPassword: '重置成员密码',
+  auditInvitationCreate: '创建邀请链接',
   auditUserPassword: '修改密码',
   auditUserRecover: '恢复管理员密码',
   auditAccountCreate: '添加订阅账号',

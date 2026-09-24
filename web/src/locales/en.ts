@@ -457,6 +457,7 @@ export const en = {
   auditMemberGroups: 'Changed pool access',
   auditMemberLimits: 'Changed member limits',
   auditMemberPassword: 'Reset member password',
+  auditInvitationCreate: 'Created invitation link',
   auditUserPassword: 'Changed password',
   auditUserRecover: 'Recovered administrator',
   auditAccountCreate: 'Added subscription account',

@@ -128,3 +128,52 @@ it('renders and filters network proxy audit records', async () => {
     ).toBe(true),
   )
 })
+
+it('shows invitation audit records and filters them by resource', async () => {
+  const fetch = vi.fn().mockImplementation((url: string) => {
+    if (url === '/api/auth/state')
+      return Promise.resolve(response(authenticated))
+    if (url.startsWith('/api/audit'))
+      return Promise.resolve(
+        response({
+          events: [
+            {
+              id: 3,
+              actor_id: 1,
+              actor_name: 'synthetic-admin',
+              actor_role: 'admin',
+              source: 'user',
+              action: 'invitation.create',
+              resource: 'invitation',
+              resource_id: '3',
+              outcome: 'success',
+              http_status: null,
+              created_at: 1900000000,
+            },
+          ],
+          next_cursor: 0,
+        }),
+      )
+    return Promise.reject(new Error('Unexpected request'))
+  })
+  vi.stubGlobal('fetch', fetch)
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/admin/audit'] }),
+      )}
+    />,
+  )
+
+  await screen.findByText('Created invitation link')
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Resource type' }))
+  await user.click(
+    screen.getByRole('menuitemradio', { name: 'Invitation link' }),
+  )
+  await waitFor(() =>
+    expect(
+      fetch.mock.calls.some(([url]) => url.includes('resource=invitation')),
+    ).toBe(true),
+  )
+})
