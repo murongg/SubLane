@@ -125,7 +125,7 @@ it.each([memberAuthenticated, authenticated])(
     expect(screen.getByText('Hit rate: —')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Account filter' })).toBeNull()
     expect(screen.getByRole('columnheader', { name: 'API key' })).toBeTruthy()
-    expect(screen.getByRole('columnheader', { name: 'Group' })).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: 'Pool' })).toBeTruthy()
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'Result filter' }))
     await user.click(screen.getByRole('menuitemradio', { name: 'Failed' }))

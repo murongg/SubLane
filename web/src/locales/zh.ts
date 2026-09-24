@@ -315,7 +315,8 @@ export const zh: Record<keyof typeof en, string> = {
   catalogAvailableModels: '可用模型',
   catalogAccountDescription:
     '从此账号获取的模型目录，仅表示上游报告的支持范围，不代表剩余额度或生成验证结果。',
-  catalogGroupDescription: '自动汇总已启用账号的模型，并应用账号池的模型白名单。',
+  catalogGroupDescription:
+    '自动汇总已启用账号的模型，并应用账号池的模型白名单。',
   catalogCount_one: '{{count}} 个模型',
   catalogCount_other: '{{count}} 个模型',
   catalogUnknown: '未知',
@@ -886,10 +887,12 @@ export const zh: Record<keyof typeof en, string> = {
   groupSaveFailed: '无法保存账号池更改，请重试。',
   groupAccess: '账号池权限',
   memberGroupsNamed: '管理 {{username}} 的账号池权限',
-  memberGroupsDescription: '选择 {{username}} 创建 API 密钥时可以使用的账号池。',
+  memberGroupsDescription:
+    '选择 {{username}} 创建 API 密钥时可以使用的账号池。',
   groupGrantRevocationHint:
     '撤销权限后，该账号池已有密钥的后续请求及 WebSocket 新一轮调用会被阻止。',
-  memberNoGroupsHint: '未获授权使用任何账号池时，该成员无法创建或使用网关密钥。',
+  memberNoGroupsHint:
+    '未获授权使用任何账号池时，该成员无法创建或使用网关密钥。',
   saveGroupAccess: '保存权限',
   keyGroup: '账号池',
   poolAccountCount: '{{count}} 个账号',

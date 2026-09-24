@@ -708,7 +708,7 @@ it('shows an empty pool catalog honestly and allows reloading it', async () => {
   await user.click(screen.getByLabelText('By amount'))
   await user.click(screen.getByRole('button', { name: 'Add model price' }))
   expect(
-    await screen.findByText('No models are currently available to this group.'),
+    await screen.findByText('No models are currently available to this pool.'),
   ).toBeTruthy()
   expect(
     (screen.getByRole('button', { name: 'Model ID' }) as HTMLButtonElement)
