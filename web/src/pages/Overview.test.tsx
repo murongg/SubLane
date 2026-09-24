@@ -9,7 +9,9 @@ import { authenticated, system, workspaces } from '@/test/fixtures'
 function open() {
   render(
     <App
-      router={createAppRouter(createMemoryHistory({ initialEntries: ['/'] }))}
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/admin/instance'] }),
+      )}
     />,
   )
 }
@@ -36,6 +38,9 @@ it('shows connection prerequisites and readable live instance data', async () =>
   expect(await screen.findByText('synthetic-version')).toBeTruthy()
   expect(screen.getByText('1 day 1 hr')).toBeTruthy()
   expect(screen.getByRole('heading', { name: 'Gateway setup' })).toBeTruthy()
+  expect(
+    screen.getByRole('heading', { name: 'Instance status', level: 1 }),
+  ).toBeTruthy()
   expect(screen.getByRole('heading', { name: 'Client access' })).toBeTruthy()
   expect(screen.getByText('Codex CLI')).toBeTruthy()
   expect(screen.getByText('Codex desktop')).toBeTruthy()
@@ -136,4 +141,36 @@ it('does not mark gateway keys ready before an active key has a ready pool', asy
       'Your gateway is ready. Connect a client using a personal API key.',
     ),
   ).toBeNull()
+})
+
+it('keeps instance status available to non-owner workspace administrators', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockImplementation((url: string) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(
+              url === '/api/auth/state'
+                ? { ...authenticated, user: { ...authenticated.user, id: 3 } }
+                : url === '/api/workspaces'
+                  ? workspaces
+                  : system,
+            ),
+          ),
+        ),
+      ),
+  )
+  open()
+  expect(
+    await screen.findByRole('heading', { name: 'Instance status', level: 1 }),
+  ).toBeTruthy()
+  expect(await screen.findByRole('heading', { name: 'Service' })).toBeTruthy()
+  expect(
+    screen
+      .getByRole('link', { name: 'Instance status' })
+      .getAttribute('aria-current'),
+  ).toBe('page')
+  expect(screen.queryByRole('button', { name: 'System settings' })).toBeNull()
 })

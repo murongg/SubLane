@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import {
+  Activity,
   FolderClosed,
   Gauge,
   ChevronRight,
@@ -51,7 +52,6 @@ const navigation = [
       { to: '/', label: 'overview', icon: LayoutDashboard },
       { to: '/keys', label: 'apiKeys', icon: KeyRound },
       { to: '/requests', label: 'requests', icon: ListChecks },
-      { to: '/usage', label: 'usageSummary', icon: ChartNoAxesCombined },
     ],
   },
   {
@@ -62,6 +62,7 @@ const navigation = [
       { to: '/groups', label: 'accountGroups', icon: FolderClosed },
       { to: '/admin/requests', label: 'allRequests', icon: ListChecks },
       { to: '/admin/usage', label: 'teamUsage', icon: ChartNoAxesCombined },
+      { to: '/admin/instance', label: 'instanceStatus', icon: Activity },
       { to: '/members', label: 'members', icon: Users },
       { to: '/admin/allocations', label: 'allocationSchemes', icon: Gauge },
       { to: '/admin/audit', label: 'auditLog', icon: ShieldCheck },

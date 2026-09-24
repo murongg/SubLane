@@ -96,12 +96,27 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
   const duration = (sum: number, requests: number) =>
     requests ? number.format(sum / requests) + ' ms' : '—'
   return (
-    <div className="space-y-6">
+    <section
+      aria-labelledby={
+        scope === 'personal' ? 'personal-usage-title' : 'team-usage-title'
+      }
+      className={
+        scope === 'personal'
+          ? 'space-y-6 border-t border-border pt-8'
+          : 'space-y-6'
+      }
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="page-title">
-            {t(scope === 'personal' ? 'yourUsage' : 'teamUsage')}
-          </h1>
+          {scope === 'personal' ? (
+            <h2 id="personal-usage-title" className="text-xl font-semibold">
+              {t('yourUsage')}
+            </h2>
+          ) : (
+            <h1 id="team-usage-title" className="page-title">
+              {t('teamUsage')}
+            </h1>
+          )}
           <p className="page-description">
             {t(
               scope === 'personal'
@@ -112,6 +127,11 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
         </div>
         <Button
           variant="outline"
+          aria-label={
+            scope === 'personal'
+              ? `${t('yourUsage')}: ${t('refresh')}`
+              : undefined
+          }
           disabled={query.isFetching}
           onClick={() =>
             Promise.all([
@@ -127,12 +147,6 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
           {t('refresh')}
         </Button>
       </div>
-      {scope === 'personal' && (
-        <>
-          <PersonalAllocations userID={userID} />
-          <PersonalBudgets userID={userID} />
-        </>
-      )}
       <div className="flex flex-wrap items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -388,6 +402,12 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
         )
       )}
       {scope === 'personal' && (
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          <PersonalAllocations userID={userID} />
+          <PersonalBudgets userID={userID} />
+        </div>
+      )}
+      {scope === 'personal' && (
         <section className="space-y-3 border-t border-border pt-5">
           <h2 className="font-medium">{t('yourRequestLimits')}</h2>
           {limits.isPending ? (
@@ -430,6 +450,6 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
           </p>
         </section>
       )}
-    </div>
+    </section>
   )
 }

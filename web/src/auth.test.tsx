@@ -6,6 +6,8 @@ import { App } from './App'
 import { createAppRouter } from './router'
 import { anonymous, authenticated, system } from './test/fixtures'
 
+vi.mock('./pages/Usage', () => ({ Usage: () => null, TeamUsage: () => null }))
+
 const response = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status })
 const workspaces = {
@@ -369,6 +371,7 @@ it('revokes access on logout and fetches fresh private data on a new login', asy
   )
   const user = userEvent.setup()
   open()
+  await user.click(await screen.findByRole('link', { name: 'Instance status' }))
   expect(await screen.findByText('synthetic-1')).toBeTruthy()
   await user.click(screen.getByRole('button', { name: 'Account menu' }))
   await user.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
@@ -382,6 +385,7 @@ it('revokes access on logout and fetches fresh private data on a new login', asy
     'synthetic passphrase 42',
   )
   await user.click(screen.getByRole('button', { name: 'Sign in' }))
+  await user.click(await screen.findByRole('link', { name: 'Instance status' }))
   await waitFor(() => expect(screen.getByText(/synthetic-\d/)).toBeTruthy())
   expect(screen.getByText('synthetic-2')).toBeTruthy()
   expect(trace).not.toContain('/api/system:false')
