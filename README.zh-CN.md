@@ -25,12 +25,15 @@ SubLane 将 AI 订阅账号整合为统一网关，并用独立工作空间隔�
 
 ## 功能
 
-- 当前仅开放 Codex 账号，可通过 OAuth 授权或导入凭据接入。Claude 和 Antigravity 暂时停用，已有账号记录保留。
-- 提供 OpenAI 兼容 API、[Claude Messages 和 Gemini 原生生成接口](https://sublane.dev/docs/zh/protocols)，支持 HTTP/SSE 及 Responses WebSocket。
-- 多工作空间隔离成员、订阅账号、账号池、个人 API 密钥、用量与审计记录。
-- 账号池调度、并发限制、冷却恢复和 Codex 额度感知。
-- 请求诊断、用量图表及备份恢复。
-- 中英文界面，支持明暗主题。
+- **Codex 订阅接入：** 支持浏览器 OAuth 授权或导入凭据 JSON，提供凭据加密、连接验证、模型发现和额度快照。Claude 与 Antigravity 账号接入暂时停用，已有记录保留。
+- **客户端 API：** 提供 OpenAI Responses、Chat Completions、Responses 压缩，以及 [Claude Messages 和 Gemini 生成格式](https://sublane.dev/docs/zh/protocols)。支持 HTTP/SSE，Responses 另支持 WebSocket；Claude 和 Gemini 格式不代表对应订阅账号已开放。
+- **工作空间与成员：** 隔离订阅账号、账号池、密钥、用量和审计记录；支持工作空间角色、邀请注册和成员直接授权。
+- **账号池：** 支持模型白名单、按模型选择账号、会话绑定、并发控制、冷却恢复和 Codex 额度感知调度。
+- **网络代理：** 为账号绑定固定出口代理，支持批量导入代理和手动检测出口。
+- **个人 API 密钥：** 绑定账号池或用量分配，支持到期、暂停、撤销、仅本人复制密钥及导入 CC Switch。
+- **用量控制：** 设置成员请求频率与并发上限，并可选按 Token、内部配置的美元金额或预估 Codex 额度份额分配用量。
+- **运维与观测：** 提供个人和工作空间用量图表、活动热力图、请求诊断、管理审计日志、备份、校验与恢复，以及 Codex 客户端版本设置。
+- **管理界面：** 内置中英文 Web 界面，支持明暗主题。
 
 ## 快速开始
 
@@ -62,7 +65,10 @@ make dev
 从[分步入门教程](https://sublane.dev/docs/zh/guide/installation)开始。使用文档统一维护在[文档仓库](https://github.com/murongg/sublane-website)。
 
 - [部署与升级](https://sublane.dev/docs/zh/deployment) · [备份恢复](https://sublane.dev/docs/zh/backup)
-- [服务商接入](https://sublane.dev/docs/zh/providers) · [API 密钥](https://sublane.dev/docs/zh/api-keys) · [账号池](https://sublane.dev/docs/zh/groups)
+- [订阅账号接入](https://sublane.dev/docs/zh/providers) · [Codex 订阅与客户端](https://sublane.dev/docs/zh/codex) · [客户端协议](https://sublane.dev/docs/zh/protocols) · [网络代理](https://sublane.dev/docs/zh/proxies)
+- [工作空间](https://sublane.dev/docs/zh/workspaces) · [成员与授权](https://sublane.dev/docs/zh/members) · [API 密钥](https://sublane.dev/docs/zh/api-keys) · [账号池](https://sublane.dev/docs/zh/groups)
+- [模型目录](https://sublane.dev/docs/zh/models) · [用量分配](https://sublane.dev/docs/zh/allocations) · [团队用量与限额](https://sublane.dev/docs/zh/team-controls)
+- [日常使用](https://sublane.dev/docs/zh/usage) · [账号池与请求诊断](https://sublane.dev/docs/zh/pool-runtime) · [管理审计](https://sublane.dev/docs/zh/audit) · [系统设置](https://sublane.dev/docs/zh/settings)
 - [开发指南](https://sublane.dev/docs/zh/development) · [系统架构](https://sublane.dev/docs/zh/architecture)
 - [发版说明](https://sublane.dev/docs/zh/releases) · [更新日志](CHANGELOG.md)
 - [参与贡献](CONTRIBUTING.md) · [安全说明](SECURITY.md)
