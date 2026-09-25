@@ -4,6 +4,16 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING:** Use resource allowances for token caps (#34) — Standard-key budget rules no longer limit requests, and the /api/me/budgets and /api/members/{id}/budgets endpoints are removed.
+
+### Fixed
+
+- Show workspace owners in management
+- Honor owner pool access
+## [0.1.0-rc.6] - 2026-09-24
+
 ### Added
 
 - Combine overview and personal usage (#29)
@@ -92,7 +102,8 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 - Distinguish remaining quota with status colors
 - Restore version-gated model discovery
 
-[Unreleased]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.5...HEAD
+[Unreleased]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.6...HEAD
+[0.1.0-rc.6]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.5...v0.1.0-rc.6
 [0.1.0-rc.5]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.4...v0.1.0-rc.5
 [0.1.0-rc.4]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.3...v0.1.0-rc.4
 [0.1.0-rc.3]: https://github.com/murongg/SubLane/compare/v0.1.0-rc.2...v0.1.0-rc.3
