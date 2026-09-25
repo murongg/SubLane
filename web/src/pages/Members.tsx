@@ -315,14 +315,17 @@ export function Members() {
                             {t('memberRoleChange')}
                           </Button>
                         )}
-                      <MemberActions
-                        member={member}
-                        onPasswordReset={
-                          canResetPasswords && member.role !== 'owner'
-                            ? () => setResetName(member.username)
-                            : undefined
-                        }
-                      />
+                      {(member.role === 'member' ||
+                        (canResetPasswords && member.role !== 'owner')) && (
+                        <MemberActions
+                          member={member}
+                          onPasswordReset={
+                            canResetPasswords
+                              ? () => setResetName(member.username)
+                              : undefined
+                          }
+                        />
+                      )}
                     </div>
                   </td>
                 </tr>

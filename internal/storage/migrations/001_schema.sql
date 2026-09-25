@@ -231,39 +231,6 @@ CREATE TABLE tenants (
     created_at INTEGER NOT NULL
 );
 
-CREATE TABLE token_budget_entries (
- request_id TEXT NOT NULL CHECK(length(request_id)<=64),
- budget_id INTEGER NOT NULL REFERENCES token_budgets(id) ON DELETE CASCADE,
- window_start INTEGER NOT NULL,
- started_at INTEGER NOT NULL,
- state TEXT NOT NULL CHECK(state IN ('active','pending','settled')),
- tokens INTEGER NOT NULL DEFAULT 0 CHECK(tokens BETWEEN 0 AND 2000000000),
- manual INTEGER NOT NULL DEFAULT 0 CHECK(manual IN (0,1)),
- PRIMARY KEY(request_id,budget_id)
-);
-
-CREATE TABLE token_budget_usage (
- budget_id INTEGER NOT NULL REFERENCES token_budgets(id) ON DELETE CASCADE,
- window_start INTEGER NOT NULL,
- window_end INTEGER NOT NULL,
- used INTEGER NOT NULL DEFAULT 0 CHECK(used>=0),
- PRIMARY KEY(budget_id,window_start)
-);
-
-CREATE TABLE token_budgets (
- id INTEGER PRIMARY KEY AUTOINCREMENT,
- tenant_id INTEGER NOT NULL REFERENCES tenants(id),
- user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
- group_id INTEGER NOT NULL DEFAULT 0 CHECK(group_id>=0),
- model TEXT NOT NULL DEFAULT '' CHECK(length(model)<=128),
- period TEXT NOT NULL CHECK(period IN ('day','month')),
- token_limit INTEGER NOT NULL CHECK(token_limit BETWEEN 1 AND 1000000000000),
- enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
- created_at INTEGER NOT NULL,
- UNIQUE(tenant_id,user_id,group_id,model,period),
- FOREIGN KEY(tenant_id,user_id) REFERENCES memberships(tenant_id,user_id) ON DELETE CASCADE
-);
-
 CREATE TABLE usage_daily (
  day INTEGER NOT NULL,
  user_id INTEGER NOT NULL,
@@ -350,8 +317,6 @@ CREATE INDEX sessions_expiry ON sessions(expires_at);
 
 CREATE INDEX sessions_user ON sessions(user_id, created_at);
 
-CREATE INDEX token_budget_entries_budget ON token_budget_entries(budget_id,state);
-
 CREATE INDEX usage_daily_user ON usage_daily(user_id,day);
 
 CREATE INDEX usage_hourly_user ON usage_hourly(tenant_id,user_id,hour);
@@ -402,15 +367,6 @@ CREATE TRIGGER group_accounts_tenant_update BEFORE UPDATE ON group_accounts
 WHEN (SELECT tenant_id FROM account_groups WHERE id=NEW.group_id)
      IS NOT (SELECT tenant_id FROM accounts WHERE id=NEW.account_id)
 BEGIN SELECT RAISE(ABORT, 'cross_tenant_account'); END;
-
-CREATE TRIGGER token_budgets_tenant_insert BEFORE INSERT ON token_budgets
-WHEN NEW.group_id != 0 AND (SELECT tenant_id FROM account_groups WHERE id=NEW.group_id) IS NOT NEW.tenant_id
-BEGIN SELECT RAISE(ABORT, 'cross_tenant_budget'); END;
-
-CREATE TRIGGER token_budgets_tenant_update BEFORE UPDATE OF tenant_id,group_id ON token_budgets
-WHEN NEW.tenant_id != OLD.tenant_id OR
- (NEW.group_id != 0 AND (SELECT tenant_id FROM account_groups WHERE id=NEW.group_id) IS NOT NEW.tenant_id)
-BEGIN SELECT RAISE(ABORT, 'cross_tenant_budget'); END;
 
 INSERT INTO settings(key,value) VALUES('usage.daily.started_at',CAST(unixepoch() AS TEXT));
 INSERT INTO settings(key,value) VALUES('usage.hourly.started_at',CAST(unixepoch() AS TEXT));

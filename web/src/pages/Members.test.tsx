@@ -41,13 +41,9 @@ it('shows the workspace owner without member-only management controls', async ()
   expect(within(row).getByText('Owner')).toBeTruthy()
   expect(within(row).queryByRole('button', { name: /disable/i })).toBeNull()
   expect(within(row).queryByRole('button', { name: /change role/i })).toBeNull()
-  const user = userEvent.setup()
-  await user.click(within(row).getByRole('button', { name: /more actions/i }))
   expect(
-    screen.getByRole('menuitem', { name: 'Standard key token budgets' }),
-  ).toBeTruthy()
-  expect(screen.queryByRole('menuitem', { name: 'Request limits' })).toBeNull()
-  expect(screen.queryByRole('menuitem', { name: 'Reset password' })).toBeNull()
+    within(row).queryByRole('button', { name: /more actions/i }),
+  ).toBeNull()
 })
 
 it('updates shared member limits and resets a member password', async () => {

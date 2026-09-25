@@ -65,6 +65,7 @@ export const reasonKeys: Record<string, keyof typeof en> = {
   token_quota_exceeded: 'reasonTokenQuota',
   token_usage_pending: 'reasonTokenPending',
   token_accounting_unavailable: 'reasonTokenAccounting',
+  allocation_accounting_unavailable: 'reasonAllocationAccounting',
   member_busy: 'reasonMemberBusy',
   member_rate_limited: 'reasonMemberRate',
   context_limit: 'reasonContextLimit',
