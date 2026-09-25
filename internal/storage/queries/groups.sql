@@ -1,8 +1,6 @@
 -- name: ListGroups :many
 SELECT g.*, (SELECT count(*) FROM group_accounts a WHERE a.group_id=g.id) AS account_count,
-(SELECT count(*) FROM group_members grant_row
- JOIN effective_group_access access ON access.group_id=grant_row.group_id AND access.user_id=grant_row.user_id
- WHERE grant_row.group_id=g.id) AS member_count
+(SELECT count(*) FROM effective_group_access access WHERE access.group_id=g.id) AS member_count
 FROM account_groups g WHERE g.tenant_id=sqlc.arg(tenant_id) ORDER BY g.id;
 
 -- name: GetGroup :one
@@ -74,16 +72,17 @@ SELECT CASE WHEN EXISTS(
 ) THEN 'needs_attention' ELSE 'not_configured' END AS status;
 
 -- name: CountGroupMembers :one
-SELECT count(*) FROM group_members grant_row
-JOIN effective_group_access access ON access.group_id=grant_row.group_id AND access.user_id=grant_row.user_id
-WHERE grant_row.group_id=sqlc.arg(group_id);
+SELECT count(*) FROM effective_group_access access
+WHERE access.group_id=sqlc.arg(group_id);
 
 -- name: ListPoolMembers :many
-SELECT u.id,u.username FROM group_members grant_row
-JOIN effective_group_access access ON access.group_id=grant_row.group_id AND access.user_id=grant_row.user_id
+-- Owners and administrators use enabled pools through their role, without a direct grant.
+SELECT u.id,u.username FROM effective_group_access access
 JOIN users u ON u.id=access.user_id
-WHERE grant_row.group_id=sqlc.arg(group_id)
-ORDER BY u.username,u.id LIMIT 100;
+JOIN account_groups g ON g.id=access.group_id
+JOIN memberships m ON m.tenant_id=g.tenant_id AND m.user_id=access.user_id
+WHERE access.group_id=sqlc.arg(group_id)
+ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,u.username,u.id LIMIT 100;
 
 -- name: SetGroupModelPolicy :exec
 UPDATE account_groups SET restricted_models=sqlc.arg(restricted) WHERE id=sqlc.arg(id);

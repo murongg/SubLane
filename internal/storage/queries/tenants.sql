@@ -1,7 +1,7 @@
 -- name: ListTenantMembers :many
 SELECT u.id,u.username,m.role,m.enabled,u.enabled AS user_enabled,m.created_at
 FROM memberships m JOIN users u ON u.id=m.user_id
-WHERE m.tenant_id=sqlc.arg(tenant_id) AND m.role IN ('member','admin')
+WHERE m.tenant_id=sqlc.arg(tenant_id) AND m.role IN ('owner','member','admin')
 AND (u.id<sqlc.arg(before_id) OR sqlc.arg(before_id)=0)
 ORDER BY u.id DESC LIMIT 51;
 

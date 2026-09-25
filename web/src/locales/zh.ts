@@ -152,10 +152,10 @@ export const zh: Record<keyof typeof en, string> = {
   budgetUnitHint: '1 M = 100 万 tokens，最多 6 位小数（精确到 1 token）。',
   budgetSettlementInvalid:
     '请输入不低于已知用量且不超过 2,000 M 的总量，最多 6 位小数。',
-  tokenBudgets: 'Token 额度',
-  budgetsFor: '{{username}} 的 Token 额度',
+  tokenBudgets: '普通 Key 的 Token 额度',
+  budgetsFor: '{{username}} 的普通 Key Token 额度',
   budgetsDescription:
-    '所有命中的额度规则同时生效，同一用户的 API Key 共用额度。按输入与输出 token 总量计数；达到上限后拒绝新请求，进行中的请求可能造成超额。',
+    '仅适用于未绑定用量分配的普通 Key。命中的额度规则会同时生效，这些 Key 共用额度。按输入与输出 token 总量计数；达到上限后拒绝新请求，进行中的请求可能造成超额。',
   budgetsLoading: '正在加载 Token 额度…',
   budgetsLoadFailed: '无法加载 Token 额度。',
   budgetsEmpty: '未绑定用量分配的 Key 尚未设置 Token 额度。',
@@ -648,6 +648,7 @@ export const zh: Record<keyof typeof en, string> = {
   signOut: '退出登录',
   accountMenu: '账号菜单',
   administrator: '管理员',
+  owner: '所有者',
   member: '成员',
   members: '成员管理',
   apiKeys: 'API 密钥',

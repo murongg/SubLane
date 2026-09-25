@@ -40,10 +40,12 @@ export function MemberActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => setAction('limits')}>
-            <Gauge aria-hidden="true" />
-            {t('memberLimits')}
-          </DropdownMenuItem>
+          {member.role === 'member' && (
+            <DropdownMenuItem onSelect={() => setAction('limits')}>
+              <Gauge aria-hidden="true" />
+              {t('memberLimits')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => setAction('budgets')}>
             <Gauge aria-hidden="true" />
             {t('tokenBudgets')}

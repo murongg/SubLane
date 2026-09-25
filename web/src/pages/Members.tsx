@@ -248,7 +248,13 @@ export function Members() {
                     </Status>
                   </td>
                   <td className="px-5 py-4">
-                    {t(member.role === 'admin' ? 'administrator' : 'member')}
+                    {t(
+                      member.role === 'owner'
+                        ? 'owner'
+                        : member.role === 'admin'
+                          ? 'administrator'
+                          : 'member',
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-muted-foreground">
                     <time
@@ -296,22 +302,23 @@ export function Members() {
                           <GroupAccess member={member} />
                         </>
                       )}
-                      {member.id !== session.data?.user?.id && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={t('memberRoleChangeNamed', {
-                            username: member.username,
-                          })}
-                          onClick={() => setMembershipTarget(member)}
-                        >
-                          {t('memberRoleChange')}
-                        </Button>
-                      )}
+                      {member.role !== 'owner' &&
+                        member.id !== session.data?.user?.id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={t('memberRoleChangeNamed', {
+                              username: member.username,
+                            })}
+                            onClick={() => setMembershipTarget(member)}
+                          >
+                            {t('memberRoleChange')}
+                          </Button>
+                        )}
                       <MemberActions
                         member={member}
                         onPasswordReset={
-                          canResetPasswords
+                          canResetPasswords && member.role !== 'owner'
                             ? () => setResetName(member.username)
                             : undefined
                         }

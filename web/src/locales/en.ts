@@ -157,10 +157,10 @@ export const en = {
   budgetUnitHint: '1 M = 1,000,000 tokens. Up to 6 decimal places (1 token).',
   budgetSettlementInvalid:
     'Enter a total from the known usage to 2,000 M, with up to 6 decimal places.',
-  tokenBudgets: 'Token budgets',
-  budgetsFor: 'Token budgets for {{username}}',
+  tokenBudgets: 'Standard key token budgets',
+  budgetsFor: 'Standard key token budgets for {{username}}',
   budgetsDescription:
-    'All matching budgets apply across API keys. Input and output tokens count together. Limits stop new requests; active requests may finish above the limit.',
+    'Applies only to API keys without a resource allowance. All matching budgets for those keys apply together. Input and output tokens count together. Limits stop new requests; active requests may finish above the limit.',
   budgetsLoading: 'Loading token budgets…',
   budgetsLoadFailed: 'Unable to load token budgets.',
   budgetsEmpty: 'No token budgets for keys outside resource allowances.',
@@ -710,6 +710,7 @@ export const en = {
   signOut: 'Sign out',
   accountMenu: 'Account menu',
   administrator: 'Administrator',
+  owner: 'Owner',
   member: 'Member',
   members: 'Members',
   apiKeys: 'API keys',

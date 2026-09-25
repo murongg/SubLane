@@ -146,6 +146,20 @@ func TestPoolAllocationUsesDirectMemberGrant(t *testing.T) {
 	}
 }
 
+func TestWorkspaceOwnerCanReceiveAllowanceWithoutPoolGrant(t *testing.T) {
+	service, conn, _, _ := fixture(t)
+	ctx := context.Background()
+	var grants int
+	if err := conn.QueryRowContext(ctx, "SELECT count(*) FROM group_members WHERE group_id=2 AND user_id=1").Scan(&grants); err != nil || grants != 0 {
+		t.Fatalf("owner unexpectedly has a direct grant: %d, %v", grants, err)
+	}
+	scheme, err := service.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic owner allowance", GroupID: 2, Enabled: true,
+		Config: Config{Mode: "tokens", Period: "day", Members: []Share{{UserID: 1, Limit: 100}}}})
+	if err != nil || len(scheme.Config.Members) != 1 || scheme.Config.Members[0].UserID != 1 {
+		t.Fatalf("owner allowance: %+v, %v", scheme, err)
+	}
+}
+
 func TestPlatformOwnerCanReceiveAllowanceAsMemberOfAnotherWorkspace(t *testing.T) {
 	_, conn, ownerID, _ := fixture(t)
 	ctx := context.Background()

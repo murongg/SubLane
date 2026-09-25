@@ -117,7 +117,7 @@ func TestMemberHTTPValidationAndOwnerProtection(t *testing.T) {
 		}
 	}
 	list := request(h, "GET", "/api/members", "", nil, cookie)
-	if list.Code != 200 || strings.Contains(list.Body.String(), "password") || strings.Contains(list.Body.String(), "owner-test") {
+	if list.Code != 200 || strings.Contains(list.Body.String(), "password") || !strings.Contains(list.Body.String(), `"username":"owner-test","role":"owner"`) {
 		t.Fatalf("bad list: %s", list.Body.String())
 	}
 }

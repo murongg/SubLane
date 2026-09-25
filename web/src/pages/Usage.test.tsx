@@ -108,7 +108,9 @@ it.each([
       )
     else
       expect(
-        screen.queryByRole('heading', { name: 'Token budgets' }),
+        screen.queryByRole('heading', {
+          name: 'Standard key token budgets',
+        }),
       ).toBeNull()
     const reads = fetch.mock.calls.filter(
       ([url]) => url === endpoint + '?days=7',

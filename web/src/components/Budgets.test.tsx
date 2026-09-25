@@ -64,9 +64,11 @@ it('creates a scoped budget and edits its limit without changing its scope', asy
   await user.click(
     await screen.findByRole('button', { name: 'More actions for member-test' }),
   )
-  await user.click(screen.getByRole('menuitem', { name: 'Token budgets' }))
+  await user.click(
+    screen.getByRole('menuitem', { name: 'Standard key token budgets' }),
+  )
   const dialog = await screen.findByRole('dialog', {
-    name: 'Token budgets for member-test',
+    name: 'Standard key token budgets for member-test',
   })
   await within(dialog).findByText(
     'No token budgets for keys outside resource allowances.',
@@ -136,9 +138,11 @@ it('shows load failures and allows an administrator to settle unknown usage', as
   await user.click(
     await screen.findByRole('button', { name: 'More actions for member-test' }),
   )
-  await user.click(screen.getByRole('menuitem', { name: 'Token budgets' }))
+  await user.click(
+    screen.getByRole('menuitem', { name: 'Standard key token budgets' }),
+  )
   const dialog = await screen.findByRole('dialog', {
-    name: 'Token budgets for member-test',
+    name: 'Standard key token budgets for member-test',
   })
   await within(dialog).findByText('Unable to load token budgets.')
   failed = false

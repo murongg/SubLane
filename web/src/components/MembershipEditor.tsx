@@ -29,7 +29,9 @@ export function MembershipEditor({
 }) {
   const { t } = useTranslation()
   const [username, setUsername] = useState(member?.username ?? '')
-  const [role, setRole] = useState<'member' | 'admin'>(member?.role ?? 'member')
+  const [role, setRole] = useState<'member' | 'admin'>(
+    member?.role === 'admin' ? 'admin' : 'member',
+  )
   const [invalid, setInvalid] = useState(false)
   const mutation = useMutation({
     mutationFn: (input: { username: string; role: 'member' | 'admin' }) =>
