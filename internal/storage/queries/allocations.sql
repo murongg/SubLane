@@ -28,9 +28,8 @@ SELECT a.id,a.provider,a.models_revision,(SELECT count(*) FROM group_accounts ot
 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id WHERE ga.group_id=? ORDER BY a.id;
 -- name: CanUseAllocation :one
 SELECT EXISTS(SELECT 1 FROM allocation_schemes s
-JOIN group_members m ON m.group_id=s.group_id
-JOIN users u ON u.id=m.user_id JOIN account_groups g ON g.id=s.group_id
-WHERE s.id=? AND m.user_id=? AND s.enabled=1 AND u.enabled=1 AND g.enabled=1);
+JOIN effective_group_access access ON access.group_id=s.group_id
+WHERE s.id=? AND access.user_id=? AND s.enabled=1);
 -- name: BindKeyAllocation :exec
 INSERT INTO allocation_keys(key_id,scheme_id) VALUES(?,?);
 -- name: GetKeyAllocation :one

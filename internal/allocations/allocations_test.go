@@ -158,6 +158,9 @@ func TestWorkspaceOwnerCanReceiveAllowanceWithoutPoolGrant(t *testing.T) {
 	if err != nil || len(scheme.Config.Members) != 1 || scheme.Config.Members[0].UserID != 1 {
 		t.Fatalf("owner allowance: %+v, %v", scheme, err)
 	}
+	if _, err := Authorize(ctx, db.New(conn), scheme.ID, 1, scheme.GroupID, scheme.EffectiveAt); err != nil {
+		t.Fatalf("owner could not use the assigned allowance: %v", err)
+	}
 }
 
 func TestPlatformOwnerCanReceiveAllowanceAsMemberOfAnotherWorkspace(t *testing.T) {
