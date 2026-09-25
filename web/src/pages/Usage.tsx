@@ -11,7 +11,6 @@ import {
 import { Button } from '@/components/ui/Button'
 import { UsageChart } from '@/components/UsageChart'
 import { PersonalAllocations } from '@/components/PersonalAllocations'
-import { PersonalBudgets } from '@/components/PersonalBudgets'
 import { ActivityMap } from '@/components/ActivityMap'
 import {
   metricLabels,
@@ -394,12 +393,7 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
           </>
         )
       )}
-      {scope === 'personal' && (
-        <div className="grid items-start gap-6 lg:grid-cols-2">
-          <PersonalAllocations userID={userID} />
-          <PersonalBudgets userID={userID} />
-        </div>
-      )}
+      {scope === 'personal' && <PersonalAllocations userID={userID} />}
       {scope === 'personal' && (
         <section className="space-y-3 border-t border-border pt-5">
           <h2 className="font-medium">{t('yourRequestLimits')}</h2>

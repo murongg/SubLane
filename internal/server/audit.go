@@ -93,9 +93,6 @@ func auditTarget(r *http.Request) (string, string, string) {
 		action, resource = "account.authorize", "account"
 	default:
 		parts := strings.Split(strings.TrimPrefix(path, "/api/"), "/")
-		if len(parts) == 4 && parts[0] == "members" && parts[2] == "budgets" && parts[3] == "settle" && r.Method == "POST" {
-			return "member.budget_settle", "member", parts[1]
-		}
 		if len(parts) < 2 || len(parts) > 3 {
 			return "", "", ""
 		}
@@ -133,9 +130,6 @@ func auditTarget(r *http.Request) (string, string, string) {
 			resource = "member"
 			if tail == "" && r.Method == "PATCH" {
 				action = "member.update"
-			}
-			if tail == "budgets" && r.Method == "PUT" {
-				action = "member.budget"
 			}
 			if tail == "limits" && r.Method == "PATCH" {
 				action = "member.limits"

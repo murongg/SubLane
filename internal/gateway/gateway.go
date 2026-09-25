@@ -40,28 +40,28 @@ const (
 func (k Kind) IsGemini() bool { return k == Gemini || k == GeminiStream }
 
 type Service struct {
-	db             *sql.DB
-	queries        *db.Queries
-	accounts       *accounts.Service
-	tenantID       int64
-	provider       *upstream.Client
-	slots          chan struct{}
-	mu             sync.Mutex
-	next           map[string]int
-	health         map[string]*Runtime
-	memberActive   map[int64]int64
-	now            func() time.Time
-	runContext     context.Context
-	stopRuntime    context.CancelFunc
-	workers        sync.WaitGroup
-	closed         bool
-	budgetsReady   bool
-	budgetFailure  bool
-	sequence       int64
-	usage          *usageCache
-	catalog        *catalogCache
-	pricing        *pricing.Service
-	allocationSync map[string]uint64
+	db                *sql.DB
+	queries           *db.Queries
+	accounts          *accounts.Service
+	tenantID          int64
+	provider          *upstream.Client
+	slots             chan struct{}
+	mu                sync.Mutex
+	next              map[string]int
+	health            map[string]*Runtime
+	memberActive      map[int64]int64
+	now               func() time.Time
+	runContext        context.Context
+	stopRuntime       context.CancelFunc
+	workers           sync.WaitGroup
+	closed            bool
+	allocationsReady  bool
+	allocationFailure bool
+	sequence          int64
+	usage             *usageCache
+	catalog           *catalogCache
+	pricing           *pricing.Service
+	allocationSync    map[string]uint64
 }
 
 func New(ctx context.Context, connection *sql.DB, accounts *accounts.Service, provider *upstream.Client, catalogs ...*pricing.Service) *Service {
@@ -164,7 +164,7 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		return nil, err
 	}
 	s.mu.Lock()
-	if err := s.admitBudget(ctx, entry, model); err != nil {
+	if err := s.prepareAllocation(ctx, entry); err != nil {
 		s.mu.Unlock()
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		entry.quotaRevision = row.Revision
 	}
 	entry.quotaReadStartedAt = s.now().UnixMilli()
-	entry.budgetDispatched = true
+	entry.upstreamDispatched = true
 	result, err := execute(credential)
 	if err != nil {
 		return nil, err

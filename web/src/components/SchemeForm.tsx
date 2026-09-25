@@ -514,8 +514,8 @@ export function SchemeForm({
               value={period}
               disabled={pending}
               options={[
-                { value: 'day', label: t('budgetDaily') },
-                { value: 'month', label: t('budgetMonthly') },
+                { value: 'day', label: t('periodDaily') },
+                { value: 'month', label: t('periodMonthly') },
               ]}
               onChange={setPeriod}
             />

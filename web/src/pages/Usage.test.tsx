@@ -54,10 +54,6 @@ it.each([
         return Promise.resolve(new Response(JSON.stringify(workspaces)))
       if (url === '/api/me/allocations')
         return Promise.resolve(new Response(JSON.stringify({ schemes: [] })))
-      if (url === '/api/me/budgets')
-        return Promise.resolve(
-          new Response(JSON.stringify({ rules: [], pending: [] })),
-        )
       if (url === '/api/me/limits')
         return Promise.resolve(
           new Response(
@@ -103,15 +99,7 @@ it.each([
     await screen.findByRole('region', { name: 'Activity by time' })
     expect(screen.getAllByRole('gridcell')).toHaveLength(168)
     if (path === '/')
-      await screen.findByText(
-        'No token budgets for keys outside resource allowances.',
-      )
-    else
-      expect(
-        screen.queryByRole('heading', {
-          name: 'Standard key token budgets',
-        }),
-      ).toBeNull()
+      await screen.findByText('No resource allowances assigned.')
     const reads = fetch.mock.calls.filter(
       ([url]) => url === endpoint + '?days=7',
     ).length
@@ -150,7 +138,6 @@ it.each([
           url === '/api/auth/state' ||
           url === '/api/workspaces' ||
           url === '/api/me/limits' ||
-          url === '/api/me/budgets' ||
           url === '/api/me/allocations' ||
           url.startsWith(endpoint + '?'),
       ),
@@ -170,10 +157,6 @@ it('shows personal usage beneath the administrator overview', async () => {
       return Promise.resolve(new Response(JSON.stringify(summary)))
     if (url === '/api/me/allocations')
       return Promise.resolve(new Response(JSON.stringify({ schemes: [] })))
-    if (url === '/api/me/budgets')
-      return Promise.resolve(
-        new Response(JSON.stringify({ rules: [], pending: [] })),
-      )
     if (url === '/api/me/limits')
       return Promise.resolve(
         new Response(
@@ -247,10 +230,6 @@ it('redirects the former personal usage URL to the combined home page', async ()
         return Promise.resolve(new Response(JSON.stringify(summary)))
       if (url === '/api/me/allocations')
         return Promise.resolve(new Response(JSON.stringify({ schemes: [] })))
-      if (url === '/api/me/budgets')
-        return Promise.resolve(
-          new Response(JSON.stringify({ rules: [], pending: [] })),
-        )
       if (url === '/api/me/limits')
         return Promise.resolve(
           new Response(

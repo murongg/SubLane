@@ -106,13 +106,3 @@ type Proxy struct {
 	LatencyMs  int64
 	CheckError string
 }
-
-type TokenBudgetEntry struct {
-	RequestID   string
-	BudgetID    int64
-	WindowStart int64
-	StartedAt   int64
-	State       string
-	Tokens      int64
-	Manual      int64
-}

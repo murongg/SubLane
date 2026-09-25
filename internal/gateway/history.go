@@ -61,8 +61,7 @@ type observation struct {
 	memberLeased       bool
 	schemeID           int64
 	allocationTracked  bool
-	budgetTracked      bool
-	budgetDispatched   bool
+	upstreamDispatched bool
 	sequence           int64
 	quotaReadStartedAt int64
 	quotaRevision      int64
@@ -174,9 +173,6 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 			q := s.queries.WithTx(tx)
 			err = e.settleAllocation(ctx, q)
 			if err == nil {
-				err = e.settleBudget(ctx, q)
-			}
-			if err == nil {
 				err = q.RecordRequest(ctx, e.record)
 			}
 			if err == nil {
@@ -199,8 +195,8 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 			}
 		}
 		if err != nil {
-			if e.budgetTracked || e.allocationTracked {
-				s.budgetFailure = true
+			if e.allocationTracked {
+				s.allocationFailure = true
 			}
 			slog.Error("Unable to persist request metadata")
 		} else if e.allocationTracked {
@@ -226,10 +222,8 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 		return "rejected", "member_busy", ""
 	case errors.Is(err, ErrMemberRate):
 		return "rejected", "member_rate_limited", ""
-	case errors.Is(err, ErrTokenQuota), errors.Is(err, ErrTokenPending):
-		return "rejected", err.Error(), ""
-	case errors.Is(err, ErrTokenAccounting):
-		return "error", "token_accounting_unavailable", ""
+	case errors.Is(err, ErrAllocationAccounting):
+		return "error", "allocation_accounting_unavailable", ""
 	case errors.Is(err, ErrQuotaExhausted):
 		return "rejected", "quota_exhausted", ""
 	case errors.Is(err, ErrAccountBusy):
