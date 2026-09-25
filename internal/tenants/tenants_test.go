@@ -85,3 +85,40 @@ func TestMembershipIsScopedToTenant(t *testing.T) {
 		t.Fatalf("suspending another tenant affected beta: ok=%v err=%v", ok, err)
 	}
 }
+
+func TestMemberListIncludesOwnerWithoutAllowingOwnerChanges(t *testing.T) {
+	ctx := context.Background()
+	connection, err := storage.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	for _, id := range []int64{2, 3} {
+		if _, err := connection.ExecContext(ctx,
+			"INSERT INTO users(id,username,role,password_hash,enabled,created_at) VALUES(?,?,'member','synthetic-hash',1,1)",
+			id, "synthetic-"+strconv.FormatInt(id, 10)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	service := New(connection)
+	workspace, err := service.Create(ctx, 2, "Synthetic workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.AddMember(ctx, 2, workspace.ID, 3, RoleMember); err != nil {
+		t.Fatal(err)
+	}
+	page, err := service.ListMembers(ctx, workspace.ID, 0)
+	if err != nil || len(page.Members) != 2 || page.Members[0].ID != 3 || page.Members[1].ID != 2 || page.Members[1].Role != RoleOwner {
+		t.Fatalf("workspace roster omitted owner: %+v, %v", page, err)
+	}
+	if _, err := service.SetMemberEnabled(ctx, 2, workspace.ID, 2, false); err != ErrNotFound {
+		t.Fatalf("owner status changed from roster: %v", err)
+	}
+	if _, err := service.SetMemberRole(ctx, 2, workspace.ID, 3, RoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SetMemberRole(ctx, 3, workspace.ID, 2, RoleMember); err != ErrForbidden {
+		t.Fatalf("owner role changed from roster: %v", err)
+	}
+}

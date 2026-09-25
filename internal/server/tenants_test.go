@@ -205,9 +205,4 @@ func TestPlatformOwnerCanHaveOrdinaryMemberLimitsInAnotherWorkspace(t *testing.T
 	if result := request(h, http.MethodGet, path, "", nil, cookie); result.Code != http.StatusOK || !strings.Contains(result.Body.String(), `"requests_per_minute":10`) {
 		t.Fatalf("read member limits for global user 1: %d %s", result.Code, result.Body.String())
 	}
-	if result := request(h, http.MethodPut, "/api/members/1/budgets", "http://example.test", map[string]any{
-		"period": "day", "limit": 100, "enabled": true, "group_id": 0, "model": "",
-	}, cookie); result.Code != http.StatusOK {
-		t.Fatalf("member budget for global user 1: %d %s", result.Code, result.Body.String())
-	}
 }

@@ -130,7 +130,7 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                 )}
                 <p className="text-xs leading-5 text-muted-foreground">
                   {detail.config.period !== 'upstream' &&
-                    `${t(detail.config.period === 'day' ? 'budgetDaily' : 'budgetMonthly')} · `}
+                    `${t(detail.config.period === 'day' ? 'periodDaily' : 'periodMonthly')} · `}
                   {t('allocationResetAt', { date: date(b.reset_at) })}
                   {b.mode !== 'tokens' &&
                     ` · ${t('allocationActualTokens', { tokens: allocationValue(b.tokens, 'tokens') })}`}

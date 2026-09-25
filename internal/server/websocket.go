@@ -106,7 +106,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 	turnID := ""
 	writeError := func(err error) error {
 		status, code := gatewayFailure(err)
-		raw, _ := json.Marshal(map[string]any{"type": "error", "status": status, "error": gatewayErrorBody(code), "quota": budgetErrorDetails(err)})
+		raw, _ := json.Marshal(map[string]any{"type": "error", "status": status, "error": gatewayErrorBody(code)})
 		return write(correlateEvent(raw, turnID))
 	}
 	_, secret, _ := strings.Cut(r.Header.Get("Authorization"), " ")

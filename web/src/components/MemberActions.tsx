@@ -9,7 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/DropdownMenu'
-import { MemberBudgets } from './MemberBudgets'
 import { MemberLimits } from './MemberLimits'
 import { PasswordDialog } from './PasswordDialog'
 
@@ -21,9 +20,7 @@ export function MemberActions({
   onPasswordReset?: () => void
 }) {
   const { t } = useTranslation()
-  const [action, setAction] = useState<
-    'limits' | 'budgets' | 'password' | null
-  >(null)
+  const [action, setAction] = useState<'limits' | 'password' | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const focus = () => trigger.current?.focus()
   return (
@@ -40,14 +37,12 @@ export function MemberActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => setAction('limits')}>
-            <Gauge aria-hidden="true" />
-            {t('memberLimits')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setAction('budgets')}>
-            <Gauge aria-hidden="true" />
-            {t('tokenBudgets')}
-          </DropdownMenuItem>
+          {member.role === 'member' && (
+            <DropdownMenuItem onSelect={() => setAction('limits')}>
+              <Gauge aria-hidden="true" />
+              {t('memberLimits')}
+            </DropdownMenuItem>
+          )}
           {onPasswordReset && (
             <DropdownMenuItem onSelect={() => setAction('password')}>
               <KeyRound aria-hidden="true" />
@@ -58,13 +53,6 @@ export function MemberActions({
       </DropdownMenu>
       {action === 'limits' && (
         <MemberLimits
-          member={member}
-          onClose={() => setAction(null)}
-          returnFocus={focus}
-        />
-      )}
-      {action === 'budgets' && (
-        <MemberBudgets
           member={member}
           onClose={() => setAction(null)}
           returnFocus={focus}

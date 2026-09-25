@@ -16,6 +16,36 @@ const syntheticMember = {
 const response = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status })
 
+it('shows the workspace owner without member-only management controls', async () => {
+  const fetchMock = vi.fn().mockImplementation((url: string) => {
+    if (url === '/api/auth/state')
+      return Promise.resolve(response(authenticated))
+    return Promise.resolve(
+      response({
+        members: [
+          {
+            id: 1,
+            username: 'synthetic-owner',
+            role: 'owner',
+            enabled: true,
+            created_at: 1900000000,
+          },
+        ],
+        next_cursor: 0,
+      }),
+    )
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  open()
+  const row = await screen.findByRole('row', { name: /synthetic-owner/ })
+  expect(within(row).getByText('Owner')).toBeTruthy()
+  expect(within(row).queryByRole('button', { name: /disable/i })).toBeNull()
+  expect(within(row).queryByRole('button', { name: /change role/i })).toBeNull()
+  expect(
+    within(row).queryByRole('button', { name: /more actions/i }),
+  ).toBeNull()
+})
+
 it('updates shared member limits and resets a member password', async () => {
   const policy = {
     user_id: 2,

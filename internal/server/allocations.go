@@ -37,7 +37,7 @@ func (h *allocationHTTP) prices(w http.ResponseWriter, r *http.Request) {
 func (h *allocationHTTP) available(w http.ResponseWriter, r *http.Request) bool {
 	if h.gateway != nil {
 		if err := h.gateway.PrepareAllocations(r.Context()); err != nil {
-			writeJSON(w, 503, map[string]string{"error": "token_accounting_unavailable"})
+			writeJSON(w, 503, map[string]string{"error": "allocation_accounting_unavailable"})
 			return false
 		}
 		return true

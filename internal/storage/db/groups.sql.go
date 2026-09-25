@@ -89,9 +89,8 @@ func (q *Queries) ClearMemberGroups(ctx context.Context, arg ClearMemberGroupsPa
 }
 
 const countGroupMembers = `-- name: CountGroupMembers :one
-SELECT count(*) FROM group_members grant_row
-JOIN effective_group_access access ON access.group_id=grant_row.group_id AND access.user_id=grant_row.user_id
-WHERE grant_row.group_id=?1
+SELECT count(*) FROM effective_group_access access
+WHERE access.group_id=?1
 `
 
 func (q *Queries) CountGroupMembers(ctx context.Context, groupID int64) (int64, error) {
@@ -346,9 +345,7 @@ func (q *Queries) ListGroupModels(ctx context.Context, groupID int64) ([]string,
 
 const listGroups = `-- name: ListGroups :many
 SELECT g.id, g.name, g.enabled, g.created_at, g.updated_at, g.restricted_models, g.tenant_id, (SELECT count(*) FROM group_accounts a WHERE a.group_id=g.id) AS account_count,
-(SELECT count(*) FROM group_members grant_row
- JOIN effective_group_access access ON access.group_id=grant_row.group_id AND access.user_id=grant_row.user_id
- WHERE grant_row.group_id=g.id) AS member_count
+(SELECT count(*) FROM effective_group_access access WHERE access.group_id=g.id) AS member_count
 FROM account_groups g WHERE g.tenant_id=?1 ORDER BY g.id
 `
 
@@ -431,11 +428,12 @@ func (q *Queries) ListMemberGroups(ctx context.Context, arg ListMemberGroupsPara
 }
 
 const listPoolMembers = `-- name: ListPoolMembers :many
-SELECT u.id,u.username FROM group_members grant_row
-JOIN effective_group_access access ON access.group_id=grant_row.group_id AND access.user_id=grant_row.user_id
+SELECT u.id,u.username FROM effective_group_access access
 JOIN users u ON u.id=access.user_id
-WHERE grant_row.group_id=?1
-ORDER BY u.username,u.id LIMIT 100
+JOIN account_groups g ON g.id=access.group_id
+JOIN memberships m ON m.tenant_id=g.tenant_id AND m.user_id=access.user_id
+WHERE access.group_id=?1
+ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,u.username,u.id LIMIT 100
 `
 
 type ListPoolMembersRow struct {
@@ -443,6 +441,7 @@ type ListPoolMembersRow struct {
 	Username string
 }
 
+// Owners and administrators use enabled pools through their role, without a direct grant.
 func (q *Queries) ListPoolMembers(ctx context.Context, groupID int64) ([]ListPoolMembersRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPoolMembers, groupID)
 	if err != nil {

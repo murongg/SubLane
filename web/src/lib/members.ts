@@ -5,7 +5,7 @@ import { selectedWorkspace } from './workspace'
 const memberSchema = z.object({
   id: z.number().int().positive(),
   username: z.string().min(3).max(32),
-  role: z.enum(['member', 'admin']),
+  role: z.enum(['member', 'admin', 'owner']),
   enabled: z.boolean(),
   created_at: z.number().int().nonnegative(),
 })

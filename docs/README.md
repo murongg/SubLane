@@ -9,4 +9,4 @@ The maintained usage, operations, and architecture guides live on the [SubLane d
 
 Edit the English and Chinese guides in the [documentation repository](https://github.com/murongg/sublane-website). This index is also included in binary release archives; those archives link to the maintained guides instead of shipping duplicate copies.
 
-The [legacy token-budget reference](https://github.com/murongg/SubLane/blob/main/docs/token-budgets.md) remains in the application repository until it has a website counterpart. Repository policies, release history, and canonical brand assets also remain with the application.
+Repository policies, release history, and canonical brand assets remain with the application.

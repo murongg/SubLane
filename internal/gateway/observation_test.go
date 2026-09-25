@@ -96,7 +96,10 @@ func TestQuotaObservationUsesDispatchBoundaryAfterPreflight(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			budgetFinish(t, x)
+			if err := x.Events(func([]byte) error { return nil }); err != nil {
+				t.Fatal(err)
+			}
+			x.Body.Close()
 			row, err := s.queries.GetAccountUsage(context.Background(), ids["codex"])
 			if err != nil {
 				t.Fatal(err)

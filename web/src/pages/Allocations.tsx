@@ -199,8 +199,8 @@ export function Allocations() {
                     s.config.period === 'upstream'
                       ? 'allocationUpstreamReset'
                       : s.config.period === 'day'
-                        ? 'budgetDaily'
-                        : 'budgetMonthly',
+                        ? 'periodDaily'
+                        : 'periodMonthly',
                   )}
                 </p>
                 {s.next && (

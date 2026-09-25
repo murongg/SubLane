@@ -268,19 +268,34 @@ func TestConnectionReadinessExcludesPausedProviders(t *testing.T) {
 	}
 }
 
-func TestPoolMembersListsOnlyDirectEnabledGrants(t *testing.T) {
-	_, service, member, _ := assignedFixture(t)
-	values, err := service.Members(context.Background(), 1)
-	if err != nil || len(values) != 1 || values[0].ID != member.ID {
-		t.Fatalf("pool grant members: %+v, %v", values, err)
+func TestPoolMembersIncludesEveryoneWithEffectiveAccess(t *testing.T) {
+	connection, service, member, _ := assignedFixture(t)
+	ctx := context.Background()
+	assertMembers := func(want ...int64) {
+		t.Helper()
+		values, err := service.Members(ctx, 1)
+		if err != nil || len(values) != len(want) {
+			t.Fatalf("pool members: %+v, %v", values, err)
+		}
+		for i, id := range want {
+			if values[i].ID != id {
+				t.Fatalf("pool members: %+v, want IDs %v", values, want)
+			}
+		}
+		listed, err := service.List(ctx)
+		if err != nil || len(listed) != 1 || listed[0].MemberCount != int64(len(want)) {
+			t.Fatalf("pool member count: %+v, %v", listed, err)
+		}
 	}
-	if err := service.SetMemberGroups(context.Background(), member.ID, []int64{}); err != nil {
+	assertMembers(1, member.ID)
+	if err := service.SetMemberGroups(ctx, member.ID, []int64{}); err != nil {
 		t.Fatal(err)
 	}
-	values, err = service.Members(context.Background(), 1)
-	if err != nil || len(values) != 0 {
-		t.Fatalf("revoked member still listed: %+v, %v", values, err)
+	assertMembers(1)
+	if _, err := tenants.New(connection).SetMemberRole(ctx, 1, 1, member.ID, tenants.RoleAdmin); err != nil {
+		t.Fatal(err)
 	}
+	assertMembers(1, member.ID)
 }
 
 func assignedFixture(t *testing.T) (*sql.DB, *groups.Service, auth.Member, accounts.Account) {

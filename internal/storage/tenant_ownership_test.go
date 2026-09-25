@@ -59,10 +59,6 @@ func TestTenantOwnedPoolRejectsForeignAccount(t *testing.T) {
 	if _, err := connection.ExecContext(ctx, "UPDATE api_keys SET group_id=30 WHERE id=1"); err == nil {
 		t.Fatal("existing key changed its workspace-bound pool")
 	}
-	if _, err := connection.ExecContext(ctx, `INSERT INTO token_budgets(tenant_id,user_id,group_id,model,period,token_limit,enabled,created_at)
-		VALUES(2,2,30,'','day',100,1,1)`); err == nil {
-		t.Fatal("member budget referenced a pool from another workspace")
-	}
 	if _, err := connection.ExecContext(ctx, "INSERT INTO group_members(group_id,user_id) VALUES(30,2)"); err != nil {
 		t.Fatal(err)
 	}

@@ -96,21 +96,6 @@ func TestRequestHistoryDoesNotCrossWorkspaces(t *testing.T) {
 	if err != nil || secondLimit.RequestsThisMinute != 0 {
 		t.Fatalf("member rate window crossed workspaces: %+v, %v", secondLimit, err)
 	}
-	if _, err := first.SaveBudget(ctx, member.ID, BudgetInput{Period: "day", Limit: 100, Enabled: true}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := second.SaveBudget(ctx, member.ID, BudgetInput{Period: "day", Limit: 200, Enabled: true}); err != nil {
-		t.Fatal(err)
-	}
-	for _, check := range []struct {
-		service *Service
-		limit   int64
-	}{{first, 100}, {second, 200}} {
-		page, err := check.service.Budgets(ctx, member.ID)
-		if err != nil || len(page.Rules) != 1 || page.Rules[0].Limit != check.limit {
-			t.Fatalf("token allowance crossed workspaces: %+v, %v", page, err)
-		}
-	}
 	if observation, err := first.begin(ctx, member.ID, otherPool.ID, Responses); err == nil {
 		observation.finish("rejected", "test_cleanup", "", "")
 		t.Fatal("gateway admitted a pool from another workspace")
