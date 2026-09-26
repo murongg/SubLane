@@ -28,18 +28,19 @@ var (
 	ErrUnavailable  = errors.New("allocation_unavailable")
 	ErrQuota        = errors.New("allocation_exhausted")
 	ErrPending      = errors.New("allocation_pending")
-	ErrSync         = errors.New("allocation_syncing")
+	ErrRisk         = errors.New("allocation_risk_limit")
 	ErrUnpriced     = errors.New("allocation_model_unpriced")
-	ErrSnapshot     = errors.New("allocation_snapshot_required")
 	ErrSettlement   = errors.New("invalid_allocation_settlement")
 )
 
 type Share struct {
 	UserID int64 `json:"user_id"`
-	Limit  int64 `json:"limit"`
+	// Limit is a percentage in hundredths for share mode; otherwise it
+	// uses the selected accounting unit's smallest increment.
+	Limit int64 `json:"limit"`
 }
 
-// Rates are micro-USD per million tokens. Ratio mode uses the same units only as relative weights.
+// Rates are micro-USD per million tokens.
 type Rate struct {
 	Model  string `json:"model"`
 	Input  int64  `json:"input"`
@@ -47,11 +48,15 @@ type Rate struct {
 	Output int64  `json:"output"`
 }
 type Config struct {
-	Mode            string  `json:"mode"`
-	Period          string  `json:"period"`
-	Members         []Share `json:"members"`
-	Rates           []Rate  `json:"rates"`
-	AllowIdleBorrow bool    `json:"allow_idle_borrow,omitempty"`
+	Mode      string  `json:"mode"`
+	Period    string  `json:"period"`
+	ResetTime string  `json:"reset_time,omitempty"`
+	ResetDay  int     `json:"reset_day,omitempty"`
+	Members   []Share `json:"members"`
+	Rates     []Rate  `json:"rates"`
+	RatioUnit string  `json:"ratio_unit,omitempty"`
+	// Total is in tokens or micro-USD according to RatioUnit.
+	Total int64 `json:"total,omitempty"`
 }
 type SchemeInput struct {
 	Name      string `json:"name"`
@@ -80,18 +85,21 @@ type Service struct {
 	tenantID int64
 	now      func() time.Time
 	pricing  *pricing.Service
+	location func() *time.Location
 }
 
 func New(conn *sql.DB) *Service { return NewForTenant(conn, 1) }
 func NewForTenant(conn *sql.DB, tenantID int64) *Service {
-	return &Service{conn: conn, tenantID: tenantID, now: time.Now}
+	return &Service{conn: conn, tenantID: tenantID, now: time.Now, location: func() *time.Location { return time.UTC }}
 }
 func NewWithPricing(conn *sql.DB, catalog *pricing.Service) *Service {
 	return NewForTenantWithPricing(conn, 1, catalog)
 }
 func NewForTenantWithPricing(conn *sql.DB, tenantID int64, catalog *pricing.Service) *Service {
-	return &Service{conn: conn, tenantID: tenantID, now: time.Now, pricing: catalog}
+	return &Service{conn: conn, tenantID: tenantID, now: time.Now, pricing: catalog, location: func() *time.Location { return time.UTC }}
 }
+
+func (s *Service) SetLocation(provider func() *time.Location) { s.location = provider }
 func validName(v string) bool {
 	return v == strings.TrimSpace(v) && utf8.ValidString(v) && utf8.RuneCountInString(v) > 0 && utf8.RuneCountInString(v) <= 64 && strings.IndexFunc(v, unicode.IsControl) < 0
 }
@@ -101,21 +109,31 @@ func bit(v bool) int64 {
 	}
 	return 0
 }
+func ratioLimit(c Config, share int64) int64 {
+	// Round down so member limits never sum beyond the configured total.
+	return c.Total * share / 10000
+}
 func normalize(c *Config) error {
 	if (c.Mode != "tokens" && c.Mode != "amount" && c.Mode != "ratio") || len(c.Members) == 0 || len(c.Members) > 100 || len(c.Rates) > 128 {
 		return ErrInput
 	}
+	if (c.Period != "day" && c.Period != "month") || !validResetSchedule(*c) {
+		return ErrInput
+	}
 	if c.Mode == "ratio" {
-		if c.Period != "upstream" {
+		if (c.RatioUnit != "tokens" && c.RatioUnit != "amount") || c.Total <= 0 || c.Total > 1_000_000_000_000 {
 			return ErrInput
 		}
-	} else if c.Period != "day" && c.Period != "month" {
+		if c.RatioUnit == "tokens" && len(c.Rates) > 0 {
+			return ErrInput
+		}
+	} else if c.Total != 0 || c.RatioUnit != "" {
 		return ErrInput
 	}
 	seen := map[int64]bool{}
 	var total int64
 	for _, m := range c.Members {
-		if m.UserID <= 0 || seen[m.UserID] || m.Limit <= 0 || m.Limit > 1_000_000_000_000 {
+		if m.UserID <= 0 || seen[m.UserID] || m.Limit <= 0 || m.Limit > 1_000_000_000_000 || c.Mode == "ratio" && (m.Limit > 10000 || ratioLimit(*c, m.Limit) == 0) {
 			return ErrInput
 		}
 		seen[m.UserID] = true
@@ -124,7 +142,7 @@ func normalize(c *Config) error {
 	if c.Mode == "ratio" && total > 10000 {
 		return ErrInput
 	}
-	if c.Mode == "amount" && len(c.Rates) == 0 {
+	if (c.Mode == "amount" || c.Mode == "ratio" && c.RatioUnit == "amount") && len(c.Rates) == 0 {
 		return ErrInput
 	}
 	models := map[string]bool{}
@@ -168,16 +186,10 @@ func decodeRevision(id, at int64, raw string) (Revision, error) {
 	if err := json.Unmarshal([]byte(raw), &r.Config); err != nil {
 		return r, err
 	}
-	return r, nil
-}
-func Window(now time.Time, period string) (int64, int64) {
-	v := now.UTC()
-	start := time.Date(v.Year(), v.Month(), v.Day(), 0, 0, 0, 0, time.UTC)
-	if period == "month" {
-		start = time.Date(v.Year(), v.Month(), 1, 0, 0, 0, 0, time.UTC)
-		return start.Unix(), start.AddDate(0, 1, 0).Unix()
+	if (r.Config.Period != "day" && r.Config.Period != "month") || !validResetSchedule(r.Config) {
+		return r, ErrInput
 	}
-	return start.Unix(), start.AddDate(0, 0, 1).Unix()
+	return r, nil
 }
 func (s *Service) Schemes(ctx context.Context) ([]Scheme, error) {
 	q := db.New(s.conn)
@@ -232,8 +244,6 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 		if total > 10000 {
 			return Scheme{}, ErrInput
 		}
-	} else if in.Config.AllowIdleBorrow {
-		return Scheme{}, ErrInput
 	}
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
@@ -268,9 +278,6 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 		if a.Shared > 0 {
 			return Scheme{}, ErrPoolConflict
 		}
-		if in.Config.Mode == "ratio" && a.Provider != "codex" {
-			return Scheme{}, ErrInput
-		}
 	}
 	if err = s.applyPrices(ctx, q, in.GroupID, &in.Config); err != nil {
 		return Scheme{}, err
@@ -297,10 +304,7 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 			return Scheme{}, err
 		}
 		if in.StartNext {
-			effective, err = nextEffective(ctx, q, in.GroupID, in.Config, now)
-			if err != nil {
-				return Scheme{}, err
-			}
+			effective = nextEffective(in.Config, now, s.location())
 		}
 	} else {
 		old, err := q.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: id, TenantID: s.tenantID})
@@ -315,10 +319,7 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 		}
 		current, err := Current(ctx, q, id, now)
 		if err == nil {
-			effective, err = nextEffective(ctx, q, in.GroupID, current.Config, now)
-			if err != nil {
-				return Scheme{}, err
-			}
+			effective = nextEffective(current.Config, now, s.location())
 		} else if errors.Is(err, ErrUnavailable) {
 			next, e := q.NextAllocationRevision(ctx, db.NextAllocationRevisionParams{SchemeID: id, EffectiveAt: now})
 			if e != nil {
@@ -352,13 +353,13 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 // applyPrices resolves omitted or zero model rates once, before the config is
 // persisted into a revision. Existing non-zero values remain explicit overrides.
 func (s *Service) applyPrices(ctx context.Context, q *db.Queries, groupID int64, config *Config) error {
-	if config.Mode == "tokens" || s.pricing == nil {
-		if config.Mode == "ratio" && len(config.Rates) == 0 {
+	if config.Mode == "tokens" || config.Mode == "ratio" && config.RatioUnit == "tokens" || s.pricing == nil {
+		if config.Mode == "ratio" && config.RatioUnit == "amount" && len(config.Rates) == 0 {
 			return ErrUnpriced
 		}
 		return nil
 	}
-	if config.Mode == "ratio" && len(config.Rates) == 0 && q != nil {
+	if config.Mode == "ratio" && config.RatioUnit == "amount" && len(config.Rates) == 0 && q != nil {
 		rows, err := q.ListGroupCatalogs(ctx, groupID)
 		if err != nil {
 			return err
@@ -427,46 +428,6 @@ func Cost(r Rate, input, output, cached int64) (int64, error) {
 		return 0, ErrInput
 	}
 	return sum.Int64(), nil
-}
-
-// Largest remainders conserve the exact observed upstream change, including one-point intervals.
-func Distribute(points int64, weights []int64) ([]int64, error) {
-	if points < 0 || points > 10000 || len(weights) == 0 {
-		return nil, ErrInput
-	}
-	total := new(big.Int)
-	for _, w := range weights {
-		if w < 0 {
-			return nil, ErrInput
-		}
-		total.Add(total, big.NewInt(w))
-	}
-	if total.Sign() == 0 {
-		return nil, ErrPending
-	}
-	out := make([]int64, len(weights))
-	remainders := make([]*big.Int, len(weights))
-	var assigned int64
-	for i, w := range weights {
-		product := new(big.Int).Mul(big.NewInt(points), big.NewInt(w))
-		value, rem := new(big.Int), new(big.Int)
-		value.QuoRem(product, total, rem)
-		out[i] = value.Int64()
-		assigned += out[i]
-		remainders[i] = rem
-	}
-	for assigned < points {
-		best := 0
-		for i := range remainders {
-			if remainders[i].Cmp(remainders[best]) > 0 {
-				best = i
-			}
-		}
-		out[best]++
-		remainders[best].SetInt64(-1)
-		assigned++
-	}
-	return out, nil
 }
 
 // Access toggles never depend on upstream availability or rewrite the policy revision.

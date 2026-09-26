@@ -17,9 +17,11 @@ import { SchemeForm } from '@/components/SchemeForm'
 import { AllocationReport } from '@/components/AllocationReport'
 import { Button } from '@/components/ui/Button'
 import { Status } from '@/components/Status'
+import { formatInstanceDate, useTimeZone } from '@/lib/timezone'
 
 export function Allocations() {
   const { t, i18n } = useTranslation()
+  const timeZone = useTimeZone()
   const query = useQuery(schemesOptions)
   const pools = useQuery(groupOptions)
   const client = useQueryClient()
@@ -53,7 +55,10 @@ export function Allocations() {
   const loading = query.isPending || pools.isPending
   const failed = query.isError || pools.isError
   const date = (n: number) =>
-    new Date(n * 1000).toLocaleString(i18n.resolvedLanguage ?? 'en')
+    formatInstanceDate(n * 1000, i18n.resolvedLanguage ?? 'en', timeZone, {
+      dateStyle: 'short',
+      timeStyle: 'medium',
+    })
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -195,20 +200,34 @@ export function Allocations() {
                 </div>
                 <p className="break-words text-sm text-muted-foreground">
                   {s.group_name} ·{' '}
-                  {t(
-                    s.config.period === 'upstream'
-                      ? 'allocationUpstreamReset'
-                      : s.config.period === 'day'
-                        ? 'periodDaily'
-                        : 'periodMonthly',
-                  )}
+                  {s.config.period === 'day'
+                    ? t('allocationDailySchedule', {
+                        time: s.config.reset_time ?? '00:00',
+                        zone: timeZone,
+                      })
+                    : t('allocationMonthlySchedule', {
+                        day: s.config.reset_day ?? 1,
+                        time: s.config.reset_time ?? '00:00',
+                        zone: timeZone,
+                      })}
                 </p>
                 {s.next && (
                   <p className="text-sm text-muted-foreground">
                     {t('allocationScheduled', {
                       mode: t(modeLabels[s.next.config.mode]),
                       date: date(s.next.effective_at),
-                    })}
+                    })}{' '}
+                    ·{' '}
+                    {s.next.config.period === 'day'
+                      ? t('allocationDailySchedule', {
+                          time: s.next.config.reset_time ?? '00:00',
+                          zone: timeZone,
+                        })
+                      : t('allocationMonthlySchedule', {
+                          day: s.next.config.reset_day ?? 1,
+                          time: s.next.config.reset_time ?? '00:00',
+                          zone: timeZone,
+                        })}
                   </p>
                 )}
               </div>

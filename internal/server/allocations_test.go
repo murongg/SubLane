@@ -132,3 +132,55 @@ func TestSchemeKeysIsolateTeamsAcrossHTTPAndWebSocket(t *testing.T) {
 		t.Fatal("ledgers mixed", page)
 	}
 }
+
+func TestTokenShareGatewayChargesWithoutQuotaSynchronization(t *testing.T) {
+	f := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"synthetic\",\"output\":[],\"usage\":{\"input_tokens\":3,\"output_tokens\":2}}}\n\n")
+	})
+	ctx := context.Background()
+	accounts, err := f.accounts.List(ctx)
+	if err != nil || len(accounts) != 1 {
+		t.Fatal(accounts, err)
+	}
+	if _, err := f.groups.Save(ctx, 1, groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{}}); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := f.groups.Save(ctx, 0, groups.Input{Name: "Synthetic pool", Enabled: true, AccountIDs: []string{accounts[0].ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.groups.SetMemberGroups(ctx, f.userID, []int64{pool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	manager := f.forwarding.Allocations()
+	scheme, err := manager.SaveScheme(ctx, 0, allocations.SchemeInput{Name: "Synthetic token shares", GroupID: pool.ID, Enabled: true,
+		Config: allocations.Config{Mode: "ratio", RatioUnit: "tokens", Period: "month", Total: 10, Members: []allocations.Share{{UserID: f.userID, Limit: 5000}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := f.keys.CreateInScheme(ctx, f.userID, scheme.ID, "Synthetic key", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := func(want int) {
+		t.Helper()
+		req, _ := http.NewRequest("POST", f.server.URL+"/v1/responses", strings.NewReader(`{"model":"synthetic-model","input":[]}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+key.Secret)
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != want {
+			body, _ := io.ReadAll(response.Body)
+			t.Fatal(response.StatusCode, string(body))
+		}
+	}
+	call(200)
+	call(429)
+	detail, err := manager.Detail(ctx, scheme.ID, f.userID)
+	if err != nil || len(detail.Balances) != 1 || detail.Balances[0].Mode != "tokens" || detail.Balances[0].Limit != 5 || detail.Balances[0].Used != 5 {
+		t.Fatal(detail, err)
+	}
+}

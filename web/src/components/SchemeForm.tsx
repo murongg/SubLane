@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { catalogOptions } from '@/lib/catalog'
+import { useTimeZone } from '@/lib/timezone'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
 import {
@@ -259,15 +260,23 @@ export function SchemeForm({
   pending: boolean
 }) {
   const { t } = useTranslation()
+  const timeZone = useTimeZone()
   const initial = scheme?.next?.config ?? scheme?.config
   const [name, setName] = useState(scheme?.name ?? '')
   const [mode, setMode] = useState<AllocationMode>(initial?.mode ?? 'ratio')
+  const [ratioUnit, setRatioUnit] = useState<'amount' | 'tokens'>(
+    initial?.ratio_unit ?? 'tokens',
+  )
   const [period, setPeriod] = useState(
     initial?.period === 'day' ? 'day' : 'month',
   )
+  const [resetTime, setResetTime] = useState(initial?.reset_time ?? '00:00')
+  const [resetDay, setResetDay] = useState(String(initial?.reset_day ?? 1))
   const [enabled, setEnabled] = useState(scheme?.enabled ?? true)
-  const [allowIdleBorrow, setAllowIdleBorrow] = useState(
-    initial?.allow_idle_borrow ?? false,
+  const [ratioTotal, setRatioTotal] = useState(
+    initial?.total
+      ? allocationValue(initial.total, initial.ratio_unit ?? 'tokens')
+      : '',
   )
   const [startNext, setStartNext] = useState(false)
   const [values, setValues] = useState<Record<number, string>>(
@@ -290,6 +299,8 @@ export function SchemeForm({
     mode !== 'ratio' || (!!scheme && (initial?.rates.length ?? 0) > 0),
   )
   const [invalid, setInvalid] = useState(false)
+  const shareMode = mode === 'ratio'
+  const tokenBased = mode === 'tokens' || (shareMode && ratioUnit === 'tokens')
   const total = members.reduce(
     (sum, m) => sum + (parseAllocationValue(values[m.id] ?? '', mode) ?? 0),
     0,
@@ -378,7 +389,7 @@ export function SchemeForm({
     event.preventDefault()
     if (
       pending ||
-      (mode !== 'tokens' && rates.some((rate) => rate.priceState === 'loading'))
+      (!tokenBased && rates.some((rate) => rate.priceState === 'loading'))
     )
       return
     const shares = members
@@ -387,28 +398,42 @@ export function SchemeForm({
         user_id: m.id,
         limit: parseAllocationValue(values[m.id], mode) ?? -1,
       }))
-    const parsedRates =
-      mode === 'tokens'
-        ? []
-        : mode === 'ratio' && !advancedRates
-          ? // Editing shares must preserve the revision's pricing snapshot even
-            // while pricing controls are collapsed. New resources resolve prices automatically.
-            initial?.mode === 'ratio'
-            ? initial.rates
-            : []
-          : rates.map((r) => ({
-              model: r.model.trim(),
-              input: parseAllocationValue(r.input, 'amount') ?? -1,
-              cached: parseAllocationValue(r.cached, 'amount') ?? -1,
-              output: parseAllocationValue(r.output, 'amount') ?? -1,
-            }))
+    const parsedRates = tokenBased
+      ? []
+      : mode === 'ratio' && !advancedRates
+        ? // Editing shares must preserve the revision's pricing snapshot even
+          // while pricing controls are collapsed. New resources resolve prices automatically.
+          initial?.mode === 'ratio' && initial.ratio_unit === 'amount'
+          ? initial.rates
+          : []
+        : rates.map((r) => ({
+            model: r.model.trim(),
+            input: parseAllocationValue(r.input, 'amount') ?? -1,
+            cached: parseAllocationValue(r.cached, 'amount') ?? -1,
+            output: parseAllocationValue(r.output, 'amount') ?? -1,
+          }))
+    const totalBudget = shareMode
+      ? (parseAllocationValue(ratioTotal, ratioUnit) ?? -1)
+      : 0
     const bad =
       !name.trim() ||
       !groupID ||
+      !/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(resetTime) ||
+      (period === 'month' &&
+        (!/^\d{1,2}$/.test(resetDay) ||
+          Number(resetDay) < 1 ||
+          Number(resetDay) > 31)) ||
       shares.length === 0 ||
       shares.some((m) => m.limit <= 0) ||
-      (mode === 'ratio' && total > 10000) ||
-      (mode === 'amount' &&
+      (shareMode && total > 10000) ||
+      (shareMode &&
+        (totalBudget <= 0 ||
+          totalBudget > 1_000_000_000_000 ||
+          shares.some(
+            (m) => Math.floor((totalBudget * m.limit) / 10000) === 0,
+          ))) ||
+      ((mode === 'amount' ||
+        (shareMode && ratioUnit === 'amount' && advancedRates)) &&
         (parsedRates.length === 0 ||
           parsedRates.some(
             (r) =>
@@ -427,12 +452,12 @@ export function SchemeForm({
       start_next: startNext,
       config: {
         mode,
-        period: mode === 'ratio' ? 'upstream' : (period as 'day' | 'month'),
+        period: period as 'day' | 'month',
+        reset_time: resetTime,
+        ...(period === 'month' ? { reset_day: Number(resetDay) } : {}),
         members: shares,
         rates: parsedRates,
-        ...(mode === 'ratio' && allowIdleBorrow
-          ? { allow_idle_borrow: true }
-          : {}),
+        ...(shareMode ? { ratio_unit: ratioUnit, total: totalBudget } : {}),
       },
     })
   }
@@ -501,10 +526,62 @@ export function SchemeForm({
             )}
           </p>
         </fieldset>
-        {mode === 'ratio' ? (
-          <p className="text-sm">{t('allocationUpstreamReset')}</p>
-        ) : (
-          <div className="max-w-xs space-y-2">
+        {shareMode && (
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-medium">
+              {t('allocationRatioUnit')}
+            </legend>
+            <div className="flex flex-wrap gap-x-6 gap-y-3">
+              {(['tokens', 'amount'] as const).map((unit) => (
+                <label key={unit} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="allocation-ratio-unit"
+                    value={unit}
+                    checked={ratioUnit === unit}
+                    onChange={() => {
+                      if (ratioUnit !== unit) {
+                        setRatioUnit(unit)
+                        setRatioTotal('')
+                        setAdvancedRates(false)
+                      }
+                    }}
+                    className="size-4 accent-primary"
+                  />
+                  {t(
+                    unit === 'tokens'
+                      ? 'allocationRatioTokens'
+                      : 'allocationRatioAmount',
+                  )}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+        <div className="grid max-w-xl gap-4 sm:grid-cols-2">
+          {shareMode && (
+            <div className="space-y-2">
+              <label
+                htmlFor="scheme-token-total"
+                className="text-sm font-medium"
+              >
+                {t('allocationTotalBudget')}
+              </label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="scheme-token-total"
+                  value={ratioTotal}
+                  onChange={(e) => setRatioTotal(e.target.value)}
+                  inputMode="decimal"
+                  className="min-w-0 text-right tabular-nums"
+                />
+                <span className="text-sm text-muted-foreground">
+                  {ratioUnit === 'amount' ? 'USD' : 'M'}
+                </span>
+              </div>
+            </div>
+          )}
+          <div className="space-y-2">
             <label htmlFor="scheme-period" className="text-sm font-medium">
               {t('allocationPeriod')}
             </label>
@@ -514,19 +591,66 @@ export function SchemeForm({
               value={period}
               disabled={pending}
               options={[
-                { value: 'day', label: t('periodDaily') },
-                { value: 'month', label: t('periodMonthly') },
+                { value: 'day', label: t('periodDaily', { zone: timeZone }) },
+                {
+                  value: 'month',
+                  label: t('periodMonthly', { zone: timeZone }),
+                },
               ]}
               onChange={setPeriod}
             />
           </div>
-        )}
+          {period === 'month' && (
+            <div className="space-y-2">
+              <label htmlFor="scheme-reset-day" className="text-sm font-medium">
+                {t('allocationResetDay')}
+              </label>
+              <Input
+                id="scheme-reset-day"
+                type="number"
+                min={1}
+                max={31}
+                step={1}
+                value={resetDay}
+                onChange={(e) => setResetDay(e.target.value)}
+                inputMode="numeric"
+                className="tabular-nums"
+              />
+            </div>
+          )}
+          <div className="space-y-2">
+            <label htmlFor="scheme-reset-time" className="text-sm font-medium">
+              {t('allocationResetTime')}
+            </label>
+            <Input
+              id="scheme-reset-time"
+              type="time"
+              step={60}
+              value={resetTime}
+              onChange={(e) => setResetTime(e.target.value)}
+              className="tabular-nums"
+            />
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
+            {t('allocationResetZoneHint', { zone: timeZone })}{' '}
+            {period === 'month' && t('allocationResetShortMonthHint')}
+          </p>
+          {shareMode && (
+            <p className="text-sm leading-6 text-muted-foreground sm:col-span-2">
+              {t(
+                ratioUnit === 'amount'
+                  ? 'allocationTotalAmountHint'
+                  : 'allocationTotalTokensHint',
+              )}
+            </p>
+          )}
+        </div>
         <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="font-medium">
-              {t(mode === 'ratio' ? 'allocationShares' : 'allocationMembers')}
+              {t(shareMode ? 'allocationShares' : 'allocationMembers')}
             </h3>
-            {mode === 'ratio' && (
+            {shareMode && (
               <Button
                 type="button"
                 size="sm"
@@ -578,13 +702,13 @@ export function SchemeForm({
                     className="w-32 text-right tabular-nums"
                   />
                   <span className="w-9 text-sm text-muted-foreground">
-                    {mode === 'ratio' ? '%' : mode === 'amount' ? 'USD' : 'M'}
+                    {shareMode ? '%' : mode === 'amount' ? 'USD' : 'M'}
                   </span>
                 </div>
               </div>
             ))}
           </div>
-          {mode === 'ratio' && (
+          {shareMode && (
             <p
               className={
                 total > 10000
@@ -599,40 +723,14 @@ export function SchemeForm({
             </p>
           )}
         </section>
-        {mode === 'ratio' && (
-          <div className="space-y-2">
-            <p className="text-sm leading-6">{t('allocationShareRules')}</p>
-            {!scheme && (
-              <p className="text-sm leading-6">
-                {t(
-                  startNext
-                    ? 'allocationStartNextRatio'
-                    : 'allocationImmediateHint',
-                )}
-              </p>
+        {shareMode && (
+          <p className="text-sm leading-6 text-muted-foreground">
+            {t(
+              ratioUnit === 'amount'
+                ? 'allocationRatioAmountRule'
+                : 'allocationRatioTokenRule',
             )}
-            <p className="text-sm leading-6 text-muted-foreground">
-              {t('allocationAutoRatesHint')}
-            </p>
-            <label
-              htmlFor="allow-idle-borrow"
-              className="flex items-start gap-2 pt-2 text-sm leading-6"
-            >
-              <input
-                id="allow-idle-borrow"
-                type="checkbox"
-                className="mt-1 size-4 shrink-0 accent-primary"
-                checked={allowIdleBorrow}
-                onChange={(e) => setAllowIdleBorrow(e.target.checked)}
-              />
-              <span>
-                <span className="block">{t('allocationAllowIdleBorrow')}</span>
-                <span className="block text-muted-foreground">
-                  {t('allocationAllowIdleBorrowHint')}
-                </span>
-              </span>
-            </label>
-          </div>
+          </p>
         )}
         {scheme && (
           <p className="text-sm leading-6 text-muted-foreground">
@@ -648,7 +746,7 @@ export function SchemeForm({
           <summary className="cursor-pointer text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
             {t('allocationSettings')}
           </summary>
-          {mode === 'ratio' && !advancedRates && (
+          {shareMode && ratioUnit === 'amount' && !advancedRates && (
             <div className="space-y-2">
               <Button
                 type="button"
@@ -659,7 +757,8 @@ export function SchemeForm({
               </Button>
             </div>
           )}
-          {mode !== 'tokens' && (mode !== 'ratio' || advancedRates) && (
+          {(mode === 'amount' ||
+            (shareMode && ratioUnit === 'amount' && advancedRates)) && (
             <section className="space-y-3">
               <h3 className="font-medium">{t('allocationRates')}</h3>
               <p className="text-sm leading-6 text-muted-foreground">
@@ -769,14 +868,10 @@ export function SchemeForm({
                   checked={startNext}
                   onChange={(e) => setStartNext(e.target.checked)}
                 />
-                {t(
-                  mode === 'ratio'
-                    ? 'allocationStartNextRatio'
-                    : 'allocationStartNext',
-                )}
+                {t('allocationStartNext')}
               </label>
             )}
-            {!scheme && !startNext && mode !== 'ratio' && (
+            {!scheme && !startNext && (
               <p className="text-sm leading-6 text-muted-foreground">
                 {t('allocationImmediateHint')}
               </p>
@@ -802,8 +897,7 @@ export function SchemeForm({
           type="submit"
           disabled={
             pending ||
-            (mode !== 'tokens' &&
-              rates.some((rate) => rate.priceState === 'loading'))
+            (!tokenBased && rates.some((rate) => rate.priceState === 'loading'))
           }
         >
           {t('allocationSave')}
