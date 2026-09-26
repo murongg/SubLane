@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -39,7 +39,90 @@ it('assigns a pool allowance directly to its granted members', async () => {
   )
 })
 
-it('splits shares exactly and preserves saved price weights while editing', async () => {
+it('requires a total token budget and saves percentage shares', async () => {
+  const user = userEvent.setup()
+  const submit = vi.fn()
+  render(
+    <SchemeForm
+      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      groupID={2}
+      onGroupChange={() => {}}
+      members={[{ id: 7, username: 'synthetic-member' }]}
+      onSubmit={submit}
+      onCancel={() => {}}
+      pending={false}
+    />,
+  )
+  await user.type(
+    screen.getByLabelText('Resource allowance name'),
+    'Synthetic shares',
+  )
+  await user.type(screen.getByLabelText('Allowance for synthetic-member'), '25')
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).not.toHaveBeenCalled()
+  await user.type(screen.getByLabelText('Total budget'), '1')
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: {
+        mode: 'ratio',
+        period: 'month',
+        reset_day: 1,
+        reset_time: '00:00',
+        ratio_unit: 'tokens',
+        total: 1_000_000,
+        members: [{ user_id: 7, limit: 2500 }],
+        rates: [],
+      },
+    }),
+  )
+})
+
+it('offers an internal USD basis below the share choice', async () => {
+  const user = userEvent.setup()
+  const submit = vi.fn()
+  render(
+    <SchemeForm
+      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      groupID={2}
+      onGroupChange={() => {}}
+      members={[{ id: 7, username: 'synthetic-member' }]}
+      onSubmit={submit}
+      onCancel={() => {}}
+      pending={false}
+    />,
+  )
+  await user.type(
+    screen.getByLabelText('Resource allowance name'),
+    'Synthetic shares',
+  )
+  await user.click(screen.getByLabelText('By amount share'))
+  await user.type(screen.getByLabelText('Total budget'), '2')
+  await user.type(screen.getByLabelText('Allowance for synthetic-member'), '25')
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: {
+        mode: 'ratio',
+        ratio_unit: 'amount',
+        total: 2_000_000,
+        period: 'month',
+        reset_day: 1,
+        reset_time: '00:00',
+        members: [{ user_id: 7, limit: 2500 }],
+        rates: [],
+      },
+    }),
+  )
+})
+
+it('splits amount shares exactly and preserves saved prices while editing', async () => {
   const user = userEvent.setup()
   const submit = vi.fn()
   const client = new QueryClient({
@@ -85,7 +168,14 @@ it('splits shares exactly and preserves saved price weights while editing', asyn
           created_at: 1,
           effective_at: 1,
           next: null,
-          config: { mode: 'ratio', period: 'upstream', members: [], rates },
+          config: {
+            mode: 'ratio',
+            ratio_unit: 'amount',
+            total: 1_000_000,
+            period: 'month',
+            members: [],
+            rates,
+          },
         }}
         pending={false}
         onCancel={() => {}}
@@ -106,7 +196,11 @@ it('splits shares exactly and preserves saved price weights while editing', asyn
     expect.objectContaining({
       config: {
         mode: 'ratio',
-        period: 'upstream',
+        ratio_unit: 'amount',
+        total: 1_000_000,
+        period: 'month',
+        reset_day: 1,
+        reset_time: '00:00',
         members: [
           { user_id: 2, limit: 3334 },
           { user_id: 3, limit: 3333 },
@@ -118,51 +212,213 @@ it('splits shares exactly and preserves saved price weights while editing', asyn
   )
 })
 
-it('distinguishes account windows updating normally from blocked reconciliation', async () => {
+it('explains token-share balances without upstream quota settlement', async () => {
   const { AllocationBalances } = await import('./AllocationBalances')
-  const balance = {
-    user_id: 2,
-    username: 'synthetic-member',
-    mode: 'ratio' as const,
-    limit: 5000,
-    used: 1200,
-    tokens: 100,
-    pending: 0,
-    reset_at: 2000000000,
-    window_kind: 'primary',
-    syncing: 1,
-  }
   render(
     <AllocationBalances
       detail={{
         id: 1,
-        name: 'Synthetic',
+        name: 'Synthetic shares',
         group_id: 2,
-        group_name: 'Synthetic',
+        group_name: 'Synthetic pool',
         enabled: true,
         created_at: 1,
         effective_at: 1,
         next: null,
         config: {
           mode: 'ratio',
-          period: 'upstream',
-          members: [{ user_id: 2, limit: 5000 }],
+          period: 'month',
+          ratio_unit: 'tokens',
+          total: 1_000_000,
+          members: [{ user_id: 2, limit: 2500 }],
           rates: [],
         },
         available: true,
-        unassigned: 0,
         pending: [],
         balances: [
-          { ...balance, window_id: 1, account_label: '1', sync_paused: false },
-          { ...balance, window_id: 2, account_label: '2', sync_paused: true },
+          {
+            user_id: 2,
+            username: 'synthetic-member',
+            mode: 'tokens',
+            limit: 250_000,
+            used: 210_000,
+            tokens: 210_000,
+            pending: 1,
+            pending_current: 1,
+            in_flight: 0,
+            reserved: 25_000,
+            admission_room: 40_000,
+            admission: 'active',
+            reset_at: 2_000_000_000,
+          },
         ],
       }}
     />,
   )
-  expect(screen.getByText('Usage updating')).toBeTruthy()
-  expect(screen.getByText('Waiting for quota sync')).toBeTruthy()
-  expect(screen.getByText(/Subscription 1/)).toBeTruthy()
-  expect(screen.getByText(/Subscription 2/)).toBeTruthy()
+  expect(
+    screen.getByText(/total token budget × assigned percentage/),
+  ).toBeTruthy()
+  expect(screen.getByText('0.25 M')).toBeTruthy()
+  expect(screen.getByText('Active')).toBeTruthy()
+  expect(screen.getByText(/0 in flight · 1 awaiting usage/)).toBeTruthy()
+})
+
+it('shows a risk pause and provisional usage beside positive remaining allowance', async () => {
+  const { AllocationBalances } = await import('./AllocationBalances')
+  render(
+    <AllocationBalances
+      detail={{
+        id: 1,
+        name: 'Synthetic shares',
+        group_id: 2,
+        group_name: 'Synthetic pool',
+        enabled: true,
+        created_at: 1,
+        effective_at: 1,
+        next: null,
+        config: {
+          mode: 'ratio',
+          period: 'month',
+          ratio_unit: 'tokens',
+          total: 1_000_000,
+          members: [{ user_id: 2, limit: 2500 }],
+          rates: [],
+        },
+        available: true,
+        pending: [],
+        balances: [
+          {
+            user_id: 2,
+            username: 'synthetic-member',
+            mode: 'tokens',
+            limit: 250_000,
+            used: 240_000,
+            tokens: 240_000,
+            pending: 2,
+            pending_current: 1,
+            in_flight: 1,
+            reserved: 50_000,
+            admission_room: 0,
+            admission: 'risk_limited',
+            reset_at: 2_000_000_000,
+          },
+        ],
+      }}
+    />,
+  )
+  expect(screen.getByText('New requests temporarily paused')).toBeTruthy()
+  expect(screen.getByText('0.01 M')).toBeTruthy()
+  expect(screen.getByText(/1 in flight · 1 awaiting usage/)).toBeTruthy()
+  expect(screen.getByText(/0.05 M temporarily reserved/)).toBeTruthy()
+  expect(screen.getByText(/Admission headroom: 0 M/)).toBeTruthy()
+  expect(screen.getByText(/Older pending requests: 1/)).toBeTruthy()
+})
+
+it('keeps the current cycle active when only an older request is pending', async () => {
+  const { AllocationBalances } = await import('./AllocationBalances')
+  render(
+    <AllocationBalances
+      detail={{
+        id: 1,
+        name: 'Synthetic',
+        group_id: 2,
+        group_name: 'Synthetic pool',
+        enabled: true,
+        created_at: 1,
+        effective_at: 1,
+        next: null,
+        config: {
+          mode: 'tokens',
+          period: 'day',
+          members: [{ user_id: 2, limit: 100 }],
+          rates: [],
+        },
+        available: true,
+        pending: [],
+        balances: [
+          {
+            user_id: 2,
+            username: 'synthetic-member',
+            mode: 'tokens',
+            limit: 100,
+            used: 0,
+            tokens: 0,
+            pending: 1,
+            pending_current: 0,
+            in_flight: 0,
+            reserved: 0,
+            admission_room: 110,
+            admission: 'active',
+            reset_at: 2_000_000_000,
+          },
+        ],
+      }}
+    />,
+  )
+  expect(screen.getByText('Active')).toBeTruthy()
+  expect(screen.getByText(/Older pending requests: 1/)).toBeTruthy()
+  expect(screen.queryByText('Usage pending reconciliation')).toBeNull()
+})
+
+it('shows exhausted amount-share balances even with pending usage', async () => {
+  const { AllocationBalances } = await import('./AllocationBalances')
+  render(
+    <AllocationBalances
+      detail={{
+        id: 1,
+        name: 'Synthetic amount shares',
+        group_id: 2,
+        group_name: 'Synthetic pool',
+        enabled: true,
+        created_at: 1,
+        effective_at: 1,
+        next: null,
+        config: {
+          mode: 'ratio',
+          ratio_unit: 'amount',
+          total: 2_000_000,
+          period: 'month',
+          reset_day: 31,
+          reset_time: '09:30',
+          members: [{ user_id: 2, limit: 5000 }],
+          rates: [
+            {
+              model: 'synthetic-model',
+              input: 2_000_000,
+              cached: 200_000,
+              output: 4_000_000,
+            },
+          ],
+        },
+        available: true,
+        pending: [],
+        balances: [
+          {
+            user_id: 2,
+            username: 'synthetic-member',
+            mode: 'amount',
+            limit: 1_000_000,
+            used: 1_000_000,
+            tokens: 250_000,
+            pending: 1,
+            pending_current: 1,
+            in_flight: 0,
+            reserved: 100_000,
+            admission_room: 0,
+            admission: 'exhausted',
+            reset_at: 2_000_000_000,
+          },
+        ],
+      }}
+    />,
+  )
+  expect(
+    screen.getByText(/total internal USD budget × assigned percentage/),
+  ).toBeTruthy()
+  expect(screen.getAllByText('1 USD').length).toBeGreaterThan(0)
+  expect(screen.getByText('Allowance exhausted')).toBeTruthy()
+  expect(screen.getByText(/0\.25 M tokens/)).toBeTruthy()
+  expect(screen.getByText(/Monthly on day 31 at 09:30 · UTC/)).toBeTruthy()
 })
 
 it('converts the three units without losing small values', () => {
@@ -205,6 +461,8 @@ it('submits exactly one mode and rejects an overallocated ratio', async () => {
       config: {
         mode: 'tokens',
         period: 'month',
+        reset_day: 1,
+        reset_time: '00:00',
         members: [{ user_id: 2, limit: 1500000 }],
         rates: [],
       },
@@ -212,6 +470,7 @@ it('submits exactly one mode and rejects an overallocated ratio', async () => {
   )
   submit.mockClear()
   await user.click(screen.getByLabelText('By share'))
+  await user.type(screen.getByLabelText('Total budget'), '1')
   const allowance = screen.getByLabelText('Allowance for synthetic-member')
   await user.clear(allowance)
   await user.type(allowance, '101')
@@ -222,62 +481,44 @@ it('submits exactly one mode and rejects an overallocated ratio', async () => {
   expect(screen.getByRole('alert')).toBeTruthy()
 })
 
-it('keeps automatic ratio pricing out of the default form', () => {
+it('keeps automatic amount-share prices collapsed while editing', () => {
   render(
     <SchemeForm
       groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
       groupID={2}
       onGroupChange={() => {}}
       members={[{ id: 2, username: 'synthetic-member' }]}
+      scheme={{
+        id: 1,
+        name: 'Synthetic amount shares',
+        group_id: 2,
+        group_name: 'Synthetic pool',
+        enabled: true,
+        created_at: 1,
+        effective_at: 1,
+        next: null,
+        config: {
+          mode: 'ratio',
+          ratio_unit: 'amount',
+          total: 1_000_000,
+          period: 'month',
+          reset_day: 15,
+          reset_time: '13:45',
+          members: [],
+          rates: [],
+        },
+      }}
       onSubmit={() => {}}
       onCancel={() => {}}
       pending={false}
     />,
   )
   expect(
-    screen.getByRole('button', { name: 'Advanced: customize model weights' }),
+    screen.getByRole('button', { name: 'Advanced: customize model prices' }),
   ).toBeTruthy()
   expect(screen.queryByLabelText('模型 ID')).toBeNull()
-})
-
-it('makes idle share borrowing an explicit ratio option', async () => {
-  const submit = vi.fn()
-  const user = userEvent.setup()
-  const team = {
-    id: 1,
-    name: 'Synthetic team',
-    enabled: true,
-    member_ids: [2],
-    members: [{ id: 2, username: 'synthetic-member', enabled: true }],
-    created_at: 1,
-  }
-  render(
-    <SchemeForm
-      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
-      groupID={2}
-      onGroupChange={() => {}}
-      members={team.members}
-      pending={false}
-      onCancel={() => {}}
-      onSubmit={submit}
-    />,
-  )
-  await user.type(
-    screen.getByLabelText('Resource allowance name'),
-    'Synthetic allowance',
-  )
-  await user.type(screen.getByLabelText('Allowance for synthetic-member'), '50')
-  await user.click(
-    screen.getByRole('checkbox', { name: /Allow idle share borrowing/ }),
-  )
-  await user.click(
-    screen.getByRole('button', { name: 'Save resource allowance' }),
-  )
-  expect(submit).toHaveBeenCalledWith(
-    expect.objectContaining({
-      config: expect.objectContaining({ allow_idle_borrow: true }),
-    }),
-  )
+  expect(screen.getByLabelText('Day of month')).toHaveProperty('value', '15')
+  expect(screen.getByLabelText('Reset time')).toHaveProperty('value', '13:45')
 })
 
 it('offers only enabled, nonempty, dedicated pools without a scheme', async () => {
@@ -315,7 +556,6 @@ it('does not label a paused scheme balance as active', async () => {
           rates: [],
         },
         available: false,
-        unassigned: 0,
         pending: [],
         balances: [
           {
@@ -326,9 +566,12 @@ it('does not label a paused scheme balance as active', async () => {
             used: 0,
             tokens: 0,
             pending: 0,
+            pending_current: 0,
+            in_flight: 0,
+            reserved: 0,
+            admission_room: 110,
+            admission: 'active',
             reset_at: 2000000000,
-            window_id: 0,
-            window_kind: '',
           },
         ],
       }}
@@ -388,11 +631,72 @@ it('changes pool and period with accessible dropdowns and clears old shares', as
       config: {
         mode: 'tokens',
         period: 'day',
+        reset_time: '00:00',
         members: [{ user_id: 2, limit: 2000000 }],
         rates: [],
       },
     }),
   )
+})
+
+it('saves a daily reset clock or monthly date and clock per allowance', async () => {
+  const user = userEvent.setup()
+  const submit = vi.fn()
+  render(
+    <SchemeForm
+      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      groupID={2}
+      onGroupChange={() => {}}
+      members={[{ id: 7, username: 'synthetic-member' }]}
+      onSubmit={submit}
+      onCancel={() => {}}
+      pending={false}
+    />,
+  )
+  await user.type(screen.getByLabelText('Resource allowance name'), 'Synthetic')
+  await user.click(screen.getByLabelText('By tokens'))
+  await user.type(screen.getByLabelText('Allowance for synthetic-member'), '1')
+  await user.clear(screen.getByLabelText('Day of month'))
+  await user.type(screen.getByLabelText('Day of month'), '32')
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).not.toHaveBeenCalled()
+  await user.clear(screen.getByLabelText('Day of month'))
+  await user.type(screen.getByLabelText('Day of month'), '31')
+  fireEvent.change(screen.getByLabelText('Reset time'), {
+    target: { value: '' },
+  })
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).not.toHaveBeenCalled()
+  fireEvent.change(screen.getByLabelText('Reset time'), {
+    target: { value: '09:30' },
+  })
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit.mock.calls[0][0].config).toEqual(
+    expect.objectContaining({
+      period: 'month',
+      reset_day: 31,
+      reset_time: '09:30',
+    }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Reset period' }))
+  await user.click(screen.getByRole('menuitemradio', { name: 'Daily · UTC' }))
+  expect(screen.queryByLabelText('Day of month')).toBeNull()
+  fireEvent.change(screen.getByLabelText('Reset time'), {
+    target: { value: '18:45' },
+  })
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit.mock.calls[1][0].config).toEqual(
+    expect.objectContaining({ period: 'day', reset_time: '18:45' }),
+  )
+  expect(submit.mock.calls[1][0].config.reset_day).toBeUndefined()
 })
 
 const modelCatalog = {

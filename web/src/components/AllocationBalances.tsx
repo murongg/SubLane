@@ -1,15 +1,25 @@
 import { useTranslation } from 'react-i18next'
 import { type AllocationDetail, allocationValue } from '@/lib/allocations'
 import { Status } from './Status'
+import { formatInstanceDate, useTimeZone } from '@/lib/timezone'
+
 export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
   const { t, i18n } = useTranslation()
+  const timeZone = useTimeZone()
   const date = (n: number) =>
-    new Date(n * 1000).toLocaleString(i18n.resolvedLanguage ?? 'en')
+    formatInstanceDate(n * 1000, i18n.resolvedLanguage ?? 'en', timeZone, {
+      dateStyle: 'short',
+      timeStyle: 'medium',
+    })
   return (
     <div className="space-y-4">
       {detail.config.mode === 'ratio' && (
         <p className="text-sm leading-6 text-muted-foreground">
-          {t('allocationEstimateHint')}
+          {t(
+            detail.config.ratio_unit === 'amount'
+              ? 'allocationRatioAmountBalanceHint'
+              : 'allocationRatioTokensBalanceHint',
+          )}
         </p>
       )}
       {!detail.available && (
@@ -26,51 +36,27 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
           {detail.balances.map((b) => {
             const state = !detail.available
               ? 'allocationUnavailableShort'
-              : b.pending > 0 || detail.unassigned > 0
-                ? 'allocationPending'
-                : b.sync_paused
-                  ? 'allocationSyncPaused'
-                  : b.used >= b.limit
-                    ? 'allocationExhausted'
-                    : (b.syncing ?? 0) > 0
-                      ? 'allocationUpdating'
-                      : 'active'
-            const unit =
-              b.mode === 'ratio'
-                ? t('allocationPoints')
-                : b.mode === 'amount'
-                  ? 'USD'
-                  : 'M'
+              : b.admission === 'exhausted'
+                ? 'allocationExhausted'
+                : b.admission === 'risk_limited'
+                  ? 'allocationRiskPaused'
+                  : 'active'
+            const unit = b.mode === 'amount' ? 'USD' : 'M'
             return (
-              <section
-                key={`${b.user_id}-${b.window_id}`}
-                className="space-y-3 py-4"
-              >
+              <section key={b.user_id} className="space-y-3 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="break-words text-sm font-medium">
                     {b.username}
-                    {b.account_label &&
-                      ` · ${t('allocationSubscription', { label: b.account_label })}`}
-                    {b.window_kind &&
-                      ` · ${b.window_kind === 'primary' ? t('allocationPrimary') : t('allocationSecondary')}`}
-                    {b.account_id && (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {b.account_id.slice(0, 8)}
-                      </span>
-                    )}
                   </h3>
                   <Status
                     kind={
                       state === 'allocationUnavailableShort'
                         ? 'neutral'
-                        : state === 'allocationPending' ||
-                            state === 'allocationSyncPaused'
+                        : state === 'allocationRiskPaused'
                           ? 'warning'
                           : state === 'allocationExhausted'
                             ? 'error'
-                            : state === 'allocationUpdating'
-                              ? 'info'
-                              : 'success'
+                            : 'success'
                     }
                   >
                     {t(state)}
@@ -87,11 +73,7 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                   </div>
                   <div>
                     <dt className="text-muted-foreground">
-                      {t(
-                        b.mode === 'ratio'
-                          ? 'allocationEstimatedUsed'
-                          : 'allocationUsed',
-                      )}
+                      {t('allocationUsed')}
                     </dt>
                     <dd className="mt-1 tabular-nums">
                       {allocationValue(b.used, b.mode)} {unit}
@@ -99,11 +81,7 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                   </div>
                   <div>
                     <dt className="text-muted-foreground">
-                      {t(
-                        b.mode === 'ratio'
-                          ? 'allocationEstimatedRemaining'
-                          : 'allocationRemaining',
-                      )}
+                      {t('allocationRemaining')}
                     </dt>
                     <dd className="mt-1 tabular-nums">
                       {allocationValue(Math.max(0, b.limit - b.used), b.mode)}{' '}
@@ -111,28 +89,49 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                     </dd>
                   </div>
                 </dl>
-                {b.mode === 'ratio' && (b.borrowed ?? 0) > 0 && (
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {t('allocationBorrowed', {
-                      points: allocationValue(b.borrowed ?? 0, 'ratio'),
+                {(b.in_flight > 0 || b.pending_current > 0) && (
+                  <div className="space-y-1 text-sm leading-6 text-muted-foreground">
+                    <p>
+                      {t('allocationRiskExposure', {
+                        inFlight: b.in_flight,
+                        pending: b.pending_current,
+                        reserved: allocationValue(b.reserved, b.mode),
+                        unit,
+                      })}
+                    </p>
+                    <p>
+                      {t('allocationAdmissionRoom', {
+                        room: allocationValue(b.admission_room, b.mode),
+                        unit,
+                      })}
+                    </p>
+                  </div>
+                )}
+                {detail.available && b.admission === 'risk_limited' && (
+                  <p className="text-sm leading-6 text-warning">
+                    {t('allocationRiskLimit')}
+                  </p>
+                )}
+                {b.pending > b.pending_current && (
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {t('allocationOlderPending', {
+                      older: b.pending - b.pending_current,
                     })}
                   </p>
                 )}
-                {b.mode === 'ratio' && state === 'allocationExhausted' && (
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    {t('allocationAccountExhausted')}
-                  </p>
-                )}
-                {state === 'allocationSyncPaused' && (
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    {t('allocationSyncPausedHint')}
-                  </p>
-                )}
                 <p className="text-xs leading-5 text-muted-foreground">
-                  {detail.config.period !== 'upstream' &&
-                    `${t(detail.config.period === 'day' ? 'periodDaily' : 'periodMonthly')} · `}
-                  {t('allocationResetAt', { date: date(b.reset_at) })}
-                  {b.mode !== 'tokens' &&
+                  {detail.config.period === 'day'
+                    ? t('allocationDailySchedule', {
+                        time: detail.config.reset_time ?? '00:00',
+                        zone: timeZone,
+                      })
+                    : t('allocationMonthlySchedule', {
+                        day: detail.config.reset_day ?? 1,
+                        time: detail.config.reset_time ?? '00:00',
+                        zone: timeZone,
+                      })}{' '}
+                  · {t('allocationResetAt', { date: date(b.reset_at) })}
+                  {b.mode === 'amount' &&
                     ` · ${t('allocationActualTokens', { tokens: allocationValue(b.tokens, 'tokens') })}`}
                 </p>
               </section>

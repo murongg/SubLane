@@ -5,6 +5,7 @@ import { authKey, type AuthState } from './auth'
 
 const integer = z.number().int().nonnegative()
 const modeSchema = z.enum(['ratio', 'amount', 'tokens'])
+const unitSchema = z.enum(['amount', 'tokens'])
 const rateSchema = z.object({
   model: z.string(),
   input: integer,
@@ -19,10 +20,16 @@ const priceSchema = z.object({
 })
 const configSchema = z.object({
   mode: modeSchema,
-  period: z.enum(['upstream', 'day', 'month']),
+  period: z.enum(['day', 'month']),
+  reset_time: z
+    .string()
+    .regex(/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/)
+    .optional(),
+  reset_day: z.number().int().min(1).max(31).optional(),
   members: z.array(z.object({ user_id: integer, limit: integer })).max(100),
   rates: z.array(rateSchema).max(128),
-  allow_idle_borrow: z.boolean().optional(),
+  ratio_unit: unitSchema.optional(),
+  total: integer.optional(),
 })
 const revisionSchema = z.object({ effective_at: integer, config: configSchema })
 export const schemeSchema = revisionSchema.extend({
@@ -37,44 +44,31 @@ export const schemeSchema = revisionSchema.extend({
 const balanceSchema = z.object({
   user_id: integer,
   username: z.string(),
-  mode: modeSchema,
+  mode: unitSchema,
   limit: integer,
   used: integer,
-  borrowed: integer.optional(),
   tokens: integer,
   pending: integer,
+  pending_current: integer,
+  in_flight: integer,
+  reserved: integer,
+  admission_room: integer,
+  admission: z.enum(['active', 'risk_limited', 'exhausted']),
   reset_at: integer,
-  window_id: integer,
-  window_kind: z.string(),
-  account_id: z.string().optional(),
-  account_label: z.string().optional(),
-  syncing: integer.optional(),
-  sync_paused: z.boolean().optional(),
 })
 const pendingSchema = z.object({
   request_id: z.string(),
   user_id: integer,
-  mode: modeSchema,
+  mode: unitSchema,
   model: z.string(),
   state: z.string(),
-  automatic: z.boolean().optional(),
   input: integer,
   output: integer,
   cached: integer,
-  debits: z.array(
-    z.object({
-      window_id: integer,
-      kind: z.string(),
-      reset_at: integer,
-      points: integer,
-      reconciled: z.boolean(),
-    }),
-  ),
 })
 export const allocationDetailSchema = schemeSchema.extend({
   balances: z.array(balanceSchema),
   pending: z.array(pendingSchema).max(256),
-  unassigned: integer,
   available: z.boolean(),
 })
 export type Scheme = z.infer<typeof schemeSchema>
@@ -152,18 +146,6 @@ export async function lookupModelPrices(models: string[]) {
     z.infer<typeof priceSchema>
   >
 }
-export function refreshAllocation(id: number) {
-  return request(`/api/allocations/${id}/refresh`, allocationDetailSchema, {
-    method: 'POST',
-    body: '{}',
-  })
-}
-export function reserveAllocation(id: number, points: number) {
-  return request(`/api/allocations/${id}/reserve`, z.undefined(), {
-    method: 'POST',
-    body: JSON.stringify({ points }),
-  })
-}
 export function settleAllocation(
   id: number,
   input: {
@@ -171,7 +153,6 @@ export function settleAllocation(
     input: number
     output: number
     cached: number
-    points: Record<number, number>
   },
 ) {
   return request(`/api/allocations/${id}/settle`, z.undefined(), {
@@ -211,9 +192,6 @@ export function allocationErrorKey(error: Error) {
       error.code === 'allocation_pool_locked'
     )
       return 'allocationPoolConflict'
-    if (error.code === 'allocation_snapshot_required')
-      return 'allocationSnapshotRequired'
-    if (error.code === 'allocation_syncing') return 'allocationSyncPaused'
     if (error.code === 'invalid_allocation_input') return 'allocationInvalid'
     if (error.code === 'invalid_allocation_settlement')
       return 'allocationSettlementConflict'

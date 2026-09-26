@@ -76,6 +76,167 @@ func grantPoolMembers(ctx context.Context, conn *sql.DB, poolID int64, members .
 	return nil
 }
 
+func TestWindowFollowsConfiguredZoneAcrossDST(t *testing.T) {
+	location, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start, end := Window(time.Date(2030, 3, 10, 16, 0, 0, 0, time.UTC), Config{Period: "day"}, location)
+	if start != time.Date(2030, 3, 10, 5, 0, 0, 0, time.UTC).Unix() || end != time.Date(2030, 3, 11, 4, 0, 0, 0, time.UTC).Unix() {
+		t.Fatal(start, end)
+	}
+	start, end = Window(time.Date(2030, 3, 15, 0, 0, 0, 0, time.UTC), Config{Period: "month"}, location)
+	if start != time.Date(2030, 3, 1, 5, 0, 0, 0, time.UTC).Unix() || end != time.Date(2030, 4, 1, 4, 0, 0, 0, time.UTC).Unix() {
+		t.Fatal(start, end)
+	}
+	santiago, err := time.LoadLocation("America/Santiago")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start, end = Window(time.Date(2026, 9, 6, 16, 0, 0, 0, time.UTC), Config{Period: "day"}, santiago)
+	if start != time.Date(2026, 9, 6, 4, 0, 0, 0, time.UTC).Unix() || end != time.Date(2026, 9, 7, 3, 0, 0, 0, time.UTC).Unix() {
+		t.Fatal("midnight DST transition", start, end)
+	}
+}
+
+func TestCustomResetSchedulesUseLocalWallTime(t *testing.T) {
+	shanghai, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	daily := Config{Period: "day", ResetTime: "09:30"}
+	start, end := Window(time.Date(2030, 4, 1, 0, 0, 0, 0, time.UTC), daily, shanghai)
+	if start != time.Date(2030, 3, 31, 1, 30, 0, 0, time.UTC).Unix() || end != time.Date(2030, 4, 1, 1, 30, 0, 0, time.UTC).Unix() {
+		t.Fatal("before daily reset", start, end)
+	}
+	start, end = Window(time.Date(2030, 4, 1, 2, 0, 0, 0, time.UTC), daily, shanghai)
+	if start != time.Date(2030, 4, 1, 1, 30, 0, 0, time.UTC).Unix() || end != time.Date(2030, 4, 2, 1, 30, 0, 0, time.UTC).Unix() {
+		t.Fatal("after daily reset", start, end)
+	}
+	monthly := Config{Period: "month", ResetDay: 31, ResetTime: "09:30"}
+	start, end = Window(time.Date(2030, 2, 28, 0, 0, 0, 0, time.UTC), monthly, shanghai)
+	if start != time.Date(2030, 1, 31, 1, 30, 0, 0, time.UTC).Unix() || end != time.Date(2030, 2, 28, 1, 30, 0, 0, time.UTC).Unix() {
+		t.Fatal("short month before reset", start, end)
+	}
+	start, end = Window(time.Date(2030, 2, 28, 2, 0, 0, 0, time.UTC), monthly, shanghai)
+	if start != time.Date(2030, 2, 28, 1, 30, 0, 0, time.UTC).Unix() || end != time.Date(2030, 3, 31, 1, 30, 0, 0, time.UTC).Unix() {
+		t.Fatal("short month after reset", start, end)
+	}
+}
+
+func TestCustomResetTimeHandlesSkippedAndRepeatedHours(t *testing.T) {
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := Config{Period: "day", ResetTime: "02:30"}
+	start, end := Window(time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC), c, newYork)
+	if start != time.Date(2026, 3, 8, 7, 0, 0, 0, time.UTC).Unix() || end != time.Date(2026, 3, 9, 6, 30, 0, 0, time.UTC).Unix() {
+		t.Fatal("skipped local time", start, end)
+	}
+	c.ResetTime = "01:30"
+	start, _ = Window(time.Date(2026, 11, 1, 6, 15, 0, 0, time.UTC), c, newYork)
+	if start != time.Date(2026, 11, 1, 5, 30, 0, 0, time.UTC).Unix() {
+		t.Fatal("repeated local time", start)
+	}
+}
+
+func TestResetScheduleValidation(t *testing.T) {
+	base := Config{Mode: "tokens", Period: "month", Members: []Share{{UserID: 1, Limit: 1}}}
+	for _, change := range []Config{
+		{Mode: "tokens", Period: "month", ResetTime: "24:00", Members: base.Members},
+		{Mode: "tokens", Period: "month", ResetDay: 32, Members: base.Members},
+		{Mode: "tokens", Period: "day", ResetDay: 2, Members: base.Members},
+	} {
+		if err := normalize(&change); !errors.Is(err, ErrInput) {
+			t.Fatal(change, err)
+		}
+	}
+}
+
+func TestStoredRevisionRejectsInvalidResetClock(t *testing.T) {
+	_, err := decodeRevision(1, 1, `{"mode":"tokens","period":"day","reset_time":"broken","members":[],"rates":[]}`)
+	if !errors.Is(err, ErrInput) {
+		t.Fatal(err)
+	}
+}
+
+func TestNewRevisionDoesNotCountPreviousCycleAfterResetTimeChange(t *testing.T) {
+	effective := time.Date(2030, 4, 2, 0, 0, 0, 0, time.UTC).Unix()
+	rev := Revision{EffectiveAt: effective, Config: Config{Mode: "tokens", Period: "day", ResetTime: "09:00"}}
+	start, end := effectiveWindow(rev, effective+3600, time.UTC)
+	if start != effective || end != time.Date(2030, 4, 2, 9, 0, 0, 0, time.UTC).Unix() {
+		t.Fatal(start, end)
+	}
+}
+
+func TestScheduledSchemeUsesConfiguredMonthlyReset(t *testing.T) {
+	s, conn, user, _ := fixture(t)
+	ctx := context.Background()
+	location, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLocation(func() *time.Location { return location })
+	now := time.Date(2030, 4, 15, 0, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic schedule", GroupID: 2, Enabled: true, StartNext: true, Config: Config{Mode: "tokens", Period: "month", ResetDay: 15, ResetTime: "09:30", Members: []Share{{UserID: user, Limit: 100}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2030, 4, 15, 1, 30, 0, 0, time.UTC).Unix()
+	if scheme.EffectiveAt != want {
+		t.Fatal("scheduled activation", scheme.EffectiveAt, want)
+	}
+	detail, err := s.Detail(ctx, scheme.ID, user)
+	if err != nil || detail.Available || detail.Config.ResetDay != 15 || detail.Config.ResetTime != "09:30" {
+		t.Fatal(detail, err)
+	}
+	reloaded := New(conn)
+	reloaded.SetLocation(func() *time.Location { return location })
+	now = time.Unix(want+60, 0)
+	reloaded.now = func() time.Time { return now }
+	detail, err = reloaded.Detail(ctx, scheme.ID, user)
+	if err != nil || !detail.Available || detail.Balances[0].ResetAt != time.Date(2030, 5, 15, 1, 30, 0, 0, time.UTC).Unix() {
+		t.Fatal(detail, err)
+	}
+}
+
+func TestChangingZoneKeepsCurrentPeriodUsage(t *testing.T) {
+	s, conn, user, account := fixture(t)
+	ctx := context.Background()
+	started := time.Date(2030, 3, 31, 17, 0, 0, 0, time.UTC).Unix()
+	s.now = func() time.Time { return time.Unix(started-60, 0) }
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic budget", GroupID: 2, Enabled: true, Config: Config{Mode: "tokens", Period: "day", Members: []Share{{UserID: user, Limit: 10}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := db.New(conn)
+	r := Request{ID: "synthetic-zone-switch", SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: started}
+	if err := Begin(ctx, q, r, started, time.UTC); err != nil {
+		t.Fatal(err)
+	}
+	if err := Finish(ctx, q, r.ID, Completion{Input: 10, Known: true, Dispatched: true}, started*1000, false); err != nil {
+		t.Fatal(err)
+	}
+	shanghai, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLocation(func() *time.Location { return shanghai })
+	s.now = func() time.Time { return time.Unix(started+3600, 0) }
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", started+3600, shanghai); !errors.Is(err, ErrQuota) {
+		t.Fatal("usage escaped when zone changed", err)
+	}
+	detail, err := s.Detail(ctx, scheme.ID, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Balances[0].Used != 10 || detail.Balances[0].ResetAt != time.Date(2030, 4, 1, 16, 0, 0, 0, time.UTC).Unix() {
+		t.Fatal(detail.Balances[0])
+	}
+}
+
 func TestAllocationSchemesStayInWorkspace(t *testing.T) {
 	first, conn, member, _ := fixture(t)
 	ctx := context.Background()
@@ -105,15 +266,8 @@ func TestAllocationSchemesStayInWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := second.Refresh(ctx, firstScheme.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("foreign workspace allocation refreshed: %v", err)
-	}
-	if _, err := conn.Exec(`INSERT INTO allocation_windows(scheme_id,account_id,kind,reset_at,account_revision,observed_at,observed_points,baseline_points,unassigned)
-		VALUES(?,'synthetic-account','primary',2000000000,0,1,0,0,5)`, firstScheme.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := second.ReserveUnassigned(ctx, firstScheme.ID, 5); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("foreign workspace allowance was reconciled: %v", err)
+	if _, err := second.Detail(ctx, firstScheme.ID, 0); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("foreign workspace allocation opened: %v", err)
 	}
 	for _, check := range []struct {
 		service *Service
@@ -143,6 +297,118 @@ func TestPoolAllocationUsesDirectMemberGrant(t *testing.T) {
 	}
 	if _, err := Authorize(ctx, db.New(conn), scheme.ID, user, 2, time.Now().Unix()); err != nil {
 		t.Fatalf("directly granted member could not use the allocation: %v", err)
+	}
+}
+
+func TestRatioTokenBudgetChargesReportedTokensWithoutQuotaSnapshot(t *testing.T) {
+	s, conn, user, account := fixture(t)
+	ctx := context.Background()
+	now := time.Date(2030, 4, 15, 12, 0, 0, 0, time.UTC).Unix()
+	s.now = func() time.Time { return unix(now) }
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic shared token budget", GroupID: 2, Enabled: true,
+		Config: Config{Mode: "ratio", RatioUnit: "tokens", Period: "month", Total: 1_000_000, Members: []Share{{UserID: user, Limit: 2500}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := db.New(conn)
+	request := Request{ID: "synthetic-ratio-token-a", SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: now}
+	if err := Begin(ctx, q, request, now, time.UTC); err != nil {
+		t.Fatal("share budget required an upstream snapshot", err)
+	}
+	if err := Finish(ctx, q, request.ID, Completion{Input: 200_000, Output: 10_000, Cached: 150_000, Known: true, Dispatched: true}, now*1000, false); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := s.Detail(ctx, scheme.ID, user)
+	if err != nil || len(detail.Balances) != 1 || detail.Balances[0].Mode != "tokens" || detail.Balances[0].Limit != 250_000 || detail.Balances[0].Used != 210_000 || len(detail.Pending) != 0 {
+		t.Fatal("share budget did not charge reported tokens exactly once", detail, err)
+	}
+	request.ID = "synthetic-ratio-token-b"
+	if err := Begin(ctx, q, request, now, time.UTC); err != nil {
+		t.Fatal(err)
+	}
+	if err := Finish(ctx, q, request.ID, Completion{Input: 40_000, Known: true, Dispatched: true}, now*1000, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); !errors.Is(err, ErrQuota) {
+		t.Fatal("member exceeded percentage of total token budget", err)
+	}
+	now = time.Date(2030, 5, 1, 0, 0, 0, 0, time.UTC).Unix()
+	request.StartedAt = now
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); err != nil {
+		t.Fatal("new month did not reset token share", err)
+	}
+	request.ID = "synthetic-unknown-tokens"
+	if err := Begin(ctx, q, request, now, time.UTC); err != nil {
+		t.Fatal(err)
+	}
+	if err := Finish(ctx, q, request.ID, Completion{Dispatched: true}, now*1000, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); err != nil {
+		t.Fatal("one unknown report interrupted the member", err)
+	}
+	request.ID = "synthetic-unknown-tokens-two"
+	if err := Begin(ctx, q, request, now, time.UTC); err != nil {
+		t.Fatal(err)
+	}
+	if err := Finish(ctx, q, request.ID, Completion{Dispatched: true}, now*1000, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); !errors.Is(err, ErrRisk) {
+		t.Fatal("unsettled risk limit was not enforced", err)
+	}
+	now = time.Date(2030, 6, 1, 0, 0, 0, 0, time.UTC).Unix()
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); err != nil {
+		t.Fatal("previous cycle pending entries froze the new cycle", err)
+	}
+}
+
+func TestRatioTokenBudgetRequiresUsableTotalAndShares(t *testing.T) {
+	s, _, user, _ := fixture(t)
+	ctx := context.Background()
+	in := SchemeInput{Name: "Synthetic shared token budget", GroupID: 2, Enabled: true,
+		Config: Config{Mode: "ratio", RatioUnit: "tokens", Period: "month", Members: []Share{{UserID: user, Limit: 2500}}}}
+	if _, err := s.SaveScheme(ctx, 0, in); !errors.Is(err, ErrInput) {
+		t.Fatal("missing total accepted", err)
+	}
+	in.Config.Total = 10
+	in.Config.Members[0].Limit = 1
+	if _, err := s.SaveScheme(ctx, 0, in); !errors.Is(err, ErrInput) {
+		t.Fatal("share rounding to zero accepted", err)
+	}
+	in.Config.Total = 1_000_000
+	in.Config.Members[0].Limit = 10_001
+	if _, err := s.SaveScheme(ctx, 0, in); !errors.Is(err, ErrInput) {
+		t.Fatal("percentage over 100 accepted", err)
+	}
+}
+
+func TestRatioAmountBudgetUsesSavedModelPrices(t *testing.T) {
+	s, conn, user, account := fixture(t)
+	ctx := context.Background()
+	now := time.Date(2030, 4, 15, 12, 0, 0, 0, time.UTC).Unix()
+	s.now = func() time.Time { return unix(now) }
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic amount shares", GroupID: 2, Enabled: true,
+		Config: Config{Mode: "ratio", RatioUnit: "amount", Period: "month", Total: 2_000_000,
+			Members: []Share{{UserID: user, Limit: 5000}},
+			Rates:   []Rate{{Model: "synthetic", Input: 2_000_000, Cached: 200_000, Output: 4_000_000}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := db.New(conn)
+	request := Request{ID: "synthetic-ratio-amount", SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: now}
+	if err := Begin(ctx, q, request, now, time.UTC); err != nil {
+		t.Fatal(err)
+	}
+	if err := Finish(ctx, q, request.ID, Completion{Input: 500_000, Known: true, Dispatched: true}, now*1000, false); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := s.Detail(ctx, scheme.ID, user)
+	if err != nil || len(detail.Balances) != 1 || detail.Balances[0].Mode != "amount" || detail.Balances[0].Limit != 1_000_000 || detail.Balances[0].Used != 1_000_000 {
+		t.Fatal("amount share was not charged at the saved model price", detail, err)
+	}
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); !errors.Is(err, ErrQuota) {
+		t.Fatal("member exceeded monetary percentage", err)
 	}
 }
 
@@ -210,12 +476,16 @@ func TestTeamsSchemesAndExclusiveCapacity(t *testing.T) {
 		t.Fatal("shared account escaped exclusive scheme")
 	}
 	input.Config.Mode = "ratio"
-	input.Config.Period = "upstream"
+	input.Config.RatioUnit = "tokens"
+	input.Config.Total = 1_000_000
+	input.Config.Period = "month"
 	input.Config.Members[0].Limit = 10001
 	if _, err = s.SaveScheme(ctx, scheme.ID, input); !errors.Is(err, ErrInput) {
 		t.Fatal("overallocated ratio", err)
 	}
 	input.Config.Mode = "amount"
+	input.Config.RatioUnit = ""
+	input.Config.Total = 0
 	input.Config.Period = "month"
 	input.Config.Members[0].Limit = 1000000
 	if _, err = s.SaveScheme(ctx, scheme.ID, input); !errors.Is(err, ErrInput) {
@@ -250,7 +520,7 @@ func TestRatioSchemeBuildsRatesFromPoolCatalog(t *testing.T) {
 		"gpt-5.1-codex":              {Input: 1250000, Cached: 125000, Output: 10000000},
 		"claude-3-7-sonnet-20250219": {Input: 3000000, Cached: 300000, Output: 15000000},
 	}))
-	scheme, err := manager.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic ratio", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}}})
+	scheme, err := manager.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic ratio", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", RatioUnit: "amount", Total: 1_000_000, Period: "month", Members: []Share{{UserID: user, Limit: 10000}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +537,7 @@ func TestRatioSchemeRejectsUnpricedPoolModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager := NewWithPricing(conn, pricing.NewStatic(map[string]pricing.Price{}))
-	_, err := manager.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic ratio", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}}})
+	_, err := manager.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic ratio", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", RatioUnit: "amount", Total: 1_000_000, Period: "month", Members: []Share{{UserID: user, Limit: 10000}}}})
 	if !errors.Is(err, ErrUnpriced) {
 		t.Fatalf("want unpriced model error, got %v", err)
 	}
@@ -285,19 +555,6 @@ func TestCostSeparatesCacheAndPreservesSmallCharges(t *testing.T) {
 	}
 	if _, err = Cost(r, 10, 0, 11); !errors.Is(err, ErrInput) {
 		t.Fatal("invalid cached subset", err)
-	}
-}
-func TestRatioDistributionConservesObservedPoints(t *testing.T) {
-	got, err := Distribute(1200, []int64{400, 100, 100})
-	if err != nil || got[0] != 800 || got[1] != 200 || got[2] != 200 {
-		t.Fatal(got, err)
-	}
-	got, err = Distribute(1, []int64{1, 1, 1})
-	if err != nil || got[0]+got[1]+got[2] != 1 {
-		t.Fatal("rounding lost points", got, err)
-	}
-	if _, err = Distribute(100, []int64{0, 0}); err == nil {
-		t.Fatal("unknown consumption treated as free")
 	}
 }
 func TestSchemeRevisionDoesNotResetCurrentAllowance(t *testing.T) {
@@ -339,43 +596,124 @@ func TestAccountingIsolationPendingRecoveryAndRollover(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := Request{ID: "synthetic-request", SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic-model", StartedAt: now}
-	if err = Begin(ctx, q, r, now); err != nil {
+	if err = Begin(ctx, q, r, now, time.UTC); err != nil {
 		t.Fatal(err)
 	}
 	if err = Finish(ctx, q, r.ID, Completion{Input: 3, Output: 2, Known: true, Dispatched: true}, now*1000, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = Check(ctx, q, scheme.ID, user, 2, account, r.Model, now); !errors.Is(err, ErrQuota) {
+	if _, err = Check(ctx, q, scheme.ID, user, 2, account, r.Model, now, time.UTC); !errors.Is(err, ErrQuota) {
 		t.Fatal("exhausted allowance admitted", err)
 	}
-	if _, err = Check(ctx, q, scheme.ID, user, 2, account, r.Model, now+86400); err != nil {
+	if _, err = Check(ctx, q, scheme.ID, user, 2, account, r.Model, now+86400, time.UTC); err != nil {
 		t.Fatal("daily reset", err)
 	}
+	now += 86400
 	r.ID = "synthetic-pending"
-	if err = Begin(ctx, q, r, now+86400); err != nil {
+	r.StartedAt = now
+	if err = Begin(ctx, q, r, now, time.UTC); err != nil {
 		t.Fatal(err)
 	}
 	if err = q.RecoverAllocationEntries(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = Check(ctx, q, scheme.ID, user, 2, account, r.Model, now+172800); !errors.Is(err, ErrPending) {
-		t.Fatal("restart lost unsettled debt", err)
+	if detail, err := s.Detail(ctx, scheme.ID, user); err != nil {
+		t.Fatal(err)
+	} else if balance := detail.Balances[0]; balance.Pending != 1 || balance.PendingCurrent != 1 || balance.Reserved != 1 || balance.Admission != "active" {
+		t.Fatal("current-cycle pending exposure was not reported", balance)
 	}
-	if err = s.Settle(ctx, scheme.ID, r.ID, Completion{Input: 3, Output: 2}, nil); err != nil {
+	now += 86400
+	if _, err = Check(ctx, q, scheme.ID, user, 2, account, r.Model, now, time.UTC); err != nil {
+		t.Fatal("previous cycle debt froze the new cycle", err)
+	}
+	if detail, err := s.Detail(ctx, scheme.ID, user); err != nil || len(detail.Pending) != 1 {
+		t.Fatal("unsettled debt disappeared from the report", err)
+	} else if balance := detail.Balances[0]; balance.Pending != 1 || balance.PendingCurrent != 0 || balance.InFlight != 0 || balance.Reserved != 0 || balance.Admission != "active" {
+		t.Fatal("previous-cycle pending exposure blocked the new cycle", balance)
+	}
+	if err = s.Settle(ctx, scheme.ID, r.ID, Completion{Input: 3, Output: 2}); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Settle(ctx, scheme.ID, r.ID, Completion{Input: 3, Output: 2}, nil); err != nil {
+	if err = s.Settle(ctx, scheme.ID, r.ID, Completion{Input: 3, Output: 2}); err != nil {
 		t.Fatal("settlement retry", err)
 	}
-	if _, err = Check(ctx, q, scheme.ID, user, 2, account, r.Model, now+172800); err != nil {
+	if _, err = Check(ctx, q, scheme.ID, user, 2, account, r.Model, now+172800, time.UTC); err != nil {
 		t.Fatal("charged next period", err)
 	}
 }
 
-func TestManagedPoolRejectsNewAccountsAndPausesWithoutQuotaSnapshot(t *testing.T) {
+func TestInFlightRequestsReserveRiskWithoutEarlyQuotaExhaustion(t *testing.T) {
+	s, conn, user, account := fixture(t)
+	ctx := context.Background()
+	now := time.Date(2030, 4, 15, 12, 0, 0, 0, time.UTC).Unix()
+	s.now = func() time.Time { return unix(now) }
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic bounded risk", GroupID: 2, Enabled: true, Config: Config{Mode: "tokens", Period: "day", Members: []Share{{UserID: user, Limit: 100}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := db.New(conn)
+	r := Request{ID: "synthetic-settled", SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: now}
+	if err := Begin(ctx, q, r, now, time.UTC); err != nil {
+		t.Fatal(err)
+	}
+	if err := Finish(ctx, q, r.ID, Completion{Input: 95, Known: true, Dispatched: true}, now*1000, false); err != nil {
+		t.Fatal(err)
+	}
+	r.ID = "synthetic-inflight"
+	if err := Begin(ctx, q, r, now, time.UTC); err != nil {
+		t.Fatal("first in-flight request should fit the risk buffer", err)
+	}
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, r.Model, now, time.UTC); !errors.Is(err, ErrRisk) {
+		t.Fatal("second request exceeded the reserved risk buffer", err)
+	}
+	if detail, err := s.Detail(ctx, scheme.ID, user); err != nil {
+		t.Fatal(err)
+	} else if balance := detail.Balances[0]; balance.InFlight != 1 || balance.PendingCurrent != 0 || balance.Reserved != 10 || balance.AdmissionRoom != 5 || balance.Admission != "risk_limited" {
+		t.Fatal("balance disagreed with gateway risk admission", balance)
+	}
+	if err := Finish(ctx, q, r.ID, Completion{Input: 2, Known: true, Dispatched: true}, now*1000, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, r.Model, now, time.UTC); err != nil {
+		t.Fatal("reservation was not released", err)
+	}
+	if detail, err := s.Detail(ctx, scheme.ID, user); err != nil {
+		t.Fatal(err)
+	} else if balance := detail.Balances[0]; balance.InFlight != 0 || balance.Reserved != 0 || balance.AdmissionRoom != 13 || balance.Admission != "active" {
+		t.Fatal("settled request still occupied risk allowance", balance)
+	}
+}
+
+func TestUnsettledRequestCountHasAutomaticBound(t *testing.T) {
+	s, conn, user, account := fixture(t)
+	ctx := context.Background()
+	now := time.Date(2030, 4, 15, 12, 0, 0, 0, time.UTC).Unix()
+	s.now = func() time.Time { return unix(now) }
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic active cap", GroupID: 2, Enabled: true, Config: Config{Mode: "tokens", Period: "day", Members: []Share{{UserID: user, Limit: 1000}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := db.New(conn)
+	for i := range 4 {
+		r := Request{ID: fmt.Sprintf("synthetic-active-%d", i), SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: now}
+		if err := Begin(ctx, q, r, now, time.UTC); err != nil {
+			t.Fatal(i, err)
+		}
+	}
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); !errors.Is(err, ErrRisk) {
+		t.Fatal("fifth unsettled request was allowed", err)
+	}
+	if detail, err := s.Detail(ctx, scheme.ID, user); err != nil {
+		t.Fatal(err)
+	} else if balance := detail.Balances[0]; balance.InFlight != 4 || balance.AdmissionRoom != 700 || balance.Admission != "risk_limited" {
+		t.Fatal("balance missed the unsettled-request count cap", balance)
+	}
+}
+
+func TestManagedPoolRejectsNewAccountsAndCanPauseWithoutUpstreamQuota(t *testing.T) {
 	s, conn, user, _ := fixture(t)
 	ctx := context.Background()
-	in := SchemeInput{Name: "Synthetic", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", Period: "upstream", Members: []Share{{UserID: user, Limit: 10000}}, Rates: []Rate{{Model: "synthetic", Input: 1, Cached: 1, Output: 1}}}}
+	in := SchemeInput{Name: "Synthetic", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", RatioUnit: "tokens", Total: 1_000_000, Period: "month", Members: []Share{{UserID: user, Limit: 10000}}}}
 	scheme, err := s.SaveScheme(ctx, 0, in)
 	if err != nil {
 		t.Fatal(err)
@@ -431,13 +769,13 @@ func TestTokenCorrectionRejectsOversizedUsage(t *testing.T) {
 	}
 	q := db.New(conn)
 	now := time.Now().Unix()
-	if err = Begin(ctx, q, Request{ID: "synthetic-large", SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: now}, now); err != nil {
+	if err = Begin(ctx, q, Request{ID: "synthetic-large", SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: now}, now, time.UTC); err != nil {
 		t.Fatal(err)
 	}
 	if err = q.RecoverAllocationEntries(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Settle(ctx, scheme.ID, "synthetic-large", Completion{Input: 1_000_000_001}, nil); !errors.Is(err, ErrInput) {
+	if err = s.Settle(ctx, scheme.ID, "synthetic-large", Completion{Input: 1_000_000_001}); !errors.Is(err, ErrInput) {
 		t.Fatal("oversized manual usage accepted", err)
 	}
 }
@@ -457,7 +795,7 @@ func TestRetentionKeepsUnresolvedDebtAndCurrentBalances(t *testing.T) {
 		at    int64
 		known bool
 	}{{"synthetic-old", now - 100*86400, true}, {"synthetic-recent", now, true}, {"synthetic-debt", now - 100*86400, false}} {
-		if err = Begin(ctx, q, Request{ID: item.id, SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: item.at}, item.at); err != nil {
+		if err = Begin(ctx, q, Request{ID: item.id, SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: item.at}, item.at, time.UTC); err != nil {
 			t.Fatal(err)
 		}
 		if err = Finish(ctx, q, item.id, Completion{Input: 1, Known: item.known, Dispatched: true}, item.at*1000, false); err != nil {
@@ -513,6 +851,10 @@ func TestPersonalReportFiltersBeforePendingLimit(t *testing.T) {
 	}
 	if len(report.Config.Members) != 1 || report.Config.Members[0].UserID != user || len(report.Balances) != 1 || report.Balances[0].UserID != user {
 		t.Fatal("another member exposed", report)
+	}
+	admin, err := s.Detail(ctx, scheme.ID, 0)
+	if err != nil || len(admin.Pending) != 256 || admin.Pending[0].RequestID != "synthetic-256" {
+		t.Fatal("recent pending usage hidden behind old debt", err)
 	}
 }
 
