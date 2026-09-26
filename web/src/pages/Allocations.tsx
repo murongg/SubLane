@@ -200,8 +200,11 @@ export function Allocations() {
                 </div>
                 <p className="break-words text-sm text-muted-foreground">
                   {s.group_name} ·{' '}
-                  {s.config.period === 'dual'
-                    ? t('allocationDualSchedule', { zone: timeZone })
+                  {s.config.period === 'durations'
+                    ? t('allocationWindowSchedule', {
+                        windows: s.config.windows?.length ?? 0,
+                        zone: timeZone,
+                      })
                     : s.config.period === 'day'
                       ? t('allocationDailySchedule', {
                           time: s.config.reset_time ?? '00:00',
@@ -220,8 +223,11 @@ export function Allocations() {
                       date: date(s.next.effective_at),
                     })}{' '}
                     ·{' '}
-                    {s.next.config.period === 'dual'
-                      ? t('allocationDualSchedule', { zone: timeZone })
+                    {s.next.config.period === 'durations'
+                      ? t('allocationWindowSchedule', {
+                          windows: s.next.config.windows?.length ?? 0,
+                          zone: timeZone,
+                        })
                       : s.next.config.period === 'day'
                         ? t('allocationDailySchedule', {
                             time: s.next.config.reset_time ?? '00:00',

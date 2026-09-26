@@ -23,8 +23,15 @@ func entryMode(c Config) string {
 	return c.Mode
 }
 func effectiveWindow(rev Revision, now int64, location *time.Location) (int64, int64) {
-	window := effectiveWindows(rev, now, location)[0]
-	return window.start, window.end
+	windows := effectiveWindows(rev, now, location)
+	longest := windows[0]
+	for _, window := range windows[1:] {
+		if window.end > longest.end {
+			longest = window
+		}
+	}
+	// Retention follows the latest active window, so short-window cleanup cannot erase longer-window usage.
+	return longest.start, longest.end
 }
 func Authorize(ctx context.Context, q *db.Queries, scheme, user, group, now int64) (Revision, error) {
 	row, err := q.GetAllocationScheme(ctx, scheme)
@@ -98,13 +105,14 @@ func currentRiskBudget(used, limit, active, pending int64) riskBudget {
 }
 
 type memberWindowUsage struct {
-	window  allocationWindow
-	limit   int64
-	used    int64
-	tokens  int64
-	active  int64
-	pending int64
-	risk    riskBudget
+	window    allocationWindow
+	limit     int64
+	unlimited bool
+	used      int64
+	tokens    int64
+	active    int64
+	pending   int64
+	risk      riskBudget
 }
 
 func readMemberWindow(ctx context.Context, q *db.Queries, scheme, user int64, member Share, config Config, window allocationWindow) (memberWindowUsage, error) {
@@ -120,13 +128,24 @@ func readMemberWindow(ctx context.Context, q *db.Queries, scheme, user int64, me
 	limit := member.Limit
 	if config.Mode == "ratio" {
 		limit = ratioLimit(config.Total, member.Limit)
-	} else if config.Mode == "windows" && window.kind == "7d" {
-		limit = member.Limit7d
+	} else if config.Mode == "windows" {
+		limit = window.limit
+		for _, override := range member.WindowOverrides {
+			if override.DurationSeconds == window.seconds {
+				limit = override.Limit
+				break
+			}
+		}
+	}
+	unlimited := config.Mode == "windows" && limit == 0
+	risk := riskBudget{}
+	if !unlimited {
+		risk = currentRiskBudget(usage.Used, limit, exposure.Active, exposure.Pending)
 	}
 	return memberWindowUsage{
-		window: window, limit: limit, used: usage.Used, tokens: usage.Tokens,
+		window: window, limit: limit, unlimited: unlimited, used: usage.Used, tokens: usage.Tokens,
 		active: exposure.Active, pending: exposure.Pending,
-		risk: currentRiskBudget(usage.Used, limit, exposure.Active, exposure.Pending),
+		risk: risk,
 	}, nil
 }
 
@@ -150,7 +169,7 @@ func Check(ctx context.Context, q *db.Queries, scheme, user, group int64, accoun
 			if err != nil {
 				return rev, err
 			}
-			if state.used >= state.limit {
+			if !state.unlimited && state.used >= state.limit {
 				return rev, ErrQuota
 			}
 			riskLimited = riskLimited || state.risk.limited

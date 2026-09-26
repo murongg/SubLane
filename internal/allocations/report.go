@@ -11,6 +11,7 @@ type Balance struct {
 	UserID         int64  `json:"user_id"`
 	Username       string `json:"username"`
 	WindowKind     string `json:"window_kind"`
+	WindowSeconds  int64  `json:"window_seconds"`
 	Mode           string `json:"mode"`
 	Limit          int64  `json:"limit"`
 	Used           int64  `json:"used"`
@@ -98,13 +99,15 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 				return out, err
 			}
 			admission := "active"
-			if state.used >= state.limit {
+			if state.unlimited {
+				admission = "unlimited"
+			} else if state.used >= state.limit {
 				admission = "exhausted"
 			} else if state.risk.limited {
 				admission = "risk_limited"
 			}
 			out.Balances = append(out.Balances, Balance{
-				UserID: m.UserID, Username: member.Username, WindowKind: window.kind, Mode: mode,
+				UserID: m.UserID, Username: member.Username, WindowKind: window.kind, WindowSeconds: window.seconds, Mode: mode,
 				Limit: state.limit, Used: state.used, Tokens: state.tokens, Pending: n,
 				PendingCurrent: state.pending, InFlight: state.active,
 				Reserved: state.risk.reserved, AdmissionRoom: state.risk.room,

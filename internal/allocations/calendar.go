@@ -9,7 +9,7 @@ import (
 var resetClock = regexp.MustCompile(`^(?:[01][0-9]|2[0-3]):[0-5][0-9]$`)
 
 func validResetSchedule(c Config) bool {
-	if c.Period == "dual" {
+	if c.Period == "durations" {
 		return c.ResetTime == "" && c.ResetDay == 0
 	}
 	if c.ResetTime != "" && !resetClock.MatchString(c.ResetTime) {
@@ -110,6 +110,8 @@ func dayStart(year int, month time.Month, day int, location *time.Location) time
 type allocationWindow struct {
 	kind       string
 	start, end int64
+	seconds    int64
+	limit      int64
 }
 
 func durationWindow(now, anchor, seconds int64) allocationWindow {
@@ -121,21 +123,28 @@ func durationWindow(now, anchor, seconds int64) allocationWindow {
 }
 
 func effectiveWindows(rev Revision, now int64, location *time.Location) []allocationWindow {
-	if rev.Config.Period == "dual" {
-		// A revision anchors both durations so the next weekly boundary also resets the short window.
-		five := durationWindow(now, rev.EffectiveAt, 5*3600)
-		five.kind = "5h"
-		seven := durationWindow(now, rev.EffectiveAt, 7*86400)
-		seven.kind = "7d"
-		return []allocationWindow{five, seven}
+	if rev.Config.Period == "durations" {
+		windows := make([]allocationWindow, 0, len(rev.Config.Windows))
+		for _, condition := range rev.Config.Windows {
+			window := durationWindow(now, rev.EffectiveAt, condition.DurationSeconds)
+			window.kind = "duration"
+			window.seconds = condition.DurationSeconds
+			window.limit = condition.Limit
+			windows = append(windows, window)
+		}
+		return windows
 	}
 	start, end := Window(unix(now), rev.Config, location)
 	return []allocationWindow{{kind: rev.Config.Period, start: max(start, rev.EffectiveAt), end: end}}
 }
 
 func nextEffective(c Config, now int64, location *time.Location, anchor int64) int64 {
-	if c.Period == "dual" {
-		return durationWindow(now, anchor, 7*86400).end
+	if c.Period == "durations" {
+		longest := int64(0)
+		for _, condition := range c.Windows {
+			longest = max(longest, condition.DurationSeconds)
+		}
+		return durationWindow(now, anchor, longest).end
 	}
 	_, end := Window(unix(now), c, location)
 	return end

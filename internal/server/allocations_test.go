@@ -34,8 +34,9 @@ func TestWindowedAmountPersonalBalanceResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = f.forwarding.Allocations().SaveScheme(ctx, 0, allocations.SchemeInput{Name: "Synthetic windows", GroupID: pool.ID, Enabled: true, Config: allocations.Config{
-		Mode: "windows", Period: "dual", Members: []allocations.Share{{UserID: f.userID, Limit: 100, Limit7d: 200}},
-		Rates: []allocations.Rate{{Model: "synthetic-model", Input: 1_000_000, Output: 1_000_000}},
+		Mode: "windows", Period: "durations", Windows: []allocations.WindowCondition{{DurationSeconds: 5 * 3600, Limit: 100}, {DurationSeconds: 7 * 86400, Limit: 200}},
+		Members: []allocations.Share{{UserID: f.userID}},
+		Rates:   []allocations.Rate{{Model: "synthetic-model", Input: 1_000_000, Output: 1_000_000}},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -53,15 +54,19 @@ func TestWindowedAmountPersonalBalanceResponse(t *testing.T) {
 			Config struct {
 				Mode    string `json:"mode"`
 				Period  string `json:"period"`
+				Windows []struct {
+					DurationSeconds int64 `json:"duration_seconds"`
+					Limit           int64 `json:"limit"`
+				} `json:"windows"`
 				Members []struct {
-					Limit   int64 `json:"limit"`
-					Limit7d int64 `json:"limit_7d"`
+					Limit int64 `json:"limit"`
 				} `json:"members"`
 			} `json:"config"`
 			Balances []struct {
-				Kind  string `json:"window_kind"`
-				Mode  string `json:"mode"`
-				Limit int64  `json:"limit"`
+				Kind          string `json:"window_kind"`
+				WindowSeconds int64  `json:"window_seconds"`
+				Mode          string `json:"mode"`
+				Limit         int64  `json:"limit"`
 			} `json:"balances"`
 		} `json:"schemes"`
 	}
@@ -69,7 +74,7 @@ func TestWindowedAmountPersonalBalanceResponse(t *testing.T) {
 		t.Fatal(err, response.Body.String())
 	}
 	got := payload.Schemes[0]
-	if got.Config.Mode != "windows" || got.Config.Period != "dual" || len(got.Config.Members) != 1 || got.Config.Members[0].Limit != 100 || got.Config.Members[0].Limit7d != 200 || len(got.Balances) != 2 || got.Balances[0].Kind != "5h" || got.Balances[0].Mode != "amount" || got.Balances[0].Limit != 100 || got.Balances[1].Kind != "7d" || got.Balances[1].Mode != "amount" || got.Balances[1].Limit != 200 {
+	if got.Config.Mode != "windows" || got.Config.Period != "durations" || len(got.Config.Windows) != 2 || got.Config.Windows[0].DurationSeconds != 5*3600 || got.Config.Windows[0].Limit != 100 || got.Config.Windows[1].DurationSeconds != 7*86400 || got.Config.Windows[1].Limit != 200 || len(got.Config.Members) != 1 || got.Config.Members[0].Limit != 0 || len(got.Balances) != 2 || got.Balances[0].Kind != "duration" || got.Balances[0].WindowSeconds != 5*3600 || got.Balances[0].Mode != "amount" || got.Balances[0].Limit != 100 || got.Balances[1].Kind != "duration" || got.Balances[1].WindowSeconds != 7*86400 || got.Balances[1].Mode != "amount" || got.Balances[1].Limit != 200 {
 		t.Fatal("personal response disagreed with windowed allowance", got)
 	}
 }

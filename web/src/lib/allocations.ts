@@ -12,15 +12,13 @@ const rateSchema = z.object({
   cached: integer,
   output: integer,
 })
-const priceSchema = z.object({
-  input: integer,
-  cached: integer,
-  output: integer,
-  source: z.string(),
+const windowConditionSchema = z.object({
+  duration_seconds: integer,
+  limit: integer,
 })
 const configSchema = z.object({
   mode: modeSchema,
-  period: z.enum(['day', 'month', 'dual']),
+  period: z.enum(['day', 'month', 'durations']),
   reset_time: z
     .string()
     .regex(/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/)
@@ -31,12 +29,13 @@ const configSchema = z.object({
       z.object({
         user_id: integer,
         limit: integer,
-        limit_7d: integer.optional(),
+        window_overrides: z.array(windowConditionSchema).max(8).optional(),
       }),
     )
     .max(100),
-  rates: z.array(rateSchema).max(128),
+  rates: z.array(rateSchema).max(4096),
   ratio_unit: unitSchema.optional(),
+  windows: z.array(windowConditionSchema).max(8).optional(),
   total: integer.optional(),
 })
 const revisionSchema = z.object({ effective_at: integer, config: configSchema })
@@ -52,7 +51,8 @@ export const schemeSchema = revisionSchema.extend({
 const balanceSchema = z.object({
   user_id: integer,
   username: z.string(),
-  window_kind: z.enum(['day', 'month', '5h', '7d']),
+  window_kind: z.enum(['day', 'month', 'duration']),
+  window_seconds: integer,
   mode: unitSchema,
   limit: integer,
   used: integer,
@@ -62,7 +62,7 @@ const balanceSchema = z.object({
   in_flight: integer,
   reserved: integer,
   admission_room: integer,
-  admission: z.enum(['active', 'risk_limited', 'exhausted']),
+  admission: z.enum(['active', 'risk_limited', 'exhausted', 'unlimited']),
   reset_at: integer,
 })
 const pendingSchema = z.object({
@@ -130,31 +130,6 @@ export function saveScheme({ id, ...input }: SchemeInput & { id?: number }) {
     { method: id ? 'PATCH' : 'POST', body: JSON.stringify(input) },
   )
 }
-export function lookupModelPrice(model: string) {
-  return request(
-    `/api/allocations/prices?model=${encodeURIComponent(model)}`,
-    z.object({ prices: z.record(z.string(), priceSchema) }),
-  ).then((result) => result.prices[model] ?? Object.values(result.prices)[0])
-}
-export async function lookupModelPrices(models: string[]) {
-  const batches = []
-  for (let i = 0; i < models.length; i += 32) {
-    const params = new URLSearchParams()
-    for (const model of models.slice(i, i + 32)) params.append('model', model)
-    batches.push(
-      request(
-        `/api/allocations/prices?${params}`,
-        z.object({
-          prices: z.record(z.string(), priceSchema),
-        }),
-      ).then((result) => result.prices),
-    )
-  }
-  return Object.assign({}, ...(await Promise.all(batches))) as Record<
-    string,
-    z.infer<typeof priceSchema>
-  >
-}
 export function settleAllocation(
   id: number,
   input: {
@@ -205,6 +180,7 @@ export function allocationErrorKey(error: Error) {
     if (error.code === 'invalid_allocation_input') return 'allocationInvalid'
     if (error.code === 'invalid_allocation_settlement')
       return 'allocationSettlementConflict'
+    if (error.code === 'allocation_model_unpriced') return 'allocationUnpriced'
     if (error.code === 'allocation_pending') return 'allocationPending'
   }
   return 'allocationFailed'
