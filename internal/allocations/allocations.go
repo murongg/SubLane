@@ -36,8 +36,20 @@ var (
 type Share struct {
 	UserID int64 `json:"user_id"`
 	// Limit is a percentage in hundredths for share mode; otherwise it
-	// uses the selected accounting unit's smallest increment.
-	Limit int64 `json:"limit"`
+	// uses the selected accounting unit's smallest increment. Time-window
+	// members use shared limits unless their duration appears in WindowOverrides.
+	Limit           int64               `json:"limit"`
+	WindowOverrides []MemberWindowLimit `json:"window_overrides,omitempty"`
+}
+
+type MemberWindowLimit struct {
+	DurationSeconds int64 `json:"duration_seconds"`
+	Limit           int64 `json:"limit"`
+}
+
+type WindowCondition struct {
+	DurationSeconds int64 `json:"duration_seconds"`
+	Limit           int64 `json:"limit"`
 }
 
 // Rates are micro-USD per million tokens.
@@ -48,13 +60,14 @@ type Rate struct {
 	Output int64  `json:"output"`
 }
 type Config struct {
-	Mode      string  `json:"mode"`
-	Period    string  `json:"period"`
-	ResetTime string  `json:"reset_time,omitempty"`
-	ResetDay  int     `json:"reset_day,omitempty"`
-	Members   []Share `json:"members"`
-	Rates     []Rate  `json:"rates"`
-	RatioUnit string  `json:"ratio_unit,omitempty"`
+	Mode      string            `json:"mode"`
+	Period    string            `json:"period"`
+	ResetTime string            `json:"reset_time,omitempty"`
+	ResetDay  int               `json:"reset_day,omitempty"`
+	Members   []Share           `json:"members"`
+	Rates     []Rate            `json:"rates"`
+	RatioUnit string            `json:"ratio_unit,omitempty"`
+	Windows   []WindowCondition `json:"windows,omitempty"`
 	// Total is in tokens or micro-USD according to RatioUnit.
 	Total int64 `json:"total,omitempty"`
 }
@@ -109,15 +122,46 @@ func bit(v bool) int64 {
 	}
 	return 0
 }
-func ratioLimit(c Config, share int64) int64 {
+func ratioLimit(total, share int64) int64 {
 	// Round down so member limits never sum beyond the configured total.
-	return c.Total * share / 10000
+	return total * share / 10000
+}
+func validMemberLimit(c Config, m Share) bool {
+	if m.UserID <= 0 || m.Limit < 0 || m.Limit > 1_000_000_000_000 {
+		return false
+	}
+	switch c.Mode {
+	case "ratio":
+		return m.Limit > 0 && m.Limit <= 10000 && ratioLimit(c.Total, m.Limit) > 0 && len(m.WindowOverrides) == 0
+	case "windows":
+		if m.Limit != 0 {
+			return false
+		}
+		seen := map[int64]bool{}
+		for _, override := range m.WindowOverrides {
+			if seen[override.DurationSeconds] || override.Limit < 0 || override.Limit > 1_000_000_000_000 {
+				return false
+			}
+			found := false
+			for _, condition := range c.Windows {
+				found = found || condition.DurationSeconds == override.DurationSeconds
+			}
+			if !found {
+				return false
+			}
+			seen[override.DurationSeconds] = true
+		}
+		return true
+	default:
+		return m.Limit > 0 && len(m.WindowOverrides) == 0
+	}
 }
 func normalize(c *Config) error {
-	if (c.Mode != "tokens" && c.Mode != "amount" && c.Mode != "ratio") || len(c.Members) == 0 || len(c.Members) > 100 || len(c.Rates) > 128 {
+	// Match the gateway's pool catalog limit: automatic pricing may include every supported model.
+	if (c.Mode != "tokens" && c.Mode != "amount" && c.Mode != "ratio" && c.Mode != "windows") || len(c.Members) == 0 || len(c.Members) > 100 || len(c.Rates) > 4096 {
 		return ErrInput
 	}
-	if (c.Period != "day" && c.Period != "month") || !validResetSchedule(*c) {
+	if (c.Period != "day" && c.Period != "month" && c.Period != "durations") || !validResetSchedule(*c) || (c.Period == "durations") != (c.Mode == "windows") {
 		return ErrInput
 	}
 	if c.Mode == "ratio" {
@@ -130,10 +174,24 @@ func normalize(c *Config) error {
 	} else if c.Total != 0 || c.RatioUnit != "" {
 		return ErrInput
 	}
+	if c.Mode == "windows" {
+		if len(c.Windows) == 0 || len(c.Windows) > 8 {
+			return ErrInput
+		}
+		seen := map[int64]bool{}
+		for _, condition := range c.Windows {
+			if condition.DurationSeconds < 3600 || condition.DurationSeconds > 365*86400 || condition.DurationSeconds%3600 != 0 || seen[condition.DurationSeconds] || condition.Limit < 0 || condition.Limit > 1_000_000_000_000 {
+				return ErrInput
+			}
+			seen[condition.DurationSeconds] = true
+		}
+	} else if len(c.Windows) > 0 {
+		return ErrInput
+	}
 	seen := map[int64]bool{}
 	var total int64
 	for _, m := range c.Members {
-		if m.UserID <= 0 || seen[m.UserID] || m.Limit <= 0 || m.Limit > 1_000_000_000_000 || c.Mode == "ratio" && (m.Limit > 10000 || ratioLimit(*c, m.Limit) == 0) {
+		if seen[m.UserID] || !validMemberLimit(*c, m) {
 			return ErrInput
 		}
 		seen[m.UserID] = true
@@ -142,7 +200,7 @@ func normalize(c *Config) error {
 	if c.Mode == "ratio" && total > 10000 {
 		return ErrInput
 	}
-	if (c.Mode == "amount" || c.Mode == "ratio" && c.RatioUnit == "amount") && len(c.Rates) == 0 {
+	if (c.Mode == "amount" || c.Mode == "windows" || c.Mode == "ratio" && c.RatioUnit == "amount") && len(c.Rates) == 0 {
 		return ErrInput
 	}
 	models := map[string]bool{}
@@ -186,7 +244,7 @@ func decodeRevision(id, at int64, raw string) (Revision, error) {
 	if err := json.Unmarshal([]byte(raw), &r.Config); err != nil {
 		return r, err
 	}
-	if (r.Config.Period != "day" && r.Config.Period != "month") || !validResetSchedule(r.Config) {
+	if (r.Config.Period != "day" && r.Config.Period != "month" && r.Config.Period != "durations") || !validResetSchedule(r.Config) || (r.Config.Period == "durations") != (r.Config.Mode == "windows") {
 		return r, ErrInput
 	}
 	return r, nil
@@ -304,7 +362,7 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 			return Scheme{}, err
 		}
 		if in.StartNext {
-			effective = nextEffective(in.Config, now, s.location())
+			effective = nextEffective(in.Config, now, s.location(), now)
 		}
 	} else {
 		old, err := q.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: id, TenantID: s.tenantID})
@@ -319,7 +377,7 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 		}
 		current, err := Current(ctx, q, id, now)
 		if err == nil {
-			effective = nextEffective(current.Config, now, s.location())
+			effective = nextEffective(current.Config, now, s.location(), current.EffectiveAt)
 		} else if errors.Is(err, ErrUnavailable) {
 			next, e := q.NextAllocationRevision(ctx, db.NextAllocationRevisionParams{SchemeID: id, EffectiveAt: now})
 			if e != nil {
@@ -350,63 +408,60 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 	return out, tx.Commit()
 }
 
-// applyPrices resolves omitted or zero model rates once, before the config is
-// persisted into a revision. Existing non-zero values remain explicit overrides.
+// Priced rules snapshot the current pool-supported models and catalog prices in each revision.
+// Submitted rates never override the catalog when a pricing service is available.
 func (s *Service) applyPrices(ctx context.Context, q *db.Queries, groupID int64, config *Config) error {
-	if config.Mode == "tokens" || config.Mode == "ratio" && config.RatioUnit == "tokens" || s.pricing == nil {
-		if config.Mode == "ratio" && config.RatioUnit == "amount" && len(config.Rates) == 0 {
+	if config.Mode == "tokens" || config.Mode == "ratio" && config.RatioUnit == "tokens" {
+		config.Rates = []Rate{}
+		return nil
+	}
+	if s.pricing == nil {
+		if len(config.Rates) == 0 {
 			return ErrUnpriced
 		}
 		return nil
 	}
-	if config.Mode == "ratio" && config.RatioUnit == "amount" && len(config.Rates) == 0 && q != nil {
-		rows, err := q.ListGroupCatalogs(ctx, groupID)
+	group, err := q.GetGroup(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	allowed, err := q.ListGroupModels(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	policy := groups.ModelPolicy{Restricted: group.RestrictedModels, Models: allowed}
+	rows, err := q.ListGroupCatalogs(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	models := map[string]bool{}
+	for _, row := range rows {
+		catalog, err := accounts.DecodeCatalog(row.ModelsSnapshot, row.ModelsRevision)
 		if err != nil {
-			return err
+			return ErrUnpriced
 		}
-		models := map[string]bool{}
-		for _, row := range rows {
-			catalog, err := accounts.DecodeCatalog(row.ModelsSnapshot, row.ModelsRevision)
-			if err != nil {
-				continue
-			}
-			for _, model := range catalog.Models {
-				_, native := groups.SplitModel(model)
+		for _, model := range catalog.Models {
+			_, native := groups.SplitModel(model)
+			if policy.Allows(row.Provider + "/" + native) {
 				models[native] = true
 			}
 		}
-		if len(models) == 0 {
-			return ErrUnpriced
-		}
-		ids := make([]string, 0, len(models))
-		for model := range models {
-			ids = append(ids, model)
-		}
-		sort.Strings(ids)
-		for _, model := range ids {
-			price, ok := s.pricing.Lookup(model)
-			if !ok {
-				return ErrUnpriced
-			}
-			config.Rates = append(config.Rates, Rate{Model: model, Input: price.Input, Cached: price.Cached, Output: price.Output})
-		}
-		return nil
 	}
-	for i := range config.Rates {
-		model := config.Rates[i].Model
+	if len(models) == 0 {
+		return ErrUnpriced
+	}
+	ids := make([]string, 0, len(models))
+	for model := range models {
+		ids = append(ids, model)
+	}
+	sort.Strings(ids)
+	config.Rates = make([]Rate, 0, len(ids))
+	for _, model := range ids {
 		price, ok := s.pricing.Lookup(model)
 		if !ok {
-			continue
+			return ErrUnpriced
 		}
-		if config.Rates[i].Input == 0 {
-			config.Rates[i].Input = price.Input
-		}
-		if config.Rates[i].Cached == 0 {
-			config.Rates[i].Cached = price.Cached
-		}
-		if config.Rates[i].Output == 0 {
-			config.Rates[i].Output = price.Output
-		}
+		config.Rates = append(config.Rates, Rate{Model: model, Input: price.Input, Cached: price.Cached, Output: price.Output})
 	}
 	return nil
 }

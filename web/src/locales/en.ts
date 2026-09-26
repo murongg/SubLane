@@ -35,17 +35,45 @@ export const en = {
   allocationRatioAmount: 'By amount share',
   allocationShares: 'Member shares',
   allocationSplitEqually: 'Split equally',
-  allocationSettings: 'Metering and activation settings',
+  allocationSectionDetails: 'Rule details',
+  allocationSectionPolicy: 'Allowance and reset',
+  allocationSectionActivation: 'Activation',
+  allocationModeRatioSummary: 'Split one budget by member percentage',
+  allocationModeAmountSummary: 'Give each member a USD limit',
+  allocationModeTokensSummary: 'Give each member a Token limit',
+  allocationModeWindowsSummary: 'Set multiple USD limits by duration',
   allocationAmount: 'By amount',
   allocationTokens: 'By tokens',
+  allocationWindows: 'By time window',
+  allocationWindowConditions: 'Time-window conditions',
+  allocationWindowConditionsHint:
+    'Add up to 8 windows. Each has its own duration and shared USD limit; blank means unlimited.',
+  allocationAddCondition: 'Add condition',
+  allocationCondition: 'Condition {{index}}',
+  allocationConditionDuration: 'Duration for condition {{index}}',
+  allocationConditionUnit: 'Unit for condition {{index}}',
+  allocationConditionLimit: 'Shared limit for condition {{index}}',
+  allocationRemoveCondition: 'Remove condition {{index}}',
+  allocationHours: 'Hours',
+  allocationDays: 'Days',
+  allocationDurationHours: '{{value}} hours',
+  allocationDurationDays: '{{value}} days',
+  allocationOverrideWindow: 'Override {{duration}} for {{name}}',
+  allocationWindowFor: '{{duration}} limit for {{name}}',
+  allocationWindowDurationHint:
+    'Each window starts when the rule takes effect and renews after its own duration. Times are shown in {{zone}} and can differ from upstream resets.',
+  allocationAutoPricingHint:
+    'Model prices are filled automatically from the models supported by the selected account pool when you save.',
   allocationSave: 'Save resource allowance',
   allocationView: 'View usage',
   allocationBack: 'Back to resource allowances',
   allocationsEmpty:
     'Create a dedicated account pool and grant members access to add a resource allowance.',
-  allocationRatioHint:
-    'Choose a token or internal USD budget, then divide it by member percentages. Completed requests count directly against each share.',
   allocationTotalBudget: 'Total budget',
+  allocationSelectAllMembers: 'Select all members',
+  allocationIncludeMember: 'Include {{name}}',
+  allocationOverrideMember: 'Override limits for {{name}}',
+  allocationOverrideLimits: 'Set personal limits',
   allocationTotalAmountHint:
     'This is an internal USD budget calculated from saved model prices, not an upstream cash balance.',
   allocationTotalTokensHint:
@@ -54,10 +82,6 @@ export const en = {
     'Each member receives their percentage of the total token budget for the selected period.',
   allocationRatioAmountRule:
     'Each member receives their percentage of the total internal USD budget for the selected period.',
-  allocationAmountHint:
-    'Charge usage at your configured model prices in USD. This is an internal allowance, not an upstream cash balance.',
-  allocationTokensHint:
-    'Count input plus output tokens. 1 M = 1,000,000 tokens. Cached input is not counted twice.',
   allocationExclusiveHint:
     'Use a dedicated pool and remove its accounts from every other pool first. After adding an allowance, the pool and its account membership stay fixed. Existing unbound keys for this pool stop working.',
   allocationMembers: 'Member allowances',
@@ -66,6 +90,16 @@ export const en = {
   allocationFor: 'Allowance for {{name}}',
   allocationTotal: 'Allocated {{total}}% · Reserved {{remaining}}%',
   allocationPeriod: 'Reset period',
+  allocationWindowSchedule: '{{windows}} time windows · {{zone}}',
+  allocationWindowReached: 'Limit reached',
+  allocationWindowRisk: 'New requests paused',
+  allocationUnlimited: 'Unlimited',
+  allocationUnmeteredExposure:
+    'This window: {{inFlight}} in flight · {{pending}} awaiting usage',
+  allocationWindowPendingHint:
+    'Pending records across this allowance: {{pending}}. Each window counts only records within its own duration.',
+  allocationWindowBlankHint:
+    'Select members who may use this allowance. Leave a shared or personal limit blank for unlimited use in that condition.',
   allocationResetDay: 'Day of month',
   allocationResetTime: 'Reset time',
   allocationResetZoneHint: 'Times use the instance time zone ({{zone}}).',
@@ -73,24 +107,7 @@ export const en = {
     'If a month has fewer days, it resets on the last day.',
   allocationDailySchedule: 'Daily at {{time}} · {{zone}}',
   allocationMonthlySchedule: 'Monthly on day {{day}} at {{time}} · {{zone}}',
-  allocationRates: 'Model prices',
-  allocationRatesHint:
-    'Select a model available in this account pool to fill its catalog prices. Switching models replaces the prices. You can edit them before saving; the saved revision keeps its own snapshot.',
-  allocationAdvancedRates: 'Advanced: customize model prices',
-  allocationPriceLoading: 'Loading model price…',
-  allocationRateInput: 'Input · USD / M',
-  allocationRateCached: 'Cached input · USD / M',
-  allocationRateOutput: 'Output · USD / M',
-  allocationAddRate: 'Add model price',
-  allocationAddAllRates: 'Add all available models ({{count}})',
-  allocationRateLimit: 'Up to 128 model prices can be configured.',
-  allocationRemoveRate: 'Remove model price {{index}}',
   allocationRemove: 'Remove',
-  allocationModelID: 'Model ID',
-  allocationChooseModel: 'Select a model',
-  allocationPriceMissing:
-    'No catalog price for this model. Enter prices manually.',
-  allocationPriceFailed: 'Could not load model prices. Enter prices manually.',
   allocationEnabled: 'Enable this resource allowance',
   allocationNextHint:
     'Changes to allowances, prices, type or reset schedule take effect next period. Pausing or enabling access takes effect immediately. Current usage and unsettled entries remain recorded.',
@@ -101,7 +118,7 @@ export const en = {
   allocationLoading: 'Loading allocations…',
   allocationFailed: 'Unable to load or save allocations. Please retry.',
   allocationInvalid:
-    'Check the name, members, reset date/time, positive allowances and model prices. Shares must total at most 100%; percentages allow two decimal places and M / USD allow six.',
+    'Check the name, selected members, reset date/time, and window conditions. Shares must total at most 100%; percentages allow two decimal places and M / USD allow six.',
   allocationPoolConflict:
     'These accounts are reserved by a resource allowance or shared with another pool. Use a separate pool; a managed pool’s account list is fixed.',
   allocationSettlementConflict:
@@ -119,11 +136,12 @@ export const en = {
   allocationExhausted: 'Allowance exhausted',
   allocationUnavailable:
     'This resource allowance is paused, scheduled, or no longer available to you.',
-  allocationUnpriced: 'Model price is not configured',
+  allocationUnpriced:
+    'The pool model catalog is unavailable or includes a model without a price. Refresh account models or restrict the pool to priced models, then retry.',
   allocationRatioTokensBalanceHint:
-    'Each token limit equals the total token budget × assigned percentage. This is an internal allowance; upstream quota may run out first.',
+    'Each token limit equals its window’s total token budget × assigned percentage. This is an internal allowance; upstream quota may run out first.',
   allocationRatioAmountBalanceHint:
-    'Each amount limit equals the total internal USD budget × assigned percentage. This is not an upstream cash balance.',
+    'Each amount limit equals its window’s total internal USD budget × assigned percentage. This is not an upstream cash balance.',
   allocationNoBalances:
     'No balances yet. Usage begins with requests made after activation.',
   allocationLimit: 'Allowance',
