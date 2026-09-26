@@ -38,6 +38,7 @@ export const zh: Record<keyof typeof en, string> = {
   allocationSettings: '计量与生效设置',
   allocationAmount: '按金额',
   allocationTokens: '按 Token',
+  allocationWindows: '5 小时和 7 天限额',
   allocationSave: '保存用量分配',
   allocationView: '查看用量',
   allocationBack: '返回用量分配',
@@ -45,6 +46,10 @@ export const zh: Record<keyof typeof en, string> = {
   allocationRatioHint:
     '选择 Token 或内部金额总预算，再按成员百分比分配。已完成请求会直接计入各自份额。',
   allocationTotalBudget: '总预算',
+  allocationWindowAmountHint:
+    '分别设置每位成员的 5 小时和 7 天内部 USD 上限。每条计价请求同时计入两个窗口，任一到限就会暂缓新请求。',
+  allocationFiveHourFor: '{{name}} 的 5 小时上限',
+  allocationSevenDayFor: '{{name}} 的 7 天上限',
   allocationTotalAmountHint:
     '这是按保存的模型价格计算的内部 USD 预算，不代表上游现金余额。',
   allocationTotalTokensHint:
@@ -63,6 +68,13 @@ export const zh: Record<keyof typeof en, string> = {
   allocationFor: '{{name}} 的额度',
   allocationTotal: '已分配 {{total}}% · 未分配 {{remaining}}%',
   allocationPeriod: '重置周期',
+  allocationDualSchedule: '5 小时和 7 天双窗口 · {{zone}}',
+  allocationFiveHours: '5 小时',
+  allocationSevenDays: '7 天',
+  allocationWindowReached: '已到上限',
+  allocationWindowRisk: '新请求暂缓',
+  allocationDualHint:
+    '两个内部 USD 窗口从规则生效时开始，分别每 5 小时和 7 天重置。时间按 {{zone}} 显示；可能与订阅账号的上游重置时间不同。',
   allocationResetDay: '每月第几日',
   allocationResetTime: '重置时间',
   allocationResetZoneHint: '时间按实例时区（{{zone}}）计算。',
@@ -115,9 +127,9 @@ export const zh: Record<keyof typeof en, string> = {
   allocationUnavailable: '此用量分配已暂停、尚未生效或你已无权使用。',
   allocationUnpriced: '模型价格尚未配置',
   allocationRatioTokensBalanceHint:
-    '每人的 Token 上限＝总预算 × 分配比例。这是内部额度，订阅账号的上游额度可能先耗尽。',
+    '每个窗口的 Token 上限＝该窗口总预算 × 分配比例。这是内部额度，订阅账号的上游额度可能先耗尽。',
   allocationRatioAmountBalanceHint:
-    '每人的金额上限＝内部 USD 总预算 × 分配比例，不代表上游现金余额。',
+    '每个窗口的金额上限＝该窗口内部 USD 总预算 × 分配比例，不代表上游现金余额。',
   allocationNoBalances: '暂无余额记录；规则生效后的请求才会计入用量。',
   allocationLimit: '分配额度',
   allocationUsed: '已用',

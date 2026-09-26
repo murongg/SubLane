@@ -82,6 +82,40 @@ it('requires a total token budget and saves percentage shares', async () => {
   )
 })
 
+it('saves separate per-member five-hour and seven-day amount limits', async () => {
+  const user = userEvent.setup()
+  const submit = mountModelPrices('synthetic-basic')
+  await user.click(screen.getByLabelText('5-hour and 7-day limits'))
+  await user.type(
+    screen.getByLabelText('5-hour limit for synthetic-member'),
+    '1',
+  )
+  await user.type(
+    screen.getByLabelText('7-day limit for synthetic-member'),
+    '10',
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: {
+        mode: 'windows',
+        period: 'dual',
+        members: [{ user_id: 2, limit: 1_000_000, limit_7d: 10_000_000 }],
+        rates: [
+          {
+            model: 'synthetic-basic',
+            input: 3_000_000,
+            cached: 0,
+            output: 7_000_000,
+          },
+        ],
+      },
+    }),
+  )
+})
+
 it('offers an internal USD basis below the share choice', async () => {
   const user = userEvent.setup()
   const submit = vi.fn()
@@ -239,6 +273,7 @@ it('explains token-share balances without upstream quota settlement', async () =
           {
             user_id: 2,
             username: 'synthetic-member',
+            window_kind: 'month',
             mode: 'tokens',
             limit: 250_000,
             used: 210_000,
@@ -290,6 +325,7 @@ it('shows a risk pause and provisional usage beside positive remaining allowance
           {
             user_id: 2,
             username: 'synthetic-member',
+            window_kind: 'month',
             mode: 'tokens',
             limit: 250_000,
             used: 240_000,
@@ -312,6 +348,81 @@ it('shows a risk pause and provisional usage beside positive remaining allowance
   expect(screen.getByText(/0.05 M temporarily reserved/)).toBeTruthy()
   expect(screen.getByText(/Admission headroom: 0 M/)).toBeTruthy()
   expect(screen.getByText(/Older pending requests: 1/)).toBeTruthy()
+})
+
+it('shows both windows under one member and the blocking seven-day status', async () => {
+  const { AllocationBalances } = await import('./AllocationBalances')
+  render(
+    <AllocationBalances
+      detail={{
+        id: 1,
+        name: 'Synthetic dual',
+        group_id: 2,
+        group_name: 'Synthetic pool',
+        enabled: true,
+        created_at: 1,
+        effective_at: 1,
+        next: null,
+        config: {
+          mode: 'windows',
+          period: 'dual',
+          members: [{ user_id: 2, limit: 250_000, limit_7d: 2_500_000 }],
+          rates: [
+            {
+              model: 'synthetic-model',
+              input: 1_000_000,
+              cached: 0,
+              output: 1_000_000,
+            },
+          ],
+        },
+        available: true,
+        pending: [],
+        balances: [
+          {
+            user_id: 2,
+            username: 'synthetic-member',
+            window_kind: '5h',
+            mode: 'amount',
+            limit: 250_000,
+            used: 100_000,
+            tokens: 100_000,
+            pending: 0,
+            pending_current: 0,
+            in_flight: 0,
+            reserved: 0,
+            admission_room: 175_000,
+            admission: 'active',
+            reset_at: 2_000_000_000,
+          },
+          {
+            user_id: 2,
+            username: 'synthetic-member',
+            window_kind: '7d',
+            mode: 'amount',
+            limit: 2_500_000,
+            used: 2_500_000,
+            tokens: 2_500_000,
+            pending: 0,
+            pending_current: 0,
+            in_flight: 0,
+            reserved: 0,
+            admission_room: 250_000,
+            admission: 'exhausted',
+            reset_at: 2_000_500_000,
+          },
+        ],
+      }}
+    />,
+  )
+  expect(
+    screen.getAllByRole('heading', { name: 'synthetic-member' }),
+  ).toHaveLength(1)
+  expect(screen.getByText('Allowance exhausted')).toBeTruthy()
+  expect(screen.getByText('5 hours')).toBeTruthy()
+  expect(screen.getByText('7 days')).toBeTruthy()
+  expect(screen.getByText('0.15 USD')).toBeTruthy()
+  expect(screen.getByText('0 USD')).toBeTruthy()
 })
 
 it('keeps the current cycle active when only an older request is pending', async () => {
@@ -339,6 +450,7 @@ it('keeps the current cycle active when only an older request is pending', async
           {
             user_id: 2,
             username: 'synthetic-member',
+            window_kind: 'day',
             mode: 'tokens',
             limit: 100,
             used: 0,
@@ -396,6 +508,7 @@ it('shows exhausted amount-share balances even with pending usage', async () => 
           {
             user_id: 2,
             username: 'synthetic-member',
+            window_kind: 'month',
             mode: 'amount',
             limit: 1_000_000,
             used: 1_000_000,
@@ -561,6 +674,7 @@ it('does not label a paused scheme balance as active', async () => {
           {
             user_id: 2,
             username: 'synthetic-member',
+            window_kind: 'month',
             mode: 'tokens',
             limit: 100,
             used: 0,

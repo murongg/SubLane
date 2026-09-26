@@ -710,6 +710,123 @@ func TestUnsettledRequestCountHasAutomaticBound(t *testing.T) {
 	}
 }
 
+func TestWindowedAmountChecksFiveHoursAndSevenDays(t *testing.T) {
+	s, conn, user, account := fixture(t)
+	ctx := context.Background()
+	now := time.Date(2030, 4, 15, 12, 0, 0, 0, time.UTC).Unix()
+	s.now = func() time.Time { return unix(now) }
+	config := Config{Mode: "windows", Period: "dual", Members: []Share{{UserID: user, Limit: 100, Limit7d: 200}}, Rates: []Rate{{Model: "synthetic", Input: 1_000_000, Output: 1_000_000}}}
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic dual windows", GroupID: 2, Enabled: true, Config: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := db.New(conn)
+	charge := func(id string, tokens int64) {
+		t.Helper()
+		r := Request{ID: id, SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: now}
+		if err := Begin(ctx, q, r, now, time.UTC); err != nil {
+			t.Fatal("begin", id, err)
+		}
+		if err := Finish(ctx, q, id, Completion{Input: tokens, Known: true, Dispatched: true}, now*1000, false); err != nil {
+			t.Fatal("finish", id, err)
+		}
+	}
+	charge("synthetic-5h-first", 90)
+	if detail, err := s.Detail(ctx, scheme.ID, user); err != nil {
+		t.Fatal(err)
+	} else if len(detail.Balances) != 2 || detail.Balances[0].Mode != "amount" || detail.Balances[0].WindowKind != "5h" || detail.Balances[0].Limit != 100 || detail.Balances[0].Used != 90 || detail.Balances[0].ResetAt != now+5*3600 || detail.Balances[1].Mode != "amount" || detail.Balances[1].WindowKind != "7d" || detail.Balances[1].Limit != 200 || detail.Balances[1].Used != 90 || detail.Balances[1].ResetAt != now+7*86400 {
+		t.Fatal("dual balances do not share one settled request", detail.Balances)
+	}
+	charge("synthetic-5h-last", 10)
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); !errors.Is(err, ErrQuota) {
+		t.Fatal("five-hour amount limit was exceeded", err)
+	}
+	now += 5 * 3600
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); err != nil {
+		t.Fatal("five-hour reset did not reopen the weekly allowance", err)
+	}
+	charge("synthetic-7d-last", 100)
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); !errors.Is(err, ErrQuota) {
+		t.Fatal("seven-day amount limit was exceeded", err)
+	}
+	now += 7*86400 - 5*3600
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); err != nil {
+		t.Fatal("seven-day reset did not reopen the allowance", err)
+	}
+}
+
+func TestWindowedAmountRequiresBothMemberLimits(t *testing.T) {
+	s, _, user, _ := fixture(t)
+	ctx := context.Background()
+	base := Config{Mode: "windows", Period: "dual", Members: []Share{{UserID: user, Limit: 100, Limit7d: 200}}, Rates: []Rate{{Model: "synthetic", Input: 1_000_000, Output: 1_000_000}}}
+	for _, invalid := range []Config{
+		func() Config { c := base; c.Members = []Share{{UserID: user, Limit7d: 200}}; return c }(),
+		func() Config { c := base; c.Members = []Share{{UserID: user, Limit: 100}}; return c }(),
+		func() Config { c := base; c.Total = 100; return c }(),
+		func() Config { c := base; c.ResetTime = "09:00"; return c }(),
+		func() Config { c := base; c.Period = "day"; return c }(),
+	} {
+		if _, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic dual", GroupID: 2, Enabled: true, Config: invalid}); !errors.Is(err, ErrInput) {
+			t.Fatal("invalid windowed amount accepted", invalid, err)
+		}
+	}
+}
+
+func TestWindowedAmountPendingExposureFollowsEachWindow(t *testing.T) {
+	s, conn, user, account := fixture(t)
+	ctx := context.Background()
+	now := time.Date(2030, 4, 15, 12, 0, 0, 0, time.UTC).Unix()
+	s.now = func() time.Time { return unix(now) }
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic dual pending", GroupID: 2, Enabled: true, Config: Config{
+		Mode: "windows", Period: "dual", Members: []Share{{UserID: user, Limit: 100, Limit7d: 200}},
+		Rates: []Rate{{Model: "synthetic", Input: 1_000_000, Output: 1_000_000}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := db.New(conn)
+	r := Request{ID: "synthetic-unmetered", SchemeID: scheme.ID, UserID: user, GroupID: 2, AccountID: account, Model: "synthetic", StartedAt: now}
+	if err := Begin(ctx, q, r, now, time.UTC); err != nil {
+		t.Fatal(err)
+	}
+	if err := Finish(ctx, q, r.ID, Completion{Known: false, Dispatched: true}, now*1000, false); err != nil {
+		t.Fatal(err)
+	}
+	now += 5 * 3600
+	detail, err := s.Detail(ctx, scheme.ID, user)
+	if err != nil || len(detail.Balances) != 2 {
+		t.Fatal(err, detail.Balances)
+	}
+	if detail.Balances[0].PendingCurrent != 0 || detail.Balances[0].Reserved != 0 || detail.Balances[1].PendingCurrent != 1 || detail.Balances[1].Reserved != 20 {
+		t.Fatal("five-hour rollover erased weekly pending exposure", detail.Balances)
+	}
+	if _, err := Check(ctx, q, scheme.ID, user, 2, account, "synthetic", now, time.UTC); err != nil {
+		t.Fatal("one weekly pending request froze both windows", err)
+	}
+}
+
+func TestWindowedAmountChangesStartAtNextSevenDayBoundary(t *testing.T) {
+	s, _, user, _ := fixture(t)
+	ctx := context.Background()
+	now := time.Date(2030, 4, 15, 12, 0, 0, 0, time.UTC).Unix()
+	start := now
+	s.now = func() time.Time { return unix(now) }
+	config := Config{Mode: "windows", Period: "dual", Members: []Share{{UserID: user, Limit: 100, Limit7d: 200}}, Rates: []Rate{{Model: "synthetic", Input: 1_000_000, Output: 1_000_000}}}
+	scheme, err := s.SaveScheme(ctx, 0, SchemeInput{Name: "Synthetic dual revisions", GroupID: 2, Enabled: true, Config: config})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now += 3600
+	config.Members = []Share{{UserID: user, Limit: 150, Limit7d: 200}}
+	updated, err := s.SaveScheme(ctx, scheme.ID, SchemeInput{Name: scheme.Name, GroupID: 2, Enabled: true, Config: config})
+	if err != nil || updated.Next == nil {
+		t.Fatal(err, updated)
+	}
+	if updated.Config.Members[0].Limit != 100 || updated.Next.Config.Members[0].Limit != 150 || updated.Next.EffectiveAt != start+7*86400 {
+		t.Fatal("dual edit changed an active weekly window", updated)
+	}
+}
+
 func TestManagedPoolRejectsNewAccountsAndCanPauseWithoutUpstreamQuota(t *testing.T) {
 	s, conn, user, _ := fixture(t)
 	ctx := context.Background()

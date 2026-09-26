@@ -9,6 +9,9 @@ import (
 var resetClock = regexp.MustCompile(`^(?:[01][0-9]|2[0-3]):[0-5][0-9]$`)
 
 func validResetSchedule(c Config) bool {
+	if c.Period == "dual" {
+		return c.ResetTime == "" && c.ResetDay == 0
+	}
 	if c.ResetTime != "" && !resetClock.MatchString(c.ResetTime) {
 		return false
 	}
@@ -104,7 +107,36 @@ func dayStart(year int, month time.Month, day int, location *time.Location) time
 	return time.Unix(lo, 0)
 }
 
-func nextEffective(c Config, now int64, location *time.Location) int64 {
+type allocationWindow struct {
+	kind       string
+	start, end int64
+}
+
+func durationWindow(now, anchor, seconds int64) allocationWindow {
+	if now < anchor {
+		return allocationWindow{start: anchor, end: anchor + seconds}
+	}
+	start := anchor + (now-anchor)/seconds*seconds
+	return allocationWindow{start: start, end: start + seconds}
+}
+
+func effectiveWindows(rev Revision, now int64, location *time.Location) []allocationWindow {
+	if rev.Config.Period == "dual" {
+		// A revision anchors both durations so the next weekly boundary also resets the short window.
+		five := durationWindow(now, rev.EffectiveAt, 5*3600)
+		five.kind = "5h"
+		seven := durationWindow(now, rev.EffectiveAt, 7*86400)
+		seven.kind = "7d"
+		return []allocationWindow{five, seven}
+	}
+	start, end := Window(unix(now), rev.Config, location)
+	return []allocationWindow{{kind: rev.Config.Period, start: max(start, rev.EffectiveAt), end: end}}
+}
+
+func nextEffective(c Config, now int64, location *time.Location, anchor int64) int64 {
+	if c.Period == "dual" {
+		return durationWindow(now, anchor, 7*86400).end
+	}
 	_, end := Window(unix(now), c, location)
 	return end
 }

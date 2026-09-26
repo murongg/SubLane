@@ -17,13 +17,14 @@ func entryMode(c Config) string {
 	if c.Mode == "ratio" {
 		return c.RatioUnit
 	}
+	if c.Mode == "windows" {
+		return "amount"
+	}
 	return c.Mode
 }
 func effectiveWindow(rev Revision, now int64, location *time.Location) (int64, int64) {
-	start, end := Window(unix(now), rev.Config, location)
-	// Revisions start a new allowance at activation, even if the configured reset is later.
-	start = max(start, rev.EffectiveAt)
-	return start, end
+	window := effectiveWindows(rev, now, location)[0]
+	return window.start, window.end
 }
 func Authorize(ctx context.Context, q *db.Queries, scheme, user, group, now int64) (Revision, error) {
 	row, err := q.GetAllocationScheme(ctx, scheme)
@@ -96,6 +97,39 @@ func currentRiskBudget(used, limit, active, pending int64) riskBudget {
 	}
 }
 
+type memberWindowUsage struct {
+	window  allocationWindow
+	limit   int64
+	used    int64
+	tokens  int64
+	active  int64
+	pending int64
+	risk    riskBudget
+}
+
+func readMemberWindow(ctx context.Context, q *db.Queries, scheme, user int64, member Share, config Config, window allocationWindow) (memberWindowUsage, error) {
+	mode := entryMode(config)
+	usage, err := q.AllocationMemberUsage(ctx, db.AllocationMemberUsageParams{SchemeID: scheme, UserID: user, StartedFrom: window.start, StartedTo: window.end, Mode: mode})
+	if err != nil {
+		return memberWindowUsage{}, err
+	}
+	exposure, err := q.AllocationMemberExposure(ctx, db.AllocationMemberExposureParams{SchemeID: scheme, UserID: user, StartedFrom: window.start, StartedTo: window.end, Mode: mode})
+	if err != nil {
+		return memberWindowUsage{}, err
+	}
+	limit := member.Limit
+	if config.Mode == "ratio" {
+		limit = ratioLimit(config.Total, member.Limit)
+	} else if config.Mode == "windows" && window.kind == "7d" {
+		limit = member.Limit7d
+	}
+	return memberWindowUsage{
+		window: window, limit: limit, used: usage.Used, tokens: usage.Tokens,
+		active: exposure.Active, pending: exposure.Pending,
+		risk: currentRiskBudget(usage.Used, limit, exposure.Active, exposure.Pending),
+	}, nil
+}
+
 func Check(ctx context.Context, q *db.Queries, scheme, user, group int64, account, model string, now int64, location *time.Location) (Revision, error) {
 	rev, err := Authorize(ctx, q, scheme, user, group, now)
 	if err != nil {
@@ -106,27 +140,22 @@ func Check(ctx context.Context, q *db.Queries, scheme, user, group int64, accoun
 			return rev, err
 		}
 	}
-	start, end := effectiveWindow(rev, now, location)
-	usage, err := q.AllocationMemberUsage(ctx, db.AllocationMemberUsageParams{SchemeID: scheme, UserID: user, StartedFrom: start, StartedTo: end, Mode: entryMode(rev.Config)})
-	if err != nil {
-		return rev, err
-	}
 	for _, m := range rev.Config.Members {
 		if m.UserID != user {
 			continue
 		}
-		limit := m.Limit
-		if rev.Config.Mode == "ratio" {
-			limit = ratioLimit(rev.Config, m.Limit)
+		riskLimited := false
+		for _, window := range effectiveWindows(rev, now, location) {
+			state, err := readMemberWindow(ctx, q, scheme, user, m, rev.Config, window)
+			if err != nil {
+				return rev, err
+			}
+			if state.used >= state.limit {
+				return rev, ErrQuota
+			}
+			riskLimited = riskLimited || state.risk.limited
 		}
-		if usage.Used >= limit {
-			return rev, ErrQuota
-		}
-		exposure, err := q.AllocationMemberExposure(ctx, db.AllocationMemberExposureParams{SchemeID: scheme, UserID: user, StartedFrom: start, StartedTo: end, Mode: entryMode(rev.Config)})
-		if err != nil {
-			return rev, err
-		}
-		if currentRiskBudget(usage.Used, limit, exposure.Active, exposure.Pending).limited {
+		if riskLimited {
 			return rev, ErrRisk
 		}
 	}

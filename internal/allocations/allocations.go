@@ -36,8 +36,10 @@ var (
 type Share struct {
 	UserID int64 `json:"user_id"`
 	// Limit is a percentage in hundredths for share mode; otherwise it
-	// uses the selected accounting unit's smallest increment.
-	Limit int64 `json:"limit"`
+	// uses the selected accounting unit's smallest increment. Windowed amount
+	// limits use Limit for 5 hours and Limit7d for 7 days.
+	Limit   int64 `json:"limit"`
+	Limit7d int64 `json:"limit_7d,omitempty"`
 }
 
 // Rates are micro-USD per million tokens.
@@ -109,15 +111,28 @@ func bit(v bool) int64 {
 	}
 	return 0
 }
-func ratioLimit(c Config, share int64) int64 {
+func ratioLimit(total, share int64) int64 {
 	// Round down so member limits never sum beyond the configured total.
-	return c.Total * share / 10000
+	return total * share / 10000
+}
+func validMemberLimit(c Config, m Share) bool {
+	if m.UserID <= 0 || m.Limit <= 0 || m.Limit > 1_000_000_000_000 {
+		return false
+	}
+	switch c.Mode {
+	case "ratio":
+		return m.Limit <= 10000 && ratioLimit(c.Total, m.Limit) > 0 && m.Limit7d == 0
+	case "windows":
+		return m.Limit7d > 0 && m.Limit7d <= 1_000_000_000_000
+	default:
+		return m.Limit7d == 0
+	}
 }
 func normalize(c *Config) error {
-	if (c.Mode != "tokens" && c.Mode != "amount" && c.Mode != "ratio") || len(c.Members) == 0 || len(c.Members) > 100 || len(c.Rates) > 128 {
+	if (c.Mode != "tokens" && c.Mode != "amount" && c.Mode != "ratio" && c.Mode != "windows") || len(c.Members) == 0 || len(c.Members) > 100 || len(c.Rates) > 128 {
 		return ErrInput
 	}
-	if (c.Period != "day" && c.Period != "month") || !validResetSchedule(*c) {
+	if (c.Period != "day" && c.Period != "month" && c.Period != "dual") || !validResetSchedule(*c) || (c.Period == "dual") != (c.Mode == "windows") {
 		return ErrInput
 	}
 	if c.Mode == "ratio" {
@@ -133,7 +148,7 @@ func normalize(c *Config) error {
 	seen := map[int64]bool{}
 	var total int64
 	for _, m := range c.Members {
-		if m.UserID <= 0 || seen[m.UserID] || m.Limit <= 0 || m.Limit > 1_000_000_000_000 || c.Mode == "ratio" && (m.Limit > 10000 || ratioLimit(*c, m.Limit) == 0) {
+		if seen[m.UserID] || !validMemberLimit(*c, m) {
 			return ErrInput
 		}
 		seen[m.UserID] = true
@@ -142,7 +157,7 @@ func normalize(c *Config) error {
 	if c.Mode == "ratio" && total > 10000 {
 		return ErrInput
 	}
-	if (c.Mode == "amount" || c.Mode == "ratio" && c.RatioUnit == "amount") && len(c.Rates) == 0 {
+	if (c.Mode == "amount" || c.Mode == "windows" || c.Mode == "ratio" && c.RatioUnit == "amount") && len(c.Rates) == 0 {
 		return ErrInput
 	}
 	models := map[string]bool{}
@@ -186,7 +201,7 @@ func decodeRevision(id, at int64, raw string) (Revision, error) {
 	if err := json.Unmarshal([]byte(raw), &r.Config); err != nil {
 		return r, err
 	}
-	if (r.Config.Period != "day" && r.Config.Period != "month") || !validResetSchedule(r.Config) {
+	if (r.Config.Period != "day" && r.Config.Period != "month" && r.Config.Period != "dual") || !validResetSchedule(r.Config) || (r.Config.Period == "dual") != (r.Config.Mode == "windows") {
 		return r, ErrInput
 	}
 	return r, nil
@@ -304,7 +319,7 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 			return Scheme{}, err
 		}
 		if in.StartNext {
-			effective = nextEffective(in.Config, now, s.location())
+			effective = nextEffective(in.Config, now, s.location(), now)
 		}
 	} else {
 		old, err := q.GetTenantAllocationScheme(ctx, db.GetTenantAllocationSchemeParams{ID: id, TenantID: s.tenantID})
@@ -319,7 +334,7 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 		}
 		current, err := Current(ctx, q, id, now)
 		if err == nil {
-			effective = nextEffective(current.Config, now, s.location())
+			effective = nextEffective(current.Config, now, s.location(), current.EffectiveAt)
 		} else if errors.Is(err, ErrUnavailable) {
 			next, e := q.NextAllocationRevision(ctx, db.NextAllocationRevisionParams{SchemeID: id, EffectiveAt: now})
 			if e != nil {

@@ -4,7 +4,7 @@ import { request, ApiError } from './request'
 import { authKey, type AuthState } from './auth'
 
 const integer = z.number().int().nonnegative()
-const modeSchema = z.enum(['ratio', 'amount', 'tokens'])
+const modeSchema = z.enum(['ratio', 'amount', 'tokens', 'windows'])
 const unitSchema = z.enum(['amount', 'tokens'])
 const rateSchema = z.object({
   model: z.string(),
@@ -20,13 +20,21 @@ const priceSchema = z.object({
 })
 const configSchema = z.object({
   mode: modeSchema,
-  period: z.enum(['day', 'month']),
+  period: z.enum(['day', 'month', 'dual']),
   reset_time: z
     .string()
     .regex(/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/)
     .optional(),
   reset_day: z.number().int().min(1).max(31).optional(),
-  members: z.array(z.object({ user_id: integer, limit: integer })).max(100),
+  members: z
+    .array(
+      z.object({
+        user_id: integer,
+        limit: integer,
+        limit_7d: integer.optional(),
+      }),
+    )
+    .max(100),
   rates: z.array(rateSchema).max(128),
   ratio_unit: unitSchema.optional(),
   total: integer.optional(),
@@ -44,6 +52,7 @@ export const schemeSchema = revisionSchema.extend({
 const balanceSchema = z.object({
   user_id: integer,
   username: z.string(),
+  window_kind: z.enum(['day', 'month', '5h', '7d']),
   mode: unitSchema,
   limit: integer,
   used: integer,
@@ -164,6 +173,7 @@ export const modeLabels = {
   ratio: 'allocationRatio',
   amount: 'allocationAmount',
   tokens: 'allocationTokens',
+  windows: 'allocationWindows',
 } as const
 export function parseAllocationValue(
   value: string,

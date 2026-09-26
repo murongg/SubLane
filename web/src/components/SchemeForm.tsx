@@ -267,8 +267,8 @@ export function SchemeForm({
   const [ratioUnit, setRatioUnit] = useState<'amount' | 'tokens'>(
     initial?.ratio_unit ?? 'tokens',
   )
-  const [period, setPeriod] = useState(
-    initial?.period === 'day' ? 'day' : 'month',
+  const [period, setPeriod] = useState<'day' | 'month' | 'dual'>(
+    initial?.period ?? 'month',
   )
   const [resetTime, setResetTime] = useState(initial?.reset_time ?? '00:00')
   const [resetDay, setResetDay] = useState(String(initial?.reset_day ?? 1))
@@ -284,6 +284,14 @@ export function SchemeForm({
       initial?.members.map((m) => [
         m.user_id,
         allocationValue(m.limit, initial.mode),
+      ]) ?? [],
+    ),
+  )
+  const [limits7d, setLimits7d] = useState<Record<number, string>>(
+    Object.fromEntries(
+      initial?.members.map((m) => [
+        m.user_id,
+        m.limit_7d ? allocationValue(m.limit_7d, 'amount') : '',
       ]) ?? [],
     ),
   )
@@ -308,8 +316,11 @@ export function SchemeForm({
   const changeMode = (next: AllocationMode) => {
     if (next !== mode) {
       setMode(next)
+      if (next === 'windows') setPeriod('dual')
+      else if (period === 'dual') setPeriod('month')
       setAdvancedRates(next !== 'ratio')
       setValues({})
+      setLimits7d({})
       setInvalid(false)
     }
   }
@@ -393,10 +404,17 @@ export function SchemeForm({
     )
       return
     const shares = members
-      .filter((m) => (values[m.id] ?? '').trim() !== '')
+      .filter(
+        (m) =>
+          (values[m.id] ?? '').trim() !== '' ||
+          (mode === 'windows' && (limits7d[m.id] ?? '').trim() !== ''),
+      )
       .map((m) => ({
         user_id: m.id,
         limit: parseAllocationValue(values[m.id], mode) ?? -1,
+        ...(mode === 'windows'
+          ? { limit_7d: parseAllocationValue(limits7d[m.id], 'amount') ?? -1 }
+          : {}),
       }))
     const parsedRates = tokenBased
       ? []
@@ -415,24 +433,27 @@ export function SchemeForm({
     const totalBudget = shareMode
       ? (parseAllocationValue(ratioTotal, ratioUnit) ?? -1)
       : 0
+    const validShareBudget = (budget: number) =>
+      budget > 0 &&
+      budget <= 1_000_000_000_000 &&
+      shares.every((m) => Math.floor((budget * m.limit) / 10000) > 0)
     const bad =
       !name.trim() ||
       !groupID ||
-      !/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(resetTime) ||
+      (mode !== 'windows' &&
+        !/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(resetTime)) ||
       (period === 'month' &&
         (!/^\d{1,2}$/.test(resetDay) ||
           Number(resetDay) < 1 ||
           Number(resetDay) > 31)) ||
       shares.length === 0 ||
-      shares.some((m) => m.limit <= 0) ||
+      shares.some(
+        (m) => m.limit <= 0 || (mode === 'windows' && (m.limit_7d ?? 0) <= 0),
+      ) ||
       (shareMode && total > 10000) ||
-      (shareMode &&
-        (totalBudget <= 0 ||
-          totalBudget > 1_000_000_000_000 ||
-          shares.some(
-            (m) => Math.floor((totalBudget * m.limit) / 10000) === 0,
-          ))) ||
+      (shareMode && !validShareBudget(totalBudget)) ||
       ((mode === 'amount' ||
+        mode === 'windows' ||
         (shareMode && ratioUnit === 'amount' && advancedRates)) &&
         (parsedRates.length === 0 ||
           parsedRates.some(
@@ -452,8 +473,8 @@ export function SchemeForm({
       start_next: startNext,
       config: {
         mode,
-        period: period as 'day' | 'month',
-        reset_time: resetTime,
+        period,
+        ...(period !== 'dual' ? { reset_time: resetTime } : {}),
         ...(period === 'month' ? { reset_day: Number(resetDay) } : {}),
         members: shares,
         rates: parsedRates,
@@ -492,6 +513,7 @@ export function SchemeForm({
               onChange={(value) => {
                 onGroupChange(Number(value))
                 setValues({})
+                setLimits7d({})
               }}
             />
           </div>
@@ -502,27 +524,31 @@ export function SchemeForm({
         <fieldset className="space-y-3">
           <legend className="text-sm font-medium">{t('allocationMode')}</legend>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
-            {(['ratio', 'amount', 'tokens'] as const).map((value) => (
-              <label key={value} className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="allocation-mode"
-                  value={value}
-                  checked={mode === value}
-                  onChange={() => changeMode(value)}
-                  className="size-4 accent-primary"
-                />
-                {t(modeLabels[value])}
-              </label>
-            ))}
+            {(['ratio', 'amount', 'tokens', 'windows'] as const).map(
+              (value) => (
+                <label key={value} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="allocation-mode"
+                    value={value}
+                    checked={mode === value}
+                    onChange={() => changeMode(value)}
+                    className="size-4 accent-primary"
+                  />
+                  {t(modeLabels[value])}
+                </label>
+              ),
+            )}
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
             {t(
               mode === 'ratio'
                 ? 'allocationRatioHint'
-                : mode === 'amount'
-                  ? 'allocationAmountHint'
-                  : 'allocationTokensHint',
+                : mode === 'windows'
+                  ? 'allocationWindowAmountHint'
+                  : mode === 'amount'
+                    ? 'allocationAmountHint'
+                    : 'allocationTokensHint',
             )}
           </p>
         </fieldset>
@@ -581,25 +607,27 @@ export function SchemeForm({
               </div>
             </div>
           )}
-          <div className="space-y-2">
-            <label htmlFor="scheme-period" className="text-sm font-medium">
-              {t('allocationPeriod')}
-            </label>
-            <SchemeChoice
-              id="scheme-period"
-              label={t('allocationPeriod')}
-              value={period}
-              disabled={pending}
-              options={[
-                { value: 'day', label: t('periodDaily', { zone: timeZone }) },
-                {
-                  value: 'month',
-                  label: t('periodMonthly', { zone: timeZone }),
-                },
-              ]}
-              onChange={setPeriod}
-            />
-          </div>
+          {mode !== 'windows' && (
+            <div className="space-y-2">
+              <label htmlFor="scheme-period" className="text-sm font-medium">
+                {t('allocationPeriod')}
+              </label>
+              <SchemeChoice
+                id="scheme-period"
+                label={t('allocationPeriod')}
+                value={period}
+                disabled={pending}
+                options={[
+                  { value: 'day', label: t('periodDaily', { zone: timeZone }) },
+                  {
+                    value: 'month',
+                    label: t('periodMonthly', { zone: timeZone }),
+                  },
+                ]}
+                onChange={(value) => setPeriod(value as 'day' | 'month')}
+              />
+            </div>
+          )}
           {period === 'month' && (
             <div className="space-y-2">
               <label htmlFor="scheme-reset-day" className="text-sm font-medium">
@@ -618,21 +646,28 @@ export function SchemeForm({
               />
             </div>
           )}
-          <div className="space-y-2">
-            <label htmlFor="scheme-reset-time" className="text-sm font-medium">
-              {t('allocationResetTime')}
-            </label>
-            <Input
-              id="scheme-reset-time"
-              type="time"
-              step={60}
-              value={resetTime}
-              onChange={(e) => setResetTime(e.target.value)}
-              className="tabular-nums"
-            />
-          </div>
+          {period !== 'dual' && (
+            <div className="space-y-2">
+              <label
+                htmlFor="scheme-reset-time"
+                className="text-sm font-medium"
+              >
+                {t('allocationResetTime')}
+              </label>
+              <Input
+                id="scheme-reset-time"
+                type="time"
+                step={60}
+                value={resetTime}
+                onChange={(e) => setResetTime(e.target.value)}
+                className="tabular-nums"
+              />
+            </div>
+          )}
           <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
-            {t('allocationResetZoneHint', { zone: timeZone })}{' '}
+            {period === 'dual'
+              ? t('allocationDualHint', { zone: timeZone })
+              : t('allocationResetZoneHint', { zone: timeZone })}{' '}
             {period === 'month' && t('allocationResetShortMonthHint')}
           </p>
           {shareMode && (
@@ -682,29 +717,88 @@ export function SchemeForm({
             {members.map((m) => (
               <div
                 key={m.id}
-                className="flex items-center justify-between gap-4 py-3"
+                className={
+                  mode === 'windows'
+                    ? 'space-y-3 py-3'
+                    : 'flex items-center justify-between gap-4 py-3'
+                }
               >
-                <label
-                  htmlFor={`share-${m.id}`}
-                  className="min-w-0 break-words text-sm"
-                >
-                  {m.username}
-                </label>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Input
-                    id={`share-${m.id}`}
-                    aria-label={t('allocationFor', { name: m.username })}
-                    value={values[m.id] ?? ''}
-                    onChange={(e) =>
-                      setValues((v) => ({ ...v, [m.id]: e.target.value }))
-                    }
-                    inputMode="decimal"
-                    className="w-32 text-right tabular-nums"
-                  />
-                  <span className="w-9 text-sm text-muted-foreground">
-                    {shareMode ? '%' : mode === 'amount' ? 'USD' : 'M'}
-                  </span>
-                </div>
+                {mode === 'windows' ? (
+                  <>
+                    <p className="min-w-0 break-words text-sm font-medium">
+                      {m.username}
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {(
+                        [
+                          {
+                            kind: '5h',
+                            label: t('allocationFiveHourFor', {
+                              name: m.username,
+                            }),
+                            value: values[m.id] ?? '',
+                            change: (value: string) =>
+                              setValues((all) => ({ ...all, [m.id]: value })),
+                          },
+                          {
+                            kind: '7d',
+                            label: t('allocationSevenDayFor', {
+                              name: m.username,
+                            }),
+                            value: limits7d[m.id] ?? '',
+                            change: (value: string) =>
+                              setLimits7d((all) => ({ ...all, [m.id]: value })),
+                          },
+                        ] as const
+                      ).map((limit) => (
+                        <div key={limit.kind} className="space-y-2">
+                          <label
+                            htmlFor={`window-${limit.kind}-${m.id}`}
+                            className="text-sm text-muted-foreground"
+                          >
+                            {limit.label}
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id={`window-${limit.kind}-${m.id}`}
+                              value={limit.value}
+                              onChange={(e) => limit.change(e.target.value)}
+                              inputMode="decimal"
+                              className="min-w-0 text-right tabular-nums"
+                            />
+                            <span className="text-sm text-muted-foreground">
+                              USD
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <label
+                      htmlFor={`share-${m.id}`}
+                      className="min-w-0 break-words text-sm"
+                    >
+                      {m.username}
+                    </label>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Input
+                        id={`share-${m.id}`}
+                        aria-label={t('allocationFor', { name: m.username })}
+                        value={values[m.id] ?? ''}
+                        onChange={(e) =>
+                          setValues((v) => ({ ...v, [m.id]: e.target.value }))
+                        }
+                        inputMode="decimal"
+                        className="w-32 text-right tabular-nums"
+                      />
+                      <span className="w-9 text-sm text-muted-foreground">
+                        {shareMode ? '%' : mode === 'amount' ? 'USD' : 'M'}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -758,6 +852,7 @@ export function SchemeForm({
             </div>
           )}
           {(mode === 'amount' ||
+            mode === 'windows' ||
             (shareMode && ratioUnit === 'amount' && advancedRates)) && (
             <section className="space-y-3">
               <h3 className="font-medium">{t('allocationRates')}</h3>

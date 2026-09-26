@@ -10,6 +10,7 @@ import (
 type Balance struct {
 	UserID         int64  `json:"user_id"`
 	Username       string `json:"username"`
+	WindowKind     string `json:"window_kind"`
 	Mode           string `json:"mode"`
 	Limit          int64  `json:"limit"`
 	Used           int64  `json:"used"`
@@ -77,15 +78,11 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 	for _, e := range pending {
 		out.Pending = append(out.Pending, Pending{RequestID: e.RequestID, UserID: e.UserID, Mode: e.Mode, Model: e.Model, State: e.State, Input: e.InputTokens, Output: e.OutputTokens, Cached: e.CachedTokens})
 	}
-	start, end := effectiveWindow(scheme.Revision, now, s.location())
+	windows := effectiveWindows(scheme.Revision, now, s.location())
 	mode := entryMode(scheme.Config)
 	for _, m := range scheme.Config.Members {
 		if user > 0 && m.UserID != user {
 			continue
-		}
-		u, err := q.AllocationMemberUsage(ctx, db.AllocationMemberUsageParams{SchemeID: id, UserID: m.UserID, StartedFrom: start, StartedTo: end, Mode: mode})
-		if err != nil {
-			return out, err
 		}
 		member, err := q.GetMember(ctx, m.UserID)
 		if err != nil {
@@ -95,26 +92,25 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 		if err != nil {
 			return out, err
 		}
-		limit := m.Limit
-		if scheme.Config.Mode == "ratio" {
-			limit = ratioLimit(scheme.Config, m.Limit)
+		for _, window := range windows {
+			state, err := readMemberWindow(ctx, q, id, m.UserID, m, scheme.Config, window)
+			if err != nil {
+				return out, err
+			}
+			admission := "active"
+			if state.used >= state.limit {
+				admission = "exhausted"
+			} else if state.risk.limited {
+				admission = "risk_limited"
+			}
+			out.Balances = append(out.Balances, Balance{
+				UserID: m.UserID, Username: member.Username, WindowKind: window.kind, Mode: mode,
+				Limit: state.limit, Used: state.used, Tokens: state.tokens, Pending: n,
+				PendingCurrent: state.pending, InFlight: state.active,
+				Reserved: state.risk.reserved, AdmissionRoom: state.risk.room,
+				Admission: admission, ResetAt: window.end,
+			})
 		}
-		exposure, err := q.AllocationMemberExposure(ctx, db.AllocationMemberExposureParams{SchemeID: id, UserID: m.UserID, StartedFrom: start, StartedTo: end, Mode: mode})
-		if err != nil {
-			return out, err
-		}
-		risk := currentRiskBudget(u.Used, limit, exposure.Active, exposure.Pending)
-		admission := "active"
-		if u.Used >= limit {
-			admission = "exhausted"
-		} else if risk.limited {
-			admission = "risk_limited"
-		}
-		out.Balances = append(out.Balances, Balance{
-			UserID: m.UserID, Username: member.Username, Mode: mode, Limit: limit, Used: u.Used,
-			Tokens: u.Tokens, Pending: n, PendingCurrent: exposure.Pending, InFlight: exposure.Active,
-			Reserved: risk.reserved, AdmissionRoom: risk.room, Admission: admission, ResetAt: end,
-		})
 	}
 	if user > 0 {
 		out.Config.Members = ownShares(out.Config.Members, user)

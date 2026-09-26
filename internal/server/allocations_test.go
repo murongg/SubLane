@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/murongg/SubLane/internal/accounts"
@@ -14,6 +15,64 @@ import (
 	"testing"
 	"time"
 )
+
+func TestWindowedAmountPersonalBalanceResponse(t *testing.T) {
+	f := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
+	ctx := context.Background()
+	accounts, err := f.accounts.List(ctx)
+	if err != nil || len(accounts) != 1 {
+		t.Fatal(accounts, err)
+	}
+	if _, err := f.groups.Save(ctx, 1, groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{}}); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := f.groups.Save(ctx, 0, groups.Input{Name: "Synthetic window pool", Enabled: true, AccountIDs: []string{accounts[0].ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.groups.SetMemberGroups(ctx, f.userID, []int64{pool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.forwarding.Allocations().SaveScheme(ctx, 0, allocations.SchemeInput{Name: "Synthetic windows", GroupID: pool.ID, Enabled: true, Config: allocations.Config{
+		Mode: "windows", Period: "dual", Members: []allocations.Share{{UserID: f.userID, Limit: 100, Limit7d: 200}},
+		Rates: []allocations.Rate{{Model: "synthetic-model", Input: 1_000_000, Output: 1_000_000}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	member, err := f.identity.Login(ctx, "member-test", "member pass 42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := request(f.server.Config.Handler, "GET", "/api/me/allocations", "", nil, &http.Cookie{Name: sessionCookie, Value: member.Token})
+	if response.Code != 200 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	var payload struct {
+		Schemes []struct {
+			Config struct {
+				Mode    string `json:"mode"`
+				Period  string `json:"period"`
+				Members []struct {
+					Limit   int64 `json:"limit"`
+					Limit7d int64 `json:"limit_7d"`
+				} `json:"members"`
+			} `json:"config"`
+			Balances []struct {
+				Kind  string `json:"window_kind"`
+				Mode  string `json:"mode"`
+				Limit int64  `json:"limit"`
+			} `json:"balances"`
+		} `json:"schemes"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil || len(payload.Schemes) != 1 {
+		t.Fatal(err, response.Body.String())
+	}
+	got := payload.Schemes[0]
+	if got.Config.Mode != "windows" || got.Config.Period != "dual" || len(got.Config.Members) != 1 || got.Config.Members[0].Limit != 100 || got.Config.Members[0].Limit7d != 200 || len(got.Balances) != 2 || got.Balances[0].Kind != "5h" || got.Balances[0].Mode != "amount" || got.Balances[0].Limit != 100 || got.Balances[1].Kind != "7d" || got.Balances[1].Mode != "amount" || got.Balances[1].Limit != 200 {
+		t.Fatal("personal response disagreed with windowed allowance", got)
+	}
+}
 
 func TestAllocationManagementRolesAndPersonalIsolation(t *testing.T) {
 	f := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })

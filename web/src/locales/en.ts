@@ -38,6 +38,7 @@ export const en = {
   allocationSettings: 'Metering and activation settings',
   allocationAmount: 'By amount',
   allocationTokens: 'By tokens',
+  allocationWindows: '5-hour and 7-day limits',
   allocationSave: 'Save resource allowance',
   allocationView: 'View usage',
   allocationBack: 'Back to resource allowances',
@@ -46,6 +47,10 @@ export const en = {
   allocationRatioHint:
     'Choose a token or internal USD budget, then divide it by member percentages. Completed requests count directly against each share.',
   allocationTotalBudget: 'Total budget',
+  allocationWindowAmountHint:
+    'Set each member’s 5-hour and 7-day internal USD limits. Every priced request counts in both windows; either limit can pause new requests.',
+  allocationFiveHourFor: '5-hour limit for {{name}}',
+  allocationSevenDayFor: '7-day limit for {{name}}',
   allocationTotalAmountHint:
     'This is an internal USD budget calculated from saved model prices, not an upstream cash balance.',
   allocationTotalTokensHint:
@@ -66,6 +71,13 @@ export const en = {
   allocationFor: 'Allowance for {{name}}',
   allocationTotal: 'Allocated {{total}}% · Reserved {{remaining}}%',
   allocationPeriod: 'Reset period',
+  allocationDualSchedule: '5-hour and 7-day windows · {{zone}}',
+  allocationFiveHours: '5 hours',
+  allocationSevenDays: '7 days',
+  allocationWindowReached: 'Limit reached',
+  allocationWindowRisk: 'New requests paused',
+  allocationDualHint:
+    'Both internal USD windows start when the rule takes effect and renew every 5 hours and 7 days. Times appear in {{zone}}; they may differ from subscription resets.',
   allocationResetDay: 'Day of month',
   allocationResetTime: 'Reset time',
   allocationResetZoneHint: 'Times use the instance time zone ({{zone}}).',
@@ -121,9 +133,9 @@ export const en = {
     'This resource allowance is paused, scheduled, or no longer available to you.',
   allocationUnpriced: 'Model price is not configured',
   allocationRatioTokensBalanceHint:
-    'Each token limit equals the total token budget × assigned percentage. This is an internal allowance; upstream quota may run out first.',
+    'Each token limit equals its window’s total token budget × assigned percentage. This is an internal allowance; upstream quota may run out first.',
   allocationRatioAmountBalanceHint:
-    'Each amount limit equals the total internal USD budget × assigned percentage. This is not an upstream cash balance.',
+    'Each amount limit equals its window’s total internal USD budget × assigned percentage. This is not an upstream cash balance.',
   allocationNoBalances:
     'No balances yet. Usage begins with requests made after activation.',
   allocationLimit: 'Allowance',
