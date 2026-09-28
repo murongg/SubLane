@@ -432,7 +432,7 @@ it('shows a stored legacy account as unavailable without reconnect actions', asy
   expect(screen.getByRole('menuitem', { name: 'Remove account' })).toBeTruthy()
 })
 
-it('updates an account concurrency limit from scheduling settings', async () => {
+it('updates an account concurrency limit to 30 from scheduling settings', async () => {
   let limit = 2
   const fetch = vi
     .fn()
@@ -482,12 +482,12 @@ it('updates an account concurrency limit from scheduling settings', async () => 
   })
   const input = within(dialog).getByLabelText('Concurrent model requests')
   await user.clear(input)
-  await user.type(input, '1')
+  await user.type(input, '30')
   await user.click(
     within(dialog).getByRole('button', { name: 'Save settings' }),
   )
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(limit).toBe(1)
+  expect(limit).toBe(30)
 })
 
 it('explains why a quota-exhausted account is skipped for new sessions', async () => {

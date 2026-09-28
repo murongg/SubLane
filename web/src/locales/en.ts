@@ -1003,8 +1003,8 @@ export const en = {
   accountScheduling: 'Scheduling settings',
   accountConcurrencyLimit: 'Concurrent model requests',
   accountConcurrencyHint:
-    'Allow 1–8 active model requests for this account across all pools. When full, new requests wait up to 10 seconds, with at most 8 waiting per pool. Lowering the limit lets existing requests finish.',
-  accountConcurrencyInvalid: 'Enter a whole number from 1 to 8.',
+    'Allow 1–30 active model requests for this account across all pools. New accounts default to 30; existing account settings stay unchanged. When full, new requests wait up to 10 seconds, with at most 8 waiting per pool. Lowering the limit lets existing requests finish.',
+  accountConcurrencyInvalid: 'Enter a whole number from 1 to 30.',
   lastAccountFailure: 'Last scheduling failure',
   resumeAccountHint:
     'Clear the cooldown to allow requests again. This does not enable a disabled account or renew its authorization.',
@@ -1017,7 +1017,7 @@ export const en = {
   accountCooling: 'Cooling down',
   accountProbing: 'Recovering',
   accountRetryReady: 'Ready to retry',
-  accountRetryAt: 'Retry after {{time}}',
+  accountRetryAt: 'Retry after {{time}}; this is a local safety window, not a provider recovery guarantee.',
   requests: 'Requests',
   allRequests: 'All requests',
   yourRequests: 'Your requests',

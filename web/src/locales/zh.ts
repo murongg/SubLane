@@ -905,8 +905,8 @@ export const zh: Record<keyof typeof en, string> = {
   accountScheduling: '调度设置',
   accountConcurrencyLimit: '模型请求并发上限',
   accountConcurrencyHint:
-    '允许此账号在所有账号池合计处理 1～8 个模型请求。满载时新请求最多等待 10 秒，每个账号池最多等待 8 个请求。降低上限不会中断正在执行的请求。',
-  accountConcurrencyInvalid: '请输入 1～8 之间的整数。',
+    '允许此账号在所有账号池合计处理 1～30 个模型请求。新账号默认 30，已有账号的设置保持不变。满载时新请求最多等待 10 秒，每个账号池最多等待 8 个请求。降低上限不会中断正在执行的请求。',
+  accountConcurrencyInvalid: '请输入 1～30 之间的整数。',
   lastAccountFailure: '最近调度失败',
   resumeAccountHint:
     '清除冷却后可再次参与调度；不会启用已停用账号，也不会更新授权。',
@@ -919,7 +919,7 @@ export const zh: Record<keyof typeof en, string> = {
   accountCooling: '冷却中',
   accountProbing: '恢复中',
   accountRetryReady: '可重试',
-  accountRetryAt: '可重试时间：{{time}}',
+  accountRetryAt: '可重试时间：{{time}}；这是本地保护窗口结束时间，不代表服务商一定恢复。',
   requests: '请求记录',
   allRequests: '全部请求',
   yourRequests: '我的请求记录',
