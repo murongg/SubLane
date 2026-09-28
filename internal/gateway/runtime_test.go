@@ -64,10 +64,17 @@ func TestAccountConcurrencySupportsThirtyAndPreservesLimitAcrossRestart(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	found := false
 	for _, state := range states {
-		if state.ID == ids["codex"] && state.MaxConcurrency != 30 {
-			t.Fatal("restart lost account concurrency", state.MaxConcurrency)
+		if state.ID == ids["codex"] {
+			found = true
+			if state.MaxConcurrency != 30 {
+				t.Fatal("restart lost account concurrency", state.MaxConcurrency)
+			}
 		}
+	}
+	if !found {
+		t.Fatal("restart lost the account runtime")
 	}
 }
 
