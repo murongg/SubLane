@@ -87,6 +87,7 @@ type observation struct {
 	schemeID           int64
 	allocationTracked  bool
 	upstreamDispatched bool
+	usageFinal         bool
 	sequence           int64
 	quotaReadStartedAt int64
 	quotaRevision      int64
@@ -192,28 +193,43 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 		}
 		// Admission must not observe released leases before the token charge commits.
 		defer s.mu.Unlock()
-		tx, err := s.db.BeginTx(ctx, nil)
-		if err == nil {
-			defer tx.Rollback()
-			q := s.queries.WithTx(tx)
-			err = e.settleAllocation(ctx, q)
-			if err == nil {
-				err = q.RecordRequest(ctx, e.record)
-			}
-			if err == nil {
-				err = recordStatistics(ctx, q, e.record)
-			}
-			if err == nil {
-				err = tx.Commit()
-			}
-		}
+		err := s.persistObservation(ctx, e)
 		if err != nil {
 			if e.allocationTracked {
-				s.allocationFailure = true
+				s.failedSettlements = append(s.failedSettlements, e)
 			}
 			slog.Error("Unable to persist request metadata")
 		}
 	})
+}
+
+func (s *Service) persistObservation(ctx context.Context, e *observation) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	if e.allocationTracked {
+		// A previous commit may have succeeded even if its caller saw an error.
+		recorded, err := q.RequestRecorded(ctx, e.record.RequestID)
+		if err != nil {
+			return err
+		}
+		if recorded {
+			return tx.Commit()
+		}
+	}
+	if err := e.settleAllocation(ctx, q); err != nil {
+		return err
+	}
+	if err := q.RecordRequest(ctx, e.record); err != nil {
+		return err
+	}
+	if err := recordStatistics(ctx, q, e.record); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {

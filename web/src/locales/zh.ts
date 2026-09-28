@@ -143,10 +143,12 @@ export const zh: Record<keyof typeof en, string> = {
     '用量已变化，或修正与此前结算冲突，请刷新后重试。',
   allocationPending: '用量待对账',
   allocationRiskLimit:
-    '当前请求的用量未确定，系统会暂占额度。请等已有请求结束后重试；待处理用量可请管理员修正。',
+    '进行中的请求较多或放行余量不足，请等进行中的请求结束后重试。待确认用量不会导致暂缓放行。',
   allocationRiskPaused: '新请求暂缓',
   allocationRiskExposure:
-    '本周期：{{inFlight}} 个进行中 · {{pending}} 个待确认用量 · 暂占 {{reserved}} {{unit}}',
+    '本周期：{{inFlight}} 个进行中 · 暂占 {{reserved}} {{unit}}',
+  allocationPendingCurrent:
+    '本周期有 {{pending}} 条待确认用量；未核实前不扣账，也不暂占额度。',
   allocationAdmissionRoom:
     '放行余量：{{room}} {{unit}}（含临时缓冲，不是额外额度）',
   allocationOlderPending:

@@ -151,10 +151,12 @@ export const en = {
     'Usage changed or the correction conflicts with a previous settlement. Refresh before retrying.',
   allocationPending: 'Usage pending reconciliation',
   allocationRiskLimit:
-    'Current requests reserve capacity until their usage is known. Retry after one finishes, or ask an administrator to correct pending usage.',
+    'Too many requests are in flight or admission headroom is low. Retry when an ongoing request finishes. Pending usage does not pause admission.',
   allocationRiskPaused: 'New requests temporarily paused',
   allocationRiskExposure:
-    'This cycle: {{inFlight}} in flight · {{pending}} awaiting usage · {{reserved}} {{unit}} temporarily reserved',
+    'This cycle: {{inFlight}} in flight · {{reserved}} {{unit}} temporarily reserved',
+  allocationPendingCurrent:
+    '{{pending}} awaiting usage this cycle; unconfirmed usage is not charged or reserved.',
   allocationAdmissionRoom:
     'Admission headroom: {{room}} {{unit}} (includes a temporary buffer, not added allowance).',
   allocationOlderPending:

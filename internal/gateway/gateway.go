@@ -57,7 +57,7 @@ type Service struct {
 	workers           sync.WaitGroup
 	closed            bool
 	allocationsReady  bool
-	allocationFailure bool
+	failedSettlements []*observation
 	sequence          int64
 	usage             *usageCache
 	catalog           *catalogCache
@@ -237,17 +237,33 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	upstreamCtx := ctx
+	var releaseUpstream func()
+	if entry.record.Provider == "codex" && kind != Compact {
+		upstreamCtx, releaseUpstream = drainingUpstreamContext(ctx, s.runContext, canceledStreamDrain)
+		defer func() {
+			if exchange == nil {
+				releaseUpstream()
+			}
+		}()
+	}
 	execute := func(c accounts.Credential) (*upstream.Stream, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if kind.IsGemini() {
-			return s.provider.Gemini(ctx, c, raw, outgoing, kind == GeminiStream)
+			return s.provider.Gemini(upstreamCtx, c, raw, outgoing, kind == GeminiStream)
 		}
 		if kind == Messages {
-			return s.provider.Messages(ctx, c, raw, outgoing)
+			return s.provider.Messages(upstreamCtx, c, raw, outgoing)
 		}
 		if kind == Chat {
-			return s.provider.Chat(ctx, c, raw, outgoing)
+			return s.provider.Chat(upstreamCtx, c, raw, outgoing)
 		}
-		return s.provider.Responses(ctx, c, raw, outgoing, kind == Compact)
+		return s.provider.Responses(upstreamCtx, c, raw, outgoing, kind == Compact)
 	}
 	if entry.record.Provider == "codex" {
 		row, err := s.queries.GetAccountUsage(ctx, id)
@@ -279,7 +295,29 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if result.StatusCode >= 200 && result.StatusCode < 300 {
 		_ = s.accounts.RecordUse(ctx, id, credential.AccessToken, true)
 	}
-	return trackExchange(result, entry), nil
+	return trackExchange(result, entry, upstreamCtx, releaseUpstream), nil
+}
+
+func drainingUpstreamContext(clientCtx, runCtx context.Context, grace time.Duration) (context.Context, func()) {
+	base := context.WithoutCancel(clientCtx)
+	var upstreamCtx context.Context
+	var cancel context.CancelFunc
+	if deadline, ok := clientCtx.Deadline(); ok {
+		upstreamCtx, cancel = context.WithDeadline(base, deadline)
+	} else {
+		upstreamCtx, cancel = context.WithCancel(base)
+	}
+	stopClient := context.AfterFunc(clientCtx, func() {
+		timer := time.NewTimer(grace)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			cancel()
+		case <-upstreamCtx.Done():
+		}
+	})
+	stopRuntime := context.AfterFunc(runCtx, cancel)
+	return upstreamCtx, func() { stopClient(); stopRuntime(); cancel() }
 }
 
 // Account reads share the same refresh owner and stale-token rejection rules as forwarding.
