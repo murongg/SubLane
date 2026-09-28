@@ -1014,11 +1014,14 @@ export const en = {
   saveAccountScheduling: 'Save settings',
   runtimeLoadFailed: 'Scheduling status is temporarily unavailable.',
   accountInFlight: 'Concurrent: {{active}} / {{limit}}',
-  accountCooling: 'Cooling down',
+  accountCooling: 'Scheduling paused',
+  accountCoolingReason: 'Reason: {{reason}}',
+  accountCoolingHint:
+    'Active requests continue. New requests use another account when possible and retry this account after the safety window.',
   accountProbing: 'Recovering',
   accountRetryReady: 'Ready to retry',
   accountRetryAt:
-    'Retry after {{time}}; this is a local safety window, not a provider recovery guarantee.',
+    'Retry after {{time}} (about {{seconds}} seconds); this is a local safety window, not a provider recovery guarantee.',
   requests: 'Requests',
   allRequests: 'All requests',
   yourRequests: 'Your requests',

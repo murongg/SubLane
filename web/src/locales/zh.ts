@@ -916,11 +916,14 @@ export const zh: Record<keyof typeof en, string> = {
   saveAccountScheduling: '保存设置',
   runtimeLoadFailed: '暂时无法获取账号调度状态。',
   accountInFlight: '并发：{{active}} / {{limit}}',
-  accountCooling: '冷却中',
+  accountCooling: '暂缓调度',
+  accountCoolingReason: '原因：{{reason}}',
+  accountCoolingHint:
+    '正在执行的请求不会中断。新请求会优先使用其他可用账号，并在保护窗口结束后重试此账号。',
   accountProbing: '恢复中',
   accountRetryReady: '可重试',
   accountRetryAt:
-    '可重试时间：{{time}}；这是本地保护窗口结束时间，不代表服务商一定恢复。',
+    '可重试时间：{{time}}（约 {{seconds}} 秒后）；这是本地保护窗口结束时间，不代表服务商一定恢复。',
   requests: '请求记录',
   allRequests: '全部请求',
   yourRequests: '我的请求记录',
