@@ -1003,7 +1003,7 @@ export const en = {
   accountScheduling: 'Scheduling settings',
   accountConcurrencyLimit: 'Concurrent model requests',
   accountConcurrencyHint:
-    'Allow 1–8 active model requests for this account across all pools. Lowering the limit lets existing requests finish.',
+    'Allow 1–8 active model requests for this account across all pools. When full, new requests wait up to 10 seconds, with at most 8 waiting per pool. Lowering the limit lets existing requests finish.',
   accountConcurrencyInvalid: 'Enter a whole number from 1 to 8.',
   lastAccountFailure: 'Last scheduling failure',
   resumeAccountHint:
@@ -1062,6 +1062,8 @@ export const en = {
   reasonInterrupted: 'Stream interrupted',
   reasonCanceled: 'Client disconnected',
   reasonAccountBusy: 'Account at capacity',
+  reasonAccountQueueFull: 'Account waiting queue is full',
+  reasonAccountWaitTimeout: 'Timed out waiting for account capacity',
   reasonCooling: 'Account cooling down',
   reasonAccountUnavailable: 'Account unavailable',
   reasonGroupUnavailable: 'Pool access unavailable',

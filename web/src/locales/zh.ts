@@ -905,7 +905,7 @@ export const zh: Record<keyof typeof en, string> = {
   accountScheduling: '调度设置',
   accountConcurrencyLimit: '模型请求并发上限',
   accountConcurrencyHint:
-    '允许此账号在所有账号池合计处理 1～8 个模型请求。降低上限不会中断正在执行的请求。',
+    '允许此账号在所有账号池合计处理 1～8 个模型请求。满载时新请求最多等待 10 秒，每个账号池最多等待 8 个请求。降低上限不会中断正在执行的请求。',
   accountConcurrencyInvalid: '请输入 1～8 之间的整数。',
   lastAccountFailure: '最近调度失败',
   resumeAccountHint:
@@ -962,6 +962,8 @@ export const zh: Record<keyof typeof en, string> = {
   reasonInterrupted: '响应流中断',
   reasonCanceled: '客户端已断开',
   reasonAccountBusy: '账号并发已满',
+  reasonAccountQueueFull: '账号等待队列已满',
+  reasonAccountWaitTimeout: '等待账号空位超时',
   reasonCooling: '账号正在冷却',
   reasonAccountUnavailable: '账号不可用',
   reasonGroupUnavailable: '账号池权限不可用',

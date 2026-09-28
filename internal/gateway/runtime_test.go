@@ -48,6 +48,7 @@ func syntheticStream() *http.Response {
 func TestAccountLeaseCoversStreamAndRejectsStickyOverload(t *testing.T) {
 	ctx := context.Background()
 	service, ids := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
+	service.accountWaitTimeout = time.Millisecond
 	if err := service.SetConcurrency(ctx, ids["codex"], 1); err != nil {
 		t.Fatal(err)
 	}
@@ -109,6 +110,7 @@ func TestRateLimitCooldownSurvivesRestartAndOnlyOneRecoveryProbe(t *testing.T) {
 	}
 	response.Body.Close()
 	restarted := New(ctx, service.db, service.accounts, service.provider)
+	restarted.accountWaitTimeout = time.Millisecond
 	defer restarted.Close()
 	restarted.now = service.now
 	if _, err := restarted.Open(ctx, 1, 1, raw, nil, Responses); !errors.Is(err, ErrAccountCooling) {

@@ -107,7 +107,6 @@ func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (
 		return nil, context.Canceled
 	}
 	s.workers.Add(1)
-	s.sequence++
 	operation, cancel := context.WithCancel(ctx)
 	identity, _ := ctx.Value(requestKey{}).(requestIdentity)
 	if identity.RequestID == "" {
@@ -127,7 +126,7 @@ func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (
 		name = "gemini"
 	}
 	started := s.now()
-	return &observation{kind: kind, sequence: s.sequence, service: s, ctx: operation, cancel: cancel, stopParent: context.AfterFunc(s.runContext, cancel), started: started, record: db.RecordRequestParams{RequestID: identity.RequestID, UserID: userID, GroupID: groupID, KeyID: identity.KeyID, Transport: identity.Transport, Operation: name, StartedAt: started.Unix()}}, nil
+	return &observation{kind: kind, service: s, ctx: operation, cancel: cancel, stopParent: context.AfterFunc(s.runContext, cancel), started: started, record: db.RecordRequestParams{RequestID: identity.RequestID, UserID: userID, GroupID: groupID, KeyID: identity.KeyID, Transport: identity.Transport, Operation: name, StartedAt: started.Unix()}}, nil
 }
 func (e *observation) finish(outcome, code, penalty, retry string) {
 	e.once.Do(func() {
@@ -200,6 +199,9 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 			}
 			slog.Error("Unable to persist request metadata")
 		}
+		if e.leased {
+			s.notifyCapacity()
+		}
 	})
 }
 
@@ -253,6 +255,8 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 		return "error", "allocation_accounting_unavailable", ""
 	case errors.Is(err, ErrQuotaExhausted):
 		return "rejected", "quota_exhausted", ""
+	case errors.Is(err, ErrAccountQueueFull), errors.Is(err, ErrAccountWaitTimeout):
+		return "rejected", err.Error(), ""
 	case errors.Is(err, ErrAccountBusy):
 		return "rejected", "account_busy", ""
 	case errors.Is(err, ErrAccountCooling):
