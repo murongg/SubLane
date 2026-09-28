@@ -919,7 +919,8 @@ export const zh: Record<keyof typeof en, string> = {
   accountCooling: '冷却中',
   accountProbing: '恢复中',
   accountRetryReady: '可重试',
-  accountRetryAt: '可重试时间：{{time}}；这是本地保护窗口结束时间，不代表服务商一定恢复。',
+  accountRetryAt:
+    '可重试时间：{{time}}；这是本地保护窗口结束时间，不代表服务商一定恢复。',
   requests: '请求记录',
   allRequests: '全部请求',
   yourRequests: '我的请求记录',

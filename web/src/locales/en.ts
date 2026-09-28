@@ -1017,7 +1017,8 @@ export const en = {
   accountCooling: 'Cooling down',
   accountProbing: 'Recovering',
   accountRetryReady: 'Ready to retry',
-  accountRetryAt: 'Retry after {{time}}; this is a local safety window, not a provider recovery guarantee.',
+  accountRetryAt:
+    'Retry after {{time}}; this is a local safety window, not a provider recovery guarantee.',
   requests: 'Requests',
   allRequests: 'All requests',
   yourRequests: 'Your requests',
