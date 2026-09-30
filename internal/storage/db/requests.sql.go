@@ -62,7 +62,7 @@ func (q *Queries) ListRequestCallers(ctx context.Context, arg ListRequestCallers
 }
 
 const listRequests = `-- name: ListRequests :many
-SELECT r.id, r.user_id, r.key_id, r.group_id, r.account_id, r.provider, r.model, r.transport, r.operation, r.started_at, r.duration_ms, r.outcome, r.error_code, r.upstream_status, r.input_tokens, r.output_tokens, r.cached_tokens, r.request_id, r.first_token_ms, r.reasoning_effort,COALESCE(u.username,'') AS username,COALESCE(k.name,'') AS key_name,COALESCE(g.name,'') AS group_name,COALESCE(a.name,'') AS account_name
+SELECT r.id, r.user_id, r.key_id, r.group_id, r.account_id, r.provider, r.model, r.transport, r.operation, r.started_at, r.duration_ms, r.outcome, r.error_code, r.upstream_status, r.input_tokens, r.output_tokens, r.cached_tokens, r.request_id, r.first_token_ms, r.reasoning_effort, r.content_mode, r.content_revision, r.content_rule_ids, r.content_check_failed,COALESCE(u.username,'') AS username,COALESCE(k.name,'') AS key_name,COALESCE(g.name,'') AS group_name,COALESCE(a.name,'') AS account_name
 FROM request_records r LEFT JOIN users u ON u.id=r.user_id LEFT JOIN api_keys k ON k.id=r.key_id LEFT JOIN account_groups g ON g.id=r.group_id LEFT JOIN accounts a ON a.id=r.account_id
 WHERE g.tenant_id=?1
  AND (r.user_id=?2 OR ?2=0) AND (r.id<?3 OR ?3=0) AND (r.account_id=?4 OR ?4='') AND (r.outcome=?5 OR ?5='') AND r.started_at>=?6
@@ -89,30 +89,34 @@ type ListRequestsParams struct {
 }
 
 type ListRequestsRow struct {
-	ID              int64
-	UserID          int64
-	KeyID           int64
-	GroupID         int64
-	AccountID       string
-	Provider        string
-	Model           string
-	Transport       string
-	Operation       string
-	StartedAt       int64
-	DurationMs      int64
-	Outcome         string
-	ErrorCode       string
-	UpstreamStatus  *int64
-	InputTokens     *int64
-	OutputTokens    *int64
-	CachedTokens    *int64
-	RequestID       string
-	FirstTokenMs    *int64
-	ReasoningEffort string
-	Username        string
-	KeyName         string
-	GroupName       string
-	AccountName     string
+	ID                 int64
+	UserID             int64
+	KeyID              int64
+	GroupID            int64
+	AccountID          string
+	Provider           string
+	Model              string
+	Transport          string
+	Operation          string
+	StartedAt          int64
+	DurationMs         int64
+	Outcome            string
+	ErrorCode          string
+	UpstreamStatus     *int64
+	InputTokens        *int64
+	OutputTokens       *int64
+	CachedTokens       *int64
+	RequestID          string
+	FirstTokenMs       *int64
+	ReasoningEffort    string
+	ContentMode        string
+	ContentRevision    int64
+	ContentRuleIds     string
+	ContentCheckFailed int64
+	Username           string
+	KeyName            string
+	GroupName          string
+	AccountName        string
 }
 
 func (q *Queries) ListRequests(ctx context.Context, arg ListRequestsParams) ([]ListRequestsRow, error) {
@@ -157,6 +161,10 @@ func (q *Queries) ListRequests(ctx context.Context, arg ListRequestsParams) ([]L
 			&i.RequestID,
 			&i.FirstTokenMs,
 			&i.ReasoningEffort,
+			&i.ContentMode,
+			&i.ContentRevision,
+			&i.ContentRuleIds,
+			&i.ContentCheckFailed,
 			&i.Username,
 			&i.KeyName,
 			&i.GroupName,
@@ -193,30 +201,34 @@ func (q *Queries) PruneRequests(ctx context.Context, beforeTime int64) (int64, e
 }
 
 const recordRequest = `-- name: RecordRequest :exec
-INSERT INTO request_records(user_id,key_id,group_id,account_id,provider,model,transport,operation,started_at,duration_ms,outcome,error_code,upstream_status,input_tokens,output_tokens,cached_tokens,request_id,first_token_ms,reasoning_effort)
-VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
+INSERT INTO request_records(user_id,key_id,group_id,account_id,provider,model,transport,operation,started_at,duration_ms,outcome,error_code,upstream_status,input_tokens,output_tokens,cached_tokens,request_id,first_token_ms,reasoning_effort,content_mode,content_revision,content_rule_ids,content_check_failed)
+VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,COALESCE(NULLIF(?22,''),'[]'),?23)
 `
 
 type RecordRequestParams struct {
-	UserID          int64
-	KeyID           int64
-	GroupID         int64
-	AccountID       string
-	Provider        string
-	Model           string
-	Transport       string
-	Operation       string
-	StartedAt       int64
-	DurationMs      int64
-	Outcome         string
-	ErrorCode       string
-	UpstreamStatus  *int64
-	InputTokens     *int64
-	OutputTokens    *int64
-	CachedTokens    *int64
-	RequestID       string
-	FirstTokenMs    *int64
-	ReasoningEffort string
+	UserID             int64
+	KeyID              int64
+	GroupID            int64
+	AccountID          string
+	Provider           string
+	Model              string
+	Transport          string
+	Operation          string
+	StartedAt          int64
+	DurationMs         int64
+	Outcome            string
+	ErrorCode          string
+	UpstreamStatus     *int64
+	InputTokens        *int64
+	OutputTokens       *int64
+	CachedTokens       *int64
+	RequestID          string
+	FirstTokenMs       *int64
+	ReasoningEffort    string
+	ContentMode        string
+	ContentRevision    int64
+	ContentRuleIds     interface{}
+	ContentCheckFailed int64
 }
 
 func (q *Queries) RecordRequest(ctx context.Context, arg RecordRequestParams) error {
@@ -240,6 +252,10 @@ func (q *Queries) RecordRequest(ctx context.Context, arg RecordRequestParams) er
 		arg.RequestID,
 		arg.FirstTokenMs,
 		arg.ReasoningEffort,
+		arg.ContentMode,
+		arg.ContentRevision,
+		arg.ContentRuleIds,
+		arg.ContentCheckFailed,
 	)
 	return err
 }

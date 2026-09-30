@@ -17,3 +17,13 @@ it('never offers administrator actions to members or unknown errors', () => {
   )
   expect(requestRecovery('unknown', true).to).toBeUndefined()
 })
+
+it('routes content failures to workspace rules only for administrators', () => {
+  expect(requestRecovery('content_policy_blocked', true).to).toBe(
+    '/admin/content',
+  )
+  expect(requestRecovery('content_policy_blocked', false).to).toBeUndefined()
+  expect(requestRecovery('content_check_unavailable', false).hint).toBe(
+    'recoveryContentUnavailable',
+  )
+})

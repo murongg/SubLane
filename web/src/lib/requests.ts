@@ -74,6 +74,14 @@ const recordSchema = z.object({
   key_name: z.string(),
   group_name: z.string(),
   account_name: z.string(),
+  content: z
+    .object({
+      mode: z.enum(['', 'observe', 'block']),
+      revision: z.number().int().nonnegative(),
+      rule_ids: z.array(z.string().max(64)).max(50),
+      check_failed: z.boolean(),
+    })
+    .optional(),
 })
 export type RequestRecord = z.infer<typeof recordSchema>
 export type RequestFilters = {

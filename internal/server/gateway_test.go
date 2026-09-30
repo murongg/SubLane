@@ -18,6 +18,7 @@ import (
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage"
@@ -39,6 +40,7 @@ type forwardFixture struct {
 	groups        *groups.Service
 	accounts      *accounts.Service
 	forwarding    *gateway.Service
+	content       *content.Service
 }
 
 func newForwardFixture(t *testing.T, handler http.HandlerFunc) forwardFixture {
@@ -120,9 +122,11 @@ func newForwardingFixture(t *testing.T, provider string, handler http.HandlerFun
 		t.Fatal(err)
 	}
 	forwarding := gateway.New(ctx, db, service, client)
+	rules := content.New(db, key, 1)
+	forwarding.SetContent(rules)
 	t.Cleanup(forwarding.Close)
 	pools := groups.New(db)
-	server := httptest.NewUnstartedServer(New(Options{Groups: pools, Auth: identity, Keys: keys, Accounts: service, Gateway: forwarding, Ping: db.PingContext}))
+	server := httptest.NewUnstartedServer(New(Options{Groups: pools, Auth: identity, Keys: keys, Accounts: service, Gateway: forwarding, Content: rules, Ping: db.PingContext}))
 	upgrades := &atomic.Int32{}
 	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
 		if state == http.StateHijacked {
@@ -131,7 +135,7 @@ func newForwardingFixture(t *testing.T, provider string, handler http.HandlerFun
 	}
 	server.Start()
 	t.Cleanup(server.Close)
-	return forwardFixture{groups: pools, accounts: service, forwarding: forwarding, server: server, upgrades: upgrades, secret: created.Secret, keyID: created.Key.ID, userID: member.ID, keys: keys, identity: identity}
+	return forwardFixture{groups: pools, accounts: service, forwarding: forwarding, content: rules, server: server, upgrades: upgrades, secret: created.Secret, keyID: created.Key.ID, userID: member.ID, keys: keys, identity: identity}
 }
 
 func TestGatewayLargeRequests(t *testing.T) {

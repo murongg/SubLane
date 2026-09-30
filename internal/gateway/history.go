@@ -13,6 +13,7 @@ import (
 
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/allocations"
+	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/upstream"
@@ -90,6 +91,7 @@ type observation struct {
 	usageFinal         bool
 	sequence           int64
 	quotaReadStartedAt int64
+	suppressModel      bool
 	quotaRevision      int64
 	quota              *upstream.Usage
 	modelState         *modelRuntime
@@ -259,15 +261,23 @@ func (s *Service) persistObservation(ctx context.Context, e *observation) error 
 	if err := e.settleAllocation(ctx, q); err != nil {
 		return err
 	}
-	if err := q.RecordRequest(ctx, e.record); err != nil {
+	record := e.record
+	// Keep the execution model for allowance settlement, but never persist a matched model value.
+	if e.suppressModel {
+		record.Model = ""
+	}
+	if err := q.RecordRequest(ctx, record); err != nil {
 		return err
 	}
-	if err := recordStatistics(ctx, q, e.record); err != nil {
+	if err := recordStatistics(ctx, q, record); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 func classify(ctx context.Context, err error) (outcome, code, penalty string) {
+	if errors.Is(err, content.ErrBlocked) || errors.Is(err, content.ErrUnavailable) {
+		return "rejected", err.Error(), ""
+	}
 	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
 		return "canceled", "client_disconnected", ""
 	}

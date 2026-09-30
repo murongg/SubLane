@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/murongg/SubLane/internal/gateway"
@@ -41,7 +40,7 @@ func geminiErrorBody(status int, code string) map[string]any {
 	case status >= 400 && status < 500:
 		name = "INVALID_ARGUMENT"
 	}
-	return map[string]any{"error": map[string]any{"code": status, "status": name, "message": strings.ReplaceAll(code, "_", " ")}}
+	return map[string]any{"error": map[string]any{"code": status, "status": name, "message": gatewayErrorMessage(code)}}
 }
 
 func writeGeminiError(w http.ResponseWriter, status int, code string) {

@@ -1,4 +1,65 @@
 export const en = {
+  contentTitle: 'Content rules',
+  contentDescription:
+    'Check outgoing request text against workspace terms and regular expressions. Matching content is encrypted and stays hidden.',
+  contentWorkspacePolicy: 'Workspace policy',
+  contentOff: 'Off',
+  contentObserve: 'Observe',
+  contentBlock: 'Block',
+  contentMode: 'Handling mode',
+  contentText: 'Text contains',
+  contentRegex: 'Regular expression',
+  contentKind: 'Match type',
+  contentRuleName: 'Rule name',
+  contentPattern: 'Matching content',
+  contentRuleEnabled: 'Enabled',
+  contentRuleDisabled: 'Disabled',
+  contentEnableRule: 'Enable this rule',
+  contentOffHint:
+    'Checks are off. Requests are forwarded without content checks.',
+  contentObserveHint:
+    'Matches appear in request diagnostics. Requests still go upstream, including matching content.',
+  contentBlockHint:
+    'Matching requests are rejected before dispatch. An incomplete check also prevents forwarding.',
+  contentScope:
+    'Checks cover JSON text, including conversation history and tool outputs. Images, binary attachments and encoded secrets are not decoded. Rule matches and policy versions are retained with request diagnostics; request bodies are never saved.',
+  contentEmpty: 'No rules configured.',
+  contentConfigure: 'Configure rules',
+  contentSaved: 'Content rules saved.',
+  contentAdd: 'Add rule',
+  contentRemove: 'Remove rule',
+  contentNewRule: 'New rule',
+  contentKeepPattern: 'Leave blank to keep the saved content',
+  contentTextHint:
+    'Case-sensitive text matching. Use a specific value; broad terms such as api_key can match ordinary code. Keep secrets out of the rule name.',
+  contentRegexHint:
+    'Uses Go RE2 syntax; lookaround and backreferences are unsupported. Use (?i) for case-insensitive matching. Empty matches are rejected.',
+  contentLimits:
+    'Up to 50 rules, 64 bytes per name and 1,024 bytes per expression. Checks cover up to 8 MiB of JSON and 64 nesting levels. Larger or deeper requests have an incomplete check. Changes apply to subsequent checks, including existing WebSocket conversations.',
+  contentTestTitle: 'Test this rule',
+  contentSample: 'Test sample',
+  contentTest: 'Test rule',
+  contentSampleHint:
+    'Test one rule without forwarding to a model. Samples are not stored and clear after testing.',
+  contentMatched: 'Sample matched.',
+  contentNotMatched: 'Sample did not match.',
+  contentInvalid:
+    'Check the rule types, names, patterns and limits. Invalid rules were not saved.',
+  contentConflict:
+    'Rules changed in another session. Refresh before editing again.',
+  contentUnavailable: 'Could not load or check content rules. Try again.',
+  reasonContentBlocked: 'Blocked by content rules',
+  reasonContentUnavailable: 'Content check unavailable',
+  requestContent: 'Content check',
+  requestContentRules: 'Matched rule IDs',
+  requestContentRevision: 'Policy version',
+  requestContentPassed: 'No matches',
+  requestContentFailed: 'Check incomplete',
+  recoveryContent:
+    'Remove sensitive text from the request and its conversation history, or ask your workspace administrator to review the rules. This request was not sent upstream.',
+  recoveryContentUnavailable:
+    'Content checks could not finish. Retry or ask your workspace administrator to check the policy.',
+
   availabilityTitle: 'Pool model availability',
   availabilityModel: 'Model ID to inspect',
   availabilityInspect: 'Inspect {{model}}',

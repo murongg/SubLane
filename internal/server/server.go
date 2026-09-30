@@ -17,6 +17,7 @@ import (
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/oauth"
@@ -36,6 +37,7 @@ type Options struct {
 	Ping              func(context.Context) error
 	Audit             *audit.Service
 	Alerts            *alerts.Service
+	Content           *content.Service
 	Auth              *auth.Service
 	Keys              *apikey.Service
 	Accounts          *accounts.Service
@@ -212,6 +214,7 @@ func New(o Options) http.Handler {
 		})
 		management.Get("/usage", memberManagement.usage)
 		management.Route("/alerts", (&alertHTTP{service: o.Alerts, tenantID: tenantID}).register)
+		management.Route("/content", (&contentHTTP{service: o.Content}).register)
 		management.Get("/audit", (&auditHTTP{service: o.Audit}).list)
 		management.Route("/settings/backup", func(settings chi.Router) {
 			settings.Use(requirePlatformAdmin(tenantID))

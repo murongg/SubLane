@@ -19,6 +19,8 @@ SELECT count(*) FROM (
       OR octet_length(credential) > 262144
     UNION ALL
     SELECT 1 FROM api_keys WHERE octet_length(encrypted_secret) > 512 OR octet_length(token_hash) > 32
+    UNION ALL
+    SELECT 1 FROM tenants WHERE octet_length(content_config)>131072
     LIMIT 1
 )
 `

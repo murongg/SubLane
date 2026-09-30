@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/murongg/SubLane/internal/gateway"
 )
@@ -35,7 +34,7 @@ func messagesErrorBody(w http.ResponseWriter, status int, code string) map[strin
 	case status >= 400 && status < 500:
 		kind = "invalid_request_error"
 	}
-	return map[string]any{"type": "error", "error": map[string]string{"type": kind, "message": strings.ReplaceAll(code, "_", " ")}, "request_id": w.Header().Get("Request-Id")}
+	return map[string]any{"type": "error", "error": map[string]string{"type": kind, "message": gatewayErrorMessage(code)}, "request_id": w.Header().Get("Request-Id")}
 }
 
 func writeMessagesError(w http.ResponseWriter, status int, code string) {

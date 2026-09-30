@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/pricing"
 	"github.com/murongg/SubLane/internal/storage/db"
@@ -66,7 +67,10 @@ type Service struct {
 	catalog            *catalogCache
 	pricing            *pricing.Service
 	timeZone           *timezone.Service
+	content            *content.Service
 }
+
+func (s *Service) SetContent(rules *content.Service) { s.content = rules }
 
 func (s *Service) SetTimeZone(zone *timezone.Service) { s.timeZone = zone }
 func (s *Service) location() *time.Location {
@@ -139,6 +143,10 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	}
 	entry.record.Model = model
 	entry.record.ReasoningEffort = requestReasoningEffort(input, kind)
+	// Inspect before later validation can publish client-supplied model metadata on a failure.
+	if err := s.checkContent(ctx, entry, raw); err != nil {
+		return nil, err
+	}
 	requestedModel := model
 	provider, model := groups.SplitModel(model)
 	if model == "" || len(model) > 128 {

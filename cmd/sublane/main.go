@@ -18,6 +18,7 @@ import (
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/config"
+	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/demo"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/pricing"
@@ -96,6 +97,9 @@ func run() error {
 	cipher, err := openVault(ctx, db, cfg.DataDir)
 	if err != nil {
 		return err
+	}
+	if err := content.New(db, cipher, 1).Verify(ctx); err != nil {
+		return fmt.Errorf("verify workspace content rules: %w", err)
 	}
 	keys := apikey.New(db, cipher)
 	notifications := alerts.New(db, cipher, nil)

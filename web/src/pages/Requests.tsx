@@ -360,6 +360,17 @@ function RequestTable({
                           ` · ${item.upstream_status}`}
                       </p>
                     )}
+                    {item.content &&
+                      (item.content.rule_ids.length > 0 ||
+                        item.content.check_failed) && (
+                        <p className="mt-1 text-xs text-warning">
+                          {t(
+                            item.content.check_failed
+                              ? 'requestContentFailed'
+                              : 'contentTitle',
+                          )}
+                        </p>
+                      )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 tabular-nums">
                     {numbers.format(item.duration_ms)} ms

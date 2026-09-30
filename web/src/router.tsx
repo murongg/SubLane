@@ -24,6 +24,11 @@ const settings = createRoute({
 const routes = root.addChildren([
   createRoute({
     getParentRoute: () => root,
+    path: '/admin/content',
+    component: lazyRouteComponent(() => import('@/pages/Content'), 'Content'),
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: '/pricing',
     component: lazyRouteComponent(() => import('@/pages/Pricing'), 'Pricing'),
   }),

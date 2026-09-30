@@ -15,6 +15,7 @@ import (
 	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/capacity"
+	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/oauth"
@@ -107,6 +108,8 @@ func (r *tenantRegistry) acquire(id int64) *tenantRuntime {
 	}
 	accountService := accounts.NewForTenant(r.db, r.vault, id)
 	forwarding := gateway.NewForTenant(r.ctx, r.db, accountService, r.provider, id, r.pricing)
+	rules := content.New(r.db, r.vault, id)
+	forwarding.SetContent(rules)
 	forwarding.SetTimeZone(r.timeZone)
 	dataDir := ""
 	var codexVersions *versions.Service
@@ -117,8 +120,9 @@ func (r *tenantRegistry) acquire(id int64) *tenantRuntime {
 	handler := server.New(server.Options{
 		DataDir: dataDir, Assets: r.assets, Version: r.version, StartedAt: r.started,
 		Ping: r.db.PingContext, Audit: audit.NewForTenant(r.db, id), Auth: r.auth,
-		Alerts: r.alerts,
-		Keys:   apikey.NewForTenant(r.db, r.vault, id), Accounts: accountService,
+		Alerts:  r.alerts,
+		Content: rules,
+		Keys:    apikey.NewForTenant(r.db, r.vault, id), Accounts: accountService,
 		OAuth: oauth.New(accountService, r.provider), Gateway: forwarding, Pricing: r.pricing,
 		Groups: groups.NewForTenant(r.db, id), Tenants: r.tenants, TenantID: id,
 		PublicURL: r.publicURL, TrustedProxies: r.trustedProxies, LoginLimiter: r.loginLimiter, EnrollmentLimiter: r.enrollmentLimiter,

@@ -12,6 +12,9 @@ func (e *observation) log(level slog.Level, message, code string) {
 		return
 	}
 	r := e.record
+	if e.suppressModel {
+		r.Model = ""
+	}
 	attrs := []slog.Attr{
 		slog.String("request_id", r.RequestID), slog.Int64("tenant_id", e.service.tenantID),
 		slog.Int64("user_id", r.UserID), slog.Int64("key_id", r.KeyID), slog.Int64("group_id", r.GroupID),
