@@ -1,4 +1,13 @@
 export const en = {
+  contentDetails: 'Scope and limits',
+  contentScanLimit: 'Scan limit',
+  contentScanSummary: '8 MiB JSON · 64 nesting levels',
+  contentRulesLabel: 'Rules',
+  contentEnabledCount: '{{enabled}} of {{count}} enabled',
+  contentRuleCount: '{{count}} / 50 rules',
+  contentRuleStatus: 'Status',
+  contentEmptyHint:
+    'Add a specific term or expression to check outgoing request text.',
   contentTitle: 'Content rules',
   contentDescription:
     'Check outgoing request text against workspace terms and regular expressions. Matching content is encrypted and stays hidden.',

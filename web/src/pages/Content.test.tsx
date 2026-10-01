@@ -59,8 +59,21 @@ it('saves rules without caching patterns and tests a sample without retaining it
   expect(
     (screen.getByLabelText('Test sample') as HTMLTextAreaElement).value,
   ).toBe('')
-  await user.click(screen.getByRole('button', { name: 'Off' }))
-  await user.click(screen.getByRole('menuitemradio', { name: 'Block' }))
+  expect(
+    (
+      screen.getByRole('radio', {
+        name: 'Off',
+      }) as HTMLInputElement
+    ).checked,
+  ).toBe(true)
+  await user.click(screen.getByRole('radio', { name: 'Block' }))
+  expect(
+    (
+      screen.getByRole('radio', {
+        name: 'Block',
+      }) as HTMLInputElement
+    ).checked,
+  ).toBe(true)
   await user.click(screen.getByRole('button', { name: 'Save changes' }))
   expect(await screen.findByText('Content rules saved.')).toBeTruthy()
   expect(saved).toEqual([
@@ -104,11 +117,11 @@ it('preserves a saved pattern on metadata edits and reports stale configuration'
         new Response(
           JSON.stringify({
             mode: 'observe',
-            revision: 3,
+            revision: saved.length ? 4 : 3,
             rules: [
               {
                 id: 'rule_synthetic',
-                name: 'Synthetic rule',
+                name: saved.length ? 'External rule' : 'Synthetic rule',
                 kind: 'text',
                 enabled: true,
               },
@@ -133,10 +146,11 @@ it('preserves a saved pattern on metadata edits and reports stale configuration'
   await user.clear(screen.getByLabelText('Rule name'))
   await user.type(screen.getByLabelText('Rule name'), 'Renamed rule')
   await user.click(screen.getByRole('button', { name: 'Save changes' }))
-  expect(await screen.findByRole('alert')).toHaveProperty(
-    'textContent',
-    'Rules changed in another session. Refresh before editing again.',
-  )
+  expect(
+    await screen.findByText(
+      'Rules changed in another session. Refresh before editing again.',
+    ),
+  ).toBeTruthy()
   expect(saved).toEqual([
     {
       mode: 'observe',
@@ -155,6 +169,10 @@ it('preserves a saved pattern on metadata edits and reports stale configuration'
   expect(
     await screen.findByRole('button', { name: 'Configure rules' }),
   ).toBeTruthy()
+  await user.click(screen.getByRole('button', { name: 'Configure rules' }))
+  expect((screen.getByLabelText('Rule name') as HTMLInputElement).value).toBe(
+    'External rule',
+  )
 })
 
 it('does not fetch management configuration for a member', () => {

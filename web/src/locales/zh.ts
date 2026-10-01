@@ -1,6 +1,14 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  contentDetails: '检查范围与限制',
+  contentScanLimit: '扫描上限',
+  contentScanSummary: '8 MiB JSON · 64 层嵌套',
+  contentRulesLabel: '规则列表',
+  contentEnabledCount: '{{count}} 条规则 · {{enabled}} 条启用',
+  contentRuleCount: '{{count}} / 50 条规则',
+  contentRuleStatus: '状态',
+  contentEmptyHint: '添加具体词条或正则，开始检查待发送的请求文本。',
   contentTitle: '内容规则',
   contentDescription:
     '按工作空间词条和正则检查待发送的请求文本。匹配内容加密保存，不会在列表中显示。',

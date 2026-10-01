@@ -1,7 +1,14 @@
 import { useId, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown } from 'lucide-react'
+import {
+  ChevronDown,
+  Info,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  SlidersHorizontal,
+} from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import {
   contentOptions,
@@ -34,6 +41,97 @@ export function Content() {
   ) : null
 }
 
+function ContentHeader({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation()
+  return (
+    <header className="flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-0 max-w-2xl flex-1 basis-72">
+        <h1 className="page-title">{t('contentTitle')}</h1>
+        <p className="page-description">{t('contentDescription')}</p>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {children}
+      </div>
+    </header>
+  )
+}
+
+function ContentNotes() {
+  const { t } = useTranslation()
+  return (
+    <details className="group border-t border-border pt-4 text-sm">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+        <Info className="size-4 text-muted-foreground" aria-hidden="true" />
+        {t('contentDetails')}
+        <ChevronDown
+          className="ml-auto size-4 text-muted-foreground group-open:rotate-180"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="max-w-3xl space-y-3 pb-2 pt-3 leading-6 text-muted-foreground">
+        <p>{t('contentScope')}</p>
+        <p>{t('contentLimits')}</p>
+      </div>
+    </details>
+  )
+}
+
+function PolicyInfo({
+  mode,
+  revision,
+  children,
+}: {
+  mode: ContentState['mode']
+  revision: number
+  children?: React.ReactNode
+}) {
+  const { t } = useTranslation()
+  return (
+    <aside className="space-y-4 border-b border-border pb-6 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">{t('contentWorkspacePolicy')}</h2>
+        {!children && (
+          <Status
+            kind={
+              mode === 'block'
+                ? 'warning'
+                : mode === 'observe'
+                  ? 'info'
+                  : 'neutral'
+            }
+          >
+            {t(contentModeKeys[mode])}
+          </Status>
+        )}
+      </div>
+      <div className="space-y-3">
+        {children}
+        <p className="text-sm leading-6 text-muted-foreground">
+          {t(
+            mode === 'observe'
+              ? 'contentObserveHint'
+              : mode === 'block'
+                ? 'contentBlockHint'
+                : 'contentOffHint',
+          )}
+        </p>
+      </div>
+      <dl className="grid grid-cols-2 gap-4 border-t border-border pt-4 text-sm lg:block lg:space-y-3">
+        <div className="space-y-1.5 lg:flex lg:justify-between lg:gap-4 lg:space-y-0">
+          <dt className="text-muted-foreground">
+            {t('requestContentRevision')}
+          </dt>
+          <dd className="tabular-nums">{revision}</dd>
+        </div>
+        <div className="space-y-1.5">
+          <dt className="text-muted-foreground">{t('contentScanLimit')}</dt>
+          <dd>{t('contentScanSummary')}</dd>
+        </div>
+      </dl>
+    </aside>
+  )
+}
+
 function ContentSettings({ userID }: { userID: number }) {
   const { t } = useTranslation()
   const client = useQueryClient()
@@ -41,122 +139,147 @@ function ContentSettings({ userID }: { userID: number }) {
   const [editing, setEditing] = useState(false)
   const [saved, setSaved] = useState(false)
   const value = query.data
+  const refresh = () => {
+    setEditing(false)
+    setSaved(false)
+    return query.refetch()
+  }
   return (
-    <div className="max-w-3xl">
-      <h1 className="page-title">{t('contentTitle')}</h1>
-      <p className="page-description">{t('contentDescription')}</p>
-      <div className="mt-8 border-y border-border py-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-medium">{t('contentWorkspacePolicy')}</h2>
-          <div className="flex flex-wrap items-center gap-3">
-            {value && !query.isError && (
-              <Status kind={value.mode === 'block' ? 'warning' : 'neutral'}>
-                {t(contentModeKeys[value.mode])}
-              </Status>
-            )}
+    <div className="space-y-6">
+      {editing && value && !query.isError ? (
+        <ContentEditor
+          key={value.revision}
+          value={value}
+          userID={userID}
+          onCancel={() => setEditing(false)}
+          onRefresh={refresh}
+          onSaved={async (result) => {
+            client.setQueryData(contentOptions(userID).queryKey, result)
+            setEditing(false)
+            setSaved(true)
+            await client.invalidateQueries({ queryKey: ['audit'] })
+          }}
+        />
+      ) : (
+        <>
+          <ContentHeader>
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               disabled={query.isFetching}
-              onClick={() => {
-                setEditing(false)
-                setSaved(false)
-                return query.refetch()
-              }}
+              onClick={refresh}
             >
+              <RefreshCw className="size-4" aria-hidden="true" />
               {t('refresh')}
             </Button>
-          </div>
-        </div>
-        {query.isPending ? (
-          <p className="mt-4 text-sm text-muted-foreground">{t('loading')}</p>
-        ) : query.isError ? (
-          <div className="mt-4 space-y-3">
-            <p role="alert" className="text-sm text-error">
+            <Button
+              disabled={!value || query.isError}
+              onClick={() => {
+                setEditing(true)
+                setSaved(false)
+              }}
+            >
+              <SlidersHorizontal className="size-4" aria-hidden="true" />
+              {t('contentConfigure')}
+            </Button>
+          </ContentHeader>
+          {query.isPending ? (
+            <p role="status" className="py-10 text-sm text-muted-foreground">
+              {t('loading')}
+            </p>
+          ) : query.isError ? (
+            <p role="alert" className="py-6 text-sm text-error">
               {t('contentUnavailable')}
             </p>
-          </div>
-        ) : (
-          value && (
-            <>
-              {editing ? (
-                <ContentEditor
-                  key={value.revision}
-                  value={value}
-                  userID={userID}
-                  onCancel={() => setEditing(false)}
-                  onSaved={async (result) => {
-                    client.setQueryData(contentOptions(userID).queryKey, result)
-                    setEditing(false)
-                    setSaved(true)
-                    await client.invalidateQueries({ queryKey: ['audit'] })
-                  }}
-                />
-              ) : (
-                <>
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                    {t(
-                      value.mode === 'observe'
-                        ? 'contentObserveHint'
-                        : value.mode === 'block'
-                          ? 'contentBlockHint'
-                          : 'contentOffHint',
-                    )}
-                  </p>
-                  <div className="mt-5 divide-y divide-border">
-                    {value.rules.length ? (
-                      value.rules.map((rule) => (
-                        <div
-                          key={rule.id}
-                          className="flex flex-wrap items-center justify-between gap-3 py-3"
-                        >
-                          <div className="min-w-0">
-                            <p className="break-words text-sm font-medium">
-                              {rule.name}
-                            </p>
-                            <p className="mt-1 break-all text-xs text-muted-foreground">
-                              {rule.id} · {t(contentKindKeys[rule.kind])}
-                            </p>
-                          </div>
-                          <Status kind="neutral">
-                            {t(
-                              rule.enabled
-                                ? 'contentRuleEnabled'
-                                : 'contentRuleDisabled',
-                            )}
-                          </Status>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="py-3 text-sm text-muted-foreground">
-                        {t('contentEmpty')}
-                      </p>
-                    )}
+          ) : (
+            value && (
+              <div className="grid items-start gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8">
+                <PolicyInfo mode={value.mode} revision={value.revision} />
+                <section
+                  className="min-w-0 overflow-hidden rounded-lg border border-border bg-card"
+                  aria-labelledby="content-rules-title"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
+                    <h2
+                      id="content-rules-title"
+                      className="text-sm font-semibold"
+                    >
+                      {t('contentRulesLabel')}
+                    </h2>
+                    <span className="text-xs text-muted-foreground">
+                      {t('contentEnabledCount', {
+                        enabled: value.rules.filter((rule) => rule.enabled)
+                          .length,
+                        count: value.rules.length,
+                      })}
+                    </span>
                   </div>
-                  <Button
-                    className="mt-5"
-                    variant="outline"
-                    onClick={() => {
-                      setEditing(true)
-                      setSaved(false)
-                    }}
-                  >
-                    {t('contentConfigure')}
-                  </Button>
-                </>
-              )}
-            </>
-          )
-        )}
-        {saved && (
-          <p role="status" className="mt-4 text-sm text-success">
-            {t('contentSaved')}
-          </p>
-        )}
-      </div>
-      <p className="mt-4 text-sm leading-6 text-muted-foreground">
-        {t('contentScope')}
-      </p>
+                  {value.rules.length ? (
+                    <>
+                      <div className="hidden grid-cols-[minmax(0,1fr)_9rem_5rem] gap-4 border-b border-border bg-muted/40 px-5 py-2.5 text-xs text-muted-foreground sm:grid">
+                        <span>{t('contentRuleName')}</span>
+                        <span>{t('contentKind')}</span>
+                        <span>{t('contentRuleStatus')}</span>
+                      </div>
+                      <ul className="divide-y divide-border">
+                        {value.rules.map((rule) => (
+                          <li
+                            key={rule.id}
+                            className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1.5 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_9rem_5rem] sm:items-center sm:gap-4"
+                          >
+                            <div className="min-w-0">
+                              <p className="break-words text-sm font-medium">
+                                {rule.name}
+                              </p>
+                              <p
+                                className="mt-1.5 truncate font-mono text-xs text-muted-foreground"
+                                title={rule.id}
+                              >
+                                {rule.id}
+                              </p>
+                            </div>
+                            <span className="row-start-2 text-xs text-muted-foreground sm:row-start-auto">
+                              {t(contentKindKeys[rule.kind])}
+                            </span>
+                            <div className="col-start-2 row-span-2 row-start-1 self-center sm:col-start-auto sm:row-span-1 sm:row-start-auto">
+                              <Status
+                                kind={rule.enabled ? 'success' : 'neutral'}
+                              >
+                                {t(
+                                  rule.enabled
+                                    ? 'contentRuleEnabled'
+                                    : 'contentRuleDisabled',
+                                )}
+                              </Status>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <div className="flex min-h-52 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+                      <ShieldCheck
+                        className="size-7 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <p className="text-sm font-medium">{t('contentEmpty')}</p>
+                      <p className="max-w-sm text-sm leading-6 text-muted-foreground">
+                        {t('contentEmptyHint')}
+                      </p>
+                    </div>
+                  )}
+                </section>
+              </div>
+            )
+          )}
+        </>
+      )}
+      {saved && (
+        <p role="status" className="text-sm text-success">
+          {t('contentSaved')}
+        </p>
+      )}
+      <ContentNotes />
     </div>
   )
 }
@@ -212,15 +335,52 @@ function ruleInput(rule: Draft): ContentRule {
     ...(rule.pattern ? { pattern: rule.pattern } : {}),
   }
 }
+function ModePicker({
+  value,
+  onChange,
+}: {
+  value: ContentState['mode']
+  onChange: (value: ContentState['mode']) => void
+}) {
+  const { t } = useTranslation()
+  const id = useId()
+  return (
+    <fieldset className="space-y-2">
+      <legend className="mb-2 text-sm text-muted-foreground">
+        {t('contentMode')}
+      </legend>
+      <div className="flex rounded-md border border-input bg-muted/30 p-1">
+        {contentModes.map((mode) => (
+          <label key={mode} className="min-w-0 flex-1 cursor-pointer">
+            <input
+              type="radio"
+              name={id}
+              value={mode}
+              checked={value === mode}
+              onChange={() => onChange(mode)}
+              className="peer sr-only"
+            />
+            <span className="flex min-h-9 items-center justify-center rounded-sm px-2 text-sm text-muted-foreground peer-checked:bg-background peer-checked:font-medium peer-checked:text-foreground peer-checked:shadow-xs peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-disabled:cursor-not-allowed peer-disabled:opacity-50 [@media(pointer:coarse)]:min-h-11">
+              {t(contentModeKeys[mode])}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
 function ContentEditor({
   value,
   userID,
   onCancel,
+  onRefresh,
   onSaved,
 }: {
   value: ContentState
   userID: number
   onCancel: () => void
+  onRefresh: () => unknown
   onSaved: (value: ContentState) => unknown
 }) {
   const { t } = useTranslation()
@@ -236,90 +396,11 @@ function ContentEditor({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (save.isPending) return
-    save.mutate({
-      mode,
-      revision: value.revision,
-      rules: rules.map(ruleInput),
-    })
+    save.mutate({ mode, revision: value.revision, rules: rules.map(ruleInput) })
   }
   return (
-    <form className="mt-5 space-y-5" onSubmit={submit}>
-      <fieldset disabled={save.isPending} className="space-y-5">
-        <div className="space-y-2">
-          <p className="text-sm font-medium">{t('contentMode')}</p>
-          <Choice
-            value={mode}
-            label={t(contentModeKeys[mode])}
-            options={contentModes.map((value) => ({
-              value,
-              label: t(contentModeKeys[value]),
-            }))}
-            onChange={(value) => setMode(value as ContentState['mode'])}
-          />
-          <p className="text-sm leading-6 text-muted-foreground">
-            {t(
-              mode === 'observe'
-                ? 'contentObserveHint'
-                : mode === 'block'
-                  ? 'contentBlockHint'
-                  : 'contentOffHint',
-            )}
-          </p>
-        </div>
-        <div className="divide-y divide-border border-y border-border">
-          {rules.map((rule) => (
-            <RuleEditor
-              key={rule.draftID}
-              userID={userID}
-              rule={rule}
-              onChange={(next) =>
-                setRules((current) =>
-                  current.map((item) =>
-                    item.draftID === rule.draftID ? next : item,
-                  ),
-                )
-              }
-              onRemove={() =>
-                setRules((current) =>
-                  current.filter((item) => item.draftID !== rule.draftID),
-                )
-              }
-            />
-          ))}
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={rules.length >= 50}
-          onClick={() =>
-            setRules((current) => [
-              ...current,
-              {
-                draftID: crypto.randomUUID(),
-                id: '',
-                name: '',
-                kind: 'text',
-                enabled: true,
-                pattern: '',
-              },
-            ])
-          }
-        >
-          {t('contentAdd')}
-        </Button>
-        <p className="text-xs leading-5 text-muted-foreground">
-          {t('contentLimits')}
-        </p>
-      </fieldset>
-      {save.isError && (
-        <p role="alert" className="text-sm text-error">
-          {t(contentError(save.error))}
-        </p>
-      )}
-      <div className="flex flex-wrap gap-3">
-        <Button type="submit" disabled={save.isPending}>
-          {t(save.isPending ? 'alertsSaving' : 'saveChanges')}
-        </Button>
+    <form className="space-y-6" onSubmit={submit}>
+      <ContentHeader>
         <Button
           type="button"
           variant="outline"
@@ -328,7 +409,91 @@ function ContentEditor({
         >
           {t('cancel')}
         </Button>
-      </div>
+        <Button type="submit" disabled={save.isPending}>
+          {t(save.isPending ? 'alertsSaving' : 'saveChanges')}
+        </Button>
+      </ContentHeader>
+      {save.isError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-md border border-error/30 bg-error-muted px-4 py-3 text-sm text-error"
+        >
+          <p className="min-w-0 flex-1">{t(contentError(save.error))}</p>
+          <Button type="button" variant="outline" onClick={onRefresh}>
+            {t('refresh')}
+          </Button>
+        </div>
+      )}
+      <fieldset disabled={save.isPending} className="min-w-0">
+        <div className="grid items-start gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8">
+          <PolicyInfo mode={mode} revision={value.revision}>
+            <ModePicker value={mode} onChange={setMode} />
+          </PolicyInfo>
+          <section
+            className="min-w-0 overflow-hidden rounded-lg border border-border bg-card"
+            aria-labelledby="content-edit-title"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
+              <div>
+                <h2 id="content-edit-title" className="text-sm font-semibold">
+                  {t('contentRulesLabel')}
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('contentRuleCount', { count: rules.length })}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={rules.length >= 50}
+                onClick={() =>
+                  setRules((current) => [
+                    ...current,
+                    {
+                      draftID: crypto.randomUUID(),
+                      id: '',
+                      name: '',
+                      kind: 'text',
+                      enabled: true,
+                      pattern: '',
+                    },
+                  ])
+                }
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                {t('contentAdd')}
+              </Button>
+            </div>
+            {rules.length ? (
+              <div className="divide-y divide-border px-5">
+                {rules.map((rule) => (
+                  <RuleEditor
+                    key={rule.draftID}
+                    userID={userID}
+                    rule={rule}
+                    onChange={(next) =>
+                      setRules((current) =>
+                        current.map((item) =>
+                          item.draftID === rule.draftID ? next : item,
+                        ),
+                      )
+                    }
+                    onRemove={() =>
+                      setRules((current) =>
+                        current.filter((item) => item.draftID !== rule.draftID),
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="px-5 py-8 text-sm text-muted-foreground">
+                {t('contentEmpty')}
+              </p>
+            )}
+          </section>
+        </div>
+      </fieldset>
     </form>
   )
 }
