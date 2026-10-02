@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { expect, it, vi } from 'vitest'
@@ -189,6 +189,72 @@ it('does not fetch management configuration for a member', () => {
     </QueryClientProvider>,
   )
   expect(fetcher).not.toHaveBeenCalled()
+})
+
+it('edits a saved regex with highlighting without revealing its stored pattern', async () => {
+  const client = createQueryClient()
+  client.setQueryData(authKey, authenticated)
+  const saved: unknown[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') saved.push(JSON.parse(String(init.body)))
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            mode: 'block',
+            revision: saved.length ? 2 : 1,
+            rules: [
+              {
+                id: 'rule_synthetic',
+                name: 'Synthetic regex',
+                kind: 'regex',
+                enabled: true,
+              },
+            ],
+          }),
+        ),
+      )
+    }),
+  )
+  const { container } = render(
+    <QueryClientProvider client={client}>
+      <Content />
+    </QueryClientProvider>,
+  )
+  const user = userEvent.setup()
+  await user.click(
+    await screen.findByRole('button', { name: 'Configure rules' }),
+  )
+  const input = screen.getByLabelText('Matching content') as HTMLTextAreaElement
+  expect(input.tagName).toBe('TEXTAREA')
+  expect(input.value).toBe('')
+  expect(input.placeholder).toBe('Leave blank to keep the saved content')
+  await user.type(input, 'DEMO_TOKEN_')
+  fireEvent.change(input, { target: { value: '^DEMO_TOKEN_[A-Z0-9]{8}$' } })
+  expect(
+    container.querySelector('[data-token="char-class"]')?.textContent,
+  ).toBe('[A-Z0-9]')
+  await user.click(screen.getByRole('button', { name: 'Save changes' }))
+  await screen.findByText('Content rules saved.')
+  expect(saved).toEqual([
+    {
+      mode: 'block',
+      revision: 1,
+      rules: [
+        {
+          id: 'rule_synthetic',
+          name: 'Synthetic regex',
+          kind: 'regex',
+          enabled: true,
+          pattern: '^DEMO_TOKEN_[A-Z0-9]{8}$',
+        },
+      ],
+    },
+  ])
+  expect(
+    JSON.stringify(client.getQueryData(['content-rules', 1])),
+  ).not.toContain('DEMO_TOKEN_')
 })
 
 it('locks rule inputs during a sample test and clears mutation-held samples after failure', async () => {

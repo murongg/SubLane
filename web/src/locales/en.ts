@@ -42,7 +42,7 @@ export const en = {
   contentTextHint:
     'Case-sensitive text matching. Use a specific value; broad terms such as api_key can match ordinary code. Keep secrets out of the rule name.',
   contentRegexHint:
-    'Uses Go RE2 syntax; lookaround and backreferences are unsupported. Use (?i) for case-insensitive matching. Empty matches are rejected.',
+    'Uses Go RE2 syntax; lookaround and backreferences are unsupported. Use (?i) for case-insensitive matching. Empty matches are rejected. Your current input is visible with syntax colors; saved patterns stay hidden.',
   contentLimits:
     'Up to 50 rules, 64 bytes per name and 1,024 bytes per expression. Checks cover up to 8 MiB of JSON and 64 nesting levels. Larger or deeper requests have an incomplete check. Changes apply to subsequent checks, including existing WebSocket conversations.',
   contentTestTitle: 'Test this rule',

@@ -41,7 +41,7 @@ export const zh: Record<keyof typeof en, string> = {
   contentTextHint:
     '文本匹配区分大小写。请使用具体值；api_key 等宽泛词条可能命中正常代码。请勿在规则名称中填写秘密。',
   contentRegexHint:
-    '使用 Go RE2 语法，不支持环视和反向引用。可用 (?i) 忽略大小写；不接受可匹配空字符串的正则。',
+    '使用 Go RE2 语法，不支持环视和反向引用。可用 (?i) 忽略大小写；不接受可匹配空字符串的正则。本次输入会以语法颜色显示，已保存的表达式仍保持隐藏。',
   contentLimits:
     '最多 50 条规则，名称不超过 64 字节，匹配内容不超过 1,024 字节。检查最多覆盖 8 MiB JSON 和 64 层嵌套，超过限制视为检查未完成。变更应用于后续检查，包括已建立的 WebSocket 会话。',
   contentTestTitle: '测试这条规则',

@@ -15,6 +15,13 @@ Go and JavaScript dependencies are pinned in `go.mod`, `go.sum`, `web/package.js
 
 The Radix dropdown menu is pinned to 2.1.16 alongside Dialog 1.1.15 so they share focus-scope and dismissable-layer dependencies. Keep those primitives aligned when upgrading and verify keyboard focus in the account menu inside the mobile navigation sheet.
 
+## Prism
+
+- Project: https://github.com/PrismJS/prism, version `1.30.0`.
+- Copyright: (c) 2012 Lea Verou.
+- License: MIT; full text in `licenses/prismjs.txt`.
+- Integration: Prism core and its regular-expression grammar tokenize local editor input. React renders token text without highlighted HTML or page-wide DOM mutation; Go RE2 remains the validation authority.
+
 ## chi and sqlc
 
 - chi: https://github.com/go-chi/chi, version `v5.3.2`, MIT; full text in `licenses/chi.txt`. Used for HTTP routing over `net/http`.

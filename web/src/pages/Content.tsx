@@ -25,6 +25,7 @@ import {
 import { useAdminMutation } from '@/hooks/use-admin-mutation'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { RegexInput } from '@/components/RegexInput'
 import { Status } from '@/components/Status'
 import {
   DropdownMenu,
@@ -577,18 +578,31 @@ function RuleEditor({
         <label htmlFor={`${id}-pattern`} className="text-sm font-medium">
           {t('contentPattern')}
         </label>
-        <Input
-          id={`${id}-pattern`}
-          type="password"
-          value={rule.pattern}
-          maxLength={1024}
-          required={!rule.id}
-          autoComplete="off"
-          spellCheck={false}
-          placeholder={rule.id ? t('contentKeepPattern') : undefined}
-          aria-describedby={`${id}-hint`}
-          onChange={(event) => change({ ...rule, pattern: event.target.value })}
-        />
+        {rule.kind === 'regex' ? (
+          <RegexInput
+            id={`${id}-pattern`}
+            value={rule.pattern}
+            required={!rule.id}
+            placeholder={rule.id ? t('contentKeepPattern') : undefined}
+            aria-describedby={`${id}-hint`}
+            onChange={(pattern) => change({ ...rule, pattern })}
+          />
+        ) : (
+          <Input
+            id={`${id}-pattern`}
+            type="password"
+            value={rule.pattern}
+            maxLength={1024}
+            required={!rule.id}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={rule.id ? t('contentKeepPattern') : undefined}
+            aria-describedby={`${id}-hint`}
+            onChange={(event) =>
+              change({ ...rule, pattern: event.target.value })
+            }
+          />
+        )}
         <p
           id={`${id}-hint`}
           className="text-xs leading-5 text-muted-foreground"
