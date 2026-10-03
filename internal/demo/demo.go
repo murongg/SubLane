@@ -20,6 +20,7 @@ import (
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/pricing"
@@ -113,7 +114,8 @@ func New(ctx context.Context, options Options) (_ *Instance, err error) {
 		Tenants: tenancy, TenantID: 1, PublicURL: options.PublicURL, TrustedProxies: options.TrustedProxies,
 		CodexVersions: versionPolicy, TimeZone: zone,
 		// Expose configuration reads without starting the outbound notification worker.
-		Alerts: alerts.New(connection, cipher, nil),
+		Alerts:  alerts.New(connection, cipher, nil),
+		Content: content.New(connection, cipher, 1),
 	})
 	instance.Handler = readOnly(server.NewMulti(connection, identity, tenancy, options.PublicURL, func(int64) http.Handler { return handler }))
 	return instance, nil

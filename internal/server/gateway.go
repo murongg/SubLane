@@ -17,6 +17,7 @@ import (
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/apikey"
+	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/upstream"
@@ -270,6 +271,10 @@ func writeSSE(w io.Writer, data []byte, named bool) error {
 func gatewayFailure(err error) (int, string) {
 	var rejected *upstream.UpstreamError
 	switch {
+	case errors.Is(err, content.ErrBlocked):
+		return 403, "content_policy_blocked"
+	case errors.Is(err, content.ErrUnavailable):
+		return 503, "content_check_unavailable"
 	case errors.Is(err, apikey.ErrInvalidKey):
 		return 401, "invalid_api_key"
 	case errors.Is(err, gateway.ErrContextLimit):
@@ -395,7 +400,14 @@ func writeGatewayFailure(w http.ResponseWriter, err error, writeError func(http.
 }
 
 func gatewayErrorBody(code string) map[string]string {
-	return map[string]string{"type": "gateway_error", "code": code, "message": strings.ReplaceAll(code, "_", " ")}
+	return map[string]string{"type": "gateway_error", "code": code, "message": gatewayErrorMessage(code)}
+}
+
+func gatewayErrorMessage(code string) string {
+	if code == "content_policy_blocked" {
+		return "content_policy_blocked: Request blocked by workspace content rules. It was not sent upstream. Remove the sensitive content or contact your workspace administrator."
+	}
+	return strings.ReplaceAll(code, "_", " ")
 }
 
 func writeGatewayError(w http.ResponseWriter, status int, code string) {

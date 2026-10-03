@@ -140,6 +140,8 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if prewarm {
+				ctxWithID := gateway.WithRequestIdentity(ctx, principal.KeyID, "websocket")
+				turnID = gateway.RequestID(ctxWithID)
 				var input struct {
 					Model string `json:"model"`
 				}
@@ -150,6 +152,13 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				if err := h.gateway.AuthorizeModel(ctx, principal.UserID, principal.GroupID, input.Model); err != nil {
+					if writeError(err) != nil {
+						return
+					}
+					continue
+				}
+				// Local prewarm also retains text for later turns, so it must obey the current rules.
+				if err := h.gateway.CheckPrewarm(ctxWithID, principal.UserID, principal.GroupID, normalized); err != nil {
 					if writeError(err) != nil {
 						return
 					}

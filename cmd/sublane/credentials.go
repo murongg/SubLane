@@ -23,6 +23,10 @@ func openVault(ctx context.Context, connection *sql.DB, directory string) (*vaul
 	if err != nil {
 		return nil, err
 	}
-	// Key-only and webhook-only instances also depend on this file.
-	return vault.Open(filepath.Join(directory, "credentials.key"), accounts == 0 && keys == 0 && webhooks == 0)
+	rules, err := q.CountContentSecrets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Content rules may hold complete secrets even when no subscription account exists.
+	return vault.Open(filepath.Join(directory, "credentials.key"), accounts == 0 && keys == 0 && webhooks == 0 && rules == 0)
 }

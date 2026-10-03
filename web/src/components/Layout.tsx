@@ -70,6 +70,7 @@ const navigation = [
       { to: '/members', label: 'members', icon: Users },
       { to: '/admin/allocations', label: 'allocationSchemes', icon: Gauge },
       { to: '/admin/audit', label: 'auditLog', icon: ShieldCheck },
+      { to: '/admin/content', label: 'contentTitle', icon: ShieldCheck },
       {
         to: '/admin/settings',
         label: 'systemSettings',

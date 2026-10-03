@@ -32,6 +32,7 @@ SubLane brings AI subscriptions into one gateway with isolated workspaces for di
 - **Network proxies:** Fixed outbound proxy per account, bulk proxy import and manual exit checks.
 - **Personal API keys:** Pool or allowance binding, expiry, pause and revocation controls, owner-only key copying and CC Switch import.
 - **Usage controls:** Per-member request rate and concurrency limits, plus optional allowances by tokens, configured internal USD amount or estimated Codex quota share.
+- **Content rules:** Optional workspace terms and regular expressions, with observe/block modes, encrypted matching content and checks before model dispatch across HTTP and WebSocket.
 - **Operations:** Personal and workspace usage charts, activity heatmaps, request diagnostics, management audit logs, backup creation, verification and restore, and Codex client version settings.
 - **Dashboard:** Embedded web interface in English and Simplified Chinese, with light and dark themes.
 

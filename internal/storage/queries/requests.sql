@@ -1,6 +1,6 @@
 -- name: RecordRequest :exec
-INSERT INTO request_records(user_id,key_id,group_id,account_id,provider,model,transport,operation,started_at,duration_ms,outcome,error_code,upstream_status,input_tokens,output_tokens,cached_tokens,request_id,first_token_ms,reasoning_effort)
-VALUES(sqlc.arg(user_id),sqlc.arg(key_id),sqlc.arg(group_id),sqlc.arg(account_id),sqlc.arg(provider),sqlc.arg(model),sqlc.arg(transport),sqlc.arg(operation),sqlc.arg(started_at),sqlc.arg(duration_ms),sqlc.arg(outcome),sqlc.arg(error_code),sqlc.narg(upstream_status),sqlc.narg(input_tokens),sqlc.narg(output_tokens),sqlc.narg(cached_tokens),sqlc.arg(request_id),sqlc.narg(first_token_ms),sqlc.arg(reasoning_effort));
+INSERT INTO request_records(user_id,key_id,group_id,account_id,provider,model,transport,operation,started_at,duration_ms,outcome,error_code,upstream_status,input_tokens,output_tokens,cached_tokens,request_id,first_token_ms,reasoning_effort,content_mode,content_revision,content_rule_ids,content_check_failed)
+VALUES(sqlc.arg(user_id),sqlc.arg(key_id),sqlc.arg(group_id),sqlc.arg(account_id),sqlc.arg(provider),sqlc.arg(model),sqlc.arg(transport),sqlc.arg(operation),sqlc.arg(started_at),sqlc.arg(duration_ms),sqlc.arg(outcome),sqlc.arg(error_code),sqlc.narg(upstream_status),sqlc.narg(input_tokens),sqlc.narg(output_tokens),sqlc.narg(cached_tokens),sqlc.arg(request_id),sqlc.narg(first_token_ms),sqlc.arg(reasoning_effort),sqlc.arg(content_mode),sqlc.arg(content_revision),COALESCE(NULLIF(sqlc.arg(content_rule_ids),''),'[]'),sqlc.arg(content_check_failed));
 
 -- name: RequestRecorded :one
 SELECT EXISTS(SELECT 1 FROM request_records WHERE request_id=?);

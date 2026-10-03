@@ -8,6 +8,7 @@ import type { RequestRecord } from '@/lib/requests'
 import { outcomeKeys, formatRequestCost } from '@/lib/requests'
 import { reasonKeys } from '@/lib/runtime'
 import { RequestID } from './RequestID'
+import { contentModeKeys } from '@/lib/content'
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,25 @@ export function RequestDetails({
       `${value.provider} · ${value.transport === 'websocket' ? 'WebSocket' : 'HTTP'} · ${value.operation}`,
     ],
     [t('requestResult'), t(outcomeKeys[value.outcome])],
+    ...(value.content
+      ? [
+          [
+            t('requestContent'),
+            value.content.check_failed
+              ? t('requestContentFailed')
+              : value.content.mode
+                ? t(contentModeKeys[value.content.mode])
+                : t('requestContentPassed'),
+          ],
+          [t('requestContentRevision'), String(value.content.revision)],
+          [
+            t('requestContentRules'),
+            value.content.rule_ids.length
+              ? value.content.rule_ids.join(', ')
+              : t('requestContentPassed'),
+          ],
+        ]
+      : []),
     ...(value.error_code
       ? [
           [

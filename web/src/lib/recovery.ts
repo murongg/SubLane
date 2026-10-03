@@ -2,7 +2,13 @@ import type { en } from '@/locales/en'
 
 type Recovery = {
   hint: keyof typeof en
-  to?: '/accounts' | '/groups' | '/members' | '/admin/allocations' | '/keys'
+  to?:
+    | '/accounts'
+    | '/groups'
+    | '/members'
+    | '/admin/allocations'
+    | '/keys'
+    | '/admin/content'
   action?: keyof typeof en
 }
 
@@ -10,6 +16,16 @@ export function requestRecovery(
   code: string,
   administrator: boolean,
 ): Recovery {
+  if (code === 'content_policy_blocked' || code === 'content_check_unavailable')
+    return {
+      hint:
+        code === 'content_policy_blocked'
+          ? 'recoveryContent'
+          : 'recoveryContentUnavailable',
+      ...(administrator
+        ? ({ to: '/admin/content', action: 'contentTitle' } as const)
+        : {}),
+    }
   if (
     [
       'account_busy',

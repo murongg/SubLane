@@ -7,6 +7,83 @@ import { createAppRouter } from '@/router'
 import { i18n } from '@/lib/i18n'
 import { authenticated, memberAuthenticated, workspaces } from '@/test/fixtures'
 
+it('shows content rule observations and blocked-request recovery without request bodies', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url === '/api/auth/state'
+              ? authenticated
+              : url === '/api/workspaces'
+                ? workspaces
+                : url.startsWith('/api/requests?')
+                  ? {
+                      requests: [
+                        {
+                          id: 1,
+                          user_id: 2,
+                          key_id: 1,
+                          group_id: 1,
+                          account_id: '',
+                          account_name: '',
+                          provider: '',
+                          model: 'synthetic-model',
+                          transport: 'http',
+                          operation: 'responses',
+                          started_at: 1900000000,
+                          duration_ms: 1,
+                          request_id: 'req_synthetic_content',
+                          first_token_ms: null,
+                          outcome: 'rejected',
+                          error_code: 'content_policy_blocked',
+                          upstream_status: null,
+                          input_tokens: null,
+                          output_tokens: null,
+                          cached_tokens: null,
+                          username: 'synthetic-member',
+                          key_name: 'Synthetic client',
+                          group_name: 'Synthetic pool',
+                          content: {
+                            mode: 'block',
+                            revision: 4,
+                            rule_ids: ['rule_synthetic'],
+                            check_failed: false,
+                          },
+                        },
+                      ],
+                      next_cursor: 0,
+                    }
+                  : { accounts: [] },
+          ),
+        ),
+      ),
+    ),
+  )
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/admin/requests'] }),
+      )}
+    />,
+  )
+  const user = userEvent.setup()
+  await user.click(
+    await screen.findByRole('button', { name: 'View request details' }),
+  )
+  const dialog = await screen.findByRole('dialog')
+  expect(within(dialog).getByText('rule_synthetic')).toBeTruthy()
+  expect(
+    within(dialog).getByText('Policy version').nextElementSibling?.textContent,
+  ).toBe('4')
+  expect(
+    within(dialog)
+      .getByRole('link', { name: 'Content rules' })
+      .getAttribute('href'),
+  ).toBe('/admin/content')
+})
+
 it.each(
   (['en', 'zh'] as const).flatMap((language) =>
     [123456, 1, 0, null, undefined].flatMap((cost) =>
