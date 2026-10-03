@@ -31,6 +31,9 @@ func (s *Service) modelPolicy(ctx context.Context, userID, groupID int64) (group
 	return policy, tx.Commit()
 }
 func policyHasProvider(policy groups.ModelPolicy, provider string) bool {
+	if !policy.AllowsProvider(provider) {
+		return false
+	}
 	if !policy.Restricted {
 		return true
 	}

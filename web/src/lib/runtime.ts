@@ -3,7 +3,7 @@ import type { en } from '@/locales/en'
 import { accountSchema } from './accounts'
 import { request } from './request'
 
-const runtimeSchema = z.object({
+export const runtimeSchema = z.object({
   id: z.string(),
   max_concurrency: z.number().int().min(1).max(30),
   in_flight: z.number().int().nonnegative(),

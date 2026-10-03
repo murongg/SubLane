@@ -493,7 +493,7 @@ func (s *Service) BindProxy(ctx context.Context, accountID, proxyID string) (Acc
 		return Account{}, err
 	}
 	if (row.ProxyID == nil && proxyID == "") || (row.ProxyID != nil && *row.ProxyID == proxyID) {
-		return metadata(row), nil
+		return s.accountMetadata(row)
 	}
 	var target *string
 	if proxyID != "" {
@@ -515,5 +515,5 @@ func (s *Service) BindProxy(ctx context.Context, accountID, proxyID string) (Acc
 	if err := tx.Commit(); err != nil {
 		return Account{}, err
 	}
-	return metadata(row), nil
+	return s.accountMetadata(row)
 }

@@ -26,8 +26,15 @@ export function AccountLimits({
   onClose,
   onChanged,
   restoreFocus,
+  updateConcurrency = setConcurrency,
+  resumeResource = resumeAccount,
 }: {
-  account: Account
+  account: Pick<Account, 'id' | 'name' | 'max_concurrency'>
+  updateConcurrency?: (input: {
+    id: string
+    max_concurrency: number
+  }) => Promise<unknown>
+  resumeResource?: (id: string) => Promise<unknown>
   runtime?: AccountRuntime
   onClose: () => void
   onChanged: () => Promise<void>
@@ -40,14 +47,14 @@ export function AccountLimits({
   const [invalid, setInvalid] = useState(false)
   const [resumed, setResumed] = useState(false)
   const update = useMutation({
-    mutationFn: setConcurrency,
+    mutationFn: updateConcurrency,
     onSuccess: async () => {
       await onChanged()
       onClose()
     },
   })
   const resume = useMutation({
-    mutationFn: resumeAccount,
+    mutationFn: resumeResource,
     onSuccess: async () => {
       setResumed(true)
       await onChanged()

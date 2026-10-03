@@ -120,7 +120,7 @@ it('lets a member create, copy once, and revoke an owned key', async () => {
   await screen.findByText('No API keys yet')
   await user.click(screen.getByRole('button', { name: 'Create key' }))
   const form = await screen.findByRole('dialog', { name: 'Create API key' })
-  await user.click(within(form).getByRole('button', { name: 'Account pool' }))
+  await user.click(within(form).getByRole('button', { name: 'Resource group' }))
   await user.click(
     await screen.findByRole('menuitemradio', { name: /Default/ }),
   )
@@ -171,7 +171,7 @@ it('discards a displayed secret when a background check changes the user', async
   await screen.findByText('No API keys yet')
   await user.click(screen.getByRole('button', { name: 'Create key' }))
   const form = await screen.findByRole('dialog', { name: 'Create API key' })
-  await user.click(within(form).getByRole('button', { name: 'Account pool' }))
+  await user.click(within(form).getByRole('button', { name: 'Resource group' }))
   await user.click(
     await screen.findByRole('menuitemradio', { name: /Default/ }),
   )
@@ -231,13 +231,15 @@ it('requires an explicit pool choice before binding a key', async () => {
   await screen.findByText('No API keys yet')
   await user.click(screen.getByRole('button', { name: 'Create key' }))
   const dialog = await screen.findByRole('dialog', { name: 'Create API key' })
-  await within(dialog).findByText('Choose an account pool')
+  await within(dialog).findByText('Choose a resource group')
   expect(
     within(dialog)
       .getByRole('button', { name: 'Create key' })
       .hasAttribute('disabled'),
   ).toBe(true)
-  await user.click(within(dialog).getByRole('button', { name: 'Account pool' }))
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Resource group' }),
+  )
   await user.click(screen.getByRole('menuitemradio', { name: /Project beta/ }))
   await user.type(
     within(dialog).getByLabelText('Name'),
@@ -267,13 +269,15 @@ it('warns that a key bound to an empty pool cannot serve requests yet', async ()
   await screen.findByText('No API keys yet')
   await user.click(screen.getByRole('button', { name: 'Create key' }))
   const dialog = await screen.findByRole('dialog', { name: 'Create API key' })
-  await user.click(within(dialog).getByRole('button', { name: 'Account pool' }))
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Resource group' }),
+  )
   await user.click(
     await screen.findByRole('menuitemradio', { name: /Synthetic empty pool/ }),
   )
   expect(
     within(dialog).getByText(
-      'This pool has no subscription accounts. A new key cannot serve requests until an account is added.',
+      'This group has no resources. A new key cannot serve requests until a resource is added.',
     ),
   ).toBeTruthy()
 })
@@ -468,7 +472,9 @@ it('creates a key with the selected expiry period', async () => {
   await screen.findByText('No API keys yet')
   await user.click(screen.getByRole('button', { name: 'Create key' }))
   const dialog = await screen.findByRole('dialog')
-  await user.click(within(dialog).getByRole('button', { name: 'Account pool' }))
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Resource group' }),
+  )
   await user.click(
     await screen.findByRole('menuitemradio', { name: /Default/ }),
   )

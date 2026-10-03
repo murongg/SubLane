@@ -56,6 +56,8 @@ it('blocks demo mutations locally and explains the restriction', async () => {
       return new Response(JSON.stringify(workspaces))
     if (path === '/api/groups')
       return new Response(JSON.stringify({ groups: [] }))
+    if (path === '/api/channels')
+      return new Response(JSON.stringify({ channels: [] }))
     if (path === '/api/accounts')
       return new Response(JSON.stringify({ accounts: [] }))
     return new Response('{}')
@@ -70,13 +72,13 @@ it('blocks demo mutations locally and explains the restriction', async () => {
     />,
   )
   await user.click(
-    await screen.findByRole('button', { name: 'Create account pool' }),
+    await screen.findByRole('button', { name: 'Create resource group' }),
   )
   await user.type(
-    screen.getByRole('textbox', { name: 'Pool name' }),
+    screen.getByRole('textbox', { name: 'Group name' }),
     'Synthetic pool',
   )
-  await user.click(screen.getByRole('button', { name: 'Save pool' }))
+  await user.click(screen.getByRole('button', { name: 'Save group' }))
   await waitFor(() =>
     expect(
       within(screen.getByRole('dialog')).getByText(

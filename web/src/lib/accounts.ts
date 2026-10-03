@@ -1,9 +1,23 @@
 import { z } from 'zod'
 import { ApiError, request } from './request'
 
-export const providers = ['codex', 'claude', 'antigravity', 'xai'] as const
+export const subscriptionProviders = [
+  'codex',
+  'claude',
+  'antigravity',
+  'xai',
+] as const
+export type SubscriptionProvider = (typeof subscriptionProviders)[number]
+export const providers = [
+  'codex',
+  'claude',
+  'antigravity',
+  'xai',
+  'openai',
+] as const
 export type Provider = (typeof providers)[number]
 export const providerLabels: Record<Provider, string> = {
+  openai: 'OpenAI API',
   xai: 'Grok',
   codex: 'Codex',
   claude: 'Claude',
@@ -18,7 +32,7 @@ export const callbackURLs: Partial<Record<Provider, string>> = {
 export const accountSchema = z.object({
   id: z.string().min(1),
   proxy_id: z.string().default(''),
-  provider: z.enum(providers).default('codex'),
+  provider: z.enum(subscriptionProviders).default('codex'),
   // Saved limits survive upgrades; keep this range aligned with runtime responses.
   max_concurrency: z.number().int().min(1).max(30).default(30),
   name: z.string(),
@@ -72,7 +86,7 @@ export const accountOptions = {
     request('/api/accounts', pageSchema, { signal }),
 }
 export function importAccount(input: {
-  provider?: Provider
+  provider?: SubscriptionProvider
   name: string
   auth_json: string
   replace_id?: string
@@ -83,8 +97,9 @@ export function importAccount(input: {
     body: JSON.stringify(input),
   })
 }
+
 export function beginAuthorization(input: {
-  provider?: Provider
+  provider?: SubscriptionProvider
   name: string
   replace_id?: string
   proxy_id?: string

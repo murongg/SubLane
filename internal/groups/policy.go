@@ -10,15 +10,18 @@ import (
 )
 
 type ModelPolicy struct {
-	Restricted bool     `json:"restricted"`
-	Models     []string `json:"models"`
+	Routing          Routing  `json:"-"`
+	HasSubscriptions bool     `json:"-"`
+	Restricted       bool     `json:"restricted"`
+	Models           []string `json:"models"`
 }
 
 var modelID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,127}$`)
 
 // SplitModel recognizes legacy gateway prefixes while preserving slashes in native model IDs.
 func SplitModel(model string) (provider, native string) {
-	if provider, native, found := strings.Cut(model, "/"); found && accounts.ValidProvider(provider) {
+	// Keep newly supported API model namespaces (for example openai/model) native, rather than inventing legacy prefixes.
+	if provider, native, found := strings.Cut(model, "/"); found && accounts.SubscriptionProvider(provider) {
 		return provider, native
 	}
 	return "", model
@@ -57,6 +60,23 @@ func (p ModelPolicy) Allows(model string) bool {
 	return false
 }
 
+func (p ModelPolicy) AllowsResource(provider, model string) bool {
+	if !p.AllowsProvider(provider) {
+		return false
+	}
+	if !p.Restricted {
+		return true
+	}
+	// API model namespaces are native IDs. Never prepend a provider and reinterpret them as legacy qualified requests.
+	for _, permitted := range p.Models {
+		scope, native := SplitModel(permitted)
+		if native == model && (scope == "" || scope == provider) {
+			return true
+		}
+	}
+	return false
+}
+
 // ReadPolicy requires transaction-bound queries so grants and the allowlist share one snapshot.
 func ReadPolicy(ctx context.Context, q *db.Queries, userID, groupID int64) (ModelPolicy, error) {
 	allowed, err := q.CanUseGroup(ctx, db.CanUseGroupParams{UserID: userID, GroupID: groupID})
@@ -71,5 +91,9 @@ func ReadPolicy(ctx context.Context, q *db.Queries, userID, groupID int64) (Mode
 		return ModelPolicy{}, err
 	}
 	models, err := q.ListGroupModels(ctx, groupID)
-	return ModelPolicy{Restricted: group.RestrictedModels, Models: models}, err
+	if err != nil {
+		return ModelPolicy{}, err
+	}
+	hasSubscriptions, err := q.GroupHasSubscriptions(ctx, groupID)
+	return ModelPolicy{Restricted: group.RestrictedModels, Models: models, Routing: Routing{Preference: group.RoutingPreference, AllowAPIFallback: group.AllowApiFallback != 0}, HasSubscriptions: hasSubscriptions}, err
 }

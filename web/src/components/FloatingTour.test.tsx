@@ -178,7 +178,9 @@ it('keeps the new key visible until the user closes its dialog', async () => {
   await user.click(await screen.findByRole('button', { name: 'Create key' }))
   const dialog = await screen.findByRole('dialog', { name: 'Create API key' })
   await user.type(within(dialog).getByLabelText('Name'), 'Synthetic key')
-  await user.click(within(dialog).getByRole('button', { name: 'Account pool' }))
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Resource group' }),
+  )
   await user.click(
     await screen.findByRole('menuitemradio', { name: /Synthetic pool/ }),
   )

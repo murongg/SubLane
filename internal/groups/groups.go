@@ -28,10 +28,13 @@ var (
 )
 
 type Group struct {
-	RestrictedModels bool   `json:"restricted_models"`
-	ID               int64  `json:"id"`
-	Name             string `json:"name"`
-	Enabled          bool   `json:"enabled"`
+	SubscriptionCount int64   `json:"subscription_count"`
+	ChannelCount      int64   `json:"channel_count"`
+	Routing           Routing `json:"routing"`
+	RestrictedModels  bool    `json:"restricted_models"`
+	ID                int64   `json:"id"`
+	Name              string  `json:"name"`
+	Enabled           bool    `json:"enabled"`
 	// IsDefault is retained for response compatibility and is always false.
 	IsDefault    bool  `json:"is_default"`
 	CreatedAt    int64 `json:"created_at"`
@@ -41,8 +44,9 @@ type Group struct {
 }
 type Detail struct {
 	Group
-	AccountIDs    []string `json:"account_ids"`
-	AllowedModels []string `json:"allowed_models"`
+	Resources     []Resource `json:"resources"`
+	AccountIDs    []string   `json:"account_ids"`
+	AllowedModels []string   `json:"allowed_models"`
 }
 type Choice struct {
 	SchemeID     int64  `json:"scheme_id,omitempty"`
@@ -56,6 +60,8 @@ type Member struct {
 	Username string `json:"username"`
 }
 type Input struct {
+	Resources   []Resource   `json:"resources"`
+	Routing     *Routing     `json:"routing,omitempty"`
 	ModelPolicy *ModelPolicy `json:"model_policy,omitempty"`
 	Name        string       `json:"name"`
 	Enabled     bool         `json:"enabled"`
@@ -82,7 +88,7 @@ func (s *Service) List(ctx context.Context) ([]Group, error) {
 	}
 	result := make([]Group, 0, len(rows))
 	for _, r := range rows {
-		result = append(result, Group{RestrictedModels: r.RestrictedModels, ID: r.ID, Name: r.Name, Enabled: r.Enabled, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, AccountCount: r.AccountCount, MemberCount: r.MemberCount})
+		result = append(result, Group{SubscriptionCount: r.SubscriptionCount, ChannelCount: r.ChannelCount, Routing: Routing{Preference: r.RoutingPreference, AllowAPIFallback: r.AllowApiFallback != 0}, RestrictedModels: r.RestrictedModels, ID: r.ID, Name: r.Name, Enabled: r.Enabled, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, AccountCount: r.AccountCount, MemberCount: r.MemberCount})
 	}
 	return result, nil
 }
@@ -108,7 +114,19 @@ func (s *Service) Get(ctx context.Context, id int64) (Detail, error) {
 	if err != nil {
 		return Detail{}, err
 	}
-	result := Detail{Group: Group{RestrictedModels: row.RestrictedModels, ID: row.ID, Name: row.Name, Enabled: row.Enabled, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, AccountCount: int64(len(ids)), MemberCount: count}, AccountIDs: ids}
+	result := Detail{Group: Group{Routing: Routing{Preference: row.RoutingPreference, AllowAPIFallback: row.AllowApiFallback != 0}, RestrictedModels: row.RestrictedModels, ID: row.ID, Name: row.Name, Enabled: row.Enabled, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, AccountCount: int64(len(ids)), MemberCount: count}, AccountIDs: ids, Resources: []Resource{}}
+	for _, sourceID := range ids {
+		source, err := q.GetAccount(ctx, db.GetAccountParams{ID: sourceID, TenantID: s.tenantID})
+		if err != nil {
+			return Detail{}, err
+		}
+		result.Resources = append(result.Resources, Resource{ID: sourceID, Kind: resourceKind(source.Provider)})
+		if source.Provider == "openai" {
+			result.ChannelCount++
+		} else {
+			result.SubscriptionCount++
+		}
+	}
 	result.AllowedModels, err = q.ListGroupModels(ctx, id)
 	if err != nil {
 		return Detail{}, err
@@ -116,6 +134,14 @@ func (s *Service) Get(ctx context.Context, id int64) (Detail, error) {
 	return result, tx.Commit()
 }
 func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, error) {
+	ids, kinds, err := resourceIDs(input)
+	if err != nil {
+		return Detail{}, err
+	}
+	input.AccountIDs = ids
+	if input.Routing != nil && !input.Routing.valid() {
+		return Detail{}, ErrInput
+	}
 	action := "group.update"
 	if id == 0 {
 		action = "group.create"
@@ -163,6 +189,15 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 		}
 		if !exists {
 			return Detail{}, ErrInput
+		}
+		if kinds != nil {
+			row, err := q.GetAccount(ctx, db.GetAccountParams{ID: accountID, TenantID: s.tenantID})
+			if err != nil {
+				return Detail{}, err
+			}
+			if kinds[accountID] != resourceKind(row.Provider) {
+				return Detail{}, ErrInput
+			}
 		}
 	}
 	now := time.Now().Unix()
@@ -221,6 +256,15 @@ func (s *Service) Save(ctx context.Context, id int64, input Input) (Detail, erro
 			if err := q.AddGroupModel(ctx, db.AddGroupModelParams{GroupID: id, Model: model}); err != nil {
 				return Detail{}, err
 			}
+		}
+	}
+	if input.Routing != nil {
+		var fallback int64
+		if input.Routing.AllowAPIFallback {
+			fallback = 1
+		}
+		if err := q.SetGroupRouting(ctx, db.SetGroupRoutingParams{ID: id, Preference: input.Routing.Preference, AllowApiFallback: fallback}); err != nil {
+			return Detail{}, err
 		}
 	}
 	if err := audit.Record(ctx, q, action, "group", audit.ID(id)); err != nil {

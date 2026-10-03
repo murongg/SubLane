@@ -66,7 +66,13 @@ export function TourProvider({
       /* Progress is still derived from server state. */
     }
     try {
-      await router.navigate({ to: setupSteps[next].to })
+      const sourceStep = next === 'account' || next === 'verify'
+      await router.navigate({
+        to:
+          sourceStep && router.state.location.pathname === '/channels'
+            ? '/channels'
+            : setupSteps[next].to,
+      })
     } catch {
       setNavigationFailed(true)
     }

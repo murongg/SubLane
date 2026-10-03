@@ -111,7 +111,7 @@ it('loads service data, navigates accounts, and persists the theme', async () =>
   )
   await user.click(await screen.findByRole('link', { name: 'Instance status' }))
   expect(await screen.findByText('synthetic-version')).toBeTruthy()
-  await user.click(screen.getByRole('link', { name: 'Accounts' }))
+  await user.click(screen.getByRole('link', { name: 'Subscription accounts' }))
   expect(
     await screen.findByRole('heading', { name: 'Subscription accounts' }),
   ).toBeTruthy()

@@ -169,6 +169,9 @@ func (c *Client) executor(provider string) (core.ProviderExecutor, error) {
 	if !accounts.ValidProvider(provider) {
 		return nil, ErrInput
 	}
+	if provider == "openai" {
+		provider = "openai-compatibility"
+	}
 	if err := c.Start(context.Background()); err != nil {
 		return nil, err
 	}
@@ -184,6 +187,10 @@ func (c *Client) executor(provider string) (core.ProviderExecutor, error) {
 	return executor, nil
 }
 func sdkAuth(c accounts.Credential) *core.Auth {
+	if c.Kind() == "openai" {
+		// The shared SDK executor receives only this account's ephemeral key and endpoint; its store stays empty.
+		return &core.Auth{ID: c.Kind() + ":" + c.AccountID, Provider: "openai-compatibility", Status: core.StatusActive, Attributes: map[string]string{"api_key": c.AccessToken, "base_url": c.BaseURL}}
+	}
 	metadata := map[string]any{}
 	for key, value := range c.Metadata {
 		var v any

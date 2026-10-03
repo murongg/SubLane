@@ -4,7 +4,7 @@ import { authKey, type AuthState } from './auth'
 import { request } from './request'
 
 export type CatalogTarget =
-  | { kind: 'account'; id: string }
+  | { kind: 'account' | 'channel'; id: string }
   | { kind: 'group' | 'key'; id: number }
 const snapshotSchema = z.object({
   models: z.array(z.string().min(1).max(128)).max(512),
@@ -36,13 +36,19 @@ const groupSchema = z.object({
 })
 export type CatalogView = z.infer<typeof snapshotSchema> & { partial: boolean }
 export function catalogPath(target: CatalogTarget) {
-  return `/api/${target.kind === 'account' ? 'accounts' : target.kind === 'group' ? 'groups' : 'keys'}/${encodeURIComponent(target.id)}/models`
+  const collections = {
+    account: 'accounts',
+    channel: 'channels',
+    group: 'groups',
+    key: 'keys',
+  }
+  return `/api/${collections[target.kind]}/${encodeURIComponent(target.id)}/models`
 }
 async function readCatalog(
   target: CatalogTarget,
   signal: AbortSignal,
 ): Promise<CatalogView> {
-  if (target.kind === 'account')
+  if (target.kind === 'account' || target.kind === 'channel')
     return {
       ...(await request(catalogPath(target), snapshotSchema, { signal })),
       partial: false,
@@ -83,15 +89,15 @@ export function catalogOptions(
   })
 }
 export async function refreshCatalog(
-  id: string,
+  target: { kind: 'account' | 'channel'; id: string },
   signal?: AbortSignal,
 ): Promise<CatalogView> {
   return {
-    ...(await request(
-      `/api/accounts/${encodeURIComponent(id)}/models/refresh`,
-      snapshotSchema,
-      { method: 'POST', body: '{}', signal },
-    )),
+    ...(await request(`${catalogPath(target)}/refresh`, snapshotSchema, {
+      method: 'POST',
+      body: '{}',
+      signal,
+    })),
     partial: false,
   }
 }

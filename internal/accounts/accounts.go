@@ -32,6 +32,7 @@ var (
 )
 
 type Account struct {
+	BaseURL        string `json:"base_url,omitempty"`
 	GroupCount     *int64 `json:"group_count,omitempty"`
 	ProxyID        string `json:"proxy_id,omitempty"`
 	ID             string `json:"id"`
@@ -85,6 +86,17 @@ func (s *Service) List(ctx context.Context) ([]Account, error) {
 		if row.ProxyID != nil {
 			account.ProxyID = *row.ProxyID
 		}
+		if row.Provider == "openai" {
+			stored, err := s.get(ctx, row.ID)
+			if err != nil {
+				return nil, err
+			}
+			credential, err := s.decrypt(stored)
+			if err != nil {
+				return nil, err
+			}
+			account.BaseURL = credential.BaseURL
+		}
 		result = append(result, account)
 	}
 	return result, nil
@@ -134,10 +146,43 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	defer s.mu.Unlock()
 	credential.Rejected = false
 	now := s.now().Unix()
+	if credential.Kind() == "openai" {
+		rows, err := s.queries.ListAccounts(ctx, s.tenantID)
+		if err != nil {
+			return Account{}, err
+		}
+		for _, existing := range rows {
+			if existing.Provider != "openai" || existing.ID == replaceID {
+				continue
+			}
+			row, err := s.get(ctx, existing.ID)
+			if err != nil {
+				return Account{}, err
+			}
+			previous, err := s.decrypt(row)
+			if err != nil {
+				return Account{}, err
+			}
+			if previous.BaseURL == credential.BaseURL && previous.AccessToken == credential.AccessToken {
+				return Account{}, ErrDuplicate
+			}
+		}
+	}
 	if replaceID != "" {
 		row, err := s.get(ctx, replaceID)
 		if err != nil {
 			return Account{}, err
+		}
+		if row.Provider == "openai" && credential.Kind() == "openai" {
+			previous, err := s.decrypt(row)
+			if err != nil {
+				return Account{}, err
+			}
+			// Key rotation retains affinity, but endpoint changes would rebind existing conversations.
+			if previous.BaseURL != credential.BaseURL {
+				return Account{}, ErrIdentity
+			}
+			credential.AccountID = previous.AccountID
 		}
 		// Existing continuations must never be rebound to a different upstream identity.
 		if row.AccountID != credential.AccountID || row.Provider != credential.Kind() {
@@ -176,7 +221,9 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 		}
 		delete(s.refreshes, replaceID)
 		row.Email, row.Plan, row.Status, row.ExpiresAt, row.UpdatedAt = credential.Email, credential.Plan, status, credential.ExpiresAt, now
-		return metadata(row), nil
+		result := metadata(row)
+		result.BaseURL = credential.BaseURL
+		return result, nil
 	}
 	credential, _, err = prepareClaudeIdentity(credential, "")
 	if err != nil {
@@ -228,7 +275,7 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	if err := tx.Commit(); err != nil {
 		return Account{}, err
 	}
-	return Account{ID: id, Provider: credential.Kind(), Name: name, Email: credential.Email, Plan: credential.Plan, Enabled: true, Status: status, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now, MaxConcurrency: 30, ProxyID: proxyID}, nil
+	return Account{ID: id, BaseURL: credential.BaseURL, Provider: credential.Kind(), Name: name, Email: credential.Email, Plan: credential.Plan, Enabled: true, Status: status, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now, MaxConcurrency: 30, ProxyID: proxyID}, nil
 }
 
 func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) (Account, error) {
@@ -255,7 +302,10 @@ func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) (Acco
 	if err := audit.Record(ctx, q, "account.update", "account", id); err != nil {
 		return Account{}, err
 	}
-	return metadata(row), tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return Account{}, err
+	}
+	return s.accountMetadata(row)
 }
 
 func (s *Service) Delete(ctx context.Context, id string) error {
@@ -324,6 +374,18 @@ func metadata(row db.Account) Account {
 	return account
 }
 
+func (s *Service) accountMetadata(row db.Account) (Account, error) {
+	result := metadata(row)
+	if row.Provider == "openai" {
+		credential, err := s.decrypt(row)
+		if err != nil {
+			return Account{}, err
+		}
+		result.BaseURL = credential.BaseURL
+	}
+	return result, nil
+}
+
 func NormalizeName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if !utf8.ValidString(name) || utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 64 || strings.IndexFunc(name, unicode.IsControl) >= 0 {
@@ -334,7 +396,10 @@ func NormalizeName(name string) (string, error) {
 
 func (s *Service) Get(ctx context.Context, id string) (Account, error) {
 	row, err := s.get(ctx, id)
-	return metadata(row), err
+	if err != nil {
+		return Account{}, err
+	}
+	return s.accountMetadata(row)
 }
 
 func (s *Service) decrypt(row db.Account) (Credential, error) {

@@ -3,6 +3,7 @@ package upstream
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -49,7 +50,17 @@ func (c *Client) providerModels(ctx context.Context, credential accounts.Credent
 	if credential.Kind() == "xai" {
 		endpoint = "https://api.x.ai/v1/models"
 	}
-	req, _ := http.NewRequestWithContext(ctx, method, endpoint, strings.NewReader(`{}`))
+	if credential.Kind() == "openai" {
+		endpoint = credential.BaseURL + "/models"
+	}
+	var body io.Reader
+	if method == http.MethodPost {
+		body = strings.NewReader(`{}`)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	if err != nil {
+		return nil, ErrInput
+	}
 	req.Header.Set("Content-Type", "application/json")
 	if credential.Kind() == "claude" {
 		req.Header.Set("Anthropic-Version", "2023-06-01")

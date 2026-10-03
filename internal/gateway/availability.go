@@ -126,7 +126,7 @@ func (s *Service) modelAvailability(rows []availabilityAccount, policy groups.Mo
 			reason = accounts.ErrDisabled
 		case account.Status == "reauth_required":
 			reason = accounts.ErrReauthorize
-		case !policy.Allows(account.Provider + "/" + model):
+		case !policy.AllowsProvider(account.Provider) || !policy.AllowsResource(account.Provider, model):
 			reason = ErrModelNotAllowed
 		case !known:
 			reason = ErrCatalogUnavailable

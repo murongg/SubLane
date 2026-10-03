@@ -72,7 +72,7 @@ func (f *Flow) BeginProviderWithProxy(ctx context.Context, provider, session, na
 	if provider == "" {
 		provider = "codex"
 	}
-	if !accounts.ValidProvider(provider) {
+	if !accounts.SubscriptionProvider(provider) {
 		return Authorization{}, accounts.ErrInput
 	}
 	if !f.accounts.ProviderEnabled(provider) {

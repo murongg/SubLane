@@ -50,7 +50,9 @@ it('filters administrator audit records and follows bounded pagination', async (
     ),
   )
   await user.click(screen.getByRole('button', { name: 'Resource type' }))
-  await user.click(screen.getByRole('menuitemradio', { name: 'Account pool' }))
+  await user.click(
+    screen.getByRole('menuitemradio', { name: 'Resource group' }),
+  )
   await waitFor(() =>
     expect(
       fetch.mock.calls.some(

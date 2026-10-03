@@ -31,11 +31,90 @@ const account = {
 }
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status })
+
+it('selects subscriptions and channels separately with API fallback off by default', async () => {
+  const channel = {
+    id: 'synthetic-channel',
+    name: 'Synthetic channel',
+    protocol: 'openai',
+    base_url: 'https://relay.example.test/v1',
+    enabled: true,
+    status: 'ready',
+    max_concurrency: 30,
+    created_at: 1,
+    updated_at: 1,
+  }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/accounts')
+        return Promise.resolve(response({ accounts: [account] }))
+      if (url === '/api/channels')
+        return Promise.resolve(response({ channels: [channel] }))
+      if (url === '/api/groups' && init?.method === 'POST') {
+        const input = JSON.parse(String(init.body))
+        expect(input.resources).toEqual([
+          { kind: 'subscription', id: account.id },
+          { kind: 'channel', id: channel.id },
+        ])
+        expect(input.routing).toEqual({
+          preference: 'subscription_first',
+          allow_api_fallback: false,
+        })
+        return Promise.resolve(
+          response({
+            ...base,
+            ...input,
+            account_count: 2,
+            account_ids: [account.id, channel.id],
+            allowed_models: [],
+          }),
+        )
+      }
+      return Promise.resolve(response({ groups: [] }))
+    }),
+  )
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/groups'] }),
+      )}
+    />,
+  )
+  const user = userEvent.setup()
+  await user.click(
+    await screen.findByRole('button', { name: 'Create resource group' }),
+  )
+  const dialog = await screen.findByRole('dialog')
+  await user.type(
+    within(dialog).getByLabelText('Group name'),
+    'Synthetic mixed resources',
+  )
+  await user.click(
+    await within(dialog).findByRole('checkbox', { name: /Synthetic account/ }),
+  )
+  await user.click(
+    await within(dialog).findByRole('checkbox', { name: /Synthetic channel/ }),
+  )
+  expect(
+    (
+      within(dialog).getByRole('checkbox', {
+        name: 'Allow API fallback when subscriptions are unavailable',
+      }) as HTMLInputElement
+    ).checked,
+  ).toBe(false)
+  await user.click(within(dialog).getByRole('button', { name: 'Save group' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+})
 it('creates a pool with only selected accounts', async () => {
   const groups = [base]
   const fetch = vi
     .fn()
     .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/channels')
+        return Promise.resolve(response({ channels: [] }))
       if (url === '/api/auth/state')
         return Promise.resolve(response(authenticated))
       if (url === '/api/accounts')
@@ -44,7 +123,11 @@ it('creates a pool with only selected accounts', async () => {
         expect(JSON.parse(String(init.body))).toEqual({
           name: 'Project alpha',
           enabled: true,
-          account_ids: ['synthetic-account'],
+          resources: [{ kind: 'subscription', id: 'synthetic-account' }],
+          routing: {
+            preference: 'subscription_first',
+            allow_api_fallback: false,
+          },
           model_policy: { restricted: false, models: [] },
         })
         const group = {
@@ -77,15 +160,17 @@ it('creates a pool with only selected accounts', async () => {
       )}
     />,
   )
-  await screen.findByRole('heading', { name: 'Account pools' })
+  await screen.findByRole('heading', { name: 'Resource groups' })
   const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Create account pool' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Create resource group' }),
+  )
   const dialog = await screen.findByRole('dialog')
-  await user.type(within(dialog).getByLabelText('Pool name'), 'Project alpha')
+  await user.type(within(dialog).getByLabelText('Group name'), 'Project alpha')
   await user.click(
     await within(dialog).findByRole('checkbox', { name: /Synthetic account/ }),
   )
-  await user.click(within(dialog).getByRole('button', { name: 'Save pool' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Save group' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   await screen.findByText('Project alpha')
 })
@@ -94,6 +179,8 @@ it('edits an exact model allowlist and makes an empty list explicitly deny all',
   const fetch = vi
     .fn()
     .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/channels')
+        return Promise.resolve(response({ channels: [] }))
       if (url === '/api/auth/state')
         return Promise.resolve(response(authenticated))
       if (url === '/api/accounts')
@@ -133,7 +220,7 @@ it('edits an exact model allowlist and makes an empty list explicitly deny all',
   expect(
     within(dialog).getByText('No models are allowed while this list is empty.'),
   ).toBeTruthy()
-  await user.click(within(dialog).getByRole('button', { name: 'Save pool' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Save group' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 })
 
@@ -142,6 +229,8 @@ it('shows a renamed first pool and allows editing its name and enabled state', a
   const fetch = vi
     .fn()
     .mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/channels')
+        return Promise.resolve(response({ channels: [] }))
       if (url === '/api/auth/state')
         return Promise.resolve(response(authenticated))
       if (url === '/api/accounts')
@@ -171,13 +260,13 @@ it('shows a renamed first pool and allows editing its name and enabled state', a
     await screen.findByRole('button', { name: 'Edit Synthetic renamed pool' }),
   )
   const dialog = await screen.findByRole('dialog')
-  await user.clear(await within(dialog).findByLabelText('Pool name'))
+  await user.clear(await within(dialog).findByLabelText('Group name'))
   await user.type(
-    within(dialog).getByLabelText('Pool name'),
+    within(dialog).getByLabelText('Group name'),
     'Synthetic updated pool',
   )
-  await user.click(within(dialog).getByLabelText('Pool enabled'))
-  await user.click(within(dialog).getByRole('button', { name: 'Save pool' }))
+  await user.click(within(dialog).getByLabelText('Group enabled'))
+  await user.click(within(dialog).getByRole('button', { name: 'Save group' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(pool.name).toBe('Synthetic updated pool')
   expect(pool.enabled).toBe(false)

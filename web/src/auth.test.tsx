@@ -146,7 +146,9 @@ it('welcomes a fresh instance, creates the administrator, and enters the workspa
   expect(document.activeElement).toBe(
     screen.getByRole('heading', { name: 'Create administrator' }),
   )
-  expect(screen.queryByRole('link', { name: 'Accounts' })).toBeNull()
+  expect(
+    screen.queryByRole('link', { name: 'Subscription accounts' }),
+  ).toBeNull()
   await user.type(screen.getByLabelText('Username'), 'admin-test')
   await user.type(
     screen.getByLabelText('Password', { exact: true }),
@@ -421,7 +423,9 @@ it('returns to login when a protected request reports an expired session', async
     await screen.findByRole('heading', { name: 'Sign in to SubLane' }),
   ).toBeTruthy()
   await waitFor(() =>
-    expect(screen.queryByRole('link', { name: 'Accounts' })).toBeNull(),
+    expect(
+      screen.queryByRole('link', { name: 'Subscription accounts' }),
+    ).toBeNull(),
   )
 })
 

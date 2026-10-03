@@ -17,15 +17,23 @@ export function DeleteAccount({
   onClose,
   onDeleted,
   restoreFocus,
+  remove = deleteAccount,
+  titleKey = 'deleteAccountTitle',
+  descriptionKey = 'deleteAccountDescription',
+  actionKey = 'deleteAccount',
 }: {
-  account: Account
+  account: Pick<Account, 'id' | 'name'>
+  remove?: (id: string) => Promise<unknown>
+  titleKey?: 'deleteAccountTitle' | 'deleteChannelTitle'
+  descriptionKey?: 'deleteAccountDescription' | 'deleteChannelDescription'
+  actionKey?: 'deleteAccount' | 'deleteChannel'
   onClose: () => void
   onDeleted: () => Promise<void>
   restoreFocus: () => void
 }) {
   const { t } = useTranslation()
   const mutation = useMutation({
-    mutationFn: () => deleteAccount(account.id),
+    mutationFn: () => remove(account.id),
     onSuccess: async () => {
       await onDeleted()
       onClose()
@@ -53,9 +61,9 @@ export function DeleteAccount({
         }}
       >
         <DialogHeader>
-          <DialogTitle>{t('deleteAccountTitle')}</DialogTitle>
+          <DialogTitle>{t(titleKey)}</DialogTitle>
           <DialogDescription>
-            {t('deleteAccountDescription', { name: account.name })}
+            {t(descriptionKey, { name: account.name })}
           </DialogDescription>
         </DialogHeader>
         {mutation.isError && (
@@ -82,7 +90,7 @@ export function DeleteAccount({
                 aria-hidden="true"
               />
             )}
-            {t('deleteAccount')}
+            {t(actionKey)}
           </Button>
         </DialogFooter>
       </DialogContent>

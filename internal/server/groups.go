@@ -80,6 +80,8 @@ func (h *groupHTTP) update(w http.ResponseWriter, r *http.Request) {
 }
 func (h *groupHTTP) save(w http.ResponseWriter, r *http.Request, id int64) {
 	var input struct {
+		Resources   []groups.Resource   `json:"resources"`
+		Routing     *groups.Routing     `json:"routing"`
 		ModelPolicy *groups.ModelPolicy `json:"model_policy"`
 		Name        string              `json:"name"`
 		Enabled     *bool               `json:"enabled"`
@@ -92,7 +94,7 @@ func (h *groupHTTP) save(w http.ResponseWriter, r *http.Request, id int64) {
 		groupError(w, groups.ErrInput)
 		return
 	}
-	value, err := h.service.Save(r.Context(), id, groups.Input{ModelPolicy: input.ModelPolicy, Name: input.Name, Enabled: *input.Enabled, AccountIDs: input.AccountIDs})
+	value, err := h.service.Save(r.Context(), id, groups.Input{Resources: input.Resources, Routing: input.Routing, ModelPolicy: input.ModelPolicy, Name: input.Name, Enabled: *input.Enabled, AccountIDs: input.AccountIDs})
 	if err != nil {
 		groupError(w, err)
 		return

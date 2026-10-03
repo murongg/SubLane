@@ -58,6 +58,7 @@ function CatalogContent({
   name: string
 }) {
   const { t, i18n } = useTranslation()
+  const individual = target.kind === 'account' || target.kind === 'channel'
   const timeZone = useTimeZone()
   const client = useQueryClient()
   const options = catalogOptions(client, target)
@@ -71,7 +72,13 @@ function CatalogContent({
   const refresh = useAdminMutation({
     userID: ownerID ?? 0,
     mutationFn: (_input: void, signal) =>
-      refreshCatalog(String(target.id), signal),
+      refreshCatalog(
+        {
+          kind: target.kind === 'channel' ? 'channel' : 'account',
+          id: String(target.id),
+        },
+        signal,
+      ),
     onSuccess: (data) => client.setQueryData(options.queryKey, data),
   })
   const data = query.data
@@ -98,8 +105,10 @@ function CatalogContent({
         <DialogTitle>{t('catalogFor', { name })}</DialogTitle>
         <DialogDescription>
           {t(
-            target.kind === 'account'
-              ? 'catalogAccountDescription'
+            individual
+              ? target.kind === 'channel'
+                ? 'catalogChannelDescription'
+                : 'catalogAccountDescription'
               : 'catalogGroupDescription',
           )}
         </DialogDescription>
@@ -113,16 +122,14 @@ function CatalogContent({
         <Button
           variant="outline"
           size="sm"
-          disabled={pending || (target.kind === 'account' && cooldown > 0)}
-          onClick={() =>
-            target.kind === 'account' ? refresh.mutate() : query.refetch()
-          }
+          disabled={pending || (individual && cooldown > 0)}
+          onClick={() => (individual ? refresh.mutate() : query.refetch())}
         >
           <RefreshCw
             aria-hidden="true"
             className={pending ? 'motion-safe:animate-spin' : undefined}
           />
-          {t(target.kind === 'account' ? 'catalogRefresh' : 'catalogReload')}
+          {t(individual ? 'catalogRefresh' : 'catalogReload')}
         </Button>
       </div>
       {query.isPending ? (
@@ -165,11 +172,7 @@ function CatalogContent({
           )}
           {data?.known && data.models.length === 0 && (
             <p className="py-4 text-sm text-muted-foreground">
-              {t(
-                target.kind === 'account'
-                  ? 'catalogEmptyAccount'
-                  : 'catalogEmptyGroup',
-              )}
+              {t(individual ? 'catalogEmptyAccount' : 'catalogEmptyGroup')}
             </p>
           )}
           {Boolean(data?.models.length) && (
@@ -189,7 +192,7 @@ function CatalogContent({
                     key={model}
                     className="break-all py-2.5 font-mono text-xs"
                   >
-                    {target.kind === 'account' ? (
+                    {individual ? (
                       model
                     ) : (
                       <button
@@ -229,10 +232,10 @@ function CatalogContent({
           )}
         </>
       )}
-      {target.kind !== 'account' && (
+      {(target.kind === 'group' || target.kind === 'key') && (
         <ModelAvailability
           key={inspectedModel}
-          target={target}
+          target={{ kind: target.kind, id: Number(target.id) }}
           model={inspectedModel}
           onInspect={setInspectedModel}
         />
