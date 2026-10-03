@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -28,6 +29,7 @@ func (h *accountHTTP) register(router chi.Router) {
 		accounts.Put("/{id}/proxy", h.bindProxy)
 		accounts.Post("/{id}/resume", h.resume)
 		accounts.Post("/import", h.importCredential)
+		accounts.Post("/api-key", h.saveAPIKey)
 		accounts.Post("/oauth", h.beginOAuth)
 		accounts.Post("/oauth/complete", h.finishOAuth)
 		accounts.Post("/oauth/poll", h.pollOAuth)
@@ -58,7 +60,13 @@ func (h *accountHTTP) list(w http.ResponseWriter, r *http.Request) {
 		accountError(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"accounts": rows})
+	subscriptions := make([]accounts.Account, 0, len(rows))
+	for _, row := range rows {
+		if accounts.SubscriptionProvider(row.Provider) {
+			subscriptions = append(subscriptions, row)
+		}
+	}
+	writeJSON(w, 200, map[string]any{"accounts": subscriptions})
 }
 
 func (h *accountHTTP) importCredential(w http.ResponseWriter, r *http.Request) {
@@ -73,6 +81,33 @@ func (h *accountHTTP) importCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	account, err := h.service.ImportProviderWithProxy(r.Context(), input.Provider, input.Name, []byte(input.AuthJSON), input.ReplaceID, input.ProxyID)
+	if err != nil {
+		accountError(w, err)
+		return
+	}
+	writeJSON(w, 201, account)
+	if h.gateway != nil {
+		_, _ = h.gateway.AccountCatalog(r.Context(), account.ID, false)
+	}
+}
+
+func (h *accountHTTP) saveAPIKey(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Name      string `json:"name"`
+		APIKey    string `json:"api_key"`
+		BaseURL   string `json:"base_url"`
+		ReplaceID string `json:"replace_id"`
+		ProxyID   string `json:"proxy_id"`
+	}
+	if !decodeJSONLimit(w, r, &input, 32<<10) {
+		return
+	}
+	raw, err := json.Marshal(map[string]string{"api_key": input.APIKey, "base_url": input.BaseURL})
+	if err != nil {
+		accountError(w, accounts.ErrInput)
+		return
+	}
+	account, err := h.service.ImportProviderWithProxy(r.Context(), "openai", input.Name, raw, input.ReplaceID, input.ProxyID)
 	if err != nil {
 		accountError(w, err)
 		return

@@ -3,6 +3,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { accountOptions, providerLabels } from '@/lib/accounts'
+import { channelOptions } from '@/lib/channels'
+import { Link } from '@tanstack/react-router'
+import { ChevronDown } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from './ui/DropdownMenu'
 import { authKey, type AuthState } from '@/lib/auth'
 import {
   groupDetails,
@@ -87,17 +97,35 @@ function GroupForm({
   const { t } = useTranslation()
   const [name, setName] = useState(value?.name ?? '')
   const [enabled, setEnabled] = useState(value?.enabled ?? true)
-  const [selected, setSelected] = useState<string[]>(value?.account_ids ?? [])
+  const [selected, setSelected] = useState<string[]>(
+    value?.resources
+      ?.filter((resource) => resource.kind === 'subscription')
+      .map((resource) => resource.id) ??
+      value?.account_ids ??
+      [],
+  )
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(
+    value?.resources
+      ?.filter((resource) => resource.kind === 'channel')
+      .map((resource) => resource.id) ?? [],
+  )
+  const [preference, setPreference] = useState<
+    'protocol' | 'subscription_first' | 'api_first'
+  >(value?.routing.preference ?? 'subscription_first')
+  const [fallback, setFallback] = useState(
+    value?.routing.allow_api_fallback ?? false,
+  )
   const [restricted, setRestricted] = useState(
     value?.restricted_models ?? false,
   )
   const [models, setModels] = useState(value?.allowed_models.join('\n') ?? '')
   const [invalid, setInvalid] = useState(false)
   const accounts = useQuery(accountOptions)
+  const channels = useQuery(channelOptions)
   const mutation = useMutation({ mutationFn: saveGroup, onSuccess: onSaved })
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (mutation.isPending || !accounts.data) return
+    if (mutation.isPending || !accounts.data || !channels.data) return
     const valid = name.trim().length > 0 && Array.from(name.trim()).length <= 64
     setInvalid(!valid)
     if (valid)
@@ -105,7 +133,11 @@ function GroupForm({
         id: value?.id,
         name: name.trim(),
         enabled,
-        account_ids: selected,
+        resources: [
+          ...selected.map((id) => ({ kind: 'subscription' as const, id })),
+          ...selectedChannels.map((id) => ({ kind: 'channel' as const, id })),
+        ],
+        routing: { preference, allow_api_fallback: fallback },
         model_policy: {
           restricted,
           models: models
@@ -220,6 +252,138 @@ function GroupForm({
             </div>
           )}
         </fieldset>
+        <fieldset className="space-y-2" disabled={mutation.isPending}>
+          <legend className="text-sm font-medium">{t('channelsTitle')}</legend>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {t('groupChannelsHint')}
+          </p>
+          {channels.isPending ? (
+            <p role="status" className="py-3 text-sm text-muted-foreground">
+              {t('loadingChannels')}
+            </p>
+          ) : channels.isError ? (
+            <div role="alert" className="space-y-2">
+              <p className="text-sm text-error">{t('channelsLoadFailed')}</p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => channels.refetch()}
+              >
+                {t('reconnect')}
+              </Button>
+            </div>
+          ) : channels.data.channels.length === 0 ? (
+            <div className="space-y-1 py-2">
+              <p className="text-sm text-muted-foreground">
+                {t('channelsEmpty')}
+              </p>
+              <Link
+                to="/channels"
+                onClick={onClose}
+                className="text-sm underline underline-offset-4"
+              >
+                {t('addChannel')}
+              </Link>
+            </div>
+          ) : (
+            <div className="max-h-60 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+              {channels.data.channels.map((channel) => (
+                <label
+                  key={channel.id}
+                  className="flex cursor-pointer items-start gap-3 px-3 py-3 hover:bg-muted"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedChannels.includes(channel.id)}
+                    onChange={(event) =>
+                      setSelectedChannels((ids) =>
+                        event.target.checked
+                          ? [...ids, channel.id]
+                          : ids.filter((id) => id !== channel.id),
+                      )
+                    }
+                    className="mt-0.5 size-4 shrink-0 accent-primary focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <span className="min-w-0 text-sm">
+                    <span className="block break-words font-medium">
+                      {channel.name}
+                    </span>
+                    <span className="mt-0.5 block break-all text-xs text-muted-foreground">
+                      {channel.base_url}
+                      {!channel.enabled && ` · ${t('disabled')}`}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </fieldset>
+        <fieldset className="space-y-3" disabled={mutation.isPending}>
+          <legend className="text-sm font-medium">{t('groupRouting')}</legend>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-between"
+                aria-label={t('groupRouting')}
+              >
+                <span>
+                  {t(
+                    preference === 'subscription_first'
+                      ? 'routingSubscriptionFirst'
+                      : preference === 'api_first'
+                        ? 'routingAPIFirst'
+                        : 'routingProtocol',
+                  )}
+                </span>
+                <ChevronDown aria-hidden="true" className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-(--radix-dropdown-menu-trigger-width)">
+              <DropdownMenuRadioGroup
+                value={preference}
+                onValueChange={(value) =>
+                  setPreference(value as typeof preference)
+                }
+              >
+                {(['subscription_first', 'api_first', 'protocol'] as const).map(
+                  (mode) => (
+                    <DropdownMenuRadioItem key={mode} value={mode}>
+                      {t(
+                        mode === 'subscription_first'
+                          ? 'routingSubscriptionFirst'
+                          : mode === 'api_first'
+                            ? 'routingAPIFirst'
+                            : 'routingProtocol',
+                      )}
+                    </DropdownMenuRadioItem>
+                  ),
+                )}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {preference === 'subscription_first' && (
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={fallback}
+                onChange={(event) => setFallback(event.target.checked)}
+                className="mt-0.5 size-4 shrink-0 accent-primary focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <span>{t('allowAPIFallback')}</span>
+            </label>
+          )}
+          <p className="text-xs leading-5 text-muted-foreground">
+            {t(
+              preference === 'subscription_first'
+                ? 'apiFallbackHint'
+                : preference === 'api_first'
+                  ? 'apiPriorityHint'
+                  : 'protocolRoutingHint',
+            )}
+          </p>
+        </fieldset>
         <fieldset className="space-y-3" disabled={mutation.isPending}>
           <legend className="text-sm font-medium">
             {t('groupModelPolicy')}
@@ -280,7 +444,10 @@ function GroupForm({
           >
             {t('cancel')}
           </Button>
-          <Button type="submit" disabled={mutation.isPending || !accounts.data}>
+          <Button
+            type="submit"
+            disabled={mutation.isPending || !accounts.data || !channels.data}
+          >
             {mutation.isPending && (
               <LoaderCircle
                 aria-hidden="true"

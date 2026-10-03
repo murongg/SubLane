@@ -42,7 +42,9 @@ export function FloatingTour() {
     setup?.stage === 'complete' && index === order.length - 1 && !query.isError
   const step = order[index]
   const metadata = setupSteps[step]
-  const onPage = path.replace(/\/+$/, '') === metadata.to
+  const onPage =
+    path.replace(/\/+$/, '') === metadata.to ||
+    ((step === 'account' || step === 'verify') && path === '/channels')
   const selector = onPage ? `[data-tour="${step}"]:not(:disabled)` : null
   const panel = useRef<HTMLElement>(null)
   const title = useRef<HTMLHeadingElement>(null)

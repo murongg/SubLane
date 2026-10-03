@@ -364,7 +364,7 @@ func (s *Service) GroupCatalog(ctx context.Context, userID, groupID int64, wait 
 			}
 		}
 		for _, id := range ids {
-			if !policy.Allows(account.Provider + "/" + id) {
+			if !policy.AllowsResource(account.Provider, id) {
 				continue
 			}
 			metadata := modelMetadata(account.Provider, id)

@@ -4,6 +4,14 @@ import { authKey, type AuthState } from './auth'
 import { ApiError, request } from './request'
 
 const groupSchema = z.object({
+  subscription_count: z.number().int().nonnegative().optional(),
+  channel_count: z.number().int().nonnegative().optional(),
+  routing: z
+    .object({
+      preference: z.enum(['protocol', 'subscription_first', 'api_first']),
+      allow_api_fallback: z.boolean(),
+    })
+    .default({ preference: 'protocol', allow_api_fallback: true }),
   id: z.number().int().positive(),
   name: z.string().min(1),
   enabled: z.boolean(),
@@ -15,6 +23,15 @@ const groupSchema = z.object({
   member_count: z.number().int().nonnegative(),
 })
 const detailSchema = groupSchema.extend({
+  resources: z
+    .array(
+      z.object({
+        kind: z.enum(['subscription', 'channel']),
+        id: z.string().min(1),
+      }),
+    )
+    .max(100)
+    .optional(),
   account_ids: z.array(z.string()).max(100),
   allowed_models: z.array(z.string()).max(100),
 })
@@ -51,7 +68,11 @@ export function saveGroup({
   id?: number
   name: string
   enabled: boolean
-  account_ids: string[]
+  resources: { kind: 'subscription' | 'channel'; id: string }[]
+  routing: {
+    preference: 'protocol' | 'subscription_first' | 'api_first'
+    allow_api_fallback: boolean
+  }
   model_policy: { restricted: boolean; models: string[] }
 }) {
   return request(id ? `/api/groups/${id}` : '/api/groups', detailSchema, {

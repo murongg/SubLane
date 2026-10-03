@@ -107,10 +107,13 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 			if !s.accounts.ProviderEnabled(bound.Provider) {
 				return id, digest, accounts.ErrProviderDisabled
 			}
+			if !policy.AllowsProvider(bound.Provider) {
+				return id, digest, ErrAffinityUnavailable
+			}
 			if kind == Compact && bound.Provider != "codex" {
 				return id, digest, upstream.ErrInput
 			}
-			if model != "" && !policy.Allows(bound.Provider+"/"+model) {
+			if model != "" && !policy.AllowsResource(bound.Provider, model) {
 				return id, digest, ErrModelNotAllowed
 			}
 			if model != "" && bound.Enabled && bound.Status != "reauth_required" {
@@ -155,16 +158,16 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 	}
 	candidates := make([]string, 0, len(available))
 	preferred := preferredProvider(kind)
-	bestRank := 2
+	bestRank := 4
 	busy, unknown, eligible := false, false, false
 	var cooling, quotaWait int64
 	var coolingModel string
 	var allocationErr error
 	for _, account := range available {
-		if !s.accounts.ProviderEnabled(account.Provider) || !allowed[account.ID] || !account.Enabled || account.Status == "reauth_required" || (provider != "" && account.Provider != provider) || (kind == Compact && account.Provider != "codex") {
+		if !s.accounts.ProviderEnabled(account.Provider) || !policy.AllowsProvider(account.Provider) || !allowed[account.ID] || !account.Enabled || account.Status == "reauth_required" || (provider != "" && account.Provider != provider) || (kind == Compact && account.Provider != "codex") {
 			continue
 		}
-		if model != "" && !policy.Allows(account.Provider+"/"+model) {
+		if model != "" && !policy.AllowsResource(account.Provider, model) {
 			continue
 		}
 		eligible = true
@@ -228,10 +231,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 		}
 		// Preference only ranks accounts that passed every policy and availability check.
 		// Existing affinities returned above must never move to a more direct provider.
-		rank := 1
-		if account.Provider == preferred {
-			rank = 0
-		}
+		rank := policy.Routing.Rank(account.Provider, preferred)
 		if rank < bestRank {
 			candidates = candidates[:0]
 			bestRank = rank
@@ -262,7 +262,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 		return "", digest, ErrNoAccount
 	}
 	// Isolate rotation across preference tiers so traffic using another protocol cannot starve this pool.
-	cursor := fmt.Sprintf("%d:%s:%s:%d", groupID, scope, preferred, bestRank)
+	cursor := fmt.Sprintf("%d:%s:%s:%s:%d", groupID, scope, policy.Routing.Preference, preferred, bestRank)
 	id := candidates[s.next[cursor]%len(candidates)]
 	s.next[cursor] = (s.next[cursor] + 1) % len(candidates)
 	if session != "" {

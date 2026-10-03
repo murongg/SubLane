@@ -9,8 +9,8 @@ import {
   completeAuthorization,
   importAccount,
   type Account,
-  type Provider,
-  providers,
+  type SubscriptionProvider as Provider,
+  subscriptionProviders as providers,
   providerLabels,
   callbackURLs,
 } from '@/lib/accounts'

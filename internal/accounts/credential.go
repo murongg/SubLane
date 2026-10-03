@@ -10,6 +10,7 @@ import (
 
 // Credential is internal secret material. HTTP responses must use Account instead.
 type Credential struct {
+	BaseURL      string                     `json:"base_url,omitempty"`
 	ProxyURL     string                     `json:"-"`
 	Provider     string                     `json:"provider,omitempty"`
 	Metadata     map[string]json.RawMessage `json:"metadata,omitempty"`
@@ -32,6 +33,10 @@ func (c Credential) Kind() string {
 }
 
 func ValidProvider(provider string) bool {
+	return SubscriptionProvider(provider) || provider == "openai"
+}
+
+func SubscriptionProvider(provider string) bool {
 	return provider == "codex" || provider == "claude" || provider == "antigravity" || provider == "xai"
 }
 
@@ -43,6 +48,9 @@ func ParseFor(provider string, raw []byte) (Credential, error) {
 	}
 	if !ValidProvider(provider) {
 		return Credential{}, ErrInput
+	}
+	if provider == "openai" {
+		return parseAPIKey(raw)
 	}
 	if provider != "codex" {
 		return parseSubscription(provider, raw)
@@ -76,6 +84,7 @@ func ParseFor(provider string, raw []byte) (Credential, error) {
 		credential.Metadata = nil
 	}
 	// Token claims are used only as display/routing metadata, never as SubLane authentication or roles.
+	credential.BaseURL = ""
 	claims := tokenClaims(credential.IDToken)
 	if claims.AccountID != "" {
 		if credential.AccountID != "" && credential.AccountID != claims.AccountID {
@@ -106,7 +115,15 @@ func ParseFor(provider string, raw []byte) (Credential, error) {
 }
 
 func (c Credential) validate() error {
-	if !ValidProvider(c.Kind()) || !validToken(c.AccessToken) || !validToken(c.RefreshToken) || len(c.IDToken) > 16384 || c.AccountID == "" || len(c.AccountID) > 256 || len(c.Email) > 320 || len(c.Plan) > 64 || c.ExpiresAt < 0 {
+	if !ValidProvider(c.Kind()) || !validToken(c.AccessToken) || (c.Kind() != "openai" && !validToken(c.RefreshToken)) || len(c.IDToken) > 16384 || c.AccountID == "" || len(c.AccountID) > 256 || len(c.Email) > 320 || len(c.Plan) > 64 || c.ExpiresAt < 0 {
+		return ErrInput
+	}
+	if c.Kind() == "openai" {
+		endpoint, err := normalizeBaseURL(c.BaseURL)
+		if err != nil || endpoint != c.BaseURL || c.RefreshToken != "" || c.ExpiresAt != 0 || c.IDToken != "" || len(c.Metadata) != 0 {
+			return ErrInput
+		}
+	} else if c.BaseURL != "" {
 		return ErrInput
 	}
 	for _, value := range []string{c.AccountID, c.Email, c.Plan} {
@@ -173,6 +190,7 @@ func parseSubscription(provider string, raw []byte) (Credential, error) {
 		return Credential{}, ErrInput
 	}
 	c := input.Credential
+	c.BaseURL = ""
 	c.Provider = provider
 	c.Metadata = make(map[string]json.RawMessage)
 	var values map[string]json.RawMessage

@@ -153,7 +153,7 @@ func (q *Queries) FindGroupName(ctx context.Context, arg FindGroupNameParams) (i
 }
 
 const getGroup = `-- name: GetGroup :one
-SELECT id, name, enabled, created_at, updated_at, restricted_models, tenant_id FROM account_groups WHERE id=?1
+SELECT id, name, enabled, created_at, updated_at, restricted_models, tenant_id, routing_preference, allow_api_fallback FROM account_groups WHERE id=?1
 `
 
 func (q *Queries) GetGroup(ctx context.Context, id int64) (AccountGroup, error) {
@@ -167,12 +167,14 @@ func (q *Queries) GetGroup(ctx context.Context, id int64) (AccountGroup, error) 
 		&i.UpdatedAt,
 		&i.RestrictedModels,
 		&i.TenantID,
+		&i.RoutingPreference,
+		&i.AllowApiFallback,
 	)
 	return i, err
 }
 
 const getTenantGroup = `-- name: GetTenantGroup :one
-SELECT id, name, enabled, created_at, updated_at, restricted_models, tenant_id FROM account_groups WHERE id=?1 AND tenant_id=?2
+SELECT id, name, enabled, created_at, updated_at, restricted_models, tenant_id, routing_preference, allow_api_fallback FROM account_groups WHERE id=?1 AND tenant_id=?2
 `
 
 type GetTenantGroupParams struct {
@@ -191,6 +193,8 @@ func (q *Queries) GetTenantGroup(ctx context.Context, arg GetTenantGroupParams) 
 		&i.UpdatedAt,
 		&i.RestrictedModels,
 		&i.TenantID,
+		&i.RoutingPreference,
+		&i.AllowApiFallback,
 	)
 	return i, err
 }
@@ -227,11 +231,11 @@ func (q *Queries) GroupAccountExists(ctx context.Context, arg GroupAccountExists
 
 const groupConnectionStatus = `-- name: GroupConnectionStatus :one
 SELECT CASE WHEN EXISTS(
- SELECT 1 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id JOIN account_groups g ON g.id=ga.group_id JOIN users u ON u.id=?1
- WHERE g.tenant_id=?2 AND g.enabled=1 AND a.enabled=1 AND a.provider IN ('codex','claude','antigravity','xai') AND a.status='ready' AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
+ SELECT 1 FROM routable_group_resources ga JOIN accounts a ON a.id=ga.account_id JOIN account_groups g ON g.id=ga.group_id JOIN users u ON u.id=?1
+ WHERE g.tenant_id=?2 AND g.enabled=1 AND a.enabled=1 AND a.provider IN ('codex','claude','antigravity','xai','openai') AND a.status='ready' AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
 ) THEN 'ready' WHEN EXISTS(
- SELECT 1 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id JOIN account_groups g ON g.id=ga.group_id JOIN users u ON u.id=?1
- WHERE g.tenant_id=?2 AND g.enabled=1 AND a.enabled=1 AND a.provider IN ('codex','claude','antigravity','xai') AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
+ SELECT 1 FROM routable_group_resources ga JOIN accounts a ON a.id=ga.account_id JOIN account_groups g ON g.id=ga.group_id JOIN users u ON u.id=?1
+ WHERE g.tenant_id=?2 AND g.enabled=1 AND a.enabled=1 AND a.provider IN ('codex','claude','antigravity','xai','openai') AND u.enabled=1 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id)
 ) THEN 'needs_attention' ELSE 'not_configured' END AS status
 `
 
@@ -247,8 +251,20 @@ func (q *Queries) GroupConnectionStatus(ctx context.Context, arg GroupConnection
 	return status, err
 }
 
+const groupHasSubscriptions = `-- name: GroupHasSubscriptions :one
+SELECT EXISTS(SELECT 1 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id
+WHERE ga.group_id=?1 AND a.provider!='openai')
+`
+
+func (q *Queries) GroupHasSubscriptions(ctx context.Context, groupID int64) (bool, error) {
+	row := q.db.QueryRowContext(ctx, groupHasSubscriptions, groupID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listAvailableGroups = `-- name: ListAvailableGroups :many
-SELECT g.id,g.name,(SELECT count(*) FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id WHERE ga.group_id=g.id AND a.provider IN ('codex','claude','antigravity','xai')) AS account_count
+SELECT g.id,g.name,(SELECT count(*) FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id WHERE ga.group_id=g.id AND a.provider IN ('codex','claude','antigravity','xai','openai')) AS account_count
 FROM account_groups g JOIN users u ON u.id=?1
 WHERE g.tenant_id=?2 AND g.enabled=1 AND u.enabled=1
 AND EXISTS(SELECT 1 FROM effective_group_access access WHERE access.group_id=g.id AND access.user_id=u.id) ORDER BY g.id
@@ -343,21 +359,27 @@ func (q *Queries) ListGroupModels(ctx context.Context, groupID int64) ([]string,
 }
 
 const listGroups = `-- name: ListGroups :many
-SELECT g.id, g.name, g.enabled, g.created_at, g.updated_at, g.restricted_models, g.tenant_id, (SELECT count(*) FROM group_accounts a WHERE a.group_id=g.id) AS account_count,
+SELECT g.id, g.name, g.enabled, g.created_at, g.updated_at, g.restricted_models, g.tenant_id, g.routing_preference, g.allow_api_fallback, (SELECT count(*) FROM group_accounts a WHERE a.group_id=g.id) AS account_count,
+(SELECT count(*) FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id WHERE ga.group_id=g.id AND a.provider!='openai') AS subscription_count,
+(SELECT count(*) FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id WHERE ga.group_id=g.id AND a.provider='openai') AS channel_count,
 (SELECT count(*) FROM effective_group_access access WHERE access.group_id=g.id) AS member_count
 FROM account_groups g WHERE g.tenant_id=?1 ORDER BY g.id
 `
 
 type ListGroupsRow struct {
-	ID               int64
-	Name             string
-	Enabled          bool
-	CreatedAt        int64
-	UpdatedAt        int64
-	RestrictedModels bool
-	TenantID         int64
-	AccountCount     int64
-	MemberCount      int64
+	ID                int64
+	Name              string
+	Enabled           bool
+	CreatedAt         int64
+	UpdatedAt         int64
+	RestrictedModels  bool
+	TenantID          int64
+	RoutingPreference string
+	AllowApiFallback  int64
+	AccountCount      int64
+	SubscriptionCount int64
+	ChannelCount      int64
+	MemberCount       int64
 }
 
 func (q *Queries) ListGroups(ctx context.Context, tenantID int64) ([]ListGroupsRow, error) {
@@ -377,7 +399,11 @@ func (q *Queries) ListGroups(ctx context.Context, tenantID int64) ([]ListGroupsR
 			&i.UpdatedAt,
 			&i.RestrictedModels,
 			&i.TenantID,
+			&i.RoutingPreference,
+			&i.AllowApiFallback,
 			&i.AccountCount,
+			&i.SubscriptionCount,
+			&i.ChannelCount,
 			&i.MemberCount,
 		); err != nil {
 			return nil, err
@@ -492,6 +518,22 @@ type SetGroupModelPolicyParams struct {
 
 func (q *Queries) SetGroupModelPolicy(ctx context.Context, arg SetGroupModelPolicyParams) error {
 	_, err := q.db.ExecContext(ctx, setGroupModelPolicy, arg.Restricted, arg.ID)
+	return err
+}
+
+const setGroupRouting = `-- name: SetGroupRouting :exec
+UPDATE account_groups SET routing_preference=?1,allow_api_fallback=?2
+WHERE id=?3
+`
+
+type SetGroupRoutingParams struct {
+	Preference       string
+	AllowApiFallback int64
+	ID               int64
+}
+
+func (q *Queries) SetGroupRouting(ctx context.Context, arg SetGroupRoutingParams) error {
+	_, err := q.db.ExecContext(ctx, setGroupRouting, arg.Preference, arg.AllowApiFallback, arg.ID)
 	return err
 }
 

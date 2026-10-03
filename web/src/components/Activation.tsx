@@ -52,6 +52,12 @@ export function Activation({
         <Button asChild variant="outline">
           <Link to={next.to}>{t(next.action)}</Link>
         </Button>
+        {administrator &&
+          (setup.stage === 'account' || setup.stage === 'verify') && (
+            <Button asChild variant="outline">
+              <Link to="/channels">{t('channelsTitle')}</Link>
+            </Button>
+          )}
       </div>
     </section>
   )

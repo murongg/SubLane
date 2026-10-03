@@ -1,6 +1,12 @@
 import type { Role } from './auth'
 
-const administratorPaths = ['/accounts', '/members', '/groups', '/admin']
+const administratorPaths = [
+  '/accounts',
+  '/channels',
+  '/members',
+  '/groups',
+  '/admin',
+]
 
 export function canAccess(
   pathname: string,

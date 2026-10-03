@@ -17,6 +17,7 @@ import (
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/audit"
 	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/channels"
 	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
@@ -229,6 +230,7 @@ func New(o Options) http.Handler {
 			(&timeZoneHTTP{service: o.TimeZone}).register(settings)
 		})
 		management.Route("/accounts", accountManagement.register)
+		management.Route("/channels", (&channelHTTP{service: channels.New(o.Accounts), resources: o.Accounts, gateway: o.Gateway}).register)
 		management.Route("/proxies", (&proxyHTTP{service: o.Accounts, check: o.ProxyCheck}).register)
 		management.Get("/requests", accountManagement.requests)
 		management.Get("/requests/filters", accountManagement.requestFilters)

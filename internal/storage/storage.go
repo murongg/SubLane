@@ -85,7 +85,7 @@ func apply(ctx context.Context, db *sql.DB, name string) error {
 	defer conn.Close()
 	// SQLite requires disabling FK actions outside the transaction for a table rebuild.
 	// The transaction's foreign_key_check still gates publication; restore enforcement before reuse.
-	if name == "011_grok.sql" {
+	if name == "011_grok.sql" || name == "015_api_upstreams.sql" {
 		if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
 			return err
 		}

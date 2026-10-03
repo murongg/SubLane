@@ -25,13 +25,15 @@ type Account struct {
 }
 
 type AccountGroup struct {
-	ID               int64
-	Name             string
-	Enabled          bool
-	CreatedAt        int64
-	UpdatedAt        int64
-	RestrictedModels bool
-	TenantID         int64
+	ID                int64
+	Name              string
+	Enabled           bool
+	CreatedAt         int64
+	UpdatedAt         int64
+	RestrictedModels  bool
+	TenantID          int64
+	RoutingPreference string
+	AllowApiFallback  int64
 }
 
 type AlertState struct {

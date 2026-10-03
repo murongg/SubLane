@@ -131,6 +131,9 @@ func (c *Client) Exchange(ctx context.Context, code, verifier string) (accounts.
 }
 
 func (c *Client) Refresh(ctx context.Context, old accounts.Credential) (accounts.Credential, error) {
+	if old.Kind() == "openai" {
+		return accounts.Credential{}, accounts.ErrReauthorize
+	}
 	ctx = credentialContext(ctx, old)
 	if old.Kind() != "codex" {
 		// Refresh is also called after a 401, even when the advertised expiry is still in the future.

@@ -17,6 +17,7 @@ export function Groups() {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['groups'] }),
       client.invalidateQueries({ queryKey: ['accounts'] }),
+      client.invalidateQueries({ queryKey: ['channels'] }),
       client.invalidateQueries({ queryKey: ['model-catalog'] }),
       client.invalidateQueries({ queryKey: ['available-groups'] }),
       client.invalidateQueries({ queryKey: ['keys'] }),
@@ -97,6 +98,30 @@ export function Groups() {
                     accounts: group.account_count,
                     members: group.member_count,
                   })}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {group.channel_count !== undefined &&
+                  group.subscription_count !== undefined &&
+                  group.channel_count > 0 &&
+                  group.subscription_count === 0 ? (
+                    t('routingAPIOnly')
+                  ) : group.subscription_count !== undefined &&
+                    group.channel_count === 0 &&
+                    group.subscription_count > 0 ? (
+                    t('routingSubscriptionsOnly')
+                  ) : (
+                    <>
+                      {t(
+                        group.routing.preference === 'subscription_first'
+                          ? 'routingSubscriptionFirst'
+                          : group.routing.preference === 'api_first'
+                            ? 'routingAPIFirst'
+                            : 'routingProtocol',
+                      )}
+                      {group.routing.preference === 'subscription_first' &&
+                        ` · ${t(group.routing.allow_api_fallback ? 'apiFallbackEnabled' : 'apiFallbackDisabled')}`}
+                    </>
+                  )}
                 </p>
               </div>
               <div className="flex items-center gap-2">

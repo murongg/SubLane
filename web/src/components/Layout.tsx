@@ -17,6 +17,7 @@ import {
   Settings,
   Users,
   Workflow,
+  Plug,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { authOptions } from '@/lib/auth'
@@ -62,6 +63,7 @@ const navigation = [
     label: 'administration',
     items: [
       { to: '/accounts', label: 'accounts', icon: Workflow },
+      { to: '/channels', label: 'channelsTitle', icon: Plug },
       { to: '/admin/proxies', label: 'proxiesTitle', icon: Route },
       { to: '/groups', label: 'accountGroups', icon: FolderClosed },
       { to: '/admin/requests', label: 'allRequests', icon: ListChecks },

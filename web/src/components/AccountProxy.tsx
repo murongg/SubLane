@@ -20,8 +20,12 @@ export function AccountProxy({
   onClose,
   onChanged,
   restoreFocus,
+  bindProxy = bindAccountProxy,
+  hint = 'accountProxyHint',
 }: {
-  account: Account
+  account: Pick<Account, 'id' | 'name' | 'proxy_id'>
+  bindProxy?: (input: { id: string; proxy_id: string }) => Promise<unknown>
+  hint?: 'accountProxyHint' | 'apiUpstreamProxyHint'
   onClose: () => void
   onChanged: () => Promise<void>
   restoreFocus: () => void
@@ -30,7 +34,7 @@ export function AccountProxy({
   const [proxyID, setProxyID] = useState(account.proxy_id)
   const query = useQuery(proxyOptions)
   const save = useMutation({
-    mutationFn: bindAccountProxy,
+    mutationFn: bindProxy,
     onSuccess: async () => {
       await onChanged()
       onClose()
@@ -64,7 +68,7 @@ export function AccountProxy({
         <DialogHeader>
           <DialogTitle>{t('accountProxy')}</DialogTitle>
           <DialogDescription>
-            {account.name} · {t('accountProxyHint')}
+            {account.name} · {t(hint)}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-5">

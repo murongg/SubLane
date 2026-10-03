@@ -69,13 +69,13 @@ export const en = {
   recoveryContentUnavailable:
     'Content checks could not finish. Retry or ask your workspace administrator to check the policy.',
 
-  availabilityTitle: 'Pool model availability',
+  availabilityTitle: 'Group model availability',
   availabilityModel: 'Model ID to inspect',
   availabilityInspect: 'Inspect {{model}}',
   availabilityCheck: 'Check status',
   availabilityChecking: 'Checking status…',
   availabilityHint:
-    'A local snapshot of eligibility for a new request. No generation is sent. Key, member and allocation limits still apply, and existing conversations keep their original account.',
+    'A local snapshot of eligibility for a new request. No generation is sent. Key, member and allocation limits still apply, and existing conversations keep their original resource.',
   availabilityFailed: 'Could not update this snapshot. Check status again.',
   availabilityEligible: 'Eligible for a new request',
   availabilityUnknown: 'Availability unknown',
@@ -91,18 +91,18 @@ export const en = {
   availabilityDisabled: 'Account disabled',
   availabilityProviderDisabled: 'Provider disabled',
   availabilityReauthorize: 'Reauthorization required',
-  availabilityNoAccounts: 'Pool has no accounts',
+  availabilityNoAccounts: 'Group has no accounts',
   alertsTest: 'Send test notification',
   alertsTesting: 'Sending test…',
   alertsTestSuccess: 'The saved destination accepted the test notification.',
   alertsTestFailed:
     'Test delivery failed. Check the saved destination and try again after one minute.',
   alertsTestCooling: 'Wait one minute between test notifications.',
-  alertsModelEnable: 'Notify when a pool model has no eligible account',
+  alertsModelEnable: 'Notify when a group model has no eligible account',
   alertsQuotaThreshold: 'Notify when quota used reaches (%)',
   alertsQuotaHint:
     'Enter 1–99; leave blank to disable. Only fresh, model-relevant quota observations are used. Unknown data does not prove recovery.',
-  alertModelUnavailable: 'Pool model unavailable',
+  alertModelUnavailable: 'Group model unavailable',
   alertQuotaLow: 'Account quota threshold reached',
   auditSettingsTest: 'Requested a webhook test',
   modelPrices: 'Model prices',
@@ -130,7 +130,7 @@ export const en = {
   pricingRange: '{{start}}–{{end}} of {{count}} models',
   demoTitle: 'Read-only demo',
   demoDescription:
-    'Explore sample accounts, pools, and usage. Changes, credential actions, and live API calls are disabled. Data resets when the demo restarts.',
+    'Explore sample accounts, groups, and usage. Changes, credential actions, and live API calls are disabled. Data resets when the demo restarts.',
   demoCredentials: 'Username: {{username}} · Password: {{password}}',
   demoExplore: 'Explore demo',
   demoReadOnly:
@@ -164,7 +164,7 @@ export const en = {
   alertsDisabled: 'Notifications off',
   alertsConfigure: 'Configure alerts',
   alertsDescription:
-    'Receive webhook notifications when an account needs authorization, a pool has no verified available account, or generation failures increase.',
+    'Receive webhook notifications when an account needs authorization, a group has no verified available account, or generation failures increase.',
   alertsUnavailable: 'Could not load or save alert settings. Try again.',
   alertsDeliveryFailed:
     'The webhook could not be delivered. Check the receiver; delivery will retry automatically.',
@@ -183,12 +183,12 @@ export const en = {
   alertsInvalid:
     'Enter a public HTTPS URL without credentials or a fragment. Enabling notifications requires a destination.',
   alertReauthorization: 'Account needs authorization',
-  alertPoolUnavailable: 'Pool has no verified available account',
+  alertPoolUnavailable: 'Group has no verified available account',
   alertRequestFailures: 'Generation failures increased',
 
   clientConfigureKey: 'Configure {{name}}',
   clientCatalogUnavailable:
-    'No model catalog is available for this key. Refresh it or ask your administrator to check its pool.',
+    'No model catalog is available for this key. Refresh it or ask your administrator to check its group.',
   clientCheckRequest: 'Check first request',
   recoveryTitle: 'What to do next',
   recoveryWait:
@@ -198,28 +198,28 @@ export const en = {
   recoveryQuota:
     'The subscription quota is exhausted. Check its reset time with your administrator. An existing conversation stays on its original account.',
   recoveryAdmin:
-    'Open the relevant settings, check this request’s pool and account, then ask the caller to retry after resolving the cause.',
+    'Open the relevant settings, check this request’s group and account, then ask the caller to retry after resolving the cause.',
   recoveryContact:
-    'Copy the request ID above and send it to your workspace administrator. They need to repair the account, pool permissions, or allocation.',
+    'Copy the request ID above and send it to your workspace administrator. They need to repair the account, group permissions, or allocation.',
   recoveryUnknown:
     'Keep the request ID above. If a retry also fails, share it with your workspace administrator for diagnosis.',
 
   activationTitle: 'Complete your first request',
-  activationAccount: 'Connect a subscription account',
+  activationAccount: 'Connect a resource',
   activationAccountHint:
-    'Connect and enable a subscription account in this workspace.',
-  activationVerify: 'Verify the account connection',
+    'Connect and enable a subscription account or API channel in this workspace.',
+  activationVerify: 'Verify the resource connection',
   activationVerifyHint:
-    'Open the account and verify its connection before adding it to a pool.',
-  activationPool: 'Add the account to an enabled pool',
+    'Verify the subscription account or API channel before adding it to a resource group.',
+  activationPool: 'Add a resource to an enabled group',
   activationPoolHint:
-    'Your account is connected. Create or enable a pool and add the verified account.',
-  activationPoolAction: 'Set up an account pool',
-  activationAccess: 'Receive account pool access',
+    'Your resource is connected. Create or enable a resource group and select the verified account or channel.',
+  activationPoolAction: 'Set up a resource group',
+  activationAccess: 'Receive resource group access',
   activationAccessHint:
-    'Ask your workspace administrator to grant you access to a ready account pool.',
+    'Ask your workspace administrator to grant you access to a ready resource group.',
   activationKey: 'Create your personal API key',
-  activationKeyHint: 'Create or enable a personal key for your account pool.',
+  activationKeyHint: 'Create or enable a personal key for your resource group.',
   activationClient: 'Configure a client and send a message',
   activationClientHint:
     'Open a key’s client guide, choose an available model, and send a message. This step completes after the gateway records your successful generation.',
@@ -247,10 +247,10 @@ export const en = {
   allocationUnavailableShort: 'Unavailable',
   allocationWaiting: 'Scheduled',
   allocationPrerequisite:
-    'Create an enabled account pool with subscription accounts, then grant pool access to members. Each pool can have one resource allowance.',
-  allocationRosterFailed: 'Could not load members with access to this pool.',
+    'Create an enabled resource group with subscription accounts, then grant group access to members. Each group can have one resource allowance.',
+  allocationRosterFailed: 'Could not load members with access to this group.',
   allocationNoGrantedMembers:
-    'Grant members access to this account pool before assigning an allowance.',
+    'Grant members access to this resource group before assigning an allowance.',
   allocationSchemes: 'Resource allowances',
   allocationsDescription:
     'Optional limits by share of a token or internal USD budget, or by direct member allowance.',
@@ -295,12 +295,12 @@ export const en = {
   allocationFutureEditDelay:
     'Future edits may wait up to {{duration}} before taking effect, based on the longest current window.',
   allocationAutoPricingHint:
-    'Model prices are filled automatically from the models supported by the selected account pool when you save.',
+    'Model prices are filled automatically from the models supported by the selected resource group when you save.',
   allocationSave: 'Save resource allowance',
   allocationView: 'View usage',
   allocationBack: 'Back to resource allowances',
   allocationsEmpty:
-    'Create a dedicated account pool and grant members access to add a resource allowance.',
+    'Create a dedicated resource group and grant members access to add a resource allowance.',
   allocationTotalBudget: 'Total budget',
   allocationSelectAllMembers: 'Select all members',
   allocationIncludeMember: 'Include {{name}}',
@@ -315,7 +315,7 @@ export const en = {
   allocationRatioAmountRule:
     'Each member receives their percentage of the total internal USD budget for the selected period.',
   allocationExclusiveHint:
-    'Use a dedicated pool and remove its accounts from every other pool first. After adding an allowance, the pool and its account membership stay fixed. Existing unbound keys for this pool stop working.',
+    'Use a dedicated group and remove its accounts from every other group first. After adding an allowance, the group and its account membership stay fixed. Existing unbound keys for this group stop working.',
   allocationMembers: 'Member allowances',
   allocationBlankHint:
     'Select members who should receive this allowance, then enter a limit or percentage for each selected member.',
@@ -375,7 +375,7 @@ export const en = {
   allocationInvalid:
     'Check the name, selected members, reset date/time, and window conditions. Shares must total at most 100%; percentages allow two decimal places and M / USD allow six.',
   allocationPoolConflict:
-    'These accounts are reserved by a resource allowance or shared with another pool. Use a separate pool; a managed pool’s account list is fixed.',
+    'These accounts are reserved by a resource allowance or shared with another group. Use a separate group; a managed group’s account list is fixed.',
   allocationSettlementConflict:
     'Usage changed or the correction conflicts with a previous settlement. Refresh before retrying.',
   allocationPending: 'Usage pending reconciliation',
@@ -394,7 +394,7 @@ export const en = {
   allocationUnavailable:
     'This resource allowance is paused, scheduled, or no longer available to you.',
   allocationUnpriced:
-    'No usable model price is available for this pool. Refresh account models or restrict the pool to priced models, then retry.',
+    'No usable model price is available for this group. Refresh account models or restrict the group to priced models, then retry.',
   allocationUnknownWindowOverride:
     'A personal limit refers to a time-window condition that no longer exists. Refresh this rule and retry.',
   allocationRatioTokensBalanceHint:
@@ -419,7 +419,7 @@ export const en = {
   allocationMine: 'My resource allowances',
   allocationRefreshMine: 'Refresh my resource allowances',
   allocationMineEmpty: 'No resource allowances assigned.',
-  allocationKeyChoice: 'Resource allowance: {{scheme}} · {{pool}}',
+  allocationKeyChoice: 'Resource allowance: {{scheme}} · {{group}}',
   auditAllocationSave: 'Saved resource allowance',
   auditAllocationSettle: 'Settled resource allowance usage',
   auditAllocationReconcile: 'Confirmed external quota usage',
@@ -577,7 +577,7 @@ export const en = {
   catalogAccountDescription:
     'Models discovered from this account. This catalog describes reported support, not remaining quota or a successful generation test.',
   catalogGroupDescription:
-    'Automatically combined from enabled accounts and filtered by the pool’s model policy.',
+    'Automatically combined from enabled resources and filtered by the group’s model policy.',
   catalogCount_one: '{{count}} model',
   catalogCount_other: '{{count}} models',
   catalogUnknown: 'Unknown',
@@ -595,13 +595,13 @@ export const en = {
   catalogExpired:
     'This saved catalog is too old to use for routing. Refresh to restore model availability.',
   catalogEmptyAccount: 'This account reported no visible models.',
-  catalogEmptyGroup: 'No models are currently available to this pool.',
+  catalogEmptyGroup: 'No models are currently available to this group.',
   catalogSearch: 'Search models',
   catalogNoMatch: 'No matching models.',
   catalogNarrowSearch:
     'Showing the first 200 matches. Refine your search to find a model.',
   catalogUpdated: 'Updated {{time}}',
-  catalogPickerHint: 'Search and select a model available to this key’s pool.',
+  catalogPickerHint: 'Search and select a model available to this key’s group.',
   catalogSelectionRequired: 'Choose a model from the available catalog.',
 
   ccSwitchImport: 'Import into CC Switch',
@@ -617,14 +617,14 @@ export const en = {
   ccSwitchApp_gemini: 'Gemini CLI',
   ccSwitchApp_grokbuild: 'Grok Build',
   ccSwitchClaudeHint:
-    'Haiku, Sonnet, and Opus will all use the selected pool model.',
+    'Haiku, Sonnet, and Opus will all use the selected group model.',
   ccSwitchGeminiHint:
     'Gemini CLI uses API key authentication. Token counting and native Gemini model discovery are not available; test a conversation after import.',
   ccSwitchGrokHint:
     'After import, check that the context window in CC Switch matches the selected model.',
   ccSwitchName: 'Configuration name',
   ccSwitchModelHint:
-    'Enter an exact model ID allowed by this key’s pool. Use the provider prefix when required.',
+    'Enter an exact model ID allowed by this key’s group. Use the provider prefix when required.',
   ccSwitchInputInvalid:
     'Use a configuration name of 1–128 characters without control characters and a valid model ID.',
   ccSwitchPrivacy:
@@ -636,7 +636,7 @@ export const en = {
   ccSwitchOpenFailed:
     'Could not open CC Switch. Check that it is installed, then try again.',
   ccSwitchKeyUnavailable:
-    'Use an enabled, unexpired key with access to its pool.',
+    'Use an enabled, unexpired key with access to its group.',
   ccSwitchPrepare: 'Prepare import',
   ccSwitchOpen: 'Open CC Switch',
   ccSwitchEdit: 'Edit configuration',
@@ -655,7 +655,7 @@ export const en = {
   editKey: 'Edit API key',
   editKeyNamed: 'Edit {{name}}',
   editKeyDescription:
-    'Update access without changing the key or its account pool.',
+    'Update access without changing the key or its resource group.',
   keyEnabled: 'Key enabled',
   keyPauseHint:
     'Pausing blocks new requests. You can enable this key again later.',
@@ -677,16 +677,16 @@ export const en = {
     'One exact model ID per line, up to 100. Use IDs from /v1/models without a provider prefix. Existing provider-specific rules retain their scope; wildcards are not supported.',
   groupNoModels: 'No models are allowed while this list is empty.',
   groupAllModelsHint:
-    'All models available through this pool can be used, including models added later.',
+    'All models available through this group can be used, including models added later.',
   groupAllModels: 'All models',
   groupRestrictedModels: 'Model allowlist',
-  reasonModelNotAllowed: 'Model not allowed by this pool',
+  reasonModelNotAllowed: 'Model not allowed by this group',
   auditLog: 'Audit log',
   auditResourceFilter: 'Resource type',
   auditAllResources: 'All resources',
   auditMember: 'Member',
   auditUser: 'User',
-  auditAccount: 'Subscription account',
+  auditAccount: 'Upstream account',
   auditActor: 'Performed by',
   auditAction: 'Action',
   auditTarget: 'Target',
@@ -702,20 +702,20 @@ export const en = {
   auditKeyCreate: 'Created API key',
   auditKeyUpdate: 'Updated API key',
   auditKeyRevoke: 'Revoked API key',
-  auditGroupCreate: 'Created account pool',
-  auditGroupUpdate: 'Updated account pool',
+  auditGroupCreate: 'Created resource group',
+  auditGroupUpdate: 'Updated resource group',
   auditMemberCreate: 'Created member',
   auditMemberUpdate: 'Changed member status',
-  auditMemberGroups: 'Changed pool access',
+  auditMemberGroups: 'Changed group access',
   auditMemberLimits: 'Changed member limits',
   auditMemberPassword: 'Reset member password',
   auditInvitationCreate: 'Created invitation link',
   auditUserPassword: 'Changed password',
   auditUserRecover: 'Recovered administrator',
-  auditAccountCreate: 'Added subscription account',
-  auditAccountAuthorize: 'Authorized subscription account',
+  auditAccountCreate: 'Added upstream account',
+  auditAccountAuthorize: 'Updated account credentials',
   auditAccountUpdate: 'Changed account status',
-  auditAccountDelete: 'Deleted subscription account',
+  auditAccountDelete: 'Deleted upstream account',
   auditAccountConcurrency: 'Changed account concurrency',
   auditAccountResume: 'Cleared account cooldown',
   auditAccountProxy: 'Changed account network proxy',
@@ -770,7 +770,7 @@ export const en = {
   memberLimits: 'Request limits',
   memberLimitsFor: 'Request limits for {{username}}',
   memberLimitsDescription:
-    'All API keys and pools used by this member share these limits. Changes apply to new model requests.',
+    'All API keys and groups used by this member share these limits. Changes apply to new model requests.',
   memberLimitsHint:
     '0 means unlimited. Requests per minute: 0–6,000; concurrency: 0–10 (default: 10). Active calls are allowed to finish.',
   memberLimitsInvalid:
@@ -827,6 +827,84 @@ export const en = {
   addAccount: 'Add account',
   accountName: 'Account name',
   connectAccountTitle: 'Connect subscription',
+  channelsTitle: 'API channels',
+  addChannel: 'Add API channel',
+  channelsDescription:
+    'Manage API endpoints, keys and models. Add channels to resource groups to grant client access.',
+  channelName: 'Channel name',
+  channelNameInvalid:
+    'Enter a channel name of 1–64 characters without control characters.',
+  channelsEmpty: 'No API channels',
+  channelsEmptyHint:
+    'Connect an OpenAI-compatible service with its API key and base URL. Subscription accounts are managed separately.',
+  loadingChannels: 'Loading API channels…',
+  channelsLoadFailed: 'Could not load API channels.',
+  channelProtocolOpenAI: 'OpenAI Chat Completions compatible',
+  channelNeedsKey: 'Replace key',
+  channelKeyHint:
+    'The upstream key is encrypted and never returned. Verify the channel, then add it to a resource group.',
+  channelExists:
+    'This API channel is already configured. Replace the key on the existing channel.',
+  channelNotFound:
+    'This API channel is no longer available. Reload the channel list.',
+  verifyChannelConnection: 'Verify connection for {{name}}',
+  channelActions: 'Actions for {{name}}',
+  channelVerifiedModels:
+    '“{{name}}” is connected. Available models: {{count}}.',
+  channelRuntimeFailed: 'Could not read channel activity.',
+  channelRuntimeUnknown: 'Channel activity is not available yet.',
+  channelAssignGroup: 'Assign to a resource group',
+  resourceAssigned: 'Assigned to {{count}} groups',
+  resourceUnassigned: 'Unassigned',
+  deleteChannelTitle: 'Remove API channel',
+  deleteChannelDescription:
+    'Remove “{{name}}” and its stored key. Existing conversations on this channel will stop.',
+  deleteChannel: 'Remove channel',
+  disableChannel: 'Disable channel',
+  enableChannel: 'Enable channel',
+  catalogChannelDescription:
+    'Models reported by this API channel. Refresh to check its current catalog.',
+  groupChannelsHint:
+    'Select the API channels available to this resource group.',
+  groupRouting: 'Routing preference',
+  routingAPIOnly: 'Use selected API channels',
+  routingSubscriptionsOnly: 'Use selected subscriptions',
+  routingSubscriptionFirst: 'Subscriptions first',
+  routingAPIFirst: 'API channels first',
+  routingProtocol: 'Prefer the client protocol',
+  allowAPIFallback: 'Allow API fallback when subscriptions are unavailable',
+  apiFallbackHint:
+    'Mixed groups use API channels only when fallback is enabled and no eligible subscription is available. API-only groups use their selected channels directly. Existing conversations keep their source.',
+  apiPriorityHint:
+    'New conversations prefer an eligible API channel, then a subscription. API calls may consume the upstream service’s balance.',
+  protocolRoutingHint:
+    'Keep the existing policy: prefer the provider matching the client protocol, then other eligible resources.',
+  apiFallbackEnabled: 'API fallback enabled',
+  apiFallbackDisabled: 'API fallback off',
+  apiUpstream: 'API upstream',
+  upstreamKeyExpiry: 'Key expiry',
+  upstreamKeyExpiryUnknown: 'Not reported by upstream',
+  apiUpstreamProxyHint:
+    'Model discovery and generation use the selected server network route.',
+  connectAPI: 'Connect API',
+  replaceAPIKey: 'Replace API key',
+  upstreamBaseURL: 'Base URL',
+  upstreamAPIKey: 'Upstream API key',
+  apiUpstreamDescription:
+    'Connect OpenAI or a service compatible with OpenAI Chat Completions using its API key and base URL.',
+  upstreamBaseURLHint:
+    'Enter the API base URL, including /v1 when required. Models are discovered from /models under this URL.',
+  upstreamEndpointLocked:
+    'Key replacement keeps this endpoint and existing conversations. Add a separate account to change the endpoint.',
+  upstreamAPIKeyHint:
+    'The upstream key is encrypted and never returned. After connecting, verify the connection and add the account to a group.',
+  upstreamAPIKeyInvalid: 'Enter a valid API key without whitespace.',
+  upstreamBaseURLInvalid:
+    'Enter an HTTP or HTTPS base URL without login credentials, query parameters or a fragment.',
+  apiUpstreamUsageHint:
+    'Request and token usage is tracked by SubLane. Subscription quota and upstream balances are unavailable for API channels.',
+  apiKeyReplacementHint:
+    'The upstream rejected this key. Replace the API key, then verify the connection.',
   connectionMethod: 'Connection method',
   accountOAuth: 'Browser authorization',
   accountImport: 'Import auth.json',
@@ -874,15 +952,14 @@ export const en = {
   accountJSONInvalid:
     'Paste valid credential JSON for the selected provider. Official API keys are not supported here.',
   accountInvalidInput:
-    'Check the account name, provider, and subscription credentials.',
+    'Check the account name, provider, and upstream credentials.',
   accountExists:
-    'This subscription is already added. Use Reauthorize on the existing account.',
+    'This upstream is already added. Update credentials on the existing account.',
   accountIdentityMismatch:
     'Reauthorize with the same provider and account. Add a separate account for a different subscription.',
-  accountLimitReached:
-    'This instance supports up to 100 subscription accounts.',
+  accountLimitReached: 'This workspace supports up to 100 resources.',
   accountDisabledHint: 'Enable this account before verifying or using it.',
-  accountReauthorizeHint: 'This account needs to be authorized again.',
+  accountReauthorizeHint: 'This account needs new credentials.',
   accountRefreshFailed:
     'Could not refresh this account. Check network access or reauthorize it.',
   oauthStateInvalid:
@@ -900,7 +977,7 @@ export const en = {
     'The provider is rate limiting this account. Try again later.',
   accountActionFailed: 'Could not complete this action. Please try again.',
   accountVerificationResult:
-    '“{{name}}” is connected. {{count}} models available.',
+    '“{{name}}” is connected. Available models: {{count}}.',
   accountReadyDescription:
     'A verified subscription account is available for gateway requests.',
   gatewayNeedsAttention: 'Needs attention',
@@ -908,10 +985,10 @@ export const en = {
     'Your gateway is ready. Connect a client using a personal API key.',
   gatewayKeyNeeded: 'Key needed',
   gatewayKeyNeededDescription:
-    'Create or reactivate a key for a ready account pool.',
+    'Create or reactivate a key for a ready resource group.',
   gatewayNoKey: 'No usable key',
   gatewayKeySetupDescription:
-    'Create a personal key for a ready account pool before your first request.',
+    'Create a personal key for a ready resource group before your first request.',
   clientGuideTitle: 'Connect your client',
   clientGuideDescription:
     'Choose your client or API format and connect with a personal SubLane API key.',
@@ -924,7 +1001,7 @@ export const en = {
   clientProtocolGemini: 'Gemini API',
   clientRequestExample: 'Request example',
   clientRequestInstructions:
-    'Set SUBLANE_API_KEY in your shell, then run this request with a model from your key’s pool.',
+    'Set SUBLANE_API_KEY in your shell, then run this request with a model from your key’s group.',
   clientNativeGuideNote:
     'Tool, thinking and cache features depend on the model and provider. These examples use the native API; they do not configure the provider’s desktop app.',
   clientEndpoint: 'API base URL',
@@ -934,7 +1011,7 @@ export const en = {
   copyClientConfig: 'Copy configuration',
   clientModel: 'Model ID',
   clientModelHint:
-    'Use the model ID returned by GET /v1/models directly. SubLane selects an available account in your pool.',
+    'Use the model ID returned by GET /v1/models directly. SubLane selects an available account in your group.',
   connectionNotConfigured:
     'Ask an administrator to connect and verify a subscription account first.',
   checkingSession: 'Checking your session…',
@@ -1046,15 +1123,15 @@ export const en = {
   memberRoleChangeNamed: 'Change role for {{username}}',
   memberRoleChangeDescription: 'Choose the workspace role for {{username}}.',
   memberBasicRoleHint:
-    'Can use granted account pools and manage personal keys and usage.',
+    'Can use granted resource groups and manage personal keys and usage.',
   memberAdminRoleHint:
-    'Can manage accounts, pools, members, allowances and audit in this workspace.',
+    'Can manage accounts, groups, members, allowances and audit in this workspace.',
   addMemberDescription:
     'Create a member account and share its credentials privately with that person.',
   createMember: 'Create member',
   creatingMember: 'Creating member…',
   memberCreated:
-    'Member {{username}} was created. Grant access to an account pool so they can use the gateway.',
+    'Member {{username}} was created. Grant access to a resource group so they can use the gateway.',
   memberUsernameTaken: 'This username is already in use.',
   memberCreateFailed: 'Could not create the member. Please try again.',
   memberUpdateFailed: 'Could not update this member. Please try again.',
@@ -1062,7 +1139,7 @@ export const en = {
   membersLoadFailed: 'Could not load members. Please try again.',
   noMembers: 'No members yet',
   noMembersDescription:
-    'Create a login or add an existing account, then grant members access to the pools they can use.',
+    'Create a login or add an existing account, then grant members access to the groups they can use.',
   memberStatus: 'Status',
   memberCreatedAt: 'Created',
   actions: 'Actions',
@@ -1093,7 +1170,7 @@ export const en = {
   authInvalidInput: 'Check the account details and try again.',
   setupClosed: 'This instance has already been set up. Sign in to continue.',
   overview: 'Overview',
-  accounts: 'Accounts',
+  accounts: 'Subscription accounts',
   preferences: 'Preferences',
   workspace: 'Workspace',
   workspaces: 'Workspaces',
@@ -1110,7 +1187,8 @@ export const en = {
   codexSetupDescription:
     'Add a subscription, then verify its connection before inviting your team to use it.',
   teamAccess: 'Gateway keys',
-  teamAccessDescription: 'An active personal key can use a ready account pool.',
+  teamAccessDescription:
+    'An active personal key can use a ready resource group.',
   comingNext: 'Coming next',
   planned: 'Planned',
   clientAccess: 'Client access',
@@ -1143,7 +1221,7 @@ export const en = {
   accountsTitle: 'Subscription accounts',
   accountEmptyTitle: 'No subscription accounts',
   accountEmptyDescription:
-    'Connect a Codex, Claude, Antigravity, or Grok account using browser authorization or a credential JSON file.',
+    'Connect Codex, Claude, Antigravity or Grok with OAuth or credential JSON. Manage API keys and endpoints under API channels.',
   providerDisabled: 'This provider is temporarily disabled.',
   backToOverview: 'Back to overview',
   appearance: 'Appearance',
@@ -1211,61 +1289,61 @@ export const en = {
   serviceProvider: 'Service provider',
   providerImportDescription:
     'Import credential JSON exported by CLIProxyAPI for the selected provider. Credentials are encrypted on this instance.',
-  accountGroups: 'Account pools',
+  accountGroups: 'Resource groups',
   groupsAssignmentHint:
-    'New accounts start unassigned. Add them to a pool and grant member access.',
+    'New accounts and channels start unassigned. Select resources for a group, then grant member access.',
   accountUnassigned: 'Unassigned',
-  accountAssignGroup: 'Assign to an account pool',
+  accountAssignGroup: 'Assign to a resource group',
   groupsEmpty:
-    'No account pools yet. Create one and select its subscription accounts.',
-  createGroup: 'Create account pool',
-  editGroup: 'Edit account pool',
+    'No resource groups yet. Create one and select subscription accounts or API channels.',
+  createGroup: 'Create resource group',
+  editGroup: 'Edit resource group',
   editGroupNamed: 'Edit {{name}}',
-  groupName: 'Pool name',
-  groupEnabled: 'Pool enabled',
-  groupCounts: 'Accounts: {{accounts}} · Members: {{members}}',
-  loadingGroups: 'Loading pools…',
-  groupsLoadFailed: 'Could not load pools. Try again.',
+  groupName: 'Group name',
+  groupEnabled: 'Group enabled',
+  groupCounts: 'Resources: {{accounts}} · Members: {{members}}',
+  loadingGroups: 'Loading groups…',
+  groupsLoadFailed: 'Could not load groups. Try again.',
   groupEditorDescription:
-    'Choose the subscription accounts available to keys bound to this pool.',
+    'Choose subscription accounts and API channels available to keys bound to this resource group.',
   groupAccounts: 'Subscription accounts',
   groupAccountsHint:
-    'Accounts stay in any other pools. For exclusive access, keep them in only one pool. Removing an account from this pool stops conversations using it through this pool.',
+    'Accounts stay in any other groups. For exclusive access, keep them in only one group. Removing an account from this group stops conversations using it through this group.',
   groupNoAccounts:
-    'Add a subscription account first, or save an empty pool and configure it later.',
-  saveGroup: 'Save pool',
-  groupNameTaken: 'A pool with this name already exists.',
-  groupLimitReached: 'Each workspace supports up to 32 account pools.',
+    'Add a subscription account first, or save an empty group and configure it later.',
+  saveGroup: 'Save group',
+  groupNameTaken: 'A group with this name already exists.',
+  groupLimitReached: 'Each workspace supports up to 32 resource groups.',
   groupInputInvalid:
-    'Check the pool name (1–64 characters), selected accounts and exact model IDs (up to 100).',
-  groupSaveFailed: 'Could not save pool changes. Try again.',
-  groupAccess: 'Pool access',
-  memberGroupsNamed: 'Manage pools for {{username}}',
+    'Check the group name (1–64 characters), selected accounts and exact model IDs (up to 100).',
+  groupSaveFailed: 'Could not save group changes. Try again.',
+  groupAccess: 'Group access',
+  memberGroupsNamed: 'Manage groups for {{username}}',
   memberGroupsDescription:
-    'Choose which pools {{username}} can use when creating API keys.',
+    'Choose which groups {{username}} can use when creating API keys.',
   groupGrantRevocationHint:
-    'Removing access blocks existing keys for that pool on their next request, including new WebSocket turns.',
+    'Removing access blocks existing keys for that group on their next request, including new WebSocket turns.',
   memberNoGroupsHint:
-    'This member will not be able to create or use gateway keys until a pool is granted.',
+    'This member will not be able to create or use gateway keys until a group is granted.',
   saveGroupAccess: 'Save access',
-  keyGroup: 'Account pool',
-  poolAccountCount: '{{count}} accounts',
+  keyGroup: 'Resource group',
+  poolAccountCount: '{{count}} resources',
   keyEmptyPoolWarning:
-    'This pool has no subscription accounts. A new key cannot serve requests until an account is added.',
+    'This group has no resources. A new key cannot serve requests until a resource is added.',
   keyGroupHint:
-    'This key can only use the selected pool. To switch pools, create a new key, update your client, then revoke the old key.',
+    'This key can only use the selected group. To switch groups, create a new key, update your client, then revoke the old key.',
   noAvailableGroups:
-    'No account pools are available. Create one or ask an administrator for access.',
+    'No resource groups are available. Create one or ask an administrator for access.',
   groupAccessChanged:
-    'Pool access has changed. Select an available pool and try again.',
-  keyGroupUnavailable: 'Pool unavailable',
-  keyGroupName: 'Pool: {{name}}',
-  chooseGroup: 'Choose an account pool',
+    'Group access has changed. Select an available group and try again.',
+  keyGroupUnavailable: 'Group unavailable',
+  keyGroupName: 'Group: {{name}}',
+  chooseGroup: 'Choose a resource group',
   clientGuideAction: 'Setup guide',
   accountScheduling: 'Scheduling settings',
   accountConcurrencyLimit: 'Concurrent model requests',
   accountConcurrencyHint:
-    'Allow 1–30 active model requests for this account across all pools. New accounts default to 30; existing account settings stay unchanged. When full, new requests wait up to 10 seconds, with at most 8 waiting per pool. Lowering the limit lets existing requests finish.',
+    'Allow 1–30 active model requests for this account across all groups. New accounts default to 30; existing account settings stay unchanged. When full, new requests wait up to 10 seconds, with at most 8 waiting per group. Lowering the limit lets existing requests finish.',
   accountConcurrencyInvalid: 'Enter a whole number from 1 to 30.',
   lastAccountFailure: 'Last scheduling failure',
   resumeAccountHint:
@@ -1290,7 +1368,7 @@ export const en = {
   personalRequestsDescription:
     'Last 7 days · up to 5,000 records instance-wide. Request and response bodies are not stored.',
   requestKey: 'API key',
-  requestGroup: 'Pool',
+  requestGroup: 'Group',
   requestsDescription:
     'Last 7 days · up to 5,000 records. Request and response bodies are not stored.',
   requestAccountFilter: 'Account filter',
@@ -1304,7 +1382,7 @@ export const en = {
     'Records appear after model calls finish. Try another filter or refresh later.',
   requestTime: 'Started',
   requestCaller: 'Member / key',
-  requestAccount: 'Account / pool',
+  requestAccount: 'Account / group',
   requestModel: 'Model',
   requestResult: 'Result',
   requestDuration: 'Duration',
@@ -1335,7 +1413,7 @@ export const en = {
   reasonAccountWaitTimeout: 'Timed out waiting for account capacity',
   reasonCooling: 'Account cooling down',
   reasonAccountUnavailable: 'Account unavailable',
-  reasonGroupUnavailable: 'Pool access unavailable',
+  reasonGroupUnavailable: 'Group access unavailable',
   reasonAuthRequired: 'Authorization required',
   reasonForbidden: 'Upstream access denied',
   reasonRejected: 'Upstream rejected request',

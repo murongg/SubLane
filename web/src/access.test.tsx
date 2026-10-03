@@ -51,7 +51,9 @@ it('gives members their own workspace without management navigation or requests'
   expect(screen.getAllByRole('link', { name: 'Manage API keys' })).toHaveLength(
     1,
   )
-  expect(screen.queryByRole('link', { name: 'Accounts' })).toBeNull()
+  expect(
+    screen.queryByRole('link', { name: 'Subscription accounts' }),
+  ).toBeNull()
   expect(screen.queryByRole('link', { name: 'Members' })).toBeNull()
   expect(screen.getByRole('link', { name: 'Requests' })).toBeTruthy()
   expect(screen.queryByRole('link', { name: 'All requests' })).toBeNull()
@@ -92,7 +94,7 @@ it('groups common and administrator navigation separately for administrators', a
     within(administration).getByRole('link', { name: 'All requests' }),
   ).toBeTruthy()
   expect(
-    within(administration).getByRole('link', { name: 'Accounts' }),
+    within(administration).getByRole('link', { name: 'Subscription accounts' }),
   ).toBeTruthy()
   expect(
     within(administration).getByRole('link', { name: 'Members' }),
@@ -103,6 +105,7 @@ it('groups common and administrator navigation separately for administrators', a
 })
 
 it.each([
+  '/channels',
   '/accounts',
   '/members',
   '/groups',
@@ -149,6 +152,8 @@ it.each([undefined, 'unknown'])(
     )
     open('/accounts')
     await screen.findByRole('heading', { name: 'Unable to connect' })
-    expect(screen.queryByRole('link', { name: 'Accounts' })).toBeNull()
+    expect(
+      screen.queryByRole('link', { name: 'Subscription accounts' }),
+    ).toBeNull()
   },
 )

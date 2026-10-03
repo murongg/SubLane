@@ -79,6 +79,16 @@ func (s *Service) prepare(ctx context.Context, id, rejectedToken string, refresh
 			return Credential{}, err
 		}
 	}
+	if credential.Kind() == "openai" {
+		// Static keys have no expiry or OAuth refresh. Rejection remains durable until an administrator rotates the key.
+		if credential.Rejected {
+			if err := s.queries.SetAccountStatus(ctx, db.SetAccountStatusParams{ID: id, Status: "reauth_required", UpdatedAt: s.now().Unix()}); err != nil {
+				return Credential{}, err
+			}
+			return Credential{}, ErrReauthorize
+		}
+		return credential, nil
+	}
 	minimumValidity := 2 * time.Minute
 	needsProject := false
 	if credential.Kind() == "antigravity" {
