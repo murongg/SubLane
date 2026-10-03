@@ -20,6 +20,69 @@ const channel = {
 }
 const response = (value: unknown) => new Response(JSON.stringify(value))
 
+it('explains when an older backend does not provide channel management', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/channels')
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: 'not_found' }), { status: 404 }),
+        )
+      if (url === '/api/channels/runtime')
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: 'not_found' }), { status: 404 }),
+        )
+      return Promise.resolve(response({}))
+    }),
+  )
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/channels'] }),
+      )}
+    />,
+  )
+  await screen.findByText(
+    'This backend does not support API channels. Start an updated backend and reconnect.',
+  )
+  expect(screen.queryByText('No API channels')).toBeNull()
+})
+
+it.each([
+  { status: 404, error: 'workspace_not_found' },
+  { status: 503, error: 'unavailable' },
+])('keeps a generic load error for $error', async ({ status, error }) => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/channels')
+        return Promise.resolve(
+          new Response(JSON.stringify({ error }), { status }),
+        )
+      if (url === '/api/channels/runtime')
+        return Promise.resolve(response({ channels: [], server_time: 1 }))
+      return Promise.resolve(response({}))
+    }),
+  )
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/channels'] }),
+      )}
+    />,
+  )
+  await screen.findByText('Could not load API channels.')
+  expect(
+    screen.queryByText(
+      'This backend does not support API channels. Start an updated backend and reconnect.',
+    ),
+  ).toBeNull()
+})
+
 it('creates a channel independently and removes the key from mutation state', async () => {
   let saved = false
   const fetch = vi

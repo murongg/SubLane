@@ -839,6 +839,8 @@ export const en = {
     'Connect an OpenAI-compatible service with its API key and base URL. Subscription accounts are managed separately.',
   loadingChannels: 'Loading API channels…',
   channelsLoadFailed: 'Could not load API channels.',
+  channelBackendMissing:
+    'This backend does not support API channels. Start an updated backend and reconnect.',
   channelProtocolOpenAI: 'OpenAI Chat Completions compatible',
   channelNeedsKey: 'Replace key',
   channelKeyHint:

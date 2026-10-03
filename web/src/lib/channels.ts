@@ -131,3 +131,14 @@ export function channelErrorKey(error: unknown) {
   }
   return accountErrorKey(error)
 }
+
+export function channelLoadErrorKey(error: unknown) {
+  // Domain errors such as missing workspaces can also return 404.
+  if (
+    error instanceof ApiError &&
+    error.status === 404 &&
+    error.code === 'not_found'
+  )
+    return 'channelBackendMissing'
+  return 'channelsLoadFailed'
+}

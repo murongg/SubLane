@@ -764,6 +764,8 @@ export const zh: Record<keyof typeof en, string> = {
     '填写 API 密钥和 Base URL 接入 OpenAI 兼容服务。订阅账号在独立页面管理。',
   loadingChannels: '正在加载 API 渠道…',
   channelsLoadFailed: '无法加载 API 渠道。',
+  channelBackendMissing:
+    '当前连接的后端不支持 API 渠道。请启动新版后端，再重新连接。',
   channelProtocolOpenAI: '兼容 OpenAI Chat Completions',
   channelNeedsKey: '需要更换密钥',
   channelKeyHint: '上游密钥加密保存且不会返回。验证渠道后，将其加入资源组。',

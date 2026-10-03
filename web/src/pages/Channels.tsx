@@ -18,6 +18,7 @@ import {
   channelOptions,
   channelRuntimeOptions,
   channelErrorKey,
+  channelLoadErrorKey,
   checkChannel,
   setChannelEnabled,
   deleteChannel,
@@ -130,7 +131,9 @@ export function Channels() {
           role="alert"
           className="space-y-3 rounded-xl border border-border p-6"
         >
-          <p className="text-sm text-error">{t('channelsLoadFailed')}</p>
+          <p className="text-sm text-error">
+            {t(channelLoadErrorKey(query.error))}
+          </p>
           <Button
             data-tour="verify"
             variant="outline"
