@@ -2,6 +2,12 @@
 
 All notable changes are documented here in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [0.5.0] - 2026-10-03
+
+### Added
+
+- Add workspace request content rules (#72)
+- Add API channels and resource groups (#73)
 ## [0.4.0] - 2026-09-30
 
 ### Added
@@ -174,6 +180,7 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 - Distinguish remaining quota with status colors
 - Restore version-gated model discovery
 
+[0.5.0]: https://github.com/murongg/SubLane/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/murongg/SubLane/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/murongg/SubLane/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/murongg/SubLane/compare/v0.1.0...v0.2.0
