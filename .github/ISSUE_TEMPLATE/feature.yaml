@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest a focused improvement to SubLane.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues and review the [roadmap](https://sublane.dev/docs/roadmap) before submitting a suggestion.
+        Describe the use case with synthetic examples and omit credentials, account identifiers, and private request or response content.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to accomplish, and what limitation do you encounter today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: Describe the smallest useful change and the resulting behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any existing workflow or alternative approach you have tried.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add relevant references, sanitized examples, or mockups if helpful.

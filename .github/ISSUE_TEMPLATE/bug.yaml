@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible problem in SubLane.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues before submitting a report.
+        Use sanitized examples only. Do not include credentials, account identifiers, private prompts, database files, or exploit-sensitive details. See the [security policy](https://github.com/murongg/SubLane/blob/main/SECURITY.md) for reporting guidance.
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened?
+      description: Describe the problem and any visible error.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the minimum setup and steps needed to reproduce the problem with synthetic data.
+      placeholder: |
+        1. Configure ...
+        2. Open or run ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: SubLane version
+      description: Release version, Docker image tag, or commit SHA for a development build.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include installation method, OS and architecture. Add browser or API client versions, provider, model, and protocol when relevant.
+      placeholder: |
+        Installation: Docker Compose / binary / source
+        OS and architecture:
+        Browser or API client and version:
+        Provider, model, and protocol (if relevant):
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, screenshots, or additional context
+      description: Optional sanitized evidence. Remove credentials, account identifiers, and private request or response content before sharing.
