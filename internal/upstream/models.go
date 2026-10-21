@@ -29,6 +29,9 @@ func catalogSource(provider, version string) string {
 		// Older snapshots discarded hidden capabilities and must be rediscovered.
 		source = "codex:v2:" + version
 	}
+	if provider == "antigravity" {
+		source = "antigravity:v2"
+	}
 	return source
 }
 
@@ -106,9 +109,16 @@ func (c *Client) providerModels(ctx context.Context, credential accounts.Credent
 		if value.Models == nil {
 			return nil, ErrResponse
 		}
-		for id := range value.Models {
+		for id, metadata := range value.Models {
 			if id != "" && len(id) <= 128 {
-				result = append(result, Model{ID: id, Object: "model", OwnedBy: "antigravity"})
+				var model struct {
+					Internal bool `json:"isInternal"`
+				}
+				if json.Unmarshal(metadata, &model) != nil {
+					return nil, ErrResponse
+				}
+				// Internal entries remain account capabilities even when omitted from discovery lists.
+				result = append(result, Model{ID: id, Object: "model", OwnedBy: "antigravity", Hidden: model.Internal})
 			}
 		}
 	}

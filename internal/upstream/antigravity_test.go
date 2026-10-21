@@ -81,3 +81,49 @@ func TestAntigravitySDKRefreshRespectsCallerCancellation(t *testing.T) {
 func antigravityFixture() accounts.Credential {
 	return accounts.Credential{Provider: "antigravity", AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", Email: "member@example.test", AccountID: "member@example.test", ExpiresAt: time.Now().Add(time.Hour).Unix(), Metadata: map[string]json.RawMessage{"project_id": json.RawMessage(`"synthetic-project"`)}}
 }
+
+func TestAntigravityDiscoverySeparatesInternalCapabilities(t *testing.T) {
+	for _, test := range []struct {
+		name, body string
+		visible    int
+	}{
+		{"mixed", `{"models":{"synthetic-visible":{},"synthetic-internal":{"isInternal":true},"synthetic-public":{"isInternal":false}}}`, 2},
+		{"internal only", `{"models":{"synthetic-internal":{"isInternal":true}}}`, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := NewWithTransport(usageTransport(func(r *http.Request) (*http.Response, error) {
+				if r.Method != http.MethodPost || r.URL.Path != "/v1internal:fetchAvailableModels" || r.Header.Get("Authorization") != "Bearer synthetic-access" {
+					t.Error("discovery lost its provider or credential boundary")
+				}
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(test.body))}, nil
+			}))
+			defer client.Close()
+			discovery, err := client.Discover(context.Background(), antigravityFixture())
+			if err != nil || len(discovery.Models) != test.visible+1 || discovery.Source != "antigravity:v2" {
+				t.Fatalf("capabilities or refresh source lost: %+v, %v", discovery, err)
+			}
+			for _, model := range discovery.Models {
+				if model.Hidden != (model.ID == "synthetic-internal") {
+					t.Fatalf("wrong visibility: %+v", model)
+				}
+			}
+			models, err := client.Models(context.Background(), antigravityFixture())
+			if err != nil || len(models) != test.visible {
+				t.Fatalf("internal model entered display list: %+v, %v", models, err)
+			}
+		})
+	}
+}
+
+func TestAntigravityDiscoveryRejectsMalformedVisibility(t *testing.T) {
+	for _, metadata := range []string{`{"isInternal":"true"}`, `[]`, `42`} {
+		client := NewWithTransport(usageTransport(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"models":{"synthetic-model":` + metadata + `}}`))}, nil
+		}))
+		_, err := client.Discover(context.Background(), antigravityFixture())
+		client.Close()
+		if !errors.Is(err, ErrResponse) {
+			t.Fatalf("malformed model metadata accepted: %s, %v", metadata, err)
+		}
+	}
+}

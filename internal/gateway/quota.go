@@ -63,7 +63,8 @@ func quotaStatus(value upstream.Usage, now time.Time) quotaDecision {
 
 func savedUsage(row db.GetAccountUsageRow) *upstream.Usage {
 	var value upstream.Usage
-	if row.UpdatedAt == nil || len(row.Snapshot) > 128<<10 || json.Unmarshal(row.Snapshot, &value) != nil || value.Limits == nil || value.UpdatedAt != *row.UpdatedAt || value.UpdatedAt <= 0 {
+	// A complete Antigravity snapshot can contain 512 limits, including hidden models.
+	if row.UpdatedAt == nil || len(row.Snapshot) > 256<<10 || json.Unmarshal(row.Snapshot, &value) != nil || value.Limits == nil || value.UpdatedAt != *row.UpdatedAt || value.UpdatedAt <= 0 {
 		return nil
 	}
 	return &value

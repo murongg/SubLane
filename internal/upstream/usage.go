@@ -21,6 +21,7 @@ type Usage struct {
 
 type UsageLimit struct {
 	Name         string        `json:"name"`
+	Hidden       bool          `json:"hidden,omitempty"`
 	Allowed      *bool         `json:"allowed"`
 	LimitReached *bool         `json:"limit_reached"`
 	Windows      []UsageWindow `json:"windows"`

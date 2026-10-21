@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -50,10 +51,18 @@ func TestSubscriptionUsageReadsProviderMetadataWithoutInference(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if calls != 1 || value.UpdatedAt <= 0 || len(value.Limits) != 2 {
+			wantLimits := 2
+			if provider == "antigravity" {
+				wantLimits = 3
+			}
+			if calls != 1 || value.UpdatedAt <= 0 || len(value.Limits) != wantLimits {
 				t.Fatalf("unexpected quota reads or limits: calls=%d limits=%d", calls, len(value.Limits))
 			}
-			windows := value.Limits[0].Windows
+			primary := 0
+			if provider == "antigravity" {
+				primary = 1
+			}
+			windows := value.Limits[primary].Windows
 			if len(windows) == 0 || windows[0].UsedPercent == nil || *windows[0].UsedPercent != 25 || windows[0].ResetAt == nil || *windows[0].ResetAt != 1893456000 {
 				t.Fatal("reported usage or reset time was lost")
 			}
@@ -61,12 +70,51 @@ func TestSubscriptionUsageReadsProviderMetadataWithoutInference(t *testing.T) {
 				if len(windows) != 2 || windows[1].UsedPercent != nil || windows[1].ResetAt != nil || windows[0].WindowSeconds == nil || *windows[0].WindowSeconds != 18000 {
 					t.Fatal("missing Claude window data became a fabricated value")
 				}
-			} else if value.Limits[1].Windows[0].UsedPercent != nil || value.Limits[1].Windows[0].ResetAt != nil || value.Limits[0].Name != "synthetic-model" {
+			} else if value.Limits[0].Name != "synthetic-internal" || value.Limits[0].Windows[0].UsedPercent == nil || *value.Limits[0].Windows[0].UsedPercent != 100 || value.Limits[2].Windows[0].UsedPercent != nil || value.Limits[2].Windows[0].ResetAt != nil || value.Limits[1].Name != "synthetic-model" {
 				t.Fatal("model identity or unknown Antigravity quota was lost")
 			}
 			encoded, _ := json.Marshal(value)
 			if strings.Contains(string(encoded), "synthetic-private") || value.ResetCredits != nil {
 				t.Fatal("unrelated upstream metadata leaked into subscription usage")
+			}
+		})
+	}
+}
+
+func TestAntigravityUsageRetainsInternalLimitsWithinExistingBounds(t *testing.T) {
+	for _, test := range []struct {
+		name              string
+		visible, internal int
+		valid             bool
+	}{
+		{"internal only", 0, 1, true},
+		{"full catalog", 128, 384, true},
+		{"too many visible", 129, 0, false},
+		{"too many total", 128, 385, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			models := map[string]any{}
+			for index := range test.visible + test.internal {
+				models[fmt.Sprintf("synthetic-%03d", index)] = map[string]any{"isInternal": index >= test.visible, "quotaInfo": map[string]any{"remainingFraction": .5}}
+			}
+			body, _ := json.Marshal(map[string]any{"models": models})
+			client := NewWithTransport(usageTransport(func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(body)))}, nil
+			}))
+			defer client.Close()
+			usage, err := client.Usage(context.Background(), antigravityFixture())
+			if !test.valid {
+				if !errors.Is(err, ErrResponse) {
+					t.Fatal("invalid quota model count accepted", err)
+				}
+				return
+			}
+			if err != nil || len(usage.Limits) != test.visible+test.internal {
+				t.Fatal("internal limits discarded", len(usage.Limits), err)
+			}
+			encoded, _ := json.Marshal(usage)
+			if got := strings.Count(string(encoded), `"hidden":true`); got != test.internal {
+				t.Fatal("internal limit visibility was not preserved", got)
 			}
 		})
 	}

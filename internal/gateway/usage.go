@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -276,6 +277,8 @@ func snapshotState(e *usageEntry, now time.Time) UsageSnapshot {
 		}
 	}
 	result.Stale = e.err != nil || now.Unix() >= result.ExpiresAt || now.Unix() < result.UpdatedAt
+	// Hidden limits still govern admission and freshness; filtering must not mutate the shared snapshot.
+	result.Limits = slices.DeleteFunc(slices.Clone(result.Limits), func(limit upstream.UsageLimit) bool { return limit.Hidden })
 	return result
 }
 
