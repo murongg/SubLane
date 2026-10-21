@@ -92,23 +92,27 @@ it.each([
         )}
       />,
     )
-    await screen.findByText('Showing 1–50 of 121')
+    // Key rows have many action buttons; keep control queries inside the paginator.
+    const pagination = within(
+      await screen.findByRole('navigation', { name: 'Pagination' }),
+    )
+    await pagination.findByText('Showing 1–50 of 121')
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Page 3' }))
-    await screen.findByText('Showing 101–121 of 121')
-    await user.click(screen.getByRole('button', { name: 'Rows per page' }))
+    await user.click(pagination.getByRole('button', { name: 'Page 3' }))
+    await pagination.findByText('Showing 101–121 of 121')
+    await user.click(pagination.getByRole('button', { name: 'Rows per page' }))
     await user.click(screen.getByRole('menuitemradio', { name: '100' }))
-    await screen.findByText('Showing 1–100 of 121')
+    await pagination.findByText('Showing 1–100 of 121')
     expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(
       101,
     )
     await user.type(
-      screen.getByRole('spinbutton', { name: 'Go to page' }),
+      pagination.getByRole('spinbutton', { name: 'Go to page' }),
       '2{Enter}',
     )
-    await screen.findByText('Showing 101–121 of 121')
+    await pagination.findByText('Showing 101–121 of 121')
     expect(
-      (screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement)
+      (pagination.getByRole('button', { name: 'Next' }) as HTMLButtonElement)
         .disabled,
     ).toBe(true)
   },
