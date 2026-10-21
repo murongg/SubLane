@@ -24,6 +24,9 @@ func (c *Client) CatalogSource(provider string) string {
 }
 
 func catalogSource(provider, version string) string {
+	if provider == "xai" {
+		return "xai:v2"
+	}
 	source := provider + ":v1"
 	if provider == "codex" {
 		// Older snapshots discarded hidden capabilities and must be rediscovered.
@@ -52,7 +55,7 @@ func (c *Client) providerModels(ctx context.Context, credential accounts.Credent
 		endpoint, method = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels", "POST"
 	}
 	if credential.Kind() == "xai" {
-		endpoint = "https://api.x.ai/v1/models"
+		endpoint = "https://cli-chat-proxy.grok.com/v1/models"
 	}
 	if credential.Kind() == "openai" {
 		endpoint = credential.BaseURL + "/models"
@@ -66,6 +69,12 @@ func (c *Client) providerModels(ctx context.Context, credential accounts.Credent
 		return nil, ErrInput
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if credential.Kind() == "xai" {
+		req.Header.Set("X-XAI-Token-Auth", "xai-grok-cli")
+		req.Header.Set("x-grok-client-mode", "cli")
+		req.Header.Set("x-userid", credential.AccountID)
+		applyGrokVersion(req.Header, c.currentGrokVersion())
+	}
 	if credential.Kind() == "claude" {
 		req.Header.Set("Anthropic-Version", "2023-06-01")
 		req.Header.Set("User-Agent", claudeUserAgent(c.currentClaudeVersion()))
@@ -85,6 +94,9 @@ func (c *Client) providerModels(ctx context.Context, credential accounts.Credent
 	raw, err := readBounded(response.Body, 2<<20)
 	if err != nil {
 		return nil, err
+	}
+	if credential.Kind() == "xai" {
+		return grokModels(raw)
 	}
 	var value struct {
 		Data []struct {

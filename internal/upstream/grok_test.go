@@ -118,7 +118,7 @@ func TestGrokDiscoveryAndExecutionUseSubscription(t *testing.T) {
 		}
 		body := `{"data":[{"id":"synthetic-model"}]}`
 		if r.URL.Path == "/v1/models" {
-			if r.URL.Host != "api.x.ai" {
+			if r.URL.Host != "cli-chat-proxy.grok.com" || r.Header.Get("X-XAI-Token-Auth") != "xai-grok-cli" {
 				t.Error("unexpected model host")
 			}
 		} else {
@@ -142,6 +142,73 @@ func TestGrokDiscoveryAndExecutionUseSubscription(t *testing.T) {
 	defer response.Body.Close()
 	if response.StatusCode != 200 || calls != 2 {
 		t.Fatal("execution failed", calls)
+	}
+}
+
+func TestGrokDiscoverySeparatesHiddenSubscriptionCapabilities(t *testing.T) {
+	for _, test := range []struct {
+		name, body string
+		visible    int
+	}{
+		{"mixed", `{"data":[{"id":"synthetic-model"},{"id":"synthetic-picker-alias","model":"synthetic-hidden","hidden":true},{"modelId":"synthetic-nested","_meta":{"hidden":true}},{"id":"synthetic-public","hidden":false,"_meta":{"hidden":true},"supportedInApi":false}]}`, 2},
+		{"hidden only", `{"data":[{"model":"synthetic-hidden","hidden":true},{"id":"synthetic-nested","_meta":{"hidden":true}}]}`, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := NewWithOptions(Options{GrokVersion: func() string { return "9.8.7" }, Transport: usageTransport(func(r *http.Request) (*http.Response, error) {
+				if r.Method != http.MethodGet || r.URL.Host != "cli-chat-proxy.grok.com" || r.URL.Path != "/v1/models" {
+					t.Error("subscription discovery used another catalog", r.URL)
+				}
+				if r.Header.Get("Authorization") != "Bearer synthetic-access" || r.Header.Get("X-XAI-Token-Auth") != "xai-grok-cli" || r.Header.Get("x-userid") != "synthetic-subject" || r.Header.Get("x-grok-client-version") != "9.8.7" || r.Header.Get("x-grok-client-mode") != "cli" {
+					t.Error("subscription catalog lost authentication or version policy")
+				}
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(test.body))}, nil
+			})})
+			defer client.Close()
+			credential := accounts.Credential{Provider: "xai", AccountID: "synthetic-subject", AccessToken: "synthetic-access"}
+			discovery, err := client.Discover(context.Background(), credential)
+			if err != nil || len(discovery.Models) != test.visible+2 || discovery.Source != "xai:v2" {
+				t.Fatalf("hidden capabilities or source lost: %+v, %v", discovery, err)
+			}
+			for _, model := range discovery.Models {
+				wantHidden := model.ID == "synthetic-hidden" || model.ID == "synthetic-nested"
+				if model.ID == "synthetic-picker-alias" || model.Hidden != wantHidden {
+					t.Fatalf("picker identity replaced routing capability or visibility: %+v", model)
+				}
+			}
+			models, err := client.Models(context.Background(), credential)
+			if err != nil || len(models) != test.visible {
+				t.Fatalf("hidden model entered the display list: %+v, %v", models, err)
+			}
+		})
+	}
+}
+
+func TestGrokDiscoveryRejectsMalformedVisibility(t *testing.T) {
+	for _, entry := range []string{`{"id":"synthetic-model","hidden":"true"}`, `{"id":"synthetic-model","_meta":{"hidden":1}}`, `{"id":"synthetic-model","_meta":[]}`} {
+		client := NewWithTransport(usageTransport(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"data":[` + entry + `]}`))}, nil
+		}))
+		_, err := client.Discover(context.Background(), accounts.Credential{Provider: "xai", AccessToken: "synthetic-access"})
+		client.Close()
+		if !errors.Is(err, ErrResponse) {
+			t.Fatalf("malformed visibility accepted: %s, %v", entry, err)
+		}
+	}
+}
+
+func TestGrokDiscoveryMergesPickerAliasesByNativeModel(t *testing.T) {
+	client := NewWithTransport(usageTransport(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"data":[{"model":"synthetic-shared","hidden":true},{"id":"synthetic-picker-alias","model":"synthetic-shared","hidden":false},{"_meta":{"modelId":"synthetic-hidden","hidden":true}}]}`))}, nil
+	}))
+	defer client.Close()
+	credential := accounts.Credential{Provider: "xai", AccessToken: "synthetic-access"}
+	discovery, err := client.Discover(context.Background(), credential)
+	if err != nil || len(discovery.Models) != 2 || discovery.Models[0].ID != "synthetic-hidden" || !discovery.Models[0].Hidden || discovery.Models[1].ID != "synthetic-shared" || discovery.Models[1].Hidden {
+		t.Fatalf("picker aliases changed native visibility: %+v, %v", discovery, err)
+	}
+	models, err := client.Models(context.Background(), credential)
+	if err != nil || len(models) != 1 || models[0].ID != "synthetic-shared" {
+		t.Fatal("a hidden alias suppressed a visible native capability", models, err)
 	}
 }
 
