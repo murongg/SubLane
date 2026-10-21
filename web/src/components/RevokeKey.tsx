@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { LoaderCircle } from 'lucide-react'
+import { Ban, LoaderCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { revokeKey, type APIKey } from '@/lib/keys'
 import { Button } from './ui/Button'
@@ -46,12 +46,14 @@ export function RevokeKey({
     >
       <DialogTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
+          className="h-auto flex-col gap-1 py-1.5"
           disabled={value.revoked_at !== null}
           aria-label={t('revokeKeyNamed', { name: value.name })}
         >
-          {t('revoke')}
+          <Ban aria-hidden="true" />
+          <span className="text-xs font-normal">{t('revoke')}</span>
         </Button>
       </DialogTrigger>
       <DialogContent

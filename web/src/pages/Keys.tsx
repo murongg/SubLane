@@ -16,6 +16,7 @@ import { CatalogDialog } from '@/components/CatalogDialog'
 import { CopyKey } from '@/components/CopyKey'
 import { ClientGuide } from '@/components/ClientGuide'
 import { CCSwitchImport } from '@/components/CCSwitchImport'
+import { MagpieImport } from '@/components/MagpieImport'
 import { RevokeKey } from '@/components/RevokeKey'
 import { EditKey } from '@/components/EditKey'
 import { Status } from '@/components/Status'
@@ -237,13 +238,18 @@ function KeyManager({ userID }: { userID: number }) {
                       : dates.format(key.last_used_at * 1000)}
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2">
                       <ClientGuide
                         value={key}
                         userID={userID}
                         disabled={keyState(key, now) !== 'active'}
                       />
                       <CCSwitchImport
+                        value={key}
+                        userID={userID}
+                        usable={keyState(key, now) === 'active'}
+                      />
+                      <MagpieImport
                         value={key}
                         userID={userID}
                         usable={keyState(key, now) === 'active'}

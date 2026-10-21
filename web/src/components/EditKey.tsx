@@ -31,13 +31,14 @@ export function EditKey({
       <DialogTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
-          className="size-8"
+          size="sm"
+          className="h-auto flex-col gap-1 py-1.5"
           aria-label={t('editKeyNamed', { name: value.name })}
           title={t('editKey')}
           disabled={value.revoked_at !== null}
         >
           <Pencil aria-hidden="true" />
+          <span className="text-xs font-normal">{t('edit')}</span>
         </Button>
       </DialogTrigger>
       {open && (

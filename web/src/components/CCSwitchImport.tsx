@@ -2,7 +2,12 @@ import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { catalogOptions } from '@/lib/catalog'
 import { ModelPicker } from './ModelPicker'
-import { ChevronDown, ExternalLink, LoaderCircle } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  ChevronDown,
+  ExternalLink,
+  LoaderCircle,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   ccSwitchApps,
@@ -57,8 +62,8 @@ export function CCSwitchImport({
       <DialogTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
-          className="size-8"
+          size="sm"
+          className="h-auto flex-col gap-1 py-1.5"
           disabled={!eligible}
           aria-label={t('ccSwitchImportNamed', { name: value.name })}
           title={t(
@@ -69,7 +74,8 @@ export function CCSwitchImport({
                 : 'ccSwitchKeyUnavailable',
           )}
         >
-          <ExternalLink aria-hidden="true" />
+          <ArrowRightLeft aria-hidden="true" />
+          <span className="text-xs font-normal">{t('ccSwitchImport')}</span>
         </Button>
       </DialogTrigger>
       {open &&
