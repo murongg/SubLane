@@ -2,6 +2,21 @@
 
 All notable changes are documented here in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [0.9.0] - 2026-10-22
+
+### Added
+
+- Add Magpie import and label key actions (#95)
+- Add manual model checks (#96)
+- Prefer parent accounts for Codex reviews (#98)
+- Add 11-language dashboard support (#99)
+
+### Fixed
+
+- Preserve hidden model routing capabilities (#97)
+- Separate internal model visibility from capabilities (#100)
+- Separate hidden model visibility from capabilities (#101)
+
 ## [0.8.0] - 2026-10-19
 
 ### Added
@@ -223,6 +238,7 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 - Distinguish remaining quota with status colors
 - Restore version-gated model discovery
 
+[0.9.0]: https://github.com/murongg/SubLane/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/murongg/SubLane/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/murongg/SubLane/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/murongg/SubLane/compare/v0.7.1...v0.7.2
