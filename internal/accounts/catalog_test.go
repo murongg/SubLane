@@ -2,9 +2,12 @@ package accounts
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,7 +39,7 @@ func TestCatalogPersistsAndRejectsObsoleteAuthorization(t *testing.T) {
 		t.Fatal("new account must be unknown", initial, err)
 	}
 	at := time.Now().Unix()
-	if err := s.SaveCatalog(ctx, a.ID, initial.Revision, []string{"synthetic-z", "synthetic-a", "synthetic-z"}, at, "synthetic:v1"); err != nil {
+	if err := s.SaveCatalog(ctx, a.ID, initial.Revision, []string{"synthetic-z", "synthetic-a", "synthetic-z"}, at, "synthetic:v1", "synthetic-z"); err != nil {
 		t.Fatal(err)
 	}
 	connection.Close()
@@ -49,6 +52,9 @@ func TestCatalogPersistsAndRejectsObsoleteAuthorization(t *testing.T) {
 	saved, err := s.Catalog(ctx, a.ID)
 	if err != nil || saved.UpdatedAt != at || saved.Source != "synthetic:v1" || !reflect.DeepEqual(saved.Models, []string{"synthetic-a", "synthetic-z"}) {
 		t.Fatal("snapshot did not survive restart", saved, err)
+	}
+	if !reflect.DeepEqual(saved.HiddenModels, []string{"synthetic-z"}) || !reflect.DeepEqual(saved.VisibleModels(), []string{"synthetic-a"}) || len(saved.Models) != 2 {
+		t.Fatal("visibility replaced callable capabilities", saved)
 	}
 	if _, err := s.Authorize(ctx, "Synthetic", credential, a.ID); err != nil {
 		t.Fatal(err)
@@ -108,8 +114,47 @@ func TestCatalogRejectsInvalidModelsWithoutReplacingSnapshot(t *testing.T) {
 			t.Fatal("invalid catalog accepted", err)
 		}
 	}
+	for _, hidden := range [][]string{{"synthetic-unknown"}, {"bad\nmodel"}, make([]string, 513)} {
+		if err := s.SaveCatalog(ctx, a.ID, catalog.Revision, []string{"synthetic-model"}, time.Now().Unix(), "synthetic:v1", hidden...); !errors.Is(err, ErrInput) {
+			t.Fatal("invalid hidden capability accepted", err)
+		}
+	}
 	catalog, err = s.Catalog(ctx, a.ID)
 	if err != nil || catalog.UpdatedAt != 0 {
 		t.Fatal("invalid catalog published", err)
+	}
+}
+
+func TestDecodeCatalogValidatesHiddenCapabilities(t *testing.T) {
+	for _, raw := range []string{
+		`{"models":["synthetic-model"],"hidden_models":["synthetic-unknown"],"updated_at":1}`,
+		`{"models":["synthetic-model"],"hidden_models":["bad\nmodel"],"updated_at":1}`,
+	} {
+		if _, err := DecodeCatalog([]byte(raw), 0); !errors.Is(err, ErrInput) {
+			t.Fatal("invalid hidden capabilities decoded", err)
+		}
+	}
+	value, err := DecodeCatalog([]byte(`{"models":["synthetic-model"],"updated_at":1}`), 0)
+	if err != nil || !reflect.DeepEqual(value.VisibleModels(), []string{"synthetic-model"}) {
+		t.Fatal("legacy catalog visibility changed", value, err)
+	}
+}
+
+func TestCatalogDecodesMaximumHiddenCapabilities(t *testing.T) {
+	models := make([]string, 512)
+	for i := range models {
+		prefix := fmt.Sprintf("synthetic-%03d-", i)
+		models[i] = prefix + strings.Repeat("x", 128-len(prefix))
+	}
+	raw, err := json.Marshal(Catalog{Models: models, HiddenModels: models, UpdatedAt: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := DecodeCatalog(raw, 0)
+	if err != nil || len(value.Models) != len(models) || len(value.VisibleModels()) != 0 {
+		t.Fatal("valid maximum-size hidden catalog cannot be read", err)
+	}
+	if _, err := DecodeCatalog(append(raw, []byte(strings.Repeat(" ", 256<<10))...), 0); !errors.Is(err, ErrInput) {
+		t.Fatal("oversized snapshot accepted", err)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -217,11 +218,12 @@ type Model struct {
 	ID      string `json:"id"`
 	Object  string `json:"object"`
 	OwnedBy string `json:"owned_by"`
+	Hidden  bool   `json:"-"`
 }
 
 func (c *Client) Models(ctx context.Context, credential accounts.Credential) ([]Model, error) {
 	value, err := c.Discover(ctx, credential)
-	return value.Models, err
+	return slices.DeleteFunc(value.Models, func(model Model) bool { return model.Hidden }), err
 }
 
 type Discovery struct {
@@ -270,8 +272,8 @@ func (c *Client) models(ctx context.Context, credential accounts.Credential, ver
 	}
 	models := make([]Model, 0, len(catalog.Models))
 	for _, model := range catalog.Models {
-		if model.Slug != "" && len(model.Slug) <= 128 && model.Visibility != "hide" && model.Visibility != "hidden" {
-			models = append(models, Model{ID: model.Slug, Object: "model", OwnedBy: "openai"})
+		if model.Slug != "" && len(model.Slug) <= 128 {
+			models = append(models, Model{ID: model.Slug, Object: "model", OwnedBy: "openai", Hidden: model.Visibility == "hide" || model.Visibility == "hidden"})
 		}
 	}
 	return models, nil

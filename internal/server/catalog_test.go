@@ -13,7 +13,111 @@ import (
 
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
+	"github.com/murongg/SubLane/internal/groups"
 )
+
+func TestHiddenCodexModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) {
+	forwarded := 0
+	f := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/models") {
+			io.WriteString(w, `{"models":[{"slug":"synthetic-model","visibility":"list"},{"slug":"codex-auto-review","visibility":"hide"},{"slug":"synthetic-hidden","visibility":"hidden"}]}`)
+			return
+		}
+		var input struct{ Model string }
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil || (input.Model != "codex-auto-review" && input.Model != "synthetic-hidden") {
+			t.Error("hidden model name changed", input.Model, err)
+		}
+		forwarded++
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_synthetic\",\"output\":[]}}\n\n")
+	})
+	ctx := context.Background()
+	rows, err := f.accounts.List(ctx)
+	if err != nil || len(rows) != 1 {
+		t.Fatal(rows, err)
+	}
+	accountID := rows[0].ID
+	snapshot, err := f.accounts.Catalog(ctx, accountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.accounts.SaveCatalog(ctx, accountID, snapshot.Revision, snapshot.Models, time.Now().Unix(), "codex:legacy"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.forwarding.AccountCatalog(ctx, accountID, true); err != nil {
+		t.Fatal(err)
+	}
+	h := f.server.Config.Handler
+	login := request(h, "POST", "/api/auth/login", "http://example.test", map[string]string{"username": "owner-test", "password": "owner pass 42"}, nil)
+	if login.Code != 200 {
+		t.Fatal("administrator login", login.Code)
+	}
+	admin := login.Result().Cookies()[0]
+	memberLogin := request(h, "POST", "/api/auth/login", "http://example.test", map[string]string{"username": "member-test", "password": "member pass 42"}, nil)
+	if memberLogin.Code != 200 {
+		t.Fatal("member login", memberLogin.Code)
+	}
+	member := memberLogin.Result().Cookies()[0]
+	invoke := func(method, path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer "+f.secret)
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	assertListings := func() {
+		t.Helper()
+		responses := []*httptest.ResponseRecorder{
+			invoke("GET", "/v1/models", ""),
+			request(h, "GET", "/api/accounts/"+accountID+"/models", "", nil, admin),
+			request(h, "GET", "/api/groups/1/models", "", nil, admin),
+			request(h, "GET", fmt.Sprintf("/api/keys/%d/models", f.keyID), "", nil, member),
+		}
+		for _, response := range responses {
+			if response.Code != 200 || strings.Contains(response.Body.String(), "codex-auto-review") || strings.Contains(response.Body.String(), "synthetic-hidden") {
+				t.Fatal("hidden capability leaked into a catalog", response.Code, response.Body.String())
+			}
+		}
+	}
+	assertListings()
+	for _, model := range []string{"codex-auto-review", "synthetic-hidden"} {
+		if response := invoke("POST", "/v1/responses", fmt.Sprintf(`{"model":%q,"input":"Synthetic operation"}`, model)); response.Code != 200 {
+			t.Fatal("hidden model rejected", response.Code, response.Body.String())
+		}
+	}
+	input := groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{accountID}, ModelPolicy: &groups.ModelPolicy{Restricted: true, Models: []string{"synthetic-model"}}}
+	if _, err := f.groups.Save(ctx, 1, input); err != nil {
+		t.Fatal(err)
+	}
+	raw := `{"model":"codex-auto-review","input":"Synthetic operation"}`
+	if response := invoke("POST", "/v1/responses", raw); response.Code != 403 || !strings.Contains(response.Body.String(), "model_not_allowed") || forwarded != 2 {
+		t.Fatal("hidden model bypassed group policy", response.Code, response.Body.String(), forwarded)
+	}
+	input.ModelPolicy.Models = []string{"codex-auto-review"}
+	if _, err := f.groups.Save(ctx, 1, input); err != nil {
+		t.Fatal(err)
+	}
+	assertListings()
+	if response := invoke("POST", "/v1/responses", raw); response.Code != 200 || forwarded != 3 {
+		t.Fatal("explicit hidden model permission was ignored", response.Code, response.Body.String(), forwarded)
+	}
+	if err := f.groups.SetMemberGroups(ctx, f.userID, []int64{}); err != nil {
+		t.Fatal(err)
+	}
+	if response := invoke("POST", "/v1/responses", raw); response.Code != 401 || forwarded != 3 {
+		t.Fatal("hidden model bypassed revoked pool access", response.Code, response.Body.String(), forwarded)
+	}
+	if err := f.groups.SetMemberGroups(ctx, f.userID, []int64{1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.keys.Update(ctx, f.userID, f.keyID, apikey.UpdateInput{Name: "Synthetic client", Enabled: false}); err != nil {
+		t.Fatal(err)
+	}
+	if response := invoke("POST", "/v1/responses", raw); response.Code != 401 || forwarded != 3 {
+		t.Fatal("hidden model bypassed paused key", response.Code, response.Body.String(), forwarded)
+	}
+}
 
 func TestCatalogEndpointsRespectRoleOwnershipAndKeyLifecycle(t *testing.T) {
 	f := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {

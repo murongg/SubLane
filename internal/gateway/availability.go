@@ -243,7 +243,7 @@ func (s *Service) WorkspaceCapacity(ctx context.Context) ([]capacity.Pool, error
 			}
 		} else {
 			for _, row := range rows {
-				for _, model := range row.catalog.Models {
+				for _, model := range row.catalog.VisibleModels() {
 					models[model] = true
 				}
 			}

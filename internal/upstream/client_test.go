@@ -248,6 +248,22 @@ func TestModelsRequestsVersionGatedCatalog(t *testing.T) {
 	}
 }
 
+func TestDiscoveryRetainsHiddenModelCapabilities(t *testing.T) {
+	client := NewWithTransport(usageTransport(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"models":[{"slug":"synthetic-visible","visibility":"list"},{"slug":"codex-auto-review","visibility":"hide"},{"slug":"synthetic-hidden","visibility":"hidden"}]}`))}, nil
+	}))
+	defer client.Close()
+	credential := accounts.Credential{AccessToken: "synthetic-access", AccountID: "synthetic-account"}
+	discovery, err := client.Discover(context.Background(), credential)
+	if err != nil || len(discovery.Models) != 3 {
+		t.Fatalf("hidden capabilities discarded: %+v, %v", discovery, err)
+	}
+	models, err := client.Models(context.Background(), credential)
+	if err != nil || len(models) != 1 || models[0].ID != "synthetic-visible" {
+		t.Fatalf("hidden models entered the display catalog: %+v, %v", models, err)
+	}
+}
+
 func TestCatalogModelIDPreservesSDKThinkingSuffixCompatibility(t *testing.T) {
 	for _, value := range []string{"synthetic-model(high)", "synthetic-model(8192)", "synthetic-model(auto)"} {
 		if actual := CatalogModelID(value); actual != "synthetic-model" {
@@ -271,7 +287,7 @@ func TestDiscoveryCapturesOneConfiguredVersion(t *testing.T) {
 	}))
 	client.version = func() string { return current.Load().(string) }
 	value, err := client.Discover(context.Background(), accounts.Credential{AccessToken: "synthetic-access", AccountID: "synthetic-account"})
-	if err != nil || value.Source != "codex:v1:0.200.0" || client.CatalogSource("codex") != "codex:v1:0.300.0" {
+	if err != nil || value.Source != "codex:v2:0.200.0" || client.CatalogSource("codex") != "codex:v2:0.300.0" {
 		t.Fatal("in-flight response was mislabeled with a newer version", value, err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"slices"
 	"sort"
 
 	"github.com/murongg/SubLane/internal/storage/db"
@@ -17,10 +18,16 @@ var catalogModelID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,127}$
 
 // UpdatedAt zero means unknown; an observed empty list is a known catalog.
 type Catalog struct {
-	Models    []string `json:"models"`
-	UpdatedAt int64    `json:"updated_at"`
-	Source    string   `json:"source,omitempty"`
-	Revision  int64    `json:"-"`
+	Models       []string `json:"models"`
+	HiddenModels []string `json:"hidden_models,omitempty"`
+	UpdatedAt    int64    `json:"updated_at"`
+	Source       string   `json:"source,omitempty"`
+	Revision     int64    `json:"-"`
+}
+
+// Visibility controls discovery lists, never the persisted set of callable models.
+func (c Catalog) VisibleModels() []string {
+	return slices.DeleteFunc(slices.Clone(c.Models), func(model string) bool { return slices.Contains(c.HiddenModels, model) })
 }
 
 func (s *Service) Catalog(ctx context.Context, id string) (Catalog, error) {
@@ -42,12 +49,30 @@ func DecodeCatalog(raw []byte, revision int64) (Catalog, error) {
 	if len(raw) == 0 {
 		return value, nil
 	}
-	if len(raw) > 128<<10 || json.Unmarshal(raw, &value) != nil || value.UpdatedAt <= 0 || value.Models == nil || len(value.Source) > 64 {
+	// Visibility metadata can repeat every capability ID in a maximum-size catalog.
+	if len(raw) > 256<<10 || json.Unmarshal(raw, &value) != nil || value.UpdatedAt <= 0 || value.Models == nil || len(value.Source) > 64 {
 		return Catalog{}, ErrInput
 	}
 	models, err := normalizedCatalog(value.Models)
+	if err != nil {
+		return Catalog{}, err
+	}
 	value.Models = models
+	value.HiddenModels, err = normalizedHiddenModels(models, value.HiddenModels)
 	return value, err
+}
+
+func normalizedHiddenModels(models, hidden []string) ([]string, error) {
+	hidden, err := normalizedCatalog(hidden)
+	if err != nil {
+		return nil, err
+	}
+	for _, model := range hidden {
+		if !slices.Contains(models, model) {
+			return nil, ErrInput
+		}
+	}
+	return hidden, nil
 }
 
 func normalizedCatalog(models []string) ([]string, error) {
@@ -69,7 +94,7 @@ func normalizedCatalog(models []string) ([]string, error) {
 	return result, nil
 }
 
-func (s *Service) SaveCatalog(ctx context.Context, id string, revision int64, models []string, observedAt int64, source string) error {
+func (s *Service) SaveCatalog(ctx context.Context, id string, revision int64, models []string, observedAt int64, source string, hiddenModels ...string) error {
 	if _, err := s.get(ctx, id); err != nil {
 		return err
 	}
@@ -80,7 +105,11 @@ func (s *Service) SaveCatalog(ctx context.Context, id string, revision int64, mo
 	if err != nil {
 		return err
 	}
-	raw, err := json.Marshal(Catalog{Models: models, UpdatedAt: observedAt, Source: source})
+	hiddenModels, err = normalizedHiddenModels(models, hiddenModels)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(Catalog{Models: models, HiddenModels: hiddenModels, UpdatedAt: observedAt, Source: source})
 	if err != nil {
 		return err
 	}
