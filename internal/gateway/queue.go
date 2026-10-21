@@ -22,7 +22,7 @@ var (
 )
 
 // Selection and leasing share the admission lock, but waiting holds neither a lock nor a transaction.
-func (s *Service) leaseAccount(ctx context.Context, entry *observation, session, provider, model string, kind Kind, affinity affinityMode) (id string, digest [32]byte, err error) {
+func (s *Service) leaseAccount(ctx context.Context, entry *observation, session, provider, model string, kind Kind, affinity affinityMode, parentThread string) (id string, digest [32]byte, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var timer *time.Timer
@@ -65,7 +65,7 @@ func (s *Service) leaseAccount(ctx context.Context, entry *observation, session,
 		} else if err := s.recheckWaitingMember(admissionCtx, entry); err != nil {
 			return id, digest, err
 		}
-		id, digest, err = s.selectAllocationAccount(admissionCtx, entry.record.UserID, entry.record.GroupID, session, provider, model, kind, entry.schemeID, affinity)
+		id, digest, err = s.selectAllocationAccount(admissionCtx, entry.record.UserID, entry.record.GroupID, session, provider, model, kind, entry.schemeID, affinity, parentThread)
 		entry.record.AccountID = id
 		if err != ErrAccountBusy {
 			break

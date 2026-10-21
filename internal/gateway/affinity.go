@@ -1,6 +1,42 @@
 package gateway
 
-import "encoding/json"
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+
+	"github.com/murongg/SubLane/internal/groups"
+	"github.com/murongg/SubLane/internal/storage/db"
+)
+
+func sessionDigest(userID, groupID int64, session string) [32]byte {
+	// Preserve existing upstream session/cache IDs in the former default pool.
+	if groupID == groups.LegacyID {
+		return sha256.Sum256([]byte(fmt.Sprintf("%d:%s", userID, session)))
+	}
+	return sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%s", userID, groupID, session)))
+}
+
+func sessionBinding(ctx context.Context, q *db.Queries, params db.ListSessionAffinitiesParams, scope string) (*db.ListSessionAffinitiesRow, error) {
+	bindings, err := q.ListSessionAffinities(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	for i := range bindings {
+		if bindings[i].Provider == scope {
+			return &bindings[i], nil
+		}
+	}
+	if scope == "auto" && len(bindings) > 0 {
+		// Multiple legacy bindings can represent different upstream identities.
+		if len(bindings) != 1 {
+			return nil, ErrAffinityUnavailable
+		}
+		return &bindings[0], nil
+	}
+	return nil, nil
+}
 
 type affinityMode uint8
 
