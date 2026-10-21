@@ -75,6 +75,8 @@ func catalogUsable(value accounts.Catalog, now time.Time) bool {
 func (c *catalogCache) state(value accounts.Catalog, e *catalogEntry, source string) CatalogSnapshot {
 	now := c.now()
 	result := CatalogSnapshot{Catalog: value, Known: value.UpdatedAt > 0, ServerTime: now.Unix(), Usable: catalogUsable(value, now)}
+	result.Models = value.VisibleModels()
+	result.HiddenModels = nil
 	result.sourceChanged = value.Source != source
 	result.Stale = result.sourceChanged || !result.Known || !result.Usable || now.Unix()-value.UpdatedAt >= int64(catalogTTL.Seconds())
 	if e != nil && e.revision == value.Revision {
@@ -209,10 +211,14 @@ func (s *Service) fetchCatalog(id string, e *catalogEntry, release func()) {
 	}
 	if err == nil {
 		ids := make([]string, 0, len(discovery.Models))
+		hidden := []string{}
 		for _, model := range discovery.Models {
 			ids = append(ids, model.ID)
+			if model.Hidden {
+				hidden = append(hidden, model.ID)
+			}
 		}
-		err = s.accounts.SaveCatalog(ctx, id, e.revision, ids, observedAt, discovery.Source)
+		err = s.accounts.SaveCatalog(ctx, id, e.revision, ids, observedAt, discovery.Source, hidden...)
 	}
 	release()
 	<-c.slots

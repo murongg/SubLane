@@ -148,6 +148,57 @@ func TestCatalogEmptyObservationIsNotUnknown(t *testing.T) {
 	}
 }
 
+func TestHiddenModelRefreshesLegacyCatalogAndSurvivesRestart(t *testing.T) {
+	ctx := context.Background()
+	var discoveries, forwarded int
+	s, ids := discoveryGateway(t, transportFunc(func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/models") {
+			discoveries++
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"models":[{"slug":"synthetic-model"},{"slug":"codex-auto-review","visibility":"hide"}]}`))}, nil
+		}
+		forwarded++
+		return syntheticStream(), nil
+	}))
+	if _, err := groups.New(s.db).Save(ctx, 1, groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{ids["codex"]}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.accounts.SaveCatalog(ctx, ids["codex"], 0, []string{"synthetic-model"}, time.Now().Unix(), "codex:v1:"+upstream.DefaultCodexVersion); err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte(`{"model":"codex-auto-review","input":"Synthetic operation"}`)
+	for _, service := range []*Service{s, New(ctx, s.db, s.accounts, s.provider)} {
+		if service != s {
+			defer service.Close()
+		}
+		stream, err := service.Open(ctx, 1, 1, raw, nil, Responses)
+		if err != nil {
+			t.Fatal("hidden capability did not route after legacy discovery or restart", err)
+		}
+		stream.Body.Close()
+	}
+	if discoveries != 1 || forwarded != 2 {
+		t.Fatalf("capability was not persisted: discoveries=%d forwarded=%d", discoveries, forwarded)
+	}
+	if _, err := s.Open(ctx, 1, 1, []byte(`{"model":"synthetic-unknown","input":"Synthetic operation"}`), nil, Responses); !errors.Is(err, ErrModelUnavailable) {
+		t.Fatal("unknown capability was forwarded", err)
+	}
+	availability, err := s.Availability(ctx, 1, 1, "codex-auto-review")
+	if err != nil || availability.State != "available" {
+		t.Fatal("hidden capability is unavailable to diagnostics", availability, err)
+	}
+	pools, err := s.WorkspaceCapacity(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pool := range pools {
+		for _, model := range pool.Models {
+			if model.Model == "codex-auto-review" {
+				t.Fatal("hidden capability entered the monitored model list")
+			}
+		}
+	}
+}
+
 func TestCatalogRefreshCoalescesAndRejectsReauthorizationRace(t *testing.T) {
 	ctx := context.Background()
 	started := make(chan struct{})
@@ -333,7 +384,7 @@ func TestVersionChangeDiscardsAnInFlightCatalog(t *testing.T) {
 		t.Fatal("old backoff blocked new version discovery", err)
 	}
 	current, err := s.accounts.Catalog(ctx, ids["codex"])
-	if err != nil || current.Source != "codex:v1:0.300.0" {
+	if err != nil || current.Source != "codex:v2:0.300.0" {
 		t.Fatal(current, err)
 	}
 }

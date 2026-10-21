@@ -26,7 +26,8 @@ func (c *Client) CatalogSource(provider string) string {
 func catalogSource(provider, version string) string {
 	source := provider + ":v1"
 	if provider == "codex" {
-		source += ":" + version
+		// Older snapshots discarded hidden capabilities and must be rediscovered.
+		source = "codex:v2:" + version
 	}
 	return source
 }
