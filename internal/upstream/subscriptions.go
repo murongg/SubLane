@@ -114,15 +114,17 @@ func (c *Client) antigravityUsage(ctx context.Context, credential accounts.Crede
 		return Usage{}, ErrResponse
 	}
 	ids := make([]string, 0, len(payload.Models))
+	visible := 0
 	for id, model := range payload.Models {
+		if id == "" || len(id) > 128 {
+			return Usage{}, ErrResponse
+		}
+		ids = append(ids, id)
 		if !model.Internal {
-			if id == "" || len(id) > 128 {
-				return Usage{}, ErrResponse
-			}
-			ids = append(ids, id)
+			visible++
 		}
 	}
-	if len(ids) > 128 {
+	if visible > 128 {
 		return Usage{}, ErrResponse
 	}
 	sort.Strings(ids)
@@ -143,7 +145,7 @@ func (c *Client) antigravityUsage(ctx context.Context, credential accounts.Crede
 			}
 		}
 		// Model quotas describe this model only; they must not become an account-wide rejection.
-		result.Limits = append(result.Limits, UsageLimit{Name: id, Windows: []UsageWindow{window}})
+		result.Limits = append(result.Limits, UsageLimit{Name: id, Hidden: payload.Models[id].Internal, Windows: []UsageWindow{window}})
 	}
 	return result, nil
 }

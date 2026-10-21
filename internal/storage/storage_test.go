@@ -44,6 +44,80 @@ func TestOpenInitializesSchemaAndPreservesData(t *testing.T) {
 	}
 }
 
+func TestOpenExpandsUsageSnapshotsWithoutLosingDataOrConstraints(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "synthetic-usage-upgrade.db")
+	previous, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := previous.Exec(`CREATE TABLE schema_migrations(name TEXT PRIMARY KEY NOT NULL,applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := migrations.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.Name() >= "018_usage_snapshot.sql" {
+			break
+		}
+		if err := apply(ctx, previous, entry.Name()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, statement := range []string{
+		`INSERT INTO users(id,username,password_hash,role,created_at) VALUES(1,'synthetic-owner','synthetic-hash','admin',1)`,
+		`INSERT INTO tenants(id,name,owner_user_id,created_at) VALUES(1,'Synthetic workspace',1,1)`,
+		`INSERT INTO accounts(id,name,account_id,status,credential,created_at,updated_at,models_revision) VALUES('synthetic-account','Synthetic account','synthetic-subject','ready',X'1234',1,1,7)`,
+		`INSERT INTO account_usage(account_id,snapshot,updated_at,revision) VALUES('synthetic-account',CAST('{"updated_at":1,"limits":[]}' AS BLOB),1,7)`,
+	} {
+		if _, err := previous.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := previous.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		upgraded, err := Open(ctx, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var snapshot []byte
+		var observed, revision int64
+		err = upgraded.QueryRow(`SELECT snapshot,updated_at,revision FROM account_usage WHERE account_id='synthetic-account'`).Scan(&snapshot, &observed, &revision)
+		upgraded.Close()
+		if err != nil || string(snapshot) != `{"updated_at":1,"limits":[]}` || observed != 1 || revision != 7 {
+			t.Fatal("usage migration lost an existing observation", string(snapshot), observed, revision, err)
+		}
+	}
+	upgraded, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer upgraded.Close()
+	if _, err := upgraded.Exec(`UPDATE account_usage SET snapshot=zeroblob(262144)`); err != nil {
+		t.Fatal("complete hidden quota snapshot does not fit", err)
+	}
+	for _, statement := range []string{
+		`UPDATE account_usage SET snapshot=zeroblob(262145)`,
+		`UPDATE account_usage SET updated_at=0`,
+		`INSERT INTO account_usage(account_id,snapshot,updated_at) VALUES('missing',X'1234',1)`,
+	} {
+		if _, err := upgraded.Exec(statement); err == nil {
+			t.Fatal("usage migration lost a constraint", statement)
+		}
+	}
+	if _, err := upgraded.Exec(`DELETE FROM accounts WHERE id='synthetic-account'`); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := upgraded.QueryRow(`SELECT count(*) FROM account_usage`).Scan(&count); err != nil || count != 0 {
+		t.Fatal("usage cascade deletion was lost", count, err)
+	}
+}
+
 func TestOpenAddsInvitationMigrationToExistingSchema(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "synthetic-previous.db")
