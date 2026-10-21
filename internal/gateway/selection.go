@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 
@@ -16,14 +15,10 @@ import (
 
 // Called under s.mu by Open, keeping policy, selection and account reservation atomic.
 func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, session, provider, model string, kind Kind) (string, [32]byte, error) {
-	return s.selectAllocationAccount(ctx, userID, groupID, session, provider, model, kind, 0, pinnedAffinity)
+	return s.selectAllocationAccount(ctx, userID, groupID, session, provider, model, kind, 0, pinnedAffinity, "")
 }
-func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID int64, session, provider, model string, kind Kind, scheme int64, affinity affinityMode) (string, [32]byte, error) {
-	digest := sha256.Sum256([]byte(fmt.Sprintf("%d:%s", userID, session)))
-	// Preserve upstream session/cache IDs for existing conversations in the former default pool, even after it is renamed.
-	if groupID != groups.LegacyID {
-		digest = sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%s", userID, groupID, session)))
-	}
+func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID int64, session, provider, model string, kind Kind, scheme int64, affinity affinityMode, parentThread string) (string, [32]byte, error) {
+	digest := sessionDigest(userID, groupID, session)
 	if userID <= 0 || groupID <= 0 {
 		return "", digest, upstream.ErrInput
 	}
@@ -73,23 +68,9 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 	bindingModel := upstream.CatalogModelID(model)
 	var replacement *db.ListSessionAffinitiesRow
 	if session != "" {
-		bindings, err := q.ListSessionAffinities(ctx, db.ListSessionAffinitiesParams{GroupID: groupID, UserID: userID, SessionHash: digest[:], Now: now})
+		existing, err := sessionBinding(ctx, q, db.ListSessionAffinitiesParams{GroupID: groupID, UserID: userID, SessionHash: digest[:], Now: now}, scope)
 		if err != nil {
 			return "", digest, err
-		}
-		var existing *db.ListSessionAffinitiesRow
-		for i := range bindings {
-			if bindings[i].Provider == scope {
-				existing = &bindings[i]
-				break
-			}
-		}
-		if existing == nil && scope == "auto" && len(bindings) > 0 {
-			// Old clients could keep separate conversations under one session ID. Guessing would cross identities.
-			if len(bindings) != 1 {
-				return "", digest, ErrAffinityUnavailable
-			}
-			existing = &bindings[0]
 		}
 		if existing != nil {
 			id := existing.AccountID
@@ -178,6 +159,18 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 			}
 		}
 	}
+	parentAccount := ""
+	if parentThread != "" && affinity != continuationAffinity {
+		// Resolve only in the authenticated user's pool; parent hints never contain trusted account IDs.
+		hash := sessionDigest(userID, groupID, parentThread)
+		binding, err := sessionBinding(ctx, q, db.ListSessionAffinitiesParams{GroupID: groupID, UserID: userID, SessionHash: hash[:], Now: now}, "auto")
+		if err != nil && !errors.Is(err, ErrAffinityUnavailable) {
+			return "", digest, err
+		}
+		if binding != nil {
+			parentAccount = binding.AccountID
+		}
+	}
 	candidates := make([]string, 0, len(available))
 	preferred := preferredProvider(kind)
 	bestRank := 4
@@ -254,6 +247,10 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 		// Preference only ranks accounts that passed every policy and availability check.
 		// Existing affinities returned above must never move to a more direct provider.
 		rank := policy.Routing.Rank(account.Provider, preferred)
+		// Parent metadata is only a preference among admitted accounts, never a binding or permission grant.
+		if account.ID == parentAccount {
+			rank = -1
+		}
 		if rank < bestRank {
 			candidates = candidates[:0]
 			bestRank = rank
