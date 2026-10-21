@@ -49,14 +49,18 @@ export function ClientGuide({
       <SheetTrigger asChild>
         <Button
           data-tour={value ? 'client' : undefined}
-          variant="outline"
+          variant={value ? 'ghost' : 'outline'}
+          size={value ? 'sm' : 'default'}
+          className={value ? 'h-auto flex-col gap-1 py-1.5' : undefined}
           disabled={disabled}
           aria-label={
             value ? t('clientConfigureKey', { name: value.name }) : undefined
           }
         >
           <BookOpen aria-hidden="true" />
-          {t('clientGuideAction')}
+          <span className={value ? 'text-xs font-normal' : undefined}>
+            {t('clientGuideAction')}
+          </span>
         </Button>
       </SheetTrigger>
       {open && (

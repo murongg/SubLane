@@ -651,6 +651,22 @@ export const en = {
   ccSwitchOpen: 'Open CC Switch',
   ccSwitchEdit: 'Edit configuration',
 
+  magpieImport: 'Import into Magpie',
+  magpieImportNamed: 'Import {{name}} into Magpie',
+  magpieDescription:
+    'Add this API key and gateway to Magpie. Models are discovered automatically from this key’s group.',
+  magpiePrivacy:
+    'This key and connection details will be passed to Magpie on this device. Confirm the import in Magpie.',
+  magpieReady: 'Ready to open Magpie and confirm the import.',
+  magpieOpened:
+    'Confirm the import in Magpie. If it did not open, check that Magpie 0.1.8 or later is installed and try again.',
+  magpieOpenFailed:
+    'Could not open Magpie. Check that Magpie 0.1.8 or later is installed, then try again.',
+  magpieKeyUnavailable:
+    'Use an enabled, unexpired key with access to its group.',
+  magpiePrepare: 'Prepare import',
+  magpieOpen: 'Open Magpie',
+
   copyKeyNamed: 'Copy {{name}}',
   keyLegacyCopy:
     'This older key cannot be copied again. Create a new key if you need its full value.',
@@ -663,6 +679,7 @@ export const en = {
 
   keyPaused: 'Paused',
   editKey: 'Edit API key',
+  edit: 'Edit',
   editKeyNamed: 'Edit {{name}}',
   editKeyDescription:
     'Update access without changing the key or its resource group.',

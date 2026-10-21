@@ -595,6 +595,20 @@ export const zh: Record<keyof typeof en, string> = {
   ccSwitchOpen: '打开 CC Switch',
   ccSwitchEdit: '修改配置',
 
+  magpieImport: '导入 Magpie',
+  magpieImportNamed: '将 {{name}} 导入 Magpie',
+  magpieDescription:
+    '将此 API 密钥和网关添加到 Magpie，模型将从此密钥所属资源组自动获取。',
+  magpiePrivacy: '此密钥和连接信息将交给本机 Magpie，请在 Magpie 中确认导入。',
+  magpieReady: '配置已准备好，打开 Magpie 确认导入。',
+  magpieOpened:
+    '请在 Magpie 中确认导入。如果未打开，请确认已安装 Magpie 0.1.8 或更新版本后重试。',
+  magpieOpenFailed:
+    '无法打开 Magpie，请确认已安装 Magpie 0.1.8 或更新版本后重试。',
+  magpieKeyUnavailable: '请使用已启用、未过期且有权访问所属资源组的密钥。',
+  magpiePrepare: '准备导入',
+  magpieOpen: '打开 Magpie',
+
   copyKeyNamed: '复制 {{name}}',
   keyLegacyCopy: '此旧密钥无法再次复制。如需完整值，请创建新密钥。',
   retrievingKey: '正在获取密钥…',
@@ -605,6 +619,7 @@ export const zh: Record<keyof typeof en, string> = {
 
   keyPaused: '已停用',
   editKey: '编辑 API 密钥',
+  edit: '编辑',
   editKeyNamed: '编辑 {{name}}',
   editKeyDescription: '调整访问设置，不更换密钥及其所属资源组。',
   keyEnabled: '启用密钥',

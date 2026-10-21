@@ -71,6 +71,13 @@ it('configures a specific personal key from its permitted model catalog', async 
   )
   const user = userEvent.setup()
   open()
+  const ccSwitch = await screen.findByRole('button', {
+    name: 'Import Synthetic laptop into CC Switch',
+  })
+  const magpie = screen.getByRole('button', {
+    name: 'Import Synthetic laptop into Magpie',
+  })
+  expect(ccSwitch.nextElementSibling).toBe(magpie)
   await user.click(
     await screen.findByRole('button', { name: 'Configure Synthetic laptop' }),
   )
