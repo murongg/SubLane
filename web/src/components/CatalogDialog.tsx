@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { List, LoaderCircle, RefreshCw } from 'lucide-react'
+import { List, LoaderCircle, Play, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   catalogOptions,
+  checkModel,
   refreshCatalog,
   type CatalogTarget,
+  type ModelCheck,
 } from '@/lib/catalog'
 import { authKey, type AuthState } from '@/lib/auth'
+import { availabilityReasons } from '@/lib/availability'
+import { accountErrorKey } from '@/lib/accounts'
 import { useAdminMutation } from '@/hooks/use-admin-mutation'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -69,6 +73,21 @@ function CatalogContent({
   const [ownerID] = useState(
     () => client.getQueryData<AuthState>(authKey)?.user?.id,
   )
+  const [checks, setChecks] = useState<Record<string, ModelCheck>>({})
+  const check = useAdminMutation({
+    userID: ownerID ?? 0,
+    mutationFn: (model: string, signal) =>
+      checkModel(
+        {
+          kind: target.kind === 'channel' ? 'channel' : 'account',
+          id: String(target.id),
+        },
+        model,
+        signal,
+      ),
+    onSuccess: (result) =>
+      setChecks((previous) => ({ ...previous, [result.model]: result })),
+  })
   const refresh = useAdminMutation({
     userID: ownerID ?? 0,
     mutationFn: (_input: void, signal) =>
@@ -93,7 +112,10 @@ function CatalogContent({
     return () => window.clearInterval(timer)
   }, [cooldown])
   const pending =
-    query.isFetching || refresh.isPending || Boolean(data?.refreshing)
+    query.isFetching ||
+    refresh.isPending ||
+    check.isPending ||
+    Boolean(data?.refreshing)
   const failed =
     query.isError || refresh.isError || Boolean(data?.refresh_failed)
   const models = (data?.models ?? []).filter((model) =>
@@ -177,6 +199,11 @@ function CatalogContent({
           )}
           {Boolean(data?.models.length) && (
             <>
+              {individual && (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {t('modelTestHint')}
+                </p>
+              )}
               <Input
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
@@ -187,25 +214,74 @@ function CatalogContent({
                 className="max-h-72 overflow-y-auto divide-y divide-border"
                 aria-label={t('catalogAvailableModels')}
               >
-                {models.slice(0, 200).map((model) => (
-                  <li
-                    key={model}
-                    className="break-all py-2.5 font-mono text-xs"
-                  >
-                    {individual ? (
-                      model
-                    ) : (
-                      <button
-                        type="button"
-                        className="w-full break-all rounded-sm text-left hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                        aria-label={t('availabilityInspect', { model })}
-                        onClick={() => setInspectedModel(model)}
-                      >
-                        {model}
-                      </button>
-                    )}
-                  </li>
-                ))}
+                {models.slice(0, 200).map((model) => {
+                  const checking = check.isPending && check.variables === model
+                  const error = check.isError && check.variables === model
+                  const result = checks[model]
+                  return (
+                    <li
+                      key={model}
+                      className="break-all py-2.5 font-mono text-xs"
+                    >
+                      {individual ? (
+                        <>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="min-w-0 break-all">{model}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0 font-sans"
+                              disabled={pending || !data?.usable}
+                              aria-label={t(
+                                checking ? 'modelTestingFor' : 'modelTestFor',
+                                { model },
+                              )}
+                              onClick={() => check.mutate(model)}
+                            >
+                              {checking ? (
+                                <LoaderCircle
+                                  aria-hidden="true"
+                                  className="motion-safe:animate-spin"
+                                />
+                              ) : (
+                                <Play aria-hidden="true" />
+                              )}
+                              {t(checking ? 'modelTesting' : 'modelTest')}
+                            </Button>
+                          </div>
+                          {!checking && (error || result) && (
+                            <p
+                              role="status"
+                              className={`mt-1 font-sans ${!error && result?.available ? 'text-success' : 'text-warning'}`}
+                            >
+                              {error
+                                ? t(accountErrorKey(check.error))
+                                : t('modelTestResult', {
+                                    result: t(
+                                      result.available
+                                        ? 'modelTestSuccess'
+                                        : (availabilityReasons[
+                                            result.error_code
+                                          ] ?? 'reasonUnknown'),
+                                    ),
+                                    duration: result.duration_ms,
+                                  })}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="w-full break-all rounded-sm text-left hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                          aria-label={t('availabilityInspect', { model })}
+                          onClick={() => setInspectedModel(model)}
+                        >
+                          {model}
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
               {!models.length && (
                 <p className="text-sm text-muted-foreground">

@@ -88,19 +88,162 @@ const snapshot = {
   refresh_failed: false,
   retry_after_seconds: 0,
 }
-function mount() {
+function mount(kind: 'account' | 'channel' = 'account') {
   const client = createQueryClient()
   client.setQueryData(authKey, authenticated)
   render(
     <QueryClientProvider client={client}>
       <CatalogDialog
-        target={{ kind: 'account', id: 'synthetic-account' }}
+        target={{ kind, id: 'synthetic-account' }}
         name="Synthetic subscription"
       />
     </QueryClientProvider>,
   )
   return client
 }
+it.each(['account', 'channel'] as const)(
+  'tests a selected %s model only after clicking and shows the result',
+  async (kind) => {
+    let resolve!: (value: Response) => void
+    const fetcher = vi.fn((url: string) =>
+      url.endsWith('/check')
+        ? new Promise<Response>((done) => {
+            resolve = done
+          })
+        : Promise.resolve(new Response(JSON.stringify(snapshot))),
+    )
+    vi.stubGlobal('fetch', fetcher)
+    const user = userEvent.setup()
+    mount(kind)
+    await user.click(
+      screen.getByRole('button', { name: 'Models for Synthetic subscription' }),
+    )
+    const button = await screen.findByRole('button', {
+      name: 'Test synthetic-basic',
+    })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(
+      screen.getByText(/uses a small amount of upstream quota/),
+    ).toBeTruthy()
+    await user.click(button)
+    expect(
+      screen
+        .getByRole('button', { name: 'Testing synthetic-basic…' })
+        .hasAttribute('disabled'),
+    ).toBe(true)
+    expect(fetcher).toHaveBeenLastCalledWith(
+      `/api/${kind === 'account' ? 'accounts' : 'channels'}/synthetic-account/models/check`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ model: 'synthetic-basic' }),
+      }),
+    )
+    await act(async () =>
+      resolve(
+        new Response(
+          JSON.stringify({
+            model: 'synthetic-basic',
+            available: true,
+            duration_ms: 123,
+            error_code: '',
+          }),
+        ),
+      ),
+    )
+    expect(
+      await screen.findByText('Responded successfully · 123 ms'),
+    ).toBeTruthy()
+    expect(button.hasAttribute('disabled')).toBe(false)
+  },
+)
+
+it('explains a failed model check and allows retrying', async () => {
+  const fetcher = vi.fn((url: string) =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify(
+          url.endsWith('/check')
+            ? {
+                model: 'synthetic-basic',
+                available: false,
+                duration_ms: 42,
+                error_code: 'rate_limited',
+              }
+            : snapshot,
+        ),
+      ),
+    ),
+  )
+  vi.stubGlobal('fetch', fetcher)
+  const user = userEvent.setup()
+  mount()
+  await user.click(
+    screen.getByRole('button', { name: 'Models for Synthetic subscription' }),
+  )
+  await user.click(
+    await screen.findByRole('button', { name: 'Test synthetic-basic' }),
+  )
+  expect(await screen.findByText('Rate limited · 42 ms')).toBeTruthy()
+  expect(screen.queryByText(/Responded successfully/)).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Test synthetic-basic' }))
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3))
+})
+
+it('cancels a model check when its dialog closes', async () => {
+  let signal: AbortSignal | undefined
+  const fetcher = vi.fn((url: string, init?: RequestInit) => {
+    if (url.endsWith('/check')) {
+      signal = init?.signal as AbortSignal
+      return new Promise<Response>(() => {})
+    }
+    return Promise.resolve(new Response(JSON.stringify(snapshot)))
+  })
+  vi.stubGlobal('fetch', fetcher)
+  const user = userEvent.setup()
+  mount()
+  await user.click(
+    screen.getByRole('button', { name: 'Models for Synthetic subscription' }),
+  )
+  await user.click(
+    await screen.findByRole('button', { name: 'Test synthetic-basic' }),
+  )
+  await user.keyboard('{Escape}')
+  await waitFor(() => expect(signal?.aborted).toBe(true))
+})
+
+it('explains a rejected check without losing the model list', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) =>
+      Promise.resolve(
+        url.endsWith('/check')
+          ? new Response(JSON.stringify({ error: 'gateway_busy' }), {
+              status: 429,
+            })
+          : new Response(JSON.stringify(snapshot)),
+      ),
+    ),
+  )
+  const user = userEvent.setup()
+  mount()
+  await user.click(
+    screen.getByRole('button', { name: 'Models for Synthetic subscription' }),
+  )
+  await user.click(
+    await screen.findByRole('button', { name: 'Test synthetic-basic' }),
+  )
+  expect(
+    await screen.findByText(
+      'The gateway is busy. Wait a moment and try again.',
+    ),
+  ).toBeTruthy()
+  expect(screen.getByText('synthetic-basic')).toBeTruthy()
+  expect(
+    screen
+      .getByRole('button', { name: 'Test synthetic-basic' })
+      .hasAttribute('disabled'),
+  ).toBe(false)
+})
 it('loads on demand and keeps the last successful catalog after a refresh failure', async () => {
   const fetch = vi
     .fn()

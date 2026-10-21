@@ -45,6 +45,7 @@ func (h *channelHTTP) register(router chi.Router) {
 		route.Post("/resume", common.resume)
 		route.Get("/models", common.catalog)
 		route.Post("/models/refresh", common.refreshCatalog)
+		route.Post("/models/check", common.checkModel)
 	})
 }
 

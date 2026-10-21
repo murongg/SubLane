@@ -582,6 +582,14 @@ export const en = {
   reasonCatalogUnavailable: 'Model catalog unavailable',
 
   catalogModels: 'Models',
+  modelTest: 'Test',
+  modelTestFor: 'Test {{model}}',
+  modelTesting: 'Testing…',
+  modelTestingFor: 'Testing {{model}}…',
+  modelTestHint:
+    'Each test sends a real request and uses a small amount of upstream quota. It times out after 30 seconds. Results apply to this resource at the time of testing.',
+  modelTestSuccess: 'Responded successfully',
+  modelTestResult: '{{result}} · {{duration}} ms',
   catalogFor: 'Models for {{name}}',
   catalogAvailableModels: 'Available models',
   catalogAccountDescription:
