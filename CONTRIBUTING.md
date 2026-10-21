@@ -8,7 +8,7 @@ SubLane is at the foundation stage. Read [PRODUCT.md](PRODUCT.md) and [the roadm
 2. Run `make setup`, then `make dev`.
 3. Write a failing test for a behavior change; implement the change and rerun the test.
 4. Run `make check` before submitting your work.
-5. Update relevant documentation and both UI languages when behavior changes.
+5. Update relevant documentation and every supported UI dictionary when behavior changes.
 
 See [development notes](https://sublane.dev/docs/development) for commands and troubleshooting.
 
@@ -33,7 +33,7 @@ No contribution agreement or public support process is configured yet. Contribut
 
 ## Documentation changes
 
-Usage, operations, and architecture guides are maintained in [sublane-website](https://github.com/murongg/sublane-website), under `content/docs/` and `content/zh/`. Update those guides with application behavior changes instead of adding duplicate copies here. Repository policies, the changelog, and references not yet covered by the website stay in this repository. See [the documentation index](docs/README.md).
+Usage, operations, and architecture guides are maintained in [sublane-website](https://github.com/murongg/sublane-website), under `content/docs/` and the corresponding `content/<locale>/` directories. Update those guides with application behavior changes instead of adding duplicate copies here. Repository policies, the changelog, and references not yet covered by the website stay in this repository. See [the documentation index](docs/README.md).
 
 ## Publishing a version
 

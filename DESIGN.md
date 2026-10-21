@@ -99,7 +99,7 @@ Keep text contrast at least 4.5:1 and visible control boundaries/focus indicator
 
 ## Typography
 
-Use the platform sans-serif stack for fast rendering and familiar English/Chinese typography. No remote font service is required.
+Use the platform sans-serif stack for fast rendering and native multilingual typography. No remote font service is required.
 
 - Page titles use the title role, balanced wrapping, and restrained tracking.
 - Section headings use normal-size text with medium weight.
@@ -107,7 +107,7 @@ Use the platform sans-serif stack for fast rendering and familiar English/Chines
 - Secondary metadata and status badges use the label size; avoid reducing normal reading text below 12px.
 - Use tabular figures for changing durations and other aligned numeric values.
 
-Keep all visible UI copy and accessibility labels in the translation dictionaries. Allow Chinese and longer English phrases to wrap naturally; do not truncate important status or recovery information.
+Keep all visible UI copy and accessibility labels in the translation dictionaries. Allow translations to wrap naturally, including longer European-language phrases; do not truncate important status or recovery information.
 
 ## Layout
 

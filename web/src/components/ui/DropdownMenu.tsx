@@ -1,5 +1,6 @@
 // Adapted from Shadcn Admin (MIT); see THIRD_PARTY_NOTICES.md.
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu'
 import { CheckIcon, ChevronRightIcon } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -7,7 +8,14 @@ import { cn } from '@/lib/cn'
 function DropdownMenu({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+  const { i18n } = useTranslation()
+  return (
+    <DropdownMenuPrimitive.Root
+      data-slot="dropdown-menu"
+      dir={i18n.dir()}
+      {...props}
+    />
+  )
 }
 
 function DropdownMenuPortal({
