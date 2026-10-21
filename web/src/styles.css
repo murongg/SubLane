@@ -165,3 +165,18 @@
     scroll-behavior: auto !important;
   }
 }
+
+:dir(rtl) .text-left {
+  text-align: start;
+}
+
+:dir(rtl) pre,
+:dir(rtl) code {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+:dir(rtl) h1,
+:dir(rtl) h2 {
+  letter-spacing: normal;
+}

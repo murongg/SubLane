@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useTranslation } from 'react-i18next'
-import { setLanguage, type Language } from '@/lib/i18n'
+import { languages, setLanguage, type Language } from '@/lib/i18n'
 import { Button } from './ui/Button'
 import {
   DropdownMenu,
@@ -22,7 +22,7 @@ type PreferenceMenuProps = {
   label: string
   value: string
   onChange: (value: string) => void
-  options: { value: string; label: string }[]
+  options: readonly { value: string; label: string }[]
   icon?: LucideIcon
 }
 
@@ -86,10 +86,7 @@ export function LanguageSelect({ compact = false }: { compact?: boolean }) {
       label={t('language')}
       value={i18n.resolvedLanguage ?? 'en'}
       onChange={(value) => setLanguage(value as Language)}
-      options={[
-        { value: 'en', label: 'English' },
-        { value: 'zh', label: '简体中文' },
-      ]}
+      options={languages}
     />
   )
 }

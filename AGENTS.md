@@ -4,7 +4,7 @@
 
 Before significant changes, read `PRODUCT.md` for scope and status, `DESIGN.md` for interface rules, and [the architecture guide](https://sublane.dev/docs/architecture) for module ownership and implementation boundaries.
 
-Use English for code comments, `PRODUCT.md`, and primary developer documentation. Keep the English and Simplified Chinese UI dictionaries complete. English is the default interface language.
+Use English for code comments, `PRODUCT.md`, and primary developer documentation. Keep every supported UI dictionary complete against the English keys. English is the default interface language.
 
 ## Work style
 
@@ -50,7 +50,7 @@ Usage, operations, and architecture guides are maintained in [the documentation 
 - Use PascalCase component filenames and lowercase domain folders. Follow TanStack Router conventions for routes.
 - Reuse the adapted Shadcn Admin components under `web/src/components/ui/`.
 - Use TanStack Query for remote state and validate API responses at the boundary.
-- Keep user-facing text in `web/src/locales/en.ts` and `zh.ts`, including accessibility labels and error messages.
+- Keep user-facing text in `web/src/locales/en.ts`, `zh.ts`, and the additional locale JSON dictionaries, including accessibility labels and error messages. Preserve interpolation placeholders and include all plural forms needed by each language.
 - Follow `DESIGN.md` for color, accessibility, responsive behavior, themes, and honest loading/failure/empty states. Never add fake account or usage data.
 
 ## Tests and verification

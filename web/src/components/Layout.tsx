@@ -186,7 +186,7 @@ function Navigation() {
       data?.user?.id === 1 && selectedWorkspace() === 1,
     )
   return (
-    <Sidebar className="border-r border-border">
+    <Sidebar className="border-e border-border">
       <SidebarHeader className="px-3 py-4">
         <div className="flex min-w-0 items-center gap-2">
           <Link

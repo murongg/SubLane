@@ -419,7 +419,7 @@ export const en = {
   allocationMine: 'My resource allowances',
   allocationRefreshMine: 'Refresh my resource allowances',
   allocationMineEmpty: 'No resource allowances assigned.',
-  allocationKeyChoice: 'Resource allowance: {{scheme}} · {{group}}',
+  allocationKeyChoice: 'Resource allowance: {{scheme}} · {{pool}}',
   auditAllocationSave: 'Saved resource allowance',
   auditAllocationSettle: 'Settled resource allowance usage',
   auditAllocationReconcile: 'Confirmed external quota usage',
