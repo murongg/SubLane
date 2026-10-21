@@ -39,6 +39,7 @@ func (h *accountHTTP) register(router chi.Router) {
 		accounts.Post("/{id}/check", h.check)
 		accounts.Get("/{id}/models", h.catalog)
 		accounts.Post("/{id}/models/refresh", h.refreshCatalog)
+		accounts.Post("/{id}/models/check", h.checkModel)
 		accounts.Get("/{id}/usage", h.usage)
 		accounts.Post("/{id}/usage/refresh", h.refreshUsage)
 	})

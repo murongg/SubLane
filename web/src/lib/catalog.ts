@@ -35,6 +35,24 @@ const groupSchema = z.object({
   server_time: z.number().int(),
 })
 export type CatalogView = z.infer<typeof snapshotSchema> & { partial: boolean }
+const modelCheckSchema = z.object({
+  model: z.string().min(1).max(128),
+  available: z.boolean(),
+  duration_ms: z.number().int().nonnegative(),
+  error_code: z.string().max(64),
+})
+export type ModelCheck = z.infer<typeof modelCheckSchema>
+export function checkModel(
+  target: Extract<CatalogTarget, { kind: 'account' | 'channel' }>,
+  model: string,
+  signal: AbortSignal,
+) {
+  return request(`${catalogPath(target)}/check`, modelCheckSchema, {
+    method: 'POST',
+    body: JSON.stringify({ model }),
+    signal,
+  })
+}
 export function catalogPath(target: CatalogTarget) {
   const collections = {
     account: 'accounts',

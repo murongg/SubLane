@@ -535,6 +535,14 @@ export const zh: Record<keyof typeof en, string> = {
   reasonCatalogUnavailable: '模型目录暂不可用',
 
   catalogModels: '模型',
+  modelTest: '检测',
+  modelTestFor: '检测 {{model}}',
+  modelTesting: '检测中…',
+  modelTestingFor: '正在检测 {{model}}…',
+  modelTestHint:
+    '每次检测会发送真实请求并消耗少量上游额度，30 秒后超时。结果仅代表此账号或渠道在检测时的状态。',
+  modelTestSuccess: '响应成功',
+  modelTestResult: '{{result}} · {{duration}} 毫秒',
   catalogFor: '{{name}} 的模型',
   catalogAvailableModels: '可用模型',
   catalogAccountDescription:
