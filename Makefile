@@ -33,7 +33,8 @@ generate-check:
 
 test:
 	node --test scripts/*.test.mjs
-	$(GO) test -race ./...
+	# The full gateway race suite can exceed Go's default 10m package timeout on CI.
+	$(GO) test -race -timeout=20m ./...
 	$(PNPM) --dir web test
 
 lint:
