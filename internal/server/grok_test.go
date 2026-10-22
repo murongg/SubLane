@@ -57,7 +57,7 @@ func TestHiddenGrokModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) {
 	}
 	admin := login("owner-test", "owner pass 42")
 	member := login("member-test", "member pass 42")
-	assertListings := func() {
+	assertListings := func(hidden ...string) {
 		t.Helper()
 		response, raw := messageRequest(t, f, "GET", "/v1/models", "", http.Header{"Authorization": {"Bearer " + f.secret}})
 		if response.StatusCode != 200 || strings.Contains(raw, "synthetic-hidden") || strings.Contains(raw, "synthetic-picker-alias") {
@@ -68,12 +68,14 @@ func TestHiddenGrokModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) {
 			cookie *http.Cookie
 		}{{"/api/accounts/" + id + "/models", admin}, {"/api/groups/1/models", admin}, {fmt.Sprintf("/api/keys/%d/models", f.keyID), member}} {
 			response := request(h, "GET", test.path, "", nil, test.cookie)
-			if response.Code != 200 || strings.Contains(response.Body.String(), "synthetic-hidden") || strings.Contains(response.Body.String(), "synthetic-picker-alias") {
-				t.Fatal("hidden capability leaked into management list", response.Code, response.Body.String())
+			want := hidden
+			if strings.HasPrefix(test.path, "/api/accounts/") {
+				want = []string{"synthetic-hidden"}
 			}
+			assertHiddenCatalog(t, response, want...)
 		}
 	}
-	assertListings()
+	assertListings("synthetic-hidden")
 	call := func(model string) int {
 		response, _ := messageRequest(t, f, "POST", "/v1/responses", fmt.Sprintf(`{"model":%q,"input":"Synthetic prompt"}`, model), http.Header{"Authorization": {"Bearer " + f.secret}})
 		return response.StatusCode
@@ -115,6 +117,7 @@ func TestHiddenGrokModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) {
 	if _, err := f.groups.Save(ctx, 1, input); err != nil {
 		t.Fatal(err)
 	}
+	assertListings()
 	if status := call("synthetic-hidden"); status != 403 || forwarded.Load() != 2 {
 		t.Fatal("hidden model bypassed model policy", status, forwarded.Load())
 	}
@@ -123,7 +126,7 @@ func TestHiddenGrokModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) {
 	if _, err := f.groups.Save(ctx, 1, input); err != nil {
 		t.Fatal(err)
 	}
-	assertListings()
+	assertListings("synthetic-hidden")
 	if status := call("synthetic-hidden"); status != 200 || forwarded.Load() != 3 {
 		t.Fatal("explicit permission could not call a hidden model", status, forwarded.Load())
 	}

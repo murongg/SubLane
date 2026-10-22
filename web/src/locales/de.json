@@ -446,6 +446,7 @@
   "reasonCatalogUnavailable": "Modellkatalog nicht verfügbar",
   "catalogModels": "Modelle",
   "catalogFor": "Muster für {{name}}",
+  "catalogHiddenModel": "Ausgeblendetes Modell",
   "catalogAvailableModels": "Verfügbare Modelle",
   "catalogAccountDescription": "Dieser Katalog beschreibt die gemeldete Unterstützung, keine verbleibenden Quoten oder einen erfolgreichen Generationstest.",
   "catalogGroupDescription": "Automatisch aus aktivierten Ressourcen kombiniert und durch die Modellrichtlinie der Gruppe gefiltert.",

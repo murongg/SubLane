@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -16,6 +18,107 @@ import (
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/upstream"
 )
+
+func TestHiddenManagementCatalogLimitDoesNotBlockPublicDiscovery(t *testing.T) {
+	ctx := context.Background()
+	s, _ := discoveryGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return nil, errors.New("unexpected synthetic IO") }))
+	ids := []string{}
+	for index := range 9 {
+		account, err := s.accounts.Authorize(ctx, "Synthetic large catalog", accounts.Credential{AccountID: fmt.Sprintf("synthetic-large-%d", index), AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", ExpiresAt: time.Now().Add(time.Hour).Unix()}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, account.ID)
+		hidden := []string{}
+		for model := range 511 {
+			hidden = append(hidden, fmt.Sprintf("synthetic-hidden-%d-%d", index, model))
+		}
+		models := append(slices.Clone(hidden), "synthetic-visible")
+		if err := s.accounts.SaveCatalog(ctx, account.ID, 0, models, s.now().Unix(), s.provider.CatalogSource("codex"), hidden...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := groups.New(s.db).Save(ctx, 1, groups.Input{Name: "Synthetic large catalog", Enabled: true, AccountIDs: ids}); err != nil {
+		t.Fatal(err)
+	}
+	models, err := s.Models(ctx, 1, 1)
+	if err != nil || len(models) != 1 || models[0].ID != "synthetic-visible" {
+		t.Fatal("hidden management metadata blocked public discovery", len(models), err)
+	}
+	if _, err := s.GroupCatalog(ctx, 1, 1, false); !errors.Is(err, upstream.ErrResponse) {
+		t.Fatal("management catalog lost its existing total model bound", err)
+	}
+}
+
+func TestManagementCatalogMarksHiddenModelsWithoutChangingPublicDiscovery(t *testing.T) {
+	for _, bothHidden := range []bool{false, true} {
+		t.Run(map[bool]string{false: "visible route wins", true: "all routes hidden"}[bothHidden], func(t *testing.T) {
+			ctx := context.Background()
+			s, ids := discoveryGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
+				t.Error("fresh management catalog contacted upstream")
+				return nil, errors.New("unexpected synthetic IO")
+			}))
+			for _, provider := range []string{"codex", "claude"} {
+				hidden := []string{"synthetic-hidden"}
+				if provider == "codex" || bothHidden {
+					hidden = append(hidden, "synthetic-shared")
+				}
+				if err := s.accounts.SaveCatalog(ctx, ids[provider], 0, []string{"synthetic-hidden", "synthetic-shared", "synthetic-visible"}, s.now().Unix(), s.provider.CatalogSource(provider), hidden...); err != nil {
+					t.Fatal(err)
+				}
+			}
+			input := groups.Input{Name: "Synthetic catalog", Enabled: true, AccountIDs: []string{ids["codex"], ids["claude"]}}
+			if _, err := groups.New(s.db).Save(ctx, 1, input); err != nil {
+				t.Fatal(err)
+			}
+			for _, allowed := range [][]string{nil, {"codex/synthetic-hidden(high)"}, {"claude/synthetic-shared"}, {"synthetic-visible"}} {
+				input.ModelPolicy = &groups.ModelPolicy{Restricted: allowed != nil, Models: allowed}
+				if _, err := groups.New(s.db).Save(ctx, 1, input); err != nil {
+					t.Fatal(err)
+				}
+				catalog, err := s.GroupCatalog(ctx, 1, 1, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw, err := json.Marshal(catalog)
+				var view struct {
+					HiddenModels []string `json:"hidden_models"`
+				}
+				if err != nil || json.Unmarshal(raw, &view) != nil {
+					t.Fatal(err)
+				}
+				want := []string{}
+				switch {
+				case allowed == nil:
+					want = append(want, "synthetic-hidden")
+					if bothHidden {
+						want = append(want, "synthetic-shared")
+					}
+				case allowed[0] == "codex/synthetic-hidden(high)":
+					want = append(want, "synthetic-hidden(high)")
+				case allowed[0] == "claude/synthetic-shared" && bothHidden:
+					want = append(want, "synthetic-shared")
+				}
+				if !slices.Equal(view.HiddenModels, want) {
+					t.Fatalf("policy-scoped hidden models: got %s, want %v", raw, want)
+				}
+				public, err := s.Models(ctx, 1, 1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, model := range public {
+					if model.ID == "synthetic-shared" && model.OwnedBy != "claude" {
+						t.Fatal("a hidden route changed the public model owner", model)
+					}
+				}
+				encoded, _ := json.Marshal(public)
+				if strings.Contains(string(encoded), "synthetic-hidden") || bothHidden && strings.Contains(string(encoded), "synthetic-shared") {
+					t.Fatal("hidden metadata entered public discovery", string(encoded))
+				}
+			}
+		})
+	}
+}
 
 func TestCatalogUnionsAccountsAndRoutesOnlySupportedModels(t *testing.T) {
 	ctx := context.Background()

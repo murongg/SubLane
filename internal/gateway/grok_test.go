@@ -46,8 +46,8 @@ func TestHiddenGrokCapabilitiesPersistAndKeepAdmissionChecks(t *testing.T) {
 			t.Fatal("hidden capability did not survive discovery or restart", selected, err)
 		}
 		catalog, err := service.AccountCatalog(ctx, id, false)
-		if err != nil || len(catalog.Models) != 1 || len(catalog.HiddenModels) != 0 {
-			t.Fatal("account list exposed hidden capability metadata", catalog, err)
+		if err != nil || len(catalog.Models) != 1 || (len(catalog.HiddenModels) != 1 || catalog.HiddenModels[0] != "synthetic-hidden") {
+			t.Fatal("management catalog lost hidden capability metadata", catalog, err)
 		}
 		value, err := service.Availability(ctx, 1, 1, "synthetic-hidden")
 		if err != nil || value.State != "available" {

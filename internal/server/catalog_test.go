@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -66,21 +67,17 @@ func TestHiddenCodexModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w
 	}
-	assertListings := func() {
+	assertListings := func(hidden ...string) {
 		t.Helper()
-		responses := []*httptest.ResponseRecorder{
-			invoke("GET", "/v1/models", ""),
-			request(h, "GET", "/api/accounts/"+accountID+"/models", "", nil, admin),
-			request(h, "GET", "/api/groups/1/models", "", nil, admin),
-			request(h, "GET", fmt.Sprintf("/api/keys/%d/models", f.keyID), "", nil, member),
+		response := invoke("GET", "/v1/models", "")
+		if response.Code != 200 || strings.Contains(response.Body.String(), "codex-auto-review") || strings.Contains(response.Body.String(), "synthetic-hidden") {
+			t.Fatal("hidden capability entered public discovery", response.Code, response.Body.String())
 		}
-		for _, response := range responses {
-			if response.Code != 200 || strings.Contains(response.Body.String(), "codex-auto-review") || strings.Contains(response.Body.String(), "synthetic-hidden") {
-				t.Fatal("hidden capability leaked into a catalog", response.Code, response.Body.String())
-			}
-		}
+		assertHiddenCatalog(t, request(h, "GET", "/api/accounts/"+accountID+"/models", "", nil, admin), "codex-auto-review", "synthetic-hidden")
+		assertHiddenCatalog(t, request(h, "GET", "/api/groups/1/models", "", nil, admin), hidden...)
+		assertHiddenCatalog(t, request(h, "GET", fmt.Sprintf("/api/keys/%d/models", f.keyID), "", nil, member), hidden...)
 	}
-	assertListings()
+	assertListings("codex-auto-review", "synthetic-hidden")
 	for _, model := range []string{"codex-auto-review", "synthetic-hidden"} {
 		if response := invoke("POST", "/v1/responses", fmt.Sprintf(`{"model":%q,"input":"Synthetic operation"}`, model)); response.Code != 200 {
 			t.Fatal("hidden model rejected", response.Code, response.Body.String())
@@ -90,6 +87,7 @@ func TestHiddenCodexModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) {
 	if _, err := f.groups.Save(ctx, 1, input); err != nil {
 		t.Fatal(err)
 	}
+	assertListings()
 	raw := `{"model":"codex-auto-review","input":"Synthetic operation"}`
 	if response := invoke("POST", "/v1/responses", raw); response.Code != 403 || !strings.Contains(response.Body.String(), "model_not_allowed") || forwarded != 2 {
 		t.Fatal("hidden model bypassed group policy", response.Code, response.Body.String(), forwarded)
@@ -98,7 +96,7 @@ func TestHiddenCodexModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) {
 	if _, err := f.groups.Save(ctx, 1, input); err != nil {
 		t.Fatal(err)
 	}
-	assertListings()
+	assertListings("codex-auto-review")
 	if response := invoke("POST", "/v1/responses", raw); response.Code != 200 || forwarded != 3 {
 		t.Fatal("explicit hidden model permission was ignored", response.Code, response.Body.String(), forwarded)
 	}
@@ -225,5 +223,21 @@ func TestCachedModelsDoNotConsumeUpstreamRequestSlots(t *testing.T) {
 	}
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &catalog) != nil || catalog.Object != "list" || len(catalog.Data) != 1 || catalog.Data[0].ID != "synthetic-model" {
 		t.Fatal("cached native model listing", w.Code, w.Body.String())
+	}
+}
+
+func assertHiddenCatalog(t *testing.T, response *httptest.ResponseRecorder, hidden ...string) {
+	t.Helper()
+	var view struct {
+		Models       json.RawMessage `json:"models"`
+		HiddenModels []string        `json:"hidden_models"`
+	}
+	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &view) != nil || !slices.Equal(view.HiddenModels, hidden) {
+		t.Fatal("management catalog lost permitted hidden metadata", response.Code, response.Body.String(), hidden)
+	}
+	for _, id := range hidden {
+		if strings.Contains(string(view.Models), id) {
+			t.Fatal("hidden model entered visible model choices", string(view.Models))
+		}
 	}
 }

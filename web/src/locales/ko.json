@@ -446,6 +446,7 @@
   "reasonCatalogUnavailable": "모델 카탈로그를 사용할 수 없습니다.",
   "catalogModels": "모델",
   "catalogFor": "{{name}} 모델",
+  "catalogHiddenModel": "숨겨진 모델",
   "catalogAvailableModels": "사용 가능한 모델",
   "catalogAccountDescription": "이 계정에서 발견된 모델입니다. 이 카탈로그에서는 남은 할당량이나 성공적인 생성 테스트가 아닌 보고된 지원에 대해 설명합니다.",
   "catalogGroupDescription": "활성화된 리소스에서 자동으로 결합되고 그룹의 모델 정책에 따라 필터링됩니다.",

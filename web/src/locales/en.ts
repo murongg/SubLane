@@ -591,6 +591,7 @@ export const en = {
   modelTestSuccess: 'Responded successfully',
   modelTestResult: '{{result}} · {{duration}} ms',
   catalogFor: 'Models for {{name}}',
+  catalogHiddenModel: 'Hidden model',
   catalogAvailableModels: 'Available models',
   catalogAccountDescription:
     'Models discovered from this account. This catalog describes reported support, not remaining quota or a successful generation test.',

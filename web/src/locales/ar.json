@@ -446,6 +446,7 @@
   "reasonCatalogUnavailable": "النموذج النموذجي غير متاح",
   "catalogModels": "النماذج",
   "catalogFor": "النماذج الخاصة {{name}}",
+  "catalogHiddenModel": "نموذج مخفي",
   "catalogAvailableModels": "النماذج المتاحة",
   "catalogAccountDescription": "النماذج التي تم اكتشافها من هذا الحساب، ويصف هذا الدليل الدعم المبلغ عنه، وليس الحصة المتبقية أو اختبار الجيل الناجح.",
   "catalogGroupDescription": "وقد جمعت آليا من الموارد الممكّنة ورسمتها السياسة النموذجية للفريق.",
