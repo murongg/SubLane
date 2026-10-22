@@ -15,6 +15,7 @@ import (
 	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/groups"
+	"github.com/murongg/SubLane/internal/logging"
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/upstream"
 )
@@ -47,6 +48,21 @@ func RequestID(ctx context.Context) string {
 }
 
 var safeModel = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,159}$`)
+
+// RecordRejection retains authenticated ingress failures without leasing or charging an upstream account.
+func (s *Service) RecordRejection(ctx context.Context, userID, groupID int64, kind Kind, code string, started time.Time) {
+	// A transport read error can cancel the request before its diagnostic is saved.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	entry, err := s.begin(ctx, userID, groupID, kind)
+	if err != nil {
+		logging.From(ctx).ErrorContext(ctx, "Unable to persist request metadata", "request_id", RequestID(ctx), "tenant_id", s.tenantID, "error_code", "persist_request_failed")
+		return
+	}
+	entry.started = started
+	entry.record.StartedAt = started.Unix()
+	entry.finish("rejected", code, "", "")
+}
 
 func requestReasoningEffort(input map[string]json.RawMessage, kind Kind) string {
 	var effort string

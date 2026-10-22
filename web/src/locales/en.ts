@@ -1468,6 +1468,12 @@ export const en = {
   reasonAuthRequired: 'Authorization required',
   reasonForbidden: 'Upstream access denied',
   reasonRejected: 'Upstream rejected request',
+  reasonUploadTimeout: 'Request upload timed out',
+  reasonUploadFailed: 'Request upload failed',
+  reasonRequestTooLarge: 'Request body too large',
+  reasonGatewayBusy: 'Gateway at capacity',
+  recoveryUpload:
+    'Check your upload connection, retry, or reduce the request size. This request did not reach a model.',
   reasonInvalid: 'Invalid request',
   reasonRefresh: 'Credential refresh failed',
   reasonUnknown: 'Request failed',

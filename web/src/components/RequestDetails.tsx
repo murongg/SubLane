@@ -47,7 +47,13 @@ export function RequestDetails({
     ...(value.account_name ? [[t('requestAccount'), value.account_name]] : []),
     [
       t('requestTransport'),
-      `${value.provider} · ${value.transport === 'websocket' ? 'WebSocket' : 'HTTP'} · ${value.operation}`,
+      [
+        value.provider,
+        value.transport === 'websocket' ? 'WebSocket' : 'HTTP',
+        value.operation,
+      ]
+        .filter(Boolean)
+        .join(' · '),
     ],
     [t('requestResult'), t(outcomeKeys[value.outcome])],
     ...(value.content

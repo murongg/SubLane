@@ -29,7 +29,7 @@ func messagesErrorBody(w http.ResponseWriter, status int, code string) map[strin
 		kind = "rate_limit_error"
 	case status == 503 || status == 529:
 		kind = "overloaded_error"
-	case status == 504:
+	case status == 408 || status == 504:
 		kind = "timeout_error"
 	case status >= 400 && status < 500:
 		kind = "invalid_request_error"

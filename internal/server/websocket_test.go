@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -66,6 +67,7 @@ func TestWebsocketConfiguredRequestBodyLimit(t *testing.T) {
 }
 
 func TestWebsocketPrewarmAndPerTurnKeyRevocation(t *testing.T) {
+	buffer := captureLogs(t, slog.LevelInfo)
 	var calls atomic.Int32
 	fixture := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
@@ -135,5 +137,17 @@ func TestWebsocketPrewarmAndPerTurnKeyRevocation(t *testing.T) {
 	detail := rejected["error"].(map[string]any)
 	if detail["code"] != "invalid_api_key" || calls.Load() != 1 {
 		t.Fatal("revoked key started another turn")
+	}
+	found := false
+	for _, record := range buffer.records(t) {
+		if record["msg"] == "Gateway request rejected" {
+			found = true
+			if record["stage"] != "authenticate" || record["connection_id"] != response.Header.Get("X-Request-ID") || record["request_id"] != nil || record["error_code"] != "invalid_api_key" {
+				t.Fatal("unrecorded rejection reused a turn log ID or lost its stage", record)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("revoked key rejection was not logged")
 	}
 }

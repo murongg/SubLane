@@ -15,6 +15,7 @@ it('never offers administrator actions to members or unknown errors', () => {
   expect(requestRecovery('member_rate_limited', false).hint).toBe(
     'recoveryWait',
   )
+  expect(requestRecovery('gateway_busy', false).hint).toBe('recoveryWait')
   expect(requestRecovery('unknown', true).to).toBeUndefined()
 })
 
@@ -27,3 +28,18 @@ it('routes content failures to workspace rules only for administrators', () => {
     'recoveryContentUnavailable',
   )
 })
+
+it.each([
+  'request_body_timeout',
+  'request_body_read_failed',
+  'request_too_large',
+])(
+  'explains upload recovery for %s without an account repair action',
+  (code) => {
+    for (const administrator of [false, true]) {
+      expect(requestRecovery(code, administrator)).toEqual({
+        hint: 'recoveryUpload',
+      })
+    }
+  },
+)
