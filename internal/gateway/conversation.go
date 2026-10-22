@@ -9,6 +9,15 @@ import (
 
 var ErrContextLimit = errors.New("conversation_context_limit")
 
+// ConversationError carries a fixed diagnostic reason without changing the public error.
+type ConversationError struct {
+	Reason string
+	cause  error
+}
+
+func (e *ConversationError) Error() string { return e.cause.Error() }
+func (e *ConversationError) Unwrap() error { return e.cause }
+
 // Conversation retains bounded, connection-local state for translating incremental WebSocket turns to stateless HTTP.
 type Conversation struct {
 	MaxRequestBody int64
@@ -26,41 +35,44 @@ func (c *Conversation) bodyLimit() int64 {
 }
 
 func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
+	reject := func(reason string, cause error) ([]byte, bool, error) {
+		return nil, false, &ConversationError{Reason: reason, cause: cause}
+	}
 	if int64(len(raw)) > c.bodyLimit() {
-		return nil, false, ErrContextLimit
+		return reject("request_size", ErrContextLimit)
 	}
 	var input map[string]json.RawMessage
 	if json.Unmarshal(raw, &input) != nil || input == nil {
-		return nil, false, upstream.ErrInput
+		return reject("invalid_json", upstream.ErrInput)
 	}
 	var kind, previous string
 	if json.Unmarshal(input["type"], &kind) != nil || kind != "response.create" && kind != "response.append" {
-		return nil, false, upstream.ErrInput
+		return reject("invalid_type", upstream.ErrInput)
 	}
 	if kind == "response.append" && c.request == nil {
-		return nil, false, upstream.ErrContinuation
+		return reject("missing_history", upstream.ErrContinuation)
 	}
 	if value := input["previous_response_id"]; len(value) > 0 && string(value) != "null" {
 		if json.Unmarshal(value, &previous) != nil {
-			return nil, false, upstream.ErrInput
+			return reject("invalid_previous_response_id", upstream.ErrInput)
 		}
 	}
 	items, err := conversationInput(input["input"])
 	if err != nil {
-		return nil, false, err
+		return reject("invalid_input", err)
 	}
 	full := fullTranscript(items)
 	if previous != "" && previous != c.responseID && !full {
-		return nil, false, upstream.ErrContinuation
+		return reject("unknown_response", upstream.ErrContinuation)
 	}
 	appendHistory := c.request != nil && !full
 	if c.overflow && appendHistory {
-		return nil, false, ErrContextLimit
+		return reject("retained_context_size", ErrContextLimit)
 	}
 	if appendHistory {
 		prior, err := conversationInput(c.request["input"])
 		if err != nil {
-			return nil, false, err
+			return reject("invalid_history", err)
 		}
 		merged := make([]json.RawMessage, 0, len(prior)+len(c.output)+len(items))
 		merged = append(merged, prior...)
@@ -77,7 +89,7 @@ func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
 	}
 	var model string
 	if json.Unmarshal(input["model"], &model) != nil || model == "" {
-		return nil, false, upstream.ErrInput
+		return reject("invalid_model", upstream.ErrInput)
 	}
 	if c.request != nil && (appendHistory || previous != "" || kind == "response.append") {
 		var priorModel string
@@ -85,14 +97,14 @@ func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
 		// Normalization removes continuation IDs and fills history. Do not let that
 		// turn an incremental model change into permission to rebind an account.
 		if upstream.CatalogModelID(model) != upstream.CatalogModelID(priorModel) {
-			return nil, false, ErrAffinityUnavailable
+			return reject("model_change", ErrAffinityUnavailable)
 		}
 	}
 	prewarm := false
 	if flag, ok := input["generate"]; ok {
 		var generate bool
 		if json.Unmarshal(flag, &generate) != nil {
-			return nil, false, upstream.ErrInput
+			return reject("invalid_generate", upstream.ErrInput)
 		}
 		prewarm = !generate
 	}
@@ -103,10 +115,10 @@ func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
 	input["input"], _ = json.Marshal(items)
 	normalized, err := json.Marshal(input)
 	if err != nil {
-		return nil, false, upstream.ErrInput
+		return reject("encode_request", upstream.ErrInput)
 	}
 	if int64(len(normalized)) > c.bodyLimit() {
-		return nil, false, ErrContextLimit
+		return reject("normalized_context_size", ErrContextLimit)
 	}
 	return normalized, prewarm, nil
 }

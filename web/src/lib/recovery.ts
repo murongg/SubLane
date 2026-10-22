@@ -16,6 +16,14 @@ export function requestRecovery(
   code: string,
   administrator: boolean,
 ): Recovery {
+  if (
+    [
+      'request_body_timeout',
+      'request_body_read_failed',
+      'request_too_large',
+    ].includes(code)
+  )
+    return { hint: 'recoveryUpload' }
   if (code === 'content_policy_blocked' || code === 'content_check_unavailable')
     return {
       hint:
@@ -35,6 +43,7 @@ export function requestRecovery(
       'member_busy',
       'member_rate_limited',
       'rate_limited',
+      'gateway_busy',
       'timeout',
     ].includes(code)
   )

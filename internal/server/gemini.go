@@ -35,7 +35,7 @@ func geminiErrorBody(status int, code string) map[string]any {
 		name = "RESOURCE_EXHAUSTED"
 	case status == 503 || status == 529:
 		name = "UNAVAILABLE"
-	case status == 504:
+	case status == 408 || status == 504:
 		name = "DEADLINE_EXCEEDED"
 	case status >= 400 && status < 500:
 		name = "INVALID_ARGUMENT"

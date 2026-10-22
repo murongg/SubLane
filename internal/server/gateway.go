@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"mime"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -92,28 +94,57 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 		writeError(w, 501, "gateway_not_configured")
 		return
 	}
+	startedAt := time.Now()
+	principal, _ := r.Context().Value(keyPrincipalKey{}).(apikey.Principal)
+	r = r.WithContext(gateway.WithRequestIdentity(r.Context(), principal.KeyID, "http"))
+	w.Header().Set("X-Request-ID", gateway.RequestID(r.Context()))
+	recordRejection := func(code string) {
+		if code == "invalid_model_request" {
+			code = "invalid_request"
+		}
+		h.gateway.RecordRejection(r.Context(), principal.UserID, principal.GroupID, kind, code, startedAt)
+	}
 	release, err := h.gateway.Acquire()
 	if err != nil {
+		_, code := gatewayFailure(err)
+		recordRejection(code)
 		fail(w, err)
 		return
 	}
 	defer release()
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" {
+		recordRejection("json_required")
 		writeError(w, 415, "json_required")
 		return
 	}
 	controller := http.NewResponseController(w)
-	_ = controller.SetReadDeadline(time.Now().Add(30 * time.Second))
 	r.Body = http.MaxBytesReader(w, r.Body, h.gateway.MaxRequestBody())
-	raw, err := io.ReadAll(r.Body)
-	_ = controller.SetReadDeadline(time.Time{})
+	raw, err := readRequestBody(controller, r.Body)
 	if err != nil {
 		var limit *http.MaxBytesError
 		if errors.As(err, &limit) {
+			recordRejection("request_too_large")
 			writeError(w, 413, "request_too_large")
 		} else {
-			fail(w, upstream.ErrInput)
+			reason := "read_error"
+			failure := errRequestBodyRead
+			var network net.Error
+			switch {
+			case errors.As(err, &network) && network.Timeout():
+				reason = "timeout"
+				failure = errRequestBodyTimeout
+				if r.ProtoMajor == 1 {
+					w.Header().Set("Connection", "close")
+				}
+			case errors.Is(err, io.ErrUnexpectedEOF):
+				reason = "unexpected_eof"
+			}
+			// Upload failures happen before history exists and otherwise resemble invalid model parameters.
+			logGatewayRejection(r.Context(), "http", "read_body", failure,
+				slog.String("reason", reason), slog.Int("received_bytes", len(raw)), slog.Int64("content_length", r.ContentLength))
+			recordRejection(failure.Error())
+			fail(w, failure)
 		}
 		return
 	}
@@ -122,16 +153,29 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	}
 	if kind.IsGemini() {
 		if alt := r.URL.Query().Get("alt"); kind == gateway.GeminiStream && alt != "" && alt != "sse" {
+			logGatewayRejection(r.Context(), "http", "gemini_parameters", upstream.ErrInput)
+			recordRejection("invalid_request")
 			fail(w, upstream.ErrInput)
 			return
 		}
 		raw, err = upstream.GeminiRequest(raw, chi.URLParam(r, "model"), h.gateway.MaxRequestBody())
 		if err != nil {
+			logGatewayRejection(r.Context(), "http", "gemini_request", err)
+			_, code := gatewayFailure(err)
+			recordRejection(code)
 			fail(w, err)
 			return
 		}
 	}
-	if json.Unmarshal(raw, &flags) != nil || kind == gateway.Compact && flags.Stream {
+	if json.Unmarshal(raw, &flags) != nil {
+		logGatewayRejection(r.Context(), "http", "request_flags", upstream.ErrInput)
+		recordRejection("invalid_request")
+		fail(w, upstream.ErrInput)
+		return
+	}
+	if kind == gateway.Compact && flags.Stream {
+		logGatewayRejection(r.Context(), "http", "compact_stream", upstream.ErrInput)
+		recordRejection("invalid_request")
 		fail(w, upstream.ErrInput)
 		return
 	}
@@ -141,9 +185,6 @@ func (h *keyHTTP) proxy(w http.ResponseWriter, r *http.Request, kind gateway.Kin
 	policy := h.gateway.Policy()
 	ctx, cancel := context.WithTimeout(r.Context(), policy.RequestTimeout)
 	defer cancel()
-	principal, _ := r.Context().Value(keyPrincipalKey{}).(apikey.Principal)
-	ctx = gateway.WithRequestIdentity(ctx, principal.KeyID, "http")
-	w.Header().Set("X-Request-ID", gateway.RequestID(ctx))
 	result, err := h.gateway.Open(ctx, principal.UserID, principal.GroupID, raw, r.Header, kind)
 	if err != nil {
 		fail(w, err)
@@ -286,6 +327,10 @@ func writeSSE(w io.Writer, data []byte, named bool) error {
 func gatewayFailure(err error) (int, string) {
 	var rejected *upstream.UpstreamError
 	switch {
+	case errors.Is(err, errRequestBodyTimeout):
+		return http.StatusRequestTimeout, "request_body_timeout"
+	case errors.Is(err, errRequestBodyRead):
+		return http.StatusBadRequest, "request_body_read_failed"
 	case errors.Is(err, content.ErrBlocked):
 		return 403, "content_policy_blocked"
 	case errors.Is(err, content.ErrUnavailable):
@@ -419,6 +464,12 @@ func gatewayErrorBody(code string) map[string]string {
 }
 
 func gatewayErrorMessage(code string) string {
+	if code == "request_body_timeout" {
+		return "Request upload timed out. Retry the request or reduce its size and check your upload connection."
+	}
+	if code == "request_body_read_failed" {
+		return "Request upload could not be completed. Retry the request and check your connection."
+	}
 	if code == "content_policy_blocked" {
 		return "content_policy_blocked: Request blocked by workspace content rules. It was not sent upstream. Remove the sensitive content or contact your workspace administrator."
 	}

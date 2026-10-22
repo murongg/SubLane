@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -30,6 +31,8 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 	case h.sockets <- struct{}{}:
 		defer func() { <-h.sockets }()
 	default:
+		logGatewayRejection(r.Context(), "websocket", "connection_admission", gateway.ErrBusy,
+			slog.Int("connections", len(h.sockets)), slog.Int("connection_limit", cap(h.sockets)))
 		gatewayError(w, gateway.ErrBusy)
 		return
 	}
@@ -108,7 +111,13 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 		return conn.WriteMessage(websocket.TextMessage, data)
 	}
 	turnID := ""
+	stage := "authenticate"
 	writeError := func(err error) error {
+		var attrs []slog.Attr
+		if turnID != "" {
+			attrs = append(attrs, slog.String("request_id", turnID))
+		}
+		logGatewayRejection(ctx, "websocket", stage, err, attrs...)
 		status, code := gatewayFailure(err)
 		raw, _ := json.Marshal(map[string]any{"type": "error", "status": status, "error": gatewayErrorBody(code)})
 		return write(correlateEvent(raw, turnID))
@@ -125,21 +134,38 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case message := <-messages:
+			started := time.Now()
+			// Authentication failures must not inherit the preceding turn's request ID.
 			turnID = ""
+			stage = "authenticate"
 			// A successful handshake does not authorize later turns after member suspension or key revocation.
 			principal, err := h.service.Authenticate(ctx, strings.TrimSpace(secret))
 			if err != nil || principal.UserID != initial.UserID || principal.KeyID != initial.KeyID || principal.GroupID != initial.GroupID {
 				_ = writeError(apikey.ErrInvalidKey)
 				return
 			}
+			stage = "normalize"
 			normalized, prewarm, err := conversation.Normalize(message)
 			if err != nil {
+				failedCtx := gateway.WithRequestIdentity(ctx, principal.KeyID, "websocket")
+				turnID = gateway.RequestID(failedCtx)
+				_, code := gatewayFailure(err)
+				switch code {
+				case "invalid_model_request", "continuation_requires_full_input":
+					code = "invalid_request"
+				case "conversation_context_limit":
+					code = "context_limit"
+				case "conversation_account_unavailable":
+					code = "account_unavailable"
+				}
+				h.gateway.RecordRejection(failedCtx, principal.UserID, principal.GroupID, gateway.Responses, code, started)
 				if writeError(err) != nil {
 					return
 				}
 				continue
 			}
 			if prewarm {
+				stage = "prewarm_decode"
 				ctxWithID := gateway.WithRequestIdentity(ctx, principal.KeyID, "websocket")
 				turnID = gateway.RequestID(ctxWithID)
 				var input struct {
@@ -151,6 +177,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 					}
 					continue
 				}
+				stage = "prewarm_authorize"
 				if err := h.gateway.AuthorizeModel(ctx, principal.UserID, principal.GroupID, input.Model); err != nil {
 					if writeError(err) != nil {
 						return
@@ -158,6 +185,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				// Local prewarm also retains text for later turns, so it must obey the current rules.
+				stage = "prewarm_content"
 				if err := h.gateway.CheckPrewarm(ctxWithID, principal.UserID, principal.GroupID, normalized); err != nil {
 					if writeError(err) != nil {
 						return
@@ -169,6 +197,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 				if write(created) != nil || write(completed) != nil {
 					return
 				}
+				stage = "prewarm_accept"
 				if err := conversation.Accept(normalized, completed); err != nil {
 					if writeError(err) != nil {
 						return
@@ -176,6 +205,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 				}
 				continue
 			}
+			stage = "admission"
 			release, err := h.gateway.Acquire()
 			if err != nil {
 				if writeError(err) != nil {
@@ -186,6 +216,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 			turnCtx, turnCancel := context.WithTimeout(ctx, h.gateway.Policy().RequestTimeout)
 			turnCtx = gateway.WithRequestIdentity(turnCtx, principal.KeyID, "websocket")
 			turnID = gateway.RequestID(turnCtx)
+			stage = "forward"
 			err = h.websocketTurn(turnCtx, principal.UserID, principal.GroupID, normalized, headers, &conversation, write)
 			turnCancel()
 			release()

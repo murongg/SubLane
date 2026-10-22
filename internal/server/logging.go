@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,12 +13,43 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/logging"
 )
 
 type requestLogKey struct{}
 type requestLogState struct{ upgraded bool }
+
+func logGatewayRejection(ctx context.Context, transport, stage string, err error, extra ...slog.Attr) {
+	status, code := gatewayFailure(err)
+	level := slog.LevelWarn
+	if status >= 500 {
+		level = slog.LevelError
+	}
+	logger := logging.From(ctx)
+	if !logger.Enabled(ctx, level) {
+		return
+	}
+	principal, _ := ctx.Value(keyPrincipalKey{}).(apikey.Principal)
+	idField := "request_id"
+	if transport == "websocket" {
+		idField = "connection_id"
+	}
+	attrs := []slog.Attr{
+		slog.String(idField, gateway.RequestID(ctx)),
+		slog.Int64("tenant_id", principal.TenantID), slog.Int64("user_id", principal.UserID),
+		slog.Int64("key_id", principal.KeyID), slog.Int64("group_id", principal.GroupID),
+		slog.String("transport", transport), slog.String("stage", stage),
+		slog.Int("status", status), slog.String("error_code", code),
+	}
+	var invalid *gateway.ConversationError
+	if errors.As(err, &invalid) {
+		attrs = append(attrs, slog.String("reason", invalid.Reason))
+	}
+	// Raw messages and caller-supplied model/session values can contain private content.
+	logger.LogAttrs(ctx, level, "Gateway request rejected", append(attrs, extra...)...)
+}
 
 func requestLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

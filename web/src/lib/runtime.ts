@@ -89,5 +89,10 @@ export const reasonKeys: Record<string, keyof typeof en> = {
   upstream_forbidden: 'reasonForbidden',
   upstream_rejected: 'reasonRejected',
   invalid_request: 'reasonInvalid',
+  json_required: 'reasonInvalid',
+  request_body_timeout: 'reasonUploadTimeout',
+  request_body_read_failed: 'reasonUploadFailed',
+  request_too_large: 'reasonRequestTooLarge',
+  gateway_busy: 'reasonGatewayBusy',
   refresh_failed: 'reasonRefresh',
 }

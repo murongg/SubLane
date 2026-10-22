@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 	"testing/fstest"
+	"testing/iotest"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -255,6 +256,218 @@ func TestWebsocketLogsUpgradeAndCorrelation(t *testing.T) {
 			t.Fatal("websocket summary was not emitted on connection close")
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestWebsocketLogsRejectedMessagesWithoutSensitiveInputs(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, reason, code string
+	}{
+		{"invalid JSON", `{"input":"synthetic-body-secret"`, "invalid_json", "invalid_model_request"},
+		{"invalid type", `{"type":"synthetic-type-secret","model":"synthetic-model-secret"}`, "invalid_type", "invalid_model_request"},
+		{"missing model", `{"type":"response.create","input":"synthetic-body-secret"}`, "invalid_model", "invalid_model_request"},
+		{"invalid previous ID", `{"type":"response.create","model":"synthetic-model-secret","previous_response_id":{"private":"synthetic-body-secret"}}`, "invalid_previous_response_id", "invalid_model_request"},
+		{"invalid input", `{"type":"response.create","model":"synthetic-model-secret","input":{"private":"synthetic-body-secret"}}`, "invalid_input", "invalid_model_request"},
+		{"unknown response", `{"type":"response.create","model":"synthetic-model-secret","previous_response_id":"synthetic-response-secret","input":[]}`, "unknown_response", "continuation_requires_full_input"},
+		{"missing history", `{"type":"response.append","model":"synthetic-model-secret","input":[]}`, "missing_history", "continuation_requires_full_input"},
+		{"invalid generate", `{"type":"response.create","model":"synthetic-model-secret","generate":"synthetic-body-secret"}`, "invalid_generate", "invalid_model_request"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			buffer := captureLogs(t, slog.LevelInfo)
+			f := newForwardFixture(t, func(http.ResponseWriter, *http.Request) {
+				t.Error("rejected message reached upstream")
+			})
+			conn, response, err := websocket.DefaultDialer.Dial(strings.Replace(f.server.URL, "http://", "ws://", 1)+"/v1/responses?token=synthetic-query-secret", http.Header{
+				"Authorization": {"Bearer " + f.secret},
+				"Cookie":        {"session=synthetic-cookie-secret"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { conn.Close() })
+			conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			if err := conn.WriteMessage(websocket.TextMessage, []byte(tc.body)); err != nil {
+				t.Fatal(err)
+			}
+			var event struct {
+				Type      string `json:"type"`
+				Status    int    `json:"status"`
+				RequestID string `json:"request_id"`
+				Error     struct {
+					Code, Message string
+				} `json:"error"`
+			}
+			if err := conn.ReadJSON(&event); err != nil {
+				t.Fatal(err)
+			}
+			if event.Type != "error" || event.Status != 400 || event.Error.Code != tc.code || event.Error.Message != strings.ReplaceAll(tc.code, "_", " ") || event.RequestID == "" {
+				t.Fatal("diagnostics changed the client error", event)
+			}
+			records := buffer.records(t)
+			var logs []map[string]any
+			for _, record := range records {
+				if record["msg"] == "Gateway request rejected" {
+					logs = append(logs, record)
+				}
+			}
+			if len(logs) != 1 || logs[0]["msg"] != "Gateway request rejected" || logs[0]["level"] != "WARN" || logs[0]["transport"] != "websocket" || logs[0]["stage"] != "normalize" || logs[0]["reason"] != tc.reason || logs[0]["error_code"] != tc.code || logs[0]["status"] != float64(400) {
+				t.Fatal("missing rejection diagnostics", logs)
+			}
+			if logs[0]["connection_id"] != response.Header.Get("X-Request-ID") || logs[0]["request_id"] != event.RequestID || logs[0]["user_id"] != float64(f.userID) || logs[0]["key_id"] != float64(f.keyID) || logs[0]["group_id"] != float64(1) || logs[0]["tenant_id"] != float64(1) {
+				t.Fatal("rejection lost trusted identity or connection correlation", logs)
+			}
+			page, err := f.forwarding.Requests(context.Background(), gateway.RequestFilter{})
+			if err != nil || page.Total != 1 || page.Requests[0].RequestID != event.RequestID || page.Requests[0].ErrorCode != "invalid_request" || page.Requests[0].Outcome != "rejected" {
+				t.Fatal("validation failure missing from request history", page.Total, err)
+			}
+			raw, _ := json.Marshal(records)
+			for _, secret := range []string{f.secret, "synthetic-body-secret", "synthetic-model-secret", "synthetic-response-secret", "synthetic-type-secret", "synthetic-query-secret", "synthetic-cookie-secret"} {
+				if strings.Contains(string(raw), secret) {
+					t.Fatal("rejection log leaked caller input", secret)
+				}
+			}
+			if err := conn.WriteJSON(map[string]any{"type": "response.create", "model": "synthetic-model", "generate": false, "input": []any{}}); err != nil {
+				t.Fatal(err)
+			}
+			for {
+				if err := conn.ReadJSON(&event); err != nil {
+					t.Fatal(err)
+				}
+				if event.Type == "error" {
+					t.Fatal("rejected message prevented a valid retry", event)
+				}
+				if event.Type == "response.completed" {
+					break
+				}
+			}
+			if len(buffer.records(t)) != len(records) {
+				t.Fatal("successful retry emitted a rejection diagnostic")
+			}
+		})
+	}
+}
+
+func TestHTTPLogsRejectedRequestParsingWithoutSensitiveInputs(t *testing.T) {
+	for _, tc := range []struct{ name, path, body, stage string }{
+		{"invalid JSON", "/v1/responses", `{"input":"synthetic-body-secret"`, "request_flags"},
+		{"invalid stream", "/v1/responses", `{"model":"synthetic-model-secret","stream":"synthetic-body-secret"}`, "request_flags"},
+		{"streaming compact", "/v1/responses/compact", `{"model":"synthetic-model-secret","stream":true}`, "compact_stream"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			buffer := captureLogs(t, slog.LevelInfo)
+			f := newForwardFixture(t, func(http.ResponseWriter, *http.Request) {
+				t.Error("rejected request reached upstream")
+			})
+			r := httptest.NewRequest(http.MethodPost, tc.path+"?token=synthetic-query-secret", strings.NewReader(tc.body))
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Authorization", "Bearer "+f.secret)
+			w := httptest.NewRecorder()
+			f.server.Config.Handler.ServeHTTP(w, r)
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"code":"invalid_model_request"`) {
+				t.Fatal("diagnostics changed request validation", w.Code, w.Body.String())
+			}
+			logs := buffer.records(t)
+			if len(logs) < 2 || logs[0]["msg"] != "Gateway request rejected" || logs[0]["level"] != "WARN" || logs[0]["transport"] != "http" || logs[0]["stage"] != tc.stage || logs[0]["status"] != float64(400) || logs[0]["error_code"] != "invalid_model_request" || logs[0]["request_id"] != w.Header().Get("X-Request-ID") || logs[len(logs)-1]["request_id"] != logs[0]["request_id"] {
+				t.Fatal("missing correlated HTTP rejection diagnostics", logs)
+			}
+			page, err := f.forwarding.Requests(context.Background(), gateway.RequestFilter{})
+			if err != nil || page.Total != 1 || page.Requests[0].RequestID != w.Header().Get("X-Request-ID") || page.Requests[0].Outcome != "rejected" || page.Requests[0].ErrorCode != "invalid_request" {
+				t.Fatal("parsing failure missing from request history", page.Total, err)
+			}
+			raw, _ := json.Marshal(logs)
+			for _, secret := range []string{f.secret, "synthetic-body-secret", "synthetic-model-secret", "synthetic-query-secret"} {
+				if strings.Contains(string(raw), secret) {
+					t.Fatal("rejection log leaked caller input", secret)
+				}
+			}
+		})
+	}
+}
+
+func TestHTTPLogsBodyReadFailuresWithoutSensitiveInputs(t *testing.T) {
+	for _, tc := range []struct {
+		name, reason, code string
+		status             int
+		err                error
+	}{
+		{"timeout", "timeout", "request_body_timeout", 408, context.DeadlineExceeded},
+		{"incomplete upload", "unexpected_eof", "request_body_read_failed", 400, io.ErrUnexpectedEOF},
+		{"other read failure", "read_error", "request_body_read_failed", 400, errors.New("synthetic-read-secret")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			buffer := captureLogs(t, slog.LevelInfo)
+			f := newForwardFixture(t, func(http.ResponseWriter, *http.Request) {
+				t.Error("incomplete request reached upstream")
+			})
+			const partial = `{"input":"synthetic-body-secret"`
+			r := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			ctx, cancel := context.WithCancel(r.Context())
+			defer cancel()
+			r = r.WithContext(ctx)
+			r.Body = io.NopCloser(cancelingReader{reader: io.MultiReader(strings.NewReader(partial), iotest.ErrReader(tc.err)), cancel: cancel})
+			r.ContentLength = int64(len(partial) + 4096)
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Authorization", "Bearer "+f.secret)
+			w := httptest.NewRecorder()
+			f.server.Config.Handler.ServeHTTP(w, r)
+			if w.Code != tc.status || !strings.Contains(w.Body.String(), `"code":"`+tc.code+`"`) {
+				t.Fatal("read failure response changed", w.Code, w.Body.String())
+			}
+			logs := buffer.records(t)
+			if len(logs) < 2 || logs[0]["msg"] != "Gateway request rejected" || logs[0]["stage"] != "read_body" || logs[0]["reason"] != tc.reason || logs[0]["received_bytes"] != float64(len(partial)) || logs[0]["content_length"] != float64(r.ContentLength) || logs[0]["request_id"] != w.Header().Get("X-Request-ID") {
+				t.Fatal("missing read failure diagnostics", logs)
+			}
+			page, err := f.forwarding.Requests(context.Background(), gateway.RequestFilter{})
+			if err != nil || page.Total != 1 {
+				t.Fatal("incomplete upload missing from request history", page.Total, err)
+			}
+			record := page.Requests[0]
+			if record.ErrorCode != tc.code || record.Outcome != "rejected" || record.RequestID != w.Header().Get("X-Request-ID") || record.KeyID != f.keyID || record.AccountID != "" || record.UpstreamStatus != nil || record.InputTokens != nil || record.OutputTokens != nil || record.EstimatedCostMicroUSD != nil {
+				t.Fatal("ingress failure charged usage or lost correlation", record)
+			}
+			raw, _ := json.Marshal(logs)
+			for _, secret := range []string{f.secret, "synthetic-body-secret", "synthetic-read-secret"} {
+				if strings.Contains(string(raw), secret) {
+					t.Fatal("read failure log leaked caller input", secret)
+				}
+			}
+		})
+	}
+}
+
+func TestWebsocketLogsConnectionLimitRejections(t *testing.T) {
+	buffer := captureLogs(t, slog.LevelInfo)
+	f := newForwardFixture(t, func(http.ResponseWriter, *http.Request) {
+		t.Error("handshake reached upstream")
+	})
+	url := strings.Replace(f.server.URL, "http://", "ws://", 1) + "/v1/responses"
+	headers := http.Header{"Authorization": {"Bearer " + f.secret}}
+	for range 8 {
+		conn, _, err := websocket.DefaultDialer.Dial(url, headers)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { conn.Close() })
+	}
+	conn, response, err := websocket.DefaultDialer.Dial(url, headers)
+	if conn != nil {
+		conn.Close()
+	}
+	if err == nil || response == nil || response.StatusCode != http.StatusTooManyRequests {
+		t.Fatal("connection limit behavior changed", response, err)
+	}
+	defer response.Body.Close()
+	found := false
+	for _, record := range buffer.records(t) {
+		if record["msg"] == "Gateway request rejected" {
+			found = true
+			if record["stage"] != "connection_admission" || record["error_code"] != "gateway_busy" || record["connections"] != float64(8) || record["connection_limit"] != float64(8) || record["connection_id"] != response.Header.Get("X-Request-ID") {
+				t.Fatal("missing connection limit diagnostics", record)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("connection limit rejection was not logged")
 	}
 }
 
