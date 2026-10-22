@@ -254,7 +254,7 @@ export function Layout({ children }: { children?: ReactNode }) {
       '/members',
       '/keys',
       '/pricing',
-    ].includes(pathname)
+    ].includes(pathname.replace(/\/+$/, ''))
   const user = data?.user
   const workspace = selectedWorkspace()
   if (!user) return null
