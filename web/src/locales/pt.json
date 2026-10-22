@@ -446,6 +446,7 @@
   "reasonCatalogUnavailable": "Catálogo do modelo não disponível",
   "catalogModels": "Modelos",
   "catalogFor": "Modelos para {{name}}",
+  "catalogHiddenModel": "Modelo oculto",
   "catalogAvailableModels": "Modelos disponíveis",
   "catalogAccountDescription": "Modelos descobertos a partir desta conta. Este catálogo descreve o suporte relatado, não permanecendo a quota ou um teste de geração bem- sucedido.",
   "catalogGroupDescription": "Combinado automaticamente a partir de recursos habilitados e filtrado pela política de modelo do grupo.",

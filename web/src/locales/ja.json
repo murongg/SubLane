@@ -446,6 +446,7 @@
   "reasonCatalogUnavailable": "モデルカタログがありません",
   "catalogModels": "モデル",
   "catalogFor": "{{name}} のモデル",
+  "catalogHiddenModel": "非表示モデル",
   "catalogAvailableModels": "利用可能なモデル",
   "catalogAccountDescription": "このアカウントから発見されたモデル。このカタログでは、残りのクォータや成功した生成テストではなく、報告されたサポートについて説明します。",
   "catalogGroupDescription": "有効なリソースから自動的に結合され、グループのモデル ポリシーによってフィルタリングされます。",

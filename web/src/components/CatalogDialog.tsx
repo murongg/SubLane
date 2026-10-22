@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { List, LoaderCircle, Play, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -101,6 +101,7 @@ function CatalogContent({
     onSuccess: (data) => client.setQueryData(options.queryKey, data),
   })
   const data = query.data
+  const labelID = useId()
   const cooldown = Math.max(
     0,
     (data?.retry_after_seconds ?? 0) -
@@ -118,7 +119,11 @@ function CatalogContent({
     Boolean(data?.refreshing)
   const failed =
     query.isError || refresh.isError || Boolean(data?.refresh_failed)
-  const models = (data?.models ?? []).filter((model) =>
+  const catalogModels = [
+    ...(data?.models ?? []),
+    ...(data?.hidden_models ?? []),
+  ]
+  const models = catalogModels.filter((model) =>
     model.toLowerCase().includes(filter.toLowerCase()),
   )
   return (
@@ -138,7 +143,7 @@ function CatalogContent({
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>
           {data?.known
-            ? t('catalogCount', { count: data.models.length })
+            ? t('catalogCount', { count: catalogModels.length })
             : t('catalogUnknown')}
         </span>
         <Button
@@ -192,12 +197,12 @@ function CatalogContent({
               {t('catalogUnknownHint')}
             </p>
           )}
-          {data?.known && data.models.length === 0 && (
+          {data?.known && catalogModels.length === 0 && (
             <p className="py-4 text-sm text-muted-foreground">
               {t(individual ? 'catalogEmptyAccount' : 'catalogEmptyGroup')}
             </p>
           )}
-          {Boolean(data?.models.length) && (
+          {Boolean(catalogModels.length) && (
             <>
               {individual && (
                 <p className="text-xs leading-5 text-muted-foreground">
@@ -218,6 +223,21 @@ function CatalogContent({
                   const checking = check.isPending && check.variables === model
                   const error = check.isError && check.variables === model
                   const result = checks[model]
+                  const hidden = data?.hidden_models.includes(model)
+                  const hiddenID = `${labelID}-${model}`
+                  const label = (
+                    <span className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="min-w-0 break-all">{model}</span>
+                      {hidden && (
+                        <span
+                          id={hiddenID}
+                          className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 font-sans text-xs text-muted-foreground"
+                        >
+                          {t('catalogHiddenModel')}
+                        </span>
+                      )}
+                    </span>
+                  )
                   return (
                     <li
                       key={model}
@@ -226,7 +246,7 @@ function CatalogContent({
                       {individual ? (
                         <>
                           <div className="flex items-center justify-between gap-3">
-                            <span className="min-w-0 break-all">{model}</span>
+                            {label}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -274,9 +294,10 @@ function CatalogContent({
                           type="button"
                           className="w-full break-all rounded-sm text-left hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                           aria-label={t('availabilityInspect', { model })}
+                          aria-describedby={hidden ? hiddenID : undefined}
                           onClick={() => setInspectedModel(model)}
                         >
-                          {model}
+                          {label}
                         </button>
                       )}
                     </li>

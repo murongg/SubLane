@@ -76,7 +76,6 @@ func (c *catalogCache) state(value accounts.Catalog, e *catalogEntry, source str
 	now := c.now()
 	result := CatalogSnapshot{Catalog: value, Known: value.UpdatedAt > 0, ServerTime: now.Unix(), Usable: catalogUsable(value, now)}
 	result.Models = value.VisibleModels()
-	result.HiddenModels = nil
 	result.sourceChanged = value.Source != source
 	result.Stale = result.sourceChanged || !result.Known || !result.Usable || now.Unix()-value.UpdatedAt >= int64(catalogTTL.Seconds())
 	if e != nil && e.revision == value.Revision {
@@ -261,13 +260,15 @@ func (s *Service) waitCatalog(ctx context.Context, id string) (CatalogSnapshot, 
 }
 
 type GroupCatalog struct {
-	Models          []upstream.Model `json:"models"`
-	KnownAccounts   int              `json:"known_accounts"`
-	UnknownAccounts int              `json:"unknown_accounts"`
-	StaleAccounts   int              `json:"stale_accounts"`
-	Refreshing      bool             `json:"refreshing"`
-	RefreshFailed   bool             `json:"refresh_failed"`
-	ServerTime      int64            `json:"server_time"`
+	Models []upstream.Model `json:"models"`
+	// Keep hidden capabilities separate from client discovery and model-picker choices.
+	HiddenModels    []string `json:"hidden_models,omitempty"`
+	KnownAccounts   int      `json:"known_accounts"`
+	UnknownAccounts int      `json:"unknown_accounts"`
+	StaleAccounts   int      `json:"stale_accounts"`
+	Refreshing      bool     `json:"refreshing"`
+	RefreshFailed   bool     `json:"refresh_failed"`
+	ServerTime      int64    `json:"server_time"`
 }
 
 func (s *Service) warmCatalogs(ctx context.Context, userID, groupID int64, provider string, wait bool) error {
@@ -312,6 +313,10 @@ func (s *Service) warmCatalogs(ctx context.Context, userID, groupID int64, provi
 }
 
 func (s *Service) GroupCatalog(ctx context.Context, userID, groupID int64, wait bool) (GroupCatalog, error) {
+	return s.groupCatalog(ctx, userID, groupID, wait, true)
+}
+
+func (s *Service) groupCatalog(ctx context.Context, userID, groupID int64, wait, includeHidden bool) (GroupCatalog, error) {
 	result := GroupCatalog{Models: []upstream.Model{}, ServerTime: s.catalog.now().Unix()}
 	if err := s.warmCatalogs(ctx, userID, groupID, "", wait); err != nil {
 		return result, err
@@ -336,7 +341,7 @@ func (s *Service) GroupCatalog(ctx context.Context, userID, groupID int64, wait 
 	if err := tx.Commit(); err != nil {
 		return result, err
 	}
-	seen := map[string]int{}
+	seen := map[string]upstream.Model{}
 	for _, account := range rows {
 		if !s.accounts.ProviderEnabled(account.Provider) || !policyHasProvider(policy, account.Provider) {
 			continue
@@ -359,12 +364,12 @@ func (s *Service) GroupCatalog(ctx context.Context, userID, groupID int64, wait 
 			continue
 		}
 		result.KnownAccounts++
-		ids := snapshot.Models
+		ids := saved.Models
 		if policy.Restricted {
 			ids = []string{}
 			for _, permitted := range policy.Models {
 				provider, native := groups.SplitModel(permitted)
-				if (provider == "" || provider == account.Provider) && catalogContains(snapshot.Models, native) {
+				if (provider == "" || provider == account.Provider) && catalogContains(saved.Models, native) {
 					ids = append(ids, native)
 				}
 			}
@@ -374,20 +379,32 @@ func (s *Service) GroupCatalog(ctx context.Context, userID, groupID int64, wait 
 				continue
 			}
 			metadata := modelMetadata(account.Provider, id)
-			if index, ok := seen[id]; ok {
-				// A shared native ID has multiple routes, not an arbitrary single owner.
-				if result.Models[index].OwnedBy != metadata.OwnedBy {
-					result.Models[index].OwnedBy = "sublane"
-				}
+			metadata.Hidden = catalogContains(saved.HiddenModels, id)
+			// Management metadata must not consume the public catalog's model budget.
+			if metadata.Hidden && !includeHidden {
 				continue
 			}
-			if len(seen) >= 4096 {
+			if previous, ok := seen[id]; ok {
+				// Hidden routes must not change public visibility or owner metadata.
+				if metadata.Hidden {
+					metadata = previous
+				} else if !previous.Hidden && previous.OwnedBy != metadata.OwnedBy {
+					metadata.OwnedBy = "sublane"
+				}
+			} else if len(seen) >= 4096 {
 				return result, upstream.ErrResponse
 			}
-			seen[id] = len(result.Models)
-			result.Models = append(result.Models, metadata)
+			seen[id] = metadata
 		}
 	}
+	for _, model := range seen {
+		if model.Hidden {
+			result.HiddenModels = append(result.HiddenModels, model.ID)
+		} else {
+			result.Models = append(result.Models, model)
+		}
+	}
+	sort.Strings(result.HiddenModels)
 	sort.Slice(result.Models, func(i, j int) bool { return result.Models[i].ID < result.Models[j].ID })
 	return result, nil
 }
@@ -422,7 +439,7 @@ func modelMetadata(provider, id string) upstream.Model {
 }
 
 func (s *Service) Models(ctx context.Context, userID, groupID int64) ([]upstream.Model, error) {
-	value, err := s.GroupCatalog(ctx, userID, groupID, true)
+	value, err := s.groupCatalog(ctx, userID, groupID, true, false)
 	if err != nil {
 		return nil, err
 	}

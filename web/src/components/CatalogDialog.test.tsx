@@ -1,11 +1,158 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import { createQueryClient } from '@/lib/query'
 import { authKey } from '@/lib/auth'
 import { authenticated } from '@/test/fixtures'
+import { i18n } from '@/lib/i18n'
 import { CatalogDialog } from './CatalogDialog'
+
+it.each(['account', 'group', 'key'] as const)(
+  'places hidden models last in the %s catalog',
+  async (kind) => {
+    const visible = ['synthetic-a-visible', 'synthetic-z-visible']
+    const hidden = ['synthetic-b-hidden', 'synthetic-y-hidden']
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify(
+            kind === 'account'
+              ? { ...snapshot, models: visible, hidden_models: hidden }
+              : {
+                  models: visible.map((id) => ({
+                    id,
+                    object: 'model',
+                    owned_by: 'synthetic',
+                  })),
+                  hidden_models: hidden,
+                  known_accounts: 1,
+                  unknown_accounts: 0,
+                  stale_accounts: 0,
+                  refreshing: false,
+                  refresh_failed: false,
+                  server_time: 1900000010,
+                },
+          ),
+        ),
+      ),
+    )
+    const client = createQueryClient()
+    client.setQueryData(authKey, authenticated)
+    render(
+      <QueryClientProvider client={client}>
+        <CatalogDialog
+          target={
+            kind === 'account'
+              ? { kind, id: 'synthetic-account' }
+              : { kind, id: 7 }
+          }
+          name="Synthetic catalog"
+        />
+      </QueryClientProvider>,
+    )
+    const user = userEvent.setup()
+    await user.click(
+      screen.getByRole('button', { name: 'Models for Synthetic catalog' }),
+    )
+    await screen.findByText(visible[0])
+    const list = screen.getByRole('list', { name: 'Available models' })
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map(
+          (item) =>
+            item.textContent?.match(/synthetic-\w+-(?:visible|hidden)/)?.[0],
+        ),
+    ).toEqual([...visible, ...hidden])
+    await user.type(
+      screen.getByRole('textbox', { name: 'Search models' }),
+      'synthetic',
+    )
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map(
+          (item) =>
+            item.textContent?.match(/synthetic-\w+-(?:visible|hidden)/)?.[0],
+        ),
+    ).toEqual([...visible, ...hidden])
+  },
+)
+
+it.each([
+  ['account', 'en'],
+  ['group', 'en'],
+  ['key', 'en'],
+  ['account', 'zh'],
+  ['group', 'zh'],
+  ['key', 'zh'],
+] as const)(
+  'labels and searches hidden models in the %s catalog in %s',
+  async (kind, language) => {
+    await i18n.changeLanguage(language)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify(
+            kind === 'account'
+              ? {
+                  ...snapshot,
+                  models: [],
+                  hidden_models: ['synthetic-hidden'],
+                }
+              : {
+                  models: [],
+                  hidden_models: ['synthetic-hidden'],
+                  known_accounts: 1,
+                  unknown_accounts: 0,
+                  stale_accounts: 0,
+                  refreshing: false,
+                  refresh_failed: false,
+                  server_time: 1900000010,
+                },
+          ),
+        ),
+      ),
+    )
+    const client = createQueryClient()
+    client.setQueryData(authKey, authenticated)
+    render(
+      <QueryClientProvider client={client}>
+        <CatalogDialog
+          target={
+            kind === 'account'
+              ? { kind, id: 'synthetic-account' }
+              : { kind, id: 7 }
+          }
+          name="Synthetic catalog"
+        />
+      </QueryClientProvider>,
+    )
+    const user = userEvent.setup()
+    await user.click(
+      screen.getByRole('button', {
+        name: i18n.t('catalogFor', { name: 'Synthetic catalog' }),
+      }),
+    )
+    const model = await screen.findByText('synthetic-hidden')
+    const row = model.closest('li')!
+    expect(
+      within(row).getByText(language === 'zh' ? '隐藏模型' : 'Hidden model'),
+    ).toBeTruthy()
+    expect(screen.getByText(i18n.t('catalogCount', { count: 1 }))).toBeTruthy()
+    const search = screen.getByRole('textbox', {
+      name: i18n.t('catalogSearch'),
+    })
+    await user.type(search, 'unmatched')
+    expect(screen.queryByText('synthetic-hidden')).toBeNull()
+    expect(screen.getByText(i18n.t('catalogNoMatch'))).toBeTruthy()
+    await user.clear(search)
+    expect(await screen.findByText('synthetic-hidden')).toBeTruthy()
+  },
+)
 
 it('inspects a pool model on demand and explains an unavailable snapshot', async () => {
   const fetcher = vi.fn((url: string) =>

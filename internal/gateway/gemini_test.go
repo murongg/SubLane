@@ -45,7 +45,7 @@ func TestHiddenGeminiCapabilitiesPersistAndKeepAdmissionChecks(t *testing.T) {
 			t.Fatal("internal capability did not survive discovery or restart", selected, err)
 		}
 		catalog, err := service.AccountCatalog(ctx, id, false)
-		if err != nil || len(catalog.Models) != 1 || len(catalog.HiddenModels) != 0 {
+		if err != nil || len(catalog.Models) != 1 || (len(catalog.HiddenModels) != 1 || catalog.HiddenModels[0] != "synthetic-internal") {
 			t.Fatal("account list exposed internal capability metadata", catalog, err)
 		}
 		value, err := service.Availability(ctx, 1, 1, "synthetic-internal")

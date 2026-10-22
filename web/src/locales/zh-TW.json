@@ -446,6 +446,7 @@
   "reasonCatalogUnavailable": "模型目錄暫不可用",
   "catalogModels": "模型",
   "catalogFor": "{{name}} 的模型",
+  "catalogHiddenModel": "隱藏模型",
   "catalogAvailableModels": "可用模型",
   "catalogAccountDescription": "從此帳號取得的模型目錄，僅表示上游報告的支援範圍，不代表剩餘額度或產生驗證結果。",
   "catalogGroupDescription": "自動匯總已啟用帳號的模型，並套用資源群組的模型白名單。",

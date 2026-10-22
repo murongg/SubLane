@@ -57,7 +57,7 @@ func TestHiddenGeminiModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) 
 	}
 	admin := login("owner-test", "owner pass 42")
 	member := login("member-test", "member pass 42")
-	assertListings := func() {
+	assertListings := func(hidden ...string) {
 		t.Helper()
 		response, raw := messageRequest(t, f, "GET", "/v1/models", "", http.Header{"Authorization": {"Bearer " + f.secret}})
 		if response.StatusCode != 200 || strings.Contains(raw, "synthetic-internal") {
@@ -68,12 +68,14 @@ func TestHiddenGeminiModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) 
 			cookie *http.Cookie
 		}{{"/api/accounts/" + id + "/models", admin}, {"/api/groups/1/models", admin}, {fmt.Sprintf("/api/keys/%d/models", f.keyID), member}} {
 			response := request(h, "GET", test.path, "", nil, test.cookie)
-			if response.Code != 200 || strings.Contains(response.Body.String(), "synthetic-internal") {
-				t.Fatal("internal capability leaked into management list", response.Code, response.Body.String())
+			want := hidden
+			if strings.HasPrefix(test.path, "/api/accounts/") {
+				want = []string{"synthetic-internal"}
 			}
+			assertHiddenCatalog(t, response, want...)
 		}
 	}
-	assertListings()
+	assertListings("synthetic-internal")
 	call := func(model string) int {
 		response, _ := messageRequest(t, f, "POST", "/v1beta/models/"+model+":generateContent", `{"contents":[{"parts":[{"text":"Synthetic prompt"}]}]}`, http.Header{"X-Goog-Api-Key": {f.secret}})
 		return response.StatusCode
@@ -88,6 +90,7 @@ func TestHiddenGeminiModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) 
 	if _, err := f.groups.Save(ctx, 1, input); err != nil {
 		t.Fatal(err)
 	}
+	assertListings()
 	if status := call("synthetic-internal"); status != 403 || forwarded != 1 {
 		t.Fatal("hidden model bypassed model policy", status, forwarded)
 	}
@@ -95,7 +98,7 @@ func TestHiddenGeminiModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) 
 	if _, err := f.groups.Save(ctx, 1, input); err != nil {
 		t.Fatal(err)
 	}
-	assertListings()
+	assertListings("synthetic-internal")
 	if status := call("synthetic-internal"); status != 200 || forwarded != 2 {
 		t.Fatal("explicit permission could not call a hidden model", status, forwarded)
 	}

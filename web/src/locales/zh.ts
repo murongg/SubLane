@@ -544,6 +544,7 @@ export const zh: Record<keyof typeof en, string> = {
   modelTestSuccess: '响应成功',
   modelTestResult: '{{result}} · {{duration}} 毫秒',
   catalogFor: '{{name}} 的模型',
+  catalogHiddenModel: '隐藏模型',
   catalogAvailableModels: '可用模型',
   catalogAccountDescription:
     '从此账号获取的模型目录，仅表示上游报告的支持范围，不代表剩余额度或生成验证结果。',
