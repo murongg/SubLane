@@ -1157,6 +1157,8 @@
   "reasonAccountWaitTimeout": "Tempo de espera para a capacidade da conta",
   "reasonCooling": "Conta arrefecer",
   "reasonAccountUnavailable": "Conta indisponível",
+  "reasonModelConflict": "Conflito de modelo da conversa",
+  "recoveryModelConflict": "Volte ao modelo anterior ou inicie uma nova conversa para usar o modelo solicitado. A conversa atual mantém a conta vinculada.",
   "reasonGroupUnavailable": "Acesso do grupo não disponível",
   "reasonAuthRequired": "Autorização necessária",
   "reasonForbidden": "Acesso a montante negado",

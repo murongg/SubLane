@@ -162,7 +162,7 @@ func TestCatalogUnionsAccountsAndRoutesOnlySupportedModels(t *testing.T) {
 		t.Fatal(err)
 	}
 	response.Body.Close()
-	if _, err := s.Open(ctx, 1, pool.ID, []byte(`{"model":"synthetic-basic","input":"synthetic"}`), sticky, Responses); !errors.Is(err, ErrAffinityUnavailable) {
+	if _, err := s.Open(ctx, 1, pool.ID, []byte(`{"model":"synthetic-basic","input":"synthetic"}`), sticky, Responses); !errors.Is(err, ErrModelConflict) {
 		t.Fatal("sticky model change moved the conversation", err)
 	}
 	if _, err := groups.New(s.db).Save(ctx, pool.ID, groups.Input{Name: pool.Name, Enabled: true, AccountIDs: []string{ids["codex"], extra.ID}, ModelPolicy: &groups.ModelPolicy{Restricted: true, Models: []string{"synthetic-shared"}}}); err != nil {

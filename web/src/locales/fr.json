@@ -1157,6 +1157,8 @@
   "reasonAccountWaitTimeout": "Délai d'attente pour la capacité de compte",
   "reasonCooling": "Refroidissement du compte",
   "reasonAccountUnavailable": "Compte non disponible",
+  "reasonModelConflict": "Conflit de modèle de conversation",
+  "recoveryModelConflict": "Revenez au modèle précédent ou démarrez une nouvelle conversation pour utiliser le modèle demandé. La conversation actuelle conserve son compte associé.",
   "reasonGroupUnavailable": "Accès en groupe non disponible",
   "reasonAuthRequired": "Autorisation requise",
   "reasonForbidden": "Accès en amont refusé",

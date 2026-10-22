@@ -16,6 +16,8 @@ export function requestRecovery(
   code: string,
   administrator: boolean,
 ): Recovery {
+  if (code === 'conversation_model_conflict')
+    return { hint: 'recoveryModelConflict' }
   if (
     [
       'request_body_timeout',

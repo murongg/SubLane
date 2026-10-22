@@ -1157,6 +1157,8 @@
   "reasonAccountWaitTimeout": "الوقت منتظراً القدرة الحسابية",
   "reasonCooling": "حساب التبريد",
   "reasonAccountUnavailable": "الحساب غير المتوفر",
+  "reasonModelConflict": "تعارض نموذج المحادثة",
+  "recoveryModelConflict": "عُد إلى النموذج السابق أو ابدأ محادثة جديدة لاستخدام النموذج المطلوب. تحتفظ المحادثة الحالية بارتباطها بالحساب.",
   "reasonGroupUnavailable": "الوصول إلى المجموعات غير متاح",
   "reasonAuthRequired": "الإذن المطلوب",
   "reasonForbidden": "الوصول إلى أعلى محرم",

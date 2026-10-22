@@ -1157,6 +1157,8 @@
   "reasonAccountWaitTimeout": "Время ожидания емкости счета",
   "reasonCooling": "Аккаунт охлаждается",
   "reasonAccountUnavailable": "Недоступный аккаунт",
+  "reasonModelConflict": "Конфликт модели диалога",
+  "recoveryModelConflict": "Вернитесь к предыдущей модели или начните новый диалог с нужной моделью. Текущий диалог сохраняет привязку к аккаунту.",
   "reasonGroupUnavailable": "Доступ группы недоступен",
   "reasonAuthRequired": "Требуемое разрешение",
   "reasonForbidden": "Доступ к Upstream запрещен",

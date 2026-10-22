@@ -23,6 +23,7 @@ import (
 
 var (
 	ErrAffinityUnavailable = errors.New("conversation_account_unavailable")
+	ErrModelConflict       = errors.New("conversation_model_conflict")
 	ErrNoAccount           = errors.New("no_accounts_available")
 	ErrBusy                = errors.New("gateway_busy")
 	ErrAffinityLimit       = errors.New("conversation_limit")
@@ -196,7 +197,11 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 	if err := s.warmUsage(ctx, userID, groupID, discoveryProvider); err != nil {
 		return nil, err
 	}
-	id, digest, err := s.leaseAccount(ctx, entry, session, provider, model, kind, requestAffinity(input, kind), reviewParentThread(input, headers, model, kind))
+	affinity := requestAffinity(input, kind)
+	if continued, _ := ctx.Value(continuationKey{}).(bool); continued {
+		affinity = continuationAffinity
+	}
+	id, digest, err := s.leaseAccount(ctx, entry, session, provider, model, kind, affinity, reviewParentThread(input, headers, model, kind))
 	if id != "" {
 		if account, lookupErr := s.accounts.Get(ctx, id); lookupErr == nil {
 			entry.record.Provider = account.Provider

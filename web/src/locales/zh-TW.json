@@ -1157,6 +1157,8 @@
   "reasonAccountWaitTimeout": "等待帳號空位超時",
   "reasonCooling": "帳號正在冷卻",
   "reasonAccountUnavailable": "帳號不可用",
+  "reasonModelConflict": "對話模型衝突",
+  "recoveryModelConflict": "請切回先前的模型，或建立新對話使用目標模型。目前對話會保留原有帳號綁定。",
   "reasonGroupUnavailable": "資源群組權限不可用",
   "reasonAuthRequired": "需要重新授權",
   "reasonForbidden": "上游拒絕訪問",

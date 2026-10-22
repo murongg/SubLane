@@ -213,7 +213,7 @@ func (h *keyHTTP) websocket(w http.ResponseWriter, r *http.Request) {
 				}
 				continue
 			}
-			turnCtx, turnCancel := context.WithTimeout(ctx, h.gateway.Policy().RequestTimeout)
+			turnCtx, turnCancel := context.WithTimeout(conversation.Context(ctx), h.gateway.Policy().RequestTimeout)
 			turnCtx = gateway.WithRequestIdentity(turnCtx, principal.KeyID, "websocket")
 			turnID = gateway.RequestID(turnCtx)
 			stage = "forward"

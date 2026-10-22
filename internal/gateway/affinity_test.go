@@ -6,7 +6,10 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
+	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/upstream"
 )
 
@@ -111,7 +114,7 @@ func TestAffinityModelSwitchRequiresPortableHistory(t *testing.T) {
 			if _, _, err := s.selectAccount(ctx, 1, 1, "synthetic-continuation", "", "synthetic-claude", test.kind); err != nil {
 				t.Fatal(err)
 			}
-			if response, err := s.Open(ctx, 1, 1, []byte(test.raw), http.Header{"Session_id": {"synthetic-continuation"}}, test.kind); !errors.Is(err, ErrAffinityUnavailable) {
+			if response, err := s.Open(ctx, 1, 1, []byte(test.raw), http.Header{"Session_id": {"synthetic-continuation"}}, test.kind); !errors.Is(err, ErrModelConflict) {
 				if response != nil {
 					response.Body.Close()
 				}
@@ -141,6 +144,36 @@ func TestAffinityModelSwitchKeepsSupportedModelsOnOriginalAccount(t *testing.T) 
 	}
 }
 
+func TestAffinityContinuationSwitchesModelsOnOriginalAccount(t *testing.T) {
+	for _, test := range []struct{ name, state string }{
+		{"reasoning", `{"type":"reasoning","encrypted_content":"synthetic-reasoning"}`},
+		{"compaction", `{"type":"compaction","encrypted_content":"synthetic-compaction"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s, ids := affinityGateway(t)
+			ctx := context.Background()
+			const session = "synthetic-same-account-switch"
+			if id, _, err := s.selectAccount(ctx, 1, 1, session, "", "synthetic-codex", Responses); err != nil || id != ids["codex"] {
+				t.Fatal("initial binding", id, err)
+			}
+			for _, model := range []string{"synthetic-shared", "synthetic-codex"} {
+				response, err := s.Open(ctx, 1, 1, []byte(`{"model":"`+model+`","input":[`+test.state+`,{"role":"user","content":"Synthetic follow-up"}]}`), http.Header{"Session_id": {session}}, Responses)
+				if err != nil {
+					t.Fatal("supported model switch rejected on the original account", err)
+				}
+				response.Body.Close()
+				var account, boundModel string
+				if err := s.db.QueryRow("SELECT account_id,model FROM account_affinity").Scan(&account, &boundModel); err != nil || account != ids["codex"] || boundModel != model {
+					t.Fatal("model switch lost the account or model binding", account, boundModel, err)
+				}
+				reopened := New(ctx, s.db, s.accounts, s.provider)
+				defer reopened.Close()
+				s = reopened
+			}
+		})
+	}
+}
+
 func TestAffinityFullHistoryDoesNotFailOverUnchangedModel(t *testing.T) {
 	s, ids := affinityGateway(t)
 	ctx := context.Background()
@@ -155,7 +188,7 @@ func TestAffinityFullHistoryDoesNotFailOverUnchangedModel(t *testing.T) {
 	if response != nil {
 		response.Body.Close()
 	}
-	if !errors.Is(err, ErrAffinityUnavailable) {
+	if !errors.Is(err, ErrModelConflict) {
 		t.Fatal("catalog change moved a full-history request", err)
 	}
 }
@@ -176,12 +209,56 @@ func TestAffinityContinuationCannotCrossModelBinding(t *testing.T) {
 		t.Fatal("full-history model switch", err)
 	}
 	response.Body.Close()
+	reopened := New(ctx, s.db, s.accounts, s.provider)
+	defer reopened.Close()
+	s = reopened
 	response, err = s.Open(ctx, 1, 1, []byte(`{"model":"synthetic-claude","input":[{"role":"assistant","content":"Synthetic reply"},{"type":"item_reference","id":"msg_synthetic_original_account"}]}`), headers, Responses)
 	if response != nil {
 		response.Body.Close()
 	}
-	if !errors.Is(err, ErrAffinityUnavailable) {
+	if err == nil || err.Error() != "conversation_model_conflict" {
 		t.Fatal("old provider state reached the new account", err)
+	}
+}
+
+func TestAffinityRebindPreservesSameProviderAndLegacyProtection(t *testing.T) {
+	for _, scope := range []string{"", "codex"} {
+		t.Run(map[string]string{"": "native", "codex": "legacy adoption"}[scope], func(t *testing.T) {
+			s, ids := affinityGateway(t)
+			ctx := context.Background()
+			second, err := s.accounts.Authorize(ctx, "Synthetic destination", accounts.Credential{Provider: "codex", AccountID: "synthetic-destination", AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", ExpiresAt: time.Now().Add(time.Hour).Unix()}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.accounts.SaveCatalog(ctx, second.ID, 0, []string{"synthetic-next"}, s.now().Unix(), upstream.CatalogSource("codex")); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := groups.New(s.db).Save(ctx, 1, groups.Input{Name: "Synthetic pool", Enabled: true, AccountIDs: []string{ids["codex"], second.ID}}); err != nil {
+				t.Fatal(err)
+			}
+			const session = "synthetic-rebound-session"
+			if id, _, err := s.selectAccount(ctx, 1, 1, session, scope, "synthetic-codex", Responses); err != nil || id != ids["codex"] {
+				t.Fatal("initial account", id, err)
+			}
+			if err := s.accounts.SaveCatalog(ctx, second.ID, 0, []string{"synthetic-next", "synthetic-codex"}, s.now().Unix(), upstream.CatalogSource("codex")); err != nil {
+				t.Fatal(err)
+			}
+			headers := http.Header{"Session_id": {session}}
+			response, err := s.Open(ctx, 1, 1, []byte(`{"model":"synthetic-next","input":[{"role":"assistant","content":"Synthetic portable history"}]}`), headers, Responses)
+			if err != nil {
+				t.Fatal("portable model switch", err)
+			}
+			response.Body.Close()
+			reopened := New(ctx, s.db, s.accounts, s.provider)
+			defer reopened.Close()
+			response, err = reopened.Open(ctx, 1, 1, []byte(`{"model":"synthetic-codex","input":[{"type":"reasoning","encrypted_content":"synthetic-old-account-state"}]}`), headers, Responses)
+			if response != nil {
+				response.Body.Close()
+			}
+			if !errors.Is(err, ErrModelConflict) {
+				t.Fatal("same-provider rebind or legacy adoption lost opaque-state protection", err)
+			}
+		})
 	}
 }
 
