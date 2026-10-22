@@ -60,6 +60,10 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
   const number = new Intl.NumberFormat(i18n.resolvedLanguage ?? 'en', {
     maximumFractionDigits: 1,
   })
+  const compact = new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  })
   const date = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? 'en', {
     dateStyle: 'medium',
     timeZone: 'UTC',
@@ -92,6 +96,8 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
         : row.name || t('statisticsUnknown')
   const tokens = (count: number, reported: number) =>
     reported > 0 ? number.format(count) : '—'
+  const compactTokens = (count: number, reported: number) =>
+    reported > 0 ? compact.format(count) : '—'
   const percentage = (completed: number, requests: number) =>
     requests ? number.format((completed / requests) * 100) + '%' : '—'
   const duration = (sum: number, requests: number) =>
@@ -252,9 +258,15 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
                   {
                     label: 'requestTokens',
                     value:
-                      tokens(totals.input_tokens, totals.input_reported) +
+                      compactTokens(
+                        totals.input_tokens,
+                        totals.input_reported,
+                      ) +
                       ' / ' +
-                      tokens(totals.output_tokens, totals.output_reported),
+                      compactTokens(
+                        totals.output_tokens,
+                        totals.output_reported,
+                      ),
                   },
                 ] as const
               ).map((item) => (
@@ -262,7 +274,16 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
                   <dt className="text-sm text-muted-foreground">
                     {t(item.label)}
                   </dt>
-                  <dd className="mt-2 break-words text-2xl font-semibold tracking-tight tabular-nums">
+                  <dd
+                    className="mt-2 break-words text-2xl font-semibold tracking-tight tabular-nums"
+                    title={
+                      item.label === 'requestTokens'
+                        ? tokens(totals.input_tokens, totals.input_reported) +
+                          ' / ' +
+                          tokens(totals.output_tokens, totals.output_reported)
+                        : undefined
+                    }
+                  >
                     {item.value}
                   </dd>
                 </div>

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { createMemoryHistory } from '@tanstack/react-router'
 import { expect, it, vi } from 'vitest'
 import { App } from '@/App'
+import { i18n } from '@/lib/i18n'
 import { createAppRouter } from '@/router'
 import {
   authenticated,
@@ -72,7 +73,18 @@ it.each([
           ),
         )
       if (url.startsWith(endpoint + '?'))
-        return Promise.resolve(new Response(JSON.stringify(summary)))
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ...summary,
+              totals: {
+                ...metrics,
+                input_tokens: 215_000_000,
+                output_tokens: 1_200_000,
+              },
+            }),
+          ),
+        )
       return Promise.reject(new Error('Unexpected privileged data request'))
     })
     vi.stubGlobal('fetch', fetch)
@@ -100,6 +112,9 @@ it.each([
       'Some calls did not report token usage; totals include reported values only.',
     )
     await screen.findByRole('img', { name: 'Daily · Requests' })
+    expect(screen.getByText('215M / 1.2M').getAttribute('title')).toBe(
+      '215,000,000 / 1,200,000',
+    )
     await screen.findByRole('region', { name: 'Activity by time' })
     expect(screen.getAllByRole('gridcell')).toHaveLength(168)
     if (path === '/')
@@ -147,6 +162,11 @@ it.each([
           url.startsWith(endpoint + '?'),
       ),
     ).toBe(true)
+    await i18n.changeLanguage('zh')
+    await screen.findByRole('heading', {
+      name: path === '/' ? '我的用量' : '团队用量',
+    })
+    expect(screen.getByText('215M / 1.2M')).toBeTruthy()
   },
 )
 

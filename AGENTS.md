@@ -12,7 +12,7 @@ Usage, operations, and architecture guides are maintained in [the documentation 
 
 - Make the smallest complete, scoped change; reuse existing mechanisms instead of speculative frameworks, packages, or services. Report assumptions and actual verification results concisely; live subscription and desktop compatibility require separate evidence.
 - Do not create commits, publish a repository, or deploy without a user request.
-- Keep temporary screenshots in ignored `.impeccable/review/`. Add screenshots to the repository only when a current README or maintained document uses them; use synthetic data and remove images when their references are removed. Attach UI review screenshots to the PR instead of committing them.
+- Keep temporary screenshots in ignored `.impeccable/review/`. Add screenshots to the repository only when a current README or maintained document uses them; use synthetic data and remove images when their references are removed. PR screenshots are optional review evidence: attach them outside the repository only when they help explain the change, and never create or commit screenshot files solely to satisfy a PR template.
 
 ## Releases
 

@@ -12,7 +12,7 @@
 
 ## Screenshots
 
-<!-- For visible UI changes, include sanitized before/after screenshots. Remove this section if it does not apply. -->
+<!-- Optional: attach sanitized screenshots to the PR when they help reviewers. Do not add screenshot files to the repository solely for this section. Remove this section when screenshots add no value. -->
 
 ## Compatibility and migration
 

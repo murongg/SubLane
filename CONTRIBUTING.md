@@ -27,7 +27,7 @@ Follow [DESIGN.md](DESIGN.md). Check loading, empty, error, and success states w
 
 ## Pull requests
 
-Explain the problem, resulting behavior, relevant tradeoffs, and verification. Attach UI screenshots for visible changes to the PR; commit screenshots only when current documentation uses them. Include migration notes when persisted data changes. Do not include unrelated cleanup or local planning documents.
+Explain the problem, resulting behavior, relevant tradeoffs, and verification. Attach sanitized UI screenshots to the PR only when they help reviewers; do not commit screenshots solely as PR evidence. Commit screenshots only when current documentation uses them. Include migration notes when persisted data changes. Do not include unrelated cleanup or local planning documents.
 
 No contribution agreement or public support process is configured yet. Contributions must be compatible with the project's AGPL-3.0-only license and preserve third-party attribution.
 
