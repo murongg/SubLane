@@ -1464,6 +1464,9 @@ export const en = {
   reasonAccountWaitTimeout: 'Timed out waiting for account capacity',
   reasonCooling: 'Account cooling down',
   reasonAccountUnavailable: 'Account unavailable',
+  reasonModelConflict: 'Conversation model conflict',
+  recoveryModelConflict:
+    'Switch back to the previous model or start a new conversation to use the requested model. The current conversation keeps its account binding.',
   reasonGroupUnavailable: 'Group access unavailable',
   reasonAuthRequired: 'Authorization required',
   reasonForbidden: 'Upstream access denied',

@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 
@@ -25,6 +26,17 @@ type Conversation struct {
 	output         []json.RawMessage
 	responseID     string
 	overflow       bool
+	continuation   bool
+}
+
+type continuationKey struct{}
+
+// Context keeps rebuilt WebSocket history pinned after Normalize removes continuation IDs.
+func (c *Conversation) Context(ctx context.Context) context.Context {
+	if c.continuation {
+		return context.WithValue(ctx, continuationKey{}, true)
+	}
+	return ctx
 }
 
 func (c *Conversation) bodyLimit() int64 {
@@ -35,6 +47,7 @@ func (c *Conversation) bodyLimit() int64 {
 }
 
 func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
+	c.continuation = false
 	reject := func(reason string, cause error) ([]byte, bool, error) {
 		return nil, false, &ConversationError{Reason: reason, cause: cause}
 	}
@@ -91,15 +104,6 @@ func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
 	if json.Unmarshal(input["model"], &model) != nil || model == "" {
 		return reject("invalid_model", upstream.ErrInput)
 	}
-	if c.request != nil && (appendHistory || previous != "" || kind == "response.append") {
-		var priorModel string
-		_ = json.Unmarshal(c.request["model"], &priorModel)
-		// Normalization removes continuation IDs and fills history. Do not let that
-		// turn an incremental model change into permission to rebind an account.
-		if upstream.CatalogModelID(model) != upstream.CatalogModelID(priorModel) {
-			return reject("model_change", ErrAffinityUnavailable)
-		}
-	}
 	prewarm := false
 	if flag, ok := input["generate"]; ok {
 		var generate bool
@@ -120,6 +124,7 @@ func (c *Conversation) Normalize(raw []byte) ([]byte, bool, error) {
 	if int64(len(normalized)) > c.bodyLimit() {
 		return reject("normalized_context_size", ErrContextLimit)
 	}
+	c.continuation = c.request != nil && (appendHistory || previous != "" || kind == "response.append")
 	return normalized, prewarm, nil
 }
 

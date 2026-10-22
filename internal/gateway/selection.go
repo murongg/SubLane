@@ -74,11 +74,6 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 		}
 		if existing != nil {
 			id := existing.AccountID
-			// After a portable model switch, old opaque state must not be sent
-			// to the new account even if it also supports the previous model.
-			if affinity == continuationAffinity && existing.Model != "" && bindingModel != existing.Model {
-				return id, digest, ErrAffinityUnavailable
-			}
 			if !allowed[id] {
 				return id, digest, ErrAffinityUnavailable
 			}
@@ -103,6 +98,11 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 			}
 			reselect := false
 			if model != "" && bound.Enabled && bound.Status != "reauth_required" {
+				// A model change alone does not change account identity. After a recorded
+				// account move, older opaque state must still stay off the new account.
+				if affinity == continuationAffinity && existing.Rebound && existing.Model != "" && bindingModel != existing.Model {
+					return id, digest, ErrModelConflict
+				}
 				known, supported, err := s.catalogSupport(ctx, q, id, model, bound.Provider)
 				if err != nil {
 					return id, digest, err
@@ -114,15 +114,13 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 					// A missing capability is not a failover signal. Only an explicit
 					// model change with portable history may replace a known binding.
 					if affinity != portableAffinity || existing.Model == "" || existing.Model == bindingModel {
-						return id, digest, ErrAffinityUnavailable
+						return id, digest, ErrModelConflict
 					}
 					reselect = true
 				}
 			}
 			if reselect {
-				if existing.Provider == scope {
-					replacement = existing
-				}
+				replacement = existing
 			} else {
 				if model != "" && !policy.AllowsResource(bound.Provider, model) {
 					return id, digest, ErrModelNotAllowed
@@ -145,7 +143,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 					bindingModel = existing.Model
 				}
 				if existing.Provider != scope {
-					if err := rememberAffinity(ctx, q, userID, groupID, digest, scope, id, bindingModel, now, expires); err != nil {
+					if err := rememberAffinity(ctx, q, userID, groupID, digest, scope, id, bindingModel, now, expires, existing.Rebound); err != nil {
 						return "", digest, err
 					}
 				}
@@ -285,10 +283,11 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 	id := candidates[s.next[cursor]%len(candidates)]
 	s.next[cursor] = (s.next[cursor] + 1) % len(candidates)
 	if session != "" {
-		if replacement != nil {
+		if replacement != nil && replacement.Provider == scope {
 			err = q.ReplaceAccountAffinity(ctx, db.ReplaceAccountAffinityParams{UserID: userID, GroupID: groupID, SessionHash: digest[:], Provider: scope, AccountID: id, Model: bindingModel, ExpiresAt: expires})
 		} else {
-			err = rememberAffinity(ctx, q, userID, groupID, digest, scope, id, bindingModel, now, expires)
+			// Creating an auto binding from a legacy scope can also move the account.
+			err = rememberAffinity(ctx, q, userID, groupID, digest, scope, id, bindingModel, now, expires, replacement != nil)
 		}
 		if err != nil {
 			return "", digest, err
@@ -311,7 +310,7 @@ func preferredProvider(kind Kind) string {
 	}
 }
 
-func rememberAffinity(ctx context.Context, q *db.Queries, userID, groupID int64, digest [32]byte, scope, id, model string, now, expires int64) error {
+func rememberAffinity(ctx context.Context, q *db.Queries, userID, groupID int64, digest [32]byte, scope, id, model string, now, expires int64, rebound bool) error {
 	if err := q.PruneAccountAffinity(ctx, now); err != nil {
 		return err
 	}
@@ -322,5 +321,5 @@ func rememberAffinity(ctx context.Context, q *db.Queries, userID, groupID int64,
 	if count >= 4096 {
 		return ErrAffinityLimit
 	}
-	return q.CreateAccountAffinity(ctx, db.CreateAccountAffinityParams{GroupID: groupID, Provider: scope, UserID: userID, SessionHash: digest[:], AccountID: id, Model: model, ExpiresAt: expires})
+	return q.CreateAccountAffinity(ctx, db.CreateAccountAffinityParams{GroupID: groupID, Provider: scope, UserID: userID, SessionHash: digest[:], AccountID: id, Model: model, ExpiresAt: expires, Rebound: rebound})
 }

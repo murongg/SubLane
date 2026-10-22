@@ -322,6 +322,8 @@ func classify(ctx context.Context, err error) (outcome, code, penalty string) {
 		return "rejected", "account_cooling", ""
 	case errors.Is(err, ErrModelCooling):
 		return "rejected", "model_cooling", ""
+	case errors.Is(err, ErrModelConflict):
+		return "rejected", "conversation_model_conflict", ""
 	case errors.Is(err, ErrNoAccount), errors.Is(err, ErrAffinityUnavailable), errors.Is(err, accounts.ErrDisabled), errors.Is(err, accounts.ErrNotFound):
 		return "rejected", "account_unavailable", ""
 	case errors.Is(err, groups.ErrUnavailable):

@@ -1,6 +1,16 @@
 import { expect, it } from 'vitest'
 import { requestRecovery } from './recovery'
 
+it('explains a conversation model conflict without an account repair action', () => {
+  for (const administrator of [false, true]) {
+    expect(
+      requestRecovery('conversation_model_conflict', administrator),
+    ).toEqual({
+      hint: 'recoveryModelConflict',
+    })
+  }
+})
+
 it('gives administrators the relevant repair destination', () => {
   expect(requestRecovery('auth_required', true).to).toBe('/accounts')
   expect(requestRecovery('allocation_model_unpriced', true).to).toBe(

@@ -353,6 +353,8 @@ func gatewayFailure(err error) (int, string) {
 		return 403, "group_unavailable"
 	case errors.Is(err, gateway.ErrAffinityUnavailable):
 		return 409, "conversation_account_unavailable"
+	case errors.Is(err, gateway.ErrModelConflict):
+		return 409, "conversation_model_conflict"
 	case errors.Is(err, gateway.ErrNoAccount):
 		return 503, "no_accounts_available"
 	case errors.Is(err, allocations.ErrQuota):
@@ -464,6 +466,12 @@ func gatewayErrorBody(code string) map[string]string {
 }
 
 func gatewayErrorMessage(code string) string {
+	if code == "conversation_model_conflict" {
+		return "The requested model cannot continue this conversation on its bound account with the supplied continuation state. Switch back to the previous model or start a new conversation to use this model."
+	}
+	if code == "conversation_account_unavailable" {
+		return "This conversation's original account binding is unavailable. Restore access to the original account or start a new conversation."
+	}
 	if code == "request_body_timeout" {
 		return "Request upload timed out. Retry the request or reduce its size and check your upload connection."
 	}

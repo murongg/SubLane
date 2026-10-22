@@ -1157,6 +1157,8 @@
   "reasonAccountWaitTimeout": "アカウント容量を待機中にタイムアウトしました",
   "reasonCooling": "アカウントのクールダウン",
   "reasonAccountUnavailable": "アカウントが利用できません",
+  "reasonModelConflict": "会話のモデルが競合しています",
+  "recoveryModelConflict": "以前のモデルに戻すか、新しい会話で目的のモデルを使用してください。現在の会話は元のアカウントとの紐付けを保持します。",
   "reasonGroupUnavailable": "グループアクセス不可",
   "reasonAuthRequired": "許可が必要です",
   "reasonForbidden": "アップストリームアクセスが拒否されました",

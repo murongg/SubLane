@@ -1332,6 +1332,9 @@ export const zh: Record<keyof typeof en, string> = {
   reasonAccountWaitTimeout: '等待账号空位超时',
   reasonCooling: '账号正在冷却',
   reasonAccountUnavailable: '账号不可用',
+  reasonModelConflict: '会话模型冲突',
+  recoveryModelConflict:
+    '请切回之前的模型，或新建会话使用目标模型。当前会话会保留原有账号绑定。',
   reasonGroupUnavailable: '资源组权限不可用',
   reasonAuthRequired: '需要重新授权',
   reasonForbidden: '上游拒绝访问',

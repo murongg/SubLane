@@ -21,7 +21,7 @@ func (q *Queries) CountAccountAffinity(ctx context.Context) (int64, error) {
 }
 
 const createAccountAffinity = `-- name: CreateAccountAffinity :exec
-INSERT INTO account_affinity(user_id, group_id, session_hash, provider, account_id, expires_at, model) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+INSERT INTO account_affinity(user_id, group_id, session_hash, provider, account_id, expires_at, model, rebound) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
 `
 
 type CreateAccountAffinityParams struct {
@@ -32,6 +32,7 @@ type CreateAccountAffinityParams struct {
 	AccountID   string
 	ExpiresAt   int64
 	Model       string
+	Rebound     bool
 }
 
 func (q *Queries) CreateAccountAffinity(ctx context.Context, arg CreateAccountAffinityParams) error {
@@ -43,12 +44,13 @@ func (q *Queries) CreateAccountAffinity(ctx context.Context, arg CreateAccountAf
 		arg.AccountID,
 		arg.ExpiresAt,
 		arg.Model,
+		arg.Rebound,
 	)
 	return err
 }
 
 const listSessionAffinities = `-- name: ListSessionAffinities :many
-SELECT provider, account_id, expires_at, model FROM account_affinity
+SELECT provider, account_id, expires_at, model, rebound FROM account_affinity
 WHERE user_id = ?1 AND group_id = ?2
 AND session_hash = ?3 AND expires_at > ?4
 ORDER BY provider
@@ -66,6 +68,7 @@ type ListSessionAffinitiesRow struct {
 	AccountID string
 	ExpiresAt int64
 	Model     string
+	Rebound   bool
 }
 
 func (q *Queries) ListSessionAffinities(ctx context.Context, arg ListSessionAffinitiesParams) ([]ListSessionAffinitiesRow, error) {
@@ -87,6 +90,7 @@ func (q *Queries) ListSessionAffinities(ctx context.Context, arg ListSessionAffi
 			&i.AccountID,
 			&i.ExpiresAt,
 			&i.Model,
+			&i.Rebound,
 		); err != nil {
 			return nil, err
 		}
@@ -111,7 +115,7 @@ func (q *Queries) PruneAccountAffinity(ctx context.Context, now int64) error {
 }
 
 const replaceAccountAffinity = `-- name: ReplaceAccountAffinity :exec
-UPDATE account_affinity SET account_id = ?1, model = ?2, expires_at = ?3
+UPDATE account_affinity SET account_id = ?1, model = ?2, expires_at = ?3, rebound = rebound OR account_id != ?1
 WHERE user_id = ?4 AND group_id = ?5 AND session_hash = ?6 AND provider = ?7
 `
 

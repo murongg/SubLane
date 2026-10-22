@@ -1157,6 +1157,8 @@
   "reasonAccountWaitTimeout": "Se agotó el tiempo de espera para la capacidad de la cuenta.",
   "reasonCooling": "Cuenta enfriándose",
   "reasonAccountUnavailable": "Cuenta no disponible",
+  "reasonModelConflict": "Conflicto de modelo en la conversación",
+  "recoveryModelConflict": "Vuelve al modelo anterior o inicia una conversación nueva para usar el modelo solicitado. La conversación actual mantiene su cuenta vinculada.",
   "reasonGroupUnavailable": "Acceso grupal no disponible",
   "reasonAuthRequired": "Se requiere autorización",
   "reasonForbidden": "Acceso ascendente denegado",

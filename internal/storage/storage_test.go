@@ -44,6 +44,63 @@ func TestOpenInitializesSchemaAndPreservesData(t *testing.T) {
 	}
 }
 
+func TestOpenPreservesConversationBindingAndRebindState(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "synthetic-affinity-upgrade.db")
+	previous, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := previous.Exec(`CREATE TABLE schema_migrations(name TEXT PRIMARY KEY NOT NULL,applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := migrations.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.Name() >= "019_affinity_rebind.sql" {
+			break
+		}
+		if err := apply(ctx, previous, entry.Name()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, statement := range []string{
+		`INSERT INTO users(id,username,password_hash,role,created_at) VALUES(1,'synthetic-owner','synthetic-hash','admin',1)`,
+		`INSERT INTO tenants(id,name,owner_user_id,created_at) VALUES(1,'Synthetic workspace',1,1)`,
+		`INSERT INTO account_groups(id,name,enabled,created_at,updated_at) VALUES(1,'Synthetic pool',1,1,1)`,
+		`INSERT INTO account_affinity(user_id,group_id,session_hash,provider,account_id,expires_at,model) VALUES(1,1,zeroblob(32),'auto','synthetic-account',2147483647,'synthetic-model')`,
+	} {
+		if _, err := previous.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	previous.Close()
+	for expected := range 2 {
+		upgraded, err := Open(ctx, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var account, model string
+		var expires, rebound int64
+		err = upgraded.QueryRow(`SELECT account_id,model,expires_at,rebound FROM account_affinity`).Scan(&account, &model, &expires, &rebound)
+		if err != nil || account != "synthetic-account" || model != "synthetic-model" || expires != 2147483647 || rebound != int64(expected) {
+			upgraded.Close()
+			t.Fatal("migration lost the current binding or durable rebind state", account, model, expires, rebound, err)
+		}
+		if _, err := upgraded.Exec(`UPDATE account_affinity SET rebound=1`); err != nil {
+			upgraded.Close()
+			t.Fatal(err)
+		}
+		if _, err := upgraded.Exec(`UPDATE account_affinity SET rebound=2`); err == nil {
+			upgraded.Close()
+			t.Fatal("invalid rebind state accepted")
+		}
+		upgraded.Close()
+	}
+}
+
 func TestOpenExpandsUsageSnapshotsWithoutLosingDataOrConstraints(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "synthetic-usage-upgrade.db")

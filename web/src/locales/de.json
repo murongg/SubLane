@@ -1157,6 +1157,8 @@
   "reasonAccountWaitTimeout": "Timed out Warten auf Kontokapazität",
   "reasonCooling": "Kontoabkühlung",
   "reasonAccountUnavailable": "Konto nicht verfügbar",
+  "reasonModelConflict": "Modellkonflikt in der Unterhaltung",
+  "recoveryModelConflict": "Wechsle zum vorherigen Modell zurück oder starte eine neue Unterhaltung mit dem gewünschten Modell. Die aktuelle Unterhaltung bleibt an ihr Konto gebunden.",
   "reasonGroupUnavailable": "Gruppenzugriff nicht verfügbar",
   "reasonAuthRequired": "Genehmigung erforderlich",
   "reasonForbidden": "Upstream-Zugang verweigert",

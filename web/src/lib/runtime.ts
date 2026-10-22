@@ -84,6 +84,7 @@ export const reasonKeys: Record<string, keyof typeof en> = {
   model_cooling: 'reasonModelCooling',
   model_rate_limited: 'reasonModelRateLimited',
   account_unavailable: 'reasonAccountUnavailable',
+  conversation_model_conflict: 'reasonModelConflict',
   group_unavailable: 'reasonGroupUnavailable',
   auth_required: 'reasonAuthRequired',
   upstream_forbidden: 'reasonForbidden',
