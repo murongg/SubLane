@@ -2,6 +2,8 @@ package backup
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,6 +12,23 @@ import (
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/vault"
 )
+
+func TestScheduledBackupNotifiesFailureAndStopsOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	schedule := Schedule{Directory: t.TempDir(), PasswordFile: filepath.Join(t.TempDir(), "missing"), Interval: time.Hour, Keep: 7}
+	called := false
+	schedule.Maintain(ctx, "synthetic-unused", "synthetic-version", "", slog.New(slog.NewTextHandler(io.Discard, nil)), func(ctx context.Context) {
+		called = true
+		if ctx.Err() != nil {
+			t.Fatal("failure notification already cancelled")
+		}
+		cancel()
+	})
+	if !called {
+		t.Fatal("failure notification not called")
+	}
+}
 
 func TestScheduledBackupVerifiesBeforeRotating(t *testing.T) {
 	ctx := context.Background()

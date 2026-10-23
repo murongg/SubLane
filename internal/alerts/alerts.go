@@ -94,7 +94,7 @@ func (s *Service) Verify(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			if _, err := destination(string(raw)); err != nil {
+			if _, err := ValidateDestination(string(raw)); err != nil {
 				return err
 			}
 		}
@@ -126,7 +126,7 @@ func (s *Service) state(ctx context.Context, tenantID int64) (State, error) {
 		if err != nil {
 			return result, err
 		}
-		u, err := destination(string(plain))
+		u, err := ValidateDestination(string(plain))
 		if err != nil {
 			return result, err
 		}
@@ -175,7 +175,7 @@ func (s *Service) Update(ctx context.Context, tenantID int64, input Input) (Stat
 		cfg.Endpoint = nil
 	}
 	if input.URL != "" {
-		if _, err := destination(input.URL); err != nil {
+		if _, err := ValidateDestination(input.URL); err != nil {
 			return State{}, err
 		}
 		cfg.Endpoint, err = s.vault.SealWebhook(tenantID, []byte(input.URL))

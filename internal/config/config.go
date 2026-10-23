@@ -18,6 +18,7 @@ import (
 
 type Config struct {
 	Backup                 backup.Schedule
+	BackupWebhookURL       string
 	Demo                   bool
 	Addr                   string
 	DataDir                string

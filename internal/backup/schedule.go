@@ -30,7 +30,7 @@ func (s Schedule) Validate() error {
 }
 
 // Maintain runs serially and is joined by the process before storage closes.
-func (s Schedule) Maintain(ctx context.Context, dataDir, version, keyFile string, logger *slog.Logger) {
+func (s Schedule) Maintain(ctx context.Context, dataDir, version, keyFile string, logger *slog.Logger, onFailure func(context.Context)) {
 	for ctx.Err() == nil {
 		started := time.Now()
 		path, err := s.Run(ctx, dataDir, version, keyFile)
@@ -40,6 +40,9 @@ func (s Schedule) Maintain(ctx context.Context, dataDir, version, keyFile string
 		if err != nil {
 			// Filesystem errors can contain private paths; keep failure logs bounded to the operation.
 			logger.Error("Scheduled backup failed; check directory access, password file, space and archive integrity")
+			if onFailure != nil {
+				onFailure(ctx)
+			}
 		} else {
 			logger.Info("Scheduled backup verified", "archive", filepath.Base(path), "completed_at", time.Now().UTC(), "duration", time.Since(started))
 		}

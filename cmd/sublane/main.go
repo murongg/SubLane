@@ -185,7 +185,15 @@ func run() error {
 		backupCtx, stopBackup := context.WithCancel(ctx)
 		go func() {
 			defer close(backupDone)
-			cfg.Backup.Maintain(backupCtx, cfg.DataDir, version, cfg.CredentialsKeyFile, logger)
+			var onFailure func(context.Context)
+			if cfg.BackupWebhookURL != "" {
+				onFailure = func(ctx context.Context) {
+					if err := notifications.BackupFailure(ctx, cfg.BackupWebhookURL); err != nil {
+						logger.Error("Scheduled backup failure notification could not be delivered")
+					}
+				}
+			}
+			cfg.Backup.Maintain(backupCtx, cfg.DataDir, version, cfg.CredentialsKeyFile, logger, onFailure)
 		}()
 		defer func() { stopBackup(); <-backupDone }()
 	}
