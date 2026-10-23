@@ -160,6 +160,9 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 		var quotaFailed, runtimeFailed, historyFailed bool
 		// Emit after the later mutex-unlock defer: slow stdout must not block admission.
 		defer func() {
+			if e.service.telemetry != nil {
+				e.service.telemetry.Observe(outcome, e.record.DurationMs, e.record.FirstTokenMs)
+			}
 			if quotaFailed {
 				e.log(slog.LevelWarn, "Unable to persist response quota", "persist_quota_failed")
 			}

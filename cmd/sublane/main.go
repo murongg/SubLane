@@ -21,6 +21,7 @@ import (
 	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/demo"
 	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/metrics"
 	"github.com/murongg/SubLane/internal/pricing"
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/storage"
@@ -166,7 +167,11 @@ func run() error {
 	}
 	priceCatalog.Start(ctx)
 	defer priceCatalog.Close()
-	registry := &tenantRegistry{ctx: ctx, db: db, vault: cipher, auth: authentication,
+	var telemetry *metrics.Collector
+	if cfg.MetricsToken != "" {
+		telemetry = &metrics.Collector{}
+	}
+	registry := &tenantRegistry{metrics: telemetry, ctx: ctx, db: db, vault: cipher, auth: authentication,
 		alerts:  notifications,
 		tenants: tenancy, provider: provider, pricing: priceCatalog, versions: codexVersions, grokVersions: grokVersions, claudeVersions: claudeVersions, timeZone: timeZone,
 		assets: web.Assets(), dataDir: cfg.DataDir, keyFile: cfg.CredentialsKeyFile, publicURL: cfg.PublicURL, trustedProxies: cfg.TrustedProxies,
@@ -200,7 +205,7 @@ func run() error {
 	notifications.SetCapacityObserver(registry.Capacity)
 	notifications.SetAllowanceObserver(registry.AllowanceAlerts)
 	notifications.Start(ctx)
-	return serve(ctx, logger, cfg.Addr, server.NewMulti(db, authentication, tenancy, cfg.PublicURL, registry.Handler))
+	return serve(ctx, logger, cfg.Addr, server.WithMetrics(server.NewMulti(db, authentication, tenancy, cfg.PublicURL, registry.Handler), cfg.MetricsToken, telemetry, registry.Pressure))
 }
 
 func serve(ctx context.Context, logger *slog.Logger, addr string, handler http.Handler) error {

@@ -33,6 +33,7 @@ type Config struct {
 	PricingFallback        string
 	PricingOverride        string
 	PricingInterval        time.Duration
+	MetricsToken           string
 	Gateway                gateway.Policy
 	InferenceHeaderTimeout time.Duration
 }
@@ -107,6 +108,17 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 	}
 	c.PricingURL = getenv("SUBLANE_PRICING_URL")
+	c.MetricsToken = getenv("SUBLANE_METRICS_TOKEN")
+	if c.MetricsToken != "" {
+		if len(c.MetricsToken) < 32 || len(c.MetricsToken) > 128 {
+			return c, fmt.Errorf("SUBLANE_METRICS_TOKEN must contain 32–128 visible ASCII characters")
+		}
+		for _, char := range c.MetricsToken {
+			if char < 33 || char > 126 {
+				return c, fmt.Errorf("SUBLANE_METRICS_TOKEN must contain 32–128 visible ASCII characters")
+			}
+		}
+	}
 	c.PricingHashURL = getenv("SUBLANE_PRICING_HASH_URL")
 	c.PricingCache = getenv("SUBLANE_PRICING_CACHE")
 	c.PricingFallback = getenv("SUBLANE_PRICING_FALLBACK")
