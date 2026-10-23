@@ -276,7 +276,7 @@ it('supports returning to the welcome page and keeps the chosen language', async
   await screen.findByRole('heading', { name: 'Welcome to SubLane' })
   await user.click(screen.getByRole('button', { name: 'Language' }))
   await user.click(screen.getByRole('menuitemradio', { name: '简体中文' }))
-  await user.click(screen.getByRole('link', { name: '开始设置' }))
+  await user.click(await screen.findByRole('link', { name: '开始设置' }))
   await screen.findByRole('heading', { name: '创建管理员' })
   await user.click(screen.getByRole('button', { name: '返回欢迎页' }))
   const heading = await screen.findByRole('heading', {

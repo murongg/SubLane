@@ -1,14 +1,32 @@
 import { expect, it, vi } from 'vitest'
 import { waitFor } from '@testing-library/react'
 
-it.each(['ja', 'zh-TW', 'ar'])(
+const loadChinese = vi.hoisted(() => vi.fn())
+vi.mock('@/locales/zh', async (original) => {
+  loadChinese()
+  return original()
+})
+
+it('does not load the Chinese dictionary for an English session', async () => {
+  localStorage.setItem('sublane-language', 'en')
+  vi.resetModules()
+  loadChinese.mockClear()
+  const { i18n } = await import('./i18n')
+  await waitFor(() => expect(i18n.isInitialized).toBe(true))
+  expect(i18n.resolvedLanguage).toBe('en')
+  expect(loadChinese).not.toHaveBeenCalled()
+})
+
+it.each(['zh', 'ja', 'zh-TW', 'ar'])(
   'restores %s before completing initialization',
   async (language) => {
     localStorage.setItem('sublane-language', language)
     vi.resetModules()
     const { i18n } = await import('./i18n')
     await waitFor(() => expect(i18n.resolvedLanguage).toBe(language))
-    expect(document.documentElement.lang).toBe(language)
+    expect(document.documentElement.lang).toBe(
+      language === 'zh' ? 'zh-CN' : language,
+    )
     expect(document.documentElement.dir).toBe(language === 'ar' ? 'rtl' : 'ltr')
   },
 )
