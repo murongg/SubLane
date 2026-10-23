@@ -18,6 +18,7 @@ import (
 	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
+	"github.com/murongg/SubLane/internal/metrics"
 	"github.com/murongg/SubLane/internal/oauth"
 	"github.com/murongg/SubLane/internal/pricing"
 	"github.com/murongg/SubLane/internal/server"
@@ -47,6 +48,7 @@ func (r *tenantRegistry) Capacity(ctx context.Context, id int64) ([]capacity.Poo
 const runtimeIdleTimeout = 5 * time.Minute
 
 type tenantRegistry struct {
+	metrics           *metrics.Collector
 	mu                sync.Mutex
 	runtimes          map[int64]*tenantRuntime
 	ctx               context.Context
@@ -116,6 +118,7 @@ func (r *tenantRegistry) acquire(id int64) *tenantRuntime {
 		policy = gateway.DefaultPolicy()
 	}
 	forwarding := gateway.NewForTenantWithPolicy(r.ctx, r.db, accountService, r.provider, id, policy, r.pricing)
+	forwarding.SetTelemetry(r.metrics)
 	rules := content.New(r.db, r.vault, id)
 	forwarding.SetContent(rules)
 	forwarding.SetTimeZone(r.timeZone)
@@ -220,4 +223,19 @@ func (r *tenantRegistry) Close() {
 	for _, runtime := range runtimes {
 		runtime.gateway.Close()
 	}
+}
+
+func (r *tenantRegistry) Pressure() (inFlight, queued int64) {
+	r.mu.Lock()
+	runtimes := make([]*tenantRuntime, 0, len(r.runtimes))
+	for _, runtime := range r.runtimes {
+		runtimes = append(runtimes, runtime)
+	}
+	r.mu.Unlock()
+	for _, runtime := range runtimes {
+		active, waiting := runtime.gateway.Pressure()
+		inFlight += active
+		queued += waiting
+	}
+	return inFlight, queued
 }

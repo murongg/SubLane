@@ -15,6 +15,7 @@ import (
 	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/logging"
+	"github.com/murongg/SubLane/internal/metrics"
 	"github.com/murongg/SubLane/internal/pricing"
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/timezone"
@@ -43,6 +44,7 @@ const (
 func (k Kind) IsGemini() bool { return k == Gemini || k == GeminiStream }
 
 type Service struct {
+	telemetry          *metrics.Collector
 	db                 *sql.DB
 	queries            *db.Queries
 	accounts           *accounts.Service
