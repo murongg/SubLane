@@ -251,7 +251,7 @@ func (e *observation) finish(outcome, code, penalty, retry string) {
 			historyFailed = true
 		}
 		if e.leased {
-			s.notifyCapacity()
+			s.notifyCapacity(e.record.AccountID)
 		}
 	})
 }

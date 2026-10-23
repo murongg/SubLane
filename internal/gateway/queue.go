@@ -41,6 +41,7 @@ func (s *Service) leaseAccount(ctx context.Context, entry *observation, session,
 			s.waiting[entry.record.GroupID]--
 			if s.waiting[entry.record.GroupID] == 0 {
 				delete(s.waiting, entry.record.GroupID)
+				delete(s.capacityChanged, entry.record.GroupID)
 			}
 		}
 	}()
@@ -83,7 +84,11 @@ func (s *Service) leaseAccount(ctx context.Context, entry *observation, session,
 			// Lifecycle/policy edits happen outside the gateway lock. Recheck them even without a lease release.
 			retry = time.NewTicker(250 * time.Millisecond)
 		}
-		changed := s.capacityChanged
+		changed := s.capacityChanged[entry.record.GroupID]
+		if changed == nil {
+			changed = make(chan struct{}, 1)
+			s.capacityChanged[entry.record.GroupID] = changed
+		}
 		s.mu.Unlock()
 		select {
 		case <-ctx.Done():
@@ -164,7 +169,24 @@ func (s *Service) recheckMember(ctx context.Context, q *db.Queries, entry *obser
 }
 
 // Call under s.mu after accounting commits, so awakened requests see the final charge.
-func (s *Service) notifyCapacity() {
-	close(s.capacityChanged)
-	s.capacityChanged = make(chan struct{})
+func (s *Service) notifyCapacity(accountID string) {
+	if len(s.waiting) == 0 {
+		return
+	}
+	groups, err := s.queries.ListResourceGroups(s.runContext, db.ListResourceGroupsParams{TenantID: s.tenantID, AccountID: accountID})
+	if err != nil {
+		// A failed lookup must not strand requests whose capacity was just released.
+		for groupID := range s.waiting {
+			groups = append(groups, groupID)
+		}
+	}
+	for _, groupID := range groups {
+		if changed := s.capacityChanged[groupID]; changed != nil {
+			// Coalesce releases and wake one waiter per affected pool; policy polling remains independent.
+			select {
+			case changed <- struct{}{}:
+			default:
+			}
+		}
+	}
 }
