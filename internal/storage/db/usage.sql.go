@@ -72,6 +72,49 @@ func (q *Queries) ListGroupUsage(ctx context.Context, groupID int64) ([]ListGrou
 	return items, nil
 }
 
+const listWorkspaceUsage = `-- name: ListWorkspaceUsage :many
+SELECT a.id, a.provider, a.models_revision AS revision, u.snapshot, u.updated_at
+FROM accounts a LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
+WHERE a.tenant_id=?1
+`
+
+type ListWorkspaceUsageRow struct {
+	ID        string
+	Provider  string
+	Revision  int64
+	Snapshot  []byte
+	UpdatedAt *int64
+}
+
+func (q *Queries) ListWorkspaceUsage(ctx context.Context, tenantID int64) ([]ListWorkspaceUsageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkspaceUsage, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceUsageRow{}
+	for rows.Next() {
+		var i ListWorkspaceUsageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Provider,
+			&i.Revision,
+			&i.Snapshot,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const saveAccountUsage = `-- name: SaveAccountUsage :execrows
 INSERT INTO account_usage(account_id, snapshot, updated_at, revision)
 SELECT id, ?1, ?2, models_revision FROM accounts

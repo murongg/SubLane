@@ -16,3 +16,8 @@ SELECT a.id, a.provider, a.models_revision AS revision, u.snapshot, u.updated_at
 FROM accounts a JOIN group_accounts ga ON ga.account_id=a.id
 LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
 WHERE ga.group_id=sqlc.arg(group_id) AND a.enabled=1 AND a.status!='reauth_required';
+
+-- name: ListWorkspaceUsage :many
+SELECT a.id, a.provider, a.models_revision AS revision, u.snapshot, u.updated_at
+FROM accounts a LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
+WHERE a.tenant_id=sqlc.arg(tenant_id);
