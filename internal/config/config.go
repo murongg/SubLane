@@ -11,11 +11,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/murongg/SubLane/internal/backup"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/vault"
 )
 
 type Config struct {
+	Backup                 backup.Schedule
 	Demo                   bool
 	Addr                   string
 	DataDir                string
@@ -37,6 +39,9 @@ type Config struct {
 func Load(getenv func(string) string) (Config, error) {
 	c := Config{Addr: "127.0.0.1:8080", DataDir: "./data", LogLevel: slog.LevelInfo, MaxRequestBody: 128 << 20, PricingInterval: 6 * time.Hour, Gateway: gateway.DefaultPolicy(), InferenceHeaderTimeout: 5 * time.Minute}
 	if err := c.loadGateway(getenv); err != nil {
+		return c, err
+	}
+	if err := c.loadBackup(getenv); err != nil {
 		return c, err
 	}
 	if v := getenv("SUBLANE_DEMO"); v != "" {

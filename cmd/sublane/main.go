@@ -180,6 +180,15 @@ func run() error {
 		gateway.MaintainHistory(maintenanceCtx, db)
 	}()
 	defer func() { stopMaintenance(); <-maintenanceDone }()
+	if cfg.Backup.Directory != "" {
+		backupDone := make(chan struct{})
+		backupCtx, stopBackup := context.WithCancel(ctx)
+		go func() {
+			defer close(backupDone)
+			cfg.Backup.Maintain(backupCtx, cfg.DataDir, version, cfg.CredentialsKeyFile, logger)
+		}()
+		defer func() { stopBackup(); <-backupDone }()
+	}
 	notifications.SetCapacityObserver(registry.Capacity)
 	notifications.Start(ctx)
 	return serve(ctx, logger, cfg.Addr, server.NewMulti(db, authentication, tenancy, cfg.PublicURL, registry.Handler))
