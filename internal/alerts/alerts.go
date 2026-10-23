@@ -55,21 +55,23 @@ type Event struct {
 	Subject     string `json:"subject"`
 	Status      string `json:"status"`
 	ObservedAt  int64  `json:"observed_at"`
+	Cycle       string `json:"cycle,omitempty"`
 }
 type Service struct {
-	conn             *sql.DB
-	queries          *db.Queries
-	vault            *vault.Vault
-	sender           Sender
-	now              func() time.Time
-	mu               sync.Mutex
-	checking         sync.Mutex
-	cancel           context.CancelFunc
-	done             chan struct{}
-	wake             chan struct{}
-	flights          map[int64]context.CancelFunc
-	testFlights      map[int64]context.CancelFunc
-	capacityObserver func(context.Context, int64) ([]capacity.Pool, error)
+	conn              *sql.DB
+	queries           *db.Queries
+	vault             *vault.Vault
+	sender            Sender
+	now               func() time.Time
+	mu                sync.Mutex
+	checking          sync.Mutex
+	cancel            context.CancelFunc
+	done              chan struct{}
+	wake              chan struct{}
+	flights           map[int64]context.CancelFunc
+	testFlights       map[int64]context.CancelFunc
+	capacityObserver  func(context.Context, int64) ([]capacity.Pool, error)
+	allowanceObserver func(context.Context, int64) ([]Allowance, error)
 }
 
 func New(conn *sql.DB, cipher *vault.Vault, sender Sender) *Service {
@@ -232,7 +234,7 @@ func newEventID() string {
 	return hex.EncodeToString(value[:])
 }
 
-func (s *Service) observe(ctx context.Context, tenantID int64, extra []db.ListAlertSignalsRow, unknown map[string]bool) error {
+func (s *Service) observe(ctx context.Context, tenantID int64, extra []db.ListAlertSignalsRow, unknown map[string]bool, cycles map[string]string) error {
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -260,7 +262,7 @@ func (s *Service) observe(ctx context.Context, tenantID int64, extra []db.ListAl
 	}
 	for key, state := range existing {
 		// Missing or stale observations cannot prove an incident has recovered.
-		uncertain := unknown[key] || (state.Kind == "model_unavailable" && unknown["model_unavailable:"+strings.SplitN(state.Subject, ":", 2)[0]+":*"]) || (state.Kind == "quota_low" && unknown["quota_low:*"]) || (unknown["capacity_unavailable"] && (state.Kind == "model_unavailable" || state.Kind == "quota_low"))
+		uncertain := (state.Kind == "allowance_low" && unknown["allowance_unavailable"]) || unknown[key] || (state.Kind == "model_unavailable" && unknown["model_unavailable:"+strings.SplitN(state.Subject, ":", 2)[0]+":*"]) || (state.Kind == "quota_low" && unknown["quota_low:*"]) || (unknown["capacity_unavailable"] && (state.Kind == "model_unavailable" || state.Kind == "quota_low"))
 		if uncertain && !current[key] {
 			continue
 		}
@@ -268,8 +270,17 @@ func (s *Service) observe(ctx context.Context, tenantID int64, extra []db.ListAl
 		if current[key] {
 			active = 1
 		}
-		if state.EventID != "" && state.Active == active {
+		newCycle := state.Kind == "allowance_low" && active == 1 && state.Cycle != cycles[key]
+		// Keep one row per recipient/window/threshold, and rearm even if both periods crossed between polls.
+		if state.Kind == "allowance_low" && active == 1 && state.Cycle == cycles[key] && state.EventID != "" {
 			continue
+		}
+		if state.EventID != "" && state.Active == active && !newCycle {
+			continue
+		}
+		if newCycle {
+			state.Cycle = cycles[key]
+			state.DeliveredActive = 0
 		}
 		state.Active = active
 		state.EventID = newEventID()
@@ -316,8 +327,26 @@ func (s *Service) checkWorkspace(ctx context.Context, tenantID int64, remaining 
 	}
 	plain, err := s.vault.OpenWebhook(tenantID, cfg.Endpoint)
 	observer := s.capacityObserver
+	allowanceObserver := s.allowanceObserver
 	s.mu.Unlock()
 	extra, unknown, errCapacity := observeCapacity(ctx, observer, tenantID, cfg)
+	var allowances []Allowance
+	// A missing observer cannot prove persisted incidents have recovered.
+	errAllowance := ErrCapacityUnavailable
+	if allowanceObserver != nil {
+		observation, cancel := context.WithTimeout(ctx, 5*time.Second)
+		allowances, errAllowance = allowanceObserver(observation, tenantID)
+		cancel()
+	}
+	if len(allowances) > 4096 {
+		errAllowance = ErrCapacityUnavailable
+	}
+	for _, value := range allowances {
+		if value.Subject == "" || len(value.Subject) > 160 || value.Cycle == "" || len(value.Cycle) > 128 {
+			errAllowance = ErrInput
+			break
+		}
+	}
 	s.mu.Lock()
 	latest, changedErr := s.queries.GetAlertConfig(ctx, tenantID)
 	if changedErr != nil || latest != raw {
@@ -329,8 +358,17 @@ func (s *Service) checkWorkspace(ctx context.Context, tenantID int64, remaining 
 		extra = nil
 		unknown = map[string]bool{"capacity_unavailable": true}
 	}
+	cycles := map[string]string{}
+	if errAllowance != nil {
+		unknown["allowance_unavailable"] = true
+	} else {
+		for _, value := range allowances {
+			extra = append(extra, db.ListAlertSignalsRow{Kind: "allowance_low", Subject: value.Subject})
+			cycles["allowance_low:"+value.Subject] = value.Cycle
+		}
+	}
 	if err == nil {
-		err = s.observe(ctx, tenantID, extra, unknown)
+		err = s.observe(ctx, tenantID, extra, unknown, cycles)
 	}
 	var states []db.AlertState
 	if err == nil {
@@ -365,7 +403,7 @@ func (s *Service) checkWorkspace(ctx context.Context, tenantID int64, remaining 
 		if state.Active != 0 {
 			status = "firing"
 		}
-		err = deliver(call, s.sender, string(plain), Event{ID: state.EventID, WorkspaceID: tenantID, Kind: state.Kind, Subject: state.Subject, Status: status, ObservedAt: state.ChangedAt})
+		err = deliver(call, s.sender, string(plain), Event{ID: state.EventID, WorkspaceID: tenantID, Kind: state.Kind, Subject: state.Subject, Status: status, ObservedAt: state.ChangedAt, Cycle: state.Cycle})
 		cancel()
 		s.mu.Lock()
 		delete(s.flights, tenantID)

@@ -85,6 +85,8 @@
   "alertsQuotaHint": "1~99를 입력합니다. 비활성화하려면 비워 두십시오. 새로운 모델 관련 할당량 관찰만 사용됩니다. 알 수 없는 데이터는 복구를 증명하지 않습니다.",
   "alertModelUnavailable": "그룹 모델을 사용할 수 없습니다",
   "alertQuotaLow": "계정 할당량 임계값에 도달했습니다.",
+  "alertAllowanceLow": "구성원 할당량 임계값 도달",
+  "alertsAllowanceDescription": "Webhook을 활성화하면 확정 사용량이 할당량의 80%와 95%에 도달할 때 기간 및 임계값별로 한 번 알립니다.",
   "auditSettingsTest": "웹훅 테스트를 요청했습니다.",
   "modelPrices": "모델 가격",
   "pricingDescription": "요청 비용 추정 및 새로운 허용량 개정에 사용되는 현재 참조 가격입니다. 이는 구독료가 아닙니다. 기존 할당량 개정은 저장된 가격을 사용합니다. 표시된 가격은 모델 액세스를 보장하지 않습니다. 키의 모델 카탈로그를 확인하세요.",

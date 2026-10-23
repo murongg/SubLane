@@ -47,7 +47,10 @@ func TestCapacityAlertMigrationPreservesDeliveryHistory(t *testing.T) {
 	if err := upgraded.QueryRow(`SELECT active,attempts,retry_at,delivery_failed FROM alert_states WHERE tenant_id=1 AND kind='request_failures'`).Scan(&active, &attempts, &retry, &failed); err != nil || active != 1 || attempts != 2 || retry != 1900000060 || failed != 1 {
 		t.Fatal(active, attempts, retry, failed, err)
 	}
-	if _, err := upgraded.Exec(`INSERT INTO alert_states VALUES(1,'model_unavailable','7:synthetic-model',1,0,'22222222222222222222222222222222',1900000000,0,0,0,0)`); err != nil {
+	if _, err := upgraded.Exec(`INSERT INTO alert_states(tenant_id,kind,subject,active,delivered_active,event_id,changed_at) VALUES(1,'model_unavailable','7:synthetic-model',1,0,'22222222222222222222222222222222',1900000000)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := upgraded.Exec(`INSERT INTO alert_states(tenant_id,kind,subject,active,delivered_active,event_id,changed_at,cycle) VALUES(1,'allowance_low','1:2:0:80',1,0,'33333333333333333333333333333333',1900000000,'1:1900086400')`); err != nil {
 		t.Fatal(err)
 	}
 }

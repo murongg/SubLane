@@ -17,11 +17,11 @@ DELETE FROM alert_states WHERE tenant_id=sqlc.arg(tenant_id);
 SELECT * FROM alert_states WHERE tenant_id=sqlc.arg(tenant_id) ORDER BY retry_at,changed_at,kind,subject;
 
 -- name: SaveAlertState :exec
-INSERT INTO alert_states(tenant_id,kind,subject,active,delivered_active,event_id,changed_at,attempts,retry_at,delivered_at,delivery_failed)
-VALUES(?,?,?,?,?,?,?,?,?,?,?)
+INSERT INTO alert_states(tenant_id,kind,subject,active,delivered_active,event_id,changed_at,attempts,retry_at,delivered_at,delivery_failed,cycle)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(tenant_id,kind,subject) DO UPDATE SET active=excluded.active,delivered_active=excluded.delivered_active,
 event_id=excluded.event_id,changed_at=excluded.changed_at,attempts=excluded.attempts,retry_at=excluded.retry_at,
-delivered_at=excluded.delivered_at,delivery_failed=excluded.delivery_failed;
+delivered_at=excluded.delivered_at,delivery_failed=excluded.delivery_failed,cycle=excluded.cycle;
 
 -- name: FinishAlertDelivery :exec
 UPDATE alert_states SET delivered_active=active,delivered_at=sqlc.arg(now),attempts=0,retry_at=0,delivery_failed=0

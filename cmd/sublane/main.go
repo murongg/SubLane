@@ -198,6 +198,7 @@ func run() error {
 		defer func() { stopBackup(); <-backupDone }()
 	}
 	notifications.SetCapacityObserver(registry.Capacity)
+	notifications.SetAllowanceObserver(registry.AllowanceAlerts)
 	notifications.Start(ctx)
 	return serve(ctx, logger, cfg.Addr, server.NewMulti(db, authentication, tenancy, cfg.PublicURL, registry.Handler))
 }

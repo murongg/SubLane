@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/netip"
@@ -42,6 +43,23 @@ func (r *tenantRegistry) Capacity(ctx context.Context, id int64) ([]capacity.Poo
 	}
 	defer r.release(runtime)
 	return runtime.gateway.WorkspaceCapacity(ctx)
+}
+
+func (r *tenantRegistry) AllowanceAlerts(ctx context.Context, id int64) ([]alerts.Allowance, error) {
+	runtime := r.acquire(id)
+	if runtime == nil {
+		return nil, alerts.ErrCapacityUnavailable
+	}
+	defer r.release(runtime)
+	values, err := runtime.gateway.Allocations().ThresholdAlerts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]alerts.Allowance, 0, len(values))
+	for _, value := range values {
+		out = append(out, alerts.Allowance{Subject: fmt.Sprintf("%d:%d:%d:%d", value.SchemeID, value.UserID, value.WindowSeconds, value.Threshold), Cycle: fmt.Sprintf("%d:%d", value.RevisionID, value.ResetAt)})
+	}
+	return out, nil
 }
 
 const runtimeIdleTimeout = 5 * time.Minute

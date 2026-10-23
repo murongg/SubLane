@@ -68,6 +68,9 @@ export function WorkspaceAlerts({ userID }: { userID: number }) {
                 {t('alertsDescription')}
               </p>
             )}
+            <p className="text-sm leading-6 text-muted-foreground">
+              {t('alertsAllowanceDescription')}
+            </p>
             {value.configured && (
               <p className="text-sm text-muted-foreground">
                 {value.destination}

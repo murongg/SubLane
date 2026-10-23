@@ -158,7 +158,7 @@ func (q *Queries) ListAlertSignals(ctx context.Context, arg ListAlertSignalsPara
 }
 
 const listAlertStates = `-- name: ListAlertStates :many
-SELECT tenant_id, kind, subject, active, delivered_active, event_id, changed_at, attempts, retry_at, delivered_at, delivery_failed FROM alert_states WHERE tenant_id=?1 ORDER BY retry_at,changed_at,kind,subject
+SELECT tenant_id, kind, subject, active, delivered_active, event_id, changed_at, attempts, retry_at, delivered_at, delivery_failed, cycle FROM alert_states WHERE tenant_id=?1 ORDER BY retry_at,changed_at,kind,subject
 `
 
 func (q *Queries) ListAlertStates(ctx context.Context, tenantID int64) ([]AlertState, error) {
@@ -182,6 +182,7 @@ func (q *Queries) ListAlertStates(ctx context.Context, tenantID int64) ([]AlertS
 			&i.RetryAt,
 			&i.DeliveredAt,
 			&i.DeliveryFailed,
+			&i.Cycle,
 		); err != nil {
 			return nil, err
 		}
@@ -214,11 +215,11 @@ func (q *Queries) SaveAlertConfig(ctx context.Context, arg SaveAlertConfigParams
 }
 
 const saveAlertState = `-- name: SaveAlertState :exec
-INSERT INTO alert_states(tenant_id,kind,subject,active,delivered_active,event_id,changed_at,attempts,retry_at,delivered_at,delivery_failed)
-VALUES(?,?,?,?,?,?,?,?,?,?,?)
+INSERT INTO alert_states(tenant_id,kind,subject,active,delivered_active,event_id,changed_at,attempts,retry_at,delivered_at,delivery_failed,cycle)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(tenant_id,kind,subject) DO UPDATE SET active=excluded.active,delivered_active=excluded.delivered_active,
 event_id=excluded.event_id,changed_at=excluded.changed_at,attempts=excluded.attempts,retry_at=excluded.retry_at,
-delivered_at=excluded.delivered_at,delivery_failed=excluded.delivery_failed
+delivered_at=excluded.delivered_at,delivery_failed=excluded.delivery_failed,cycle=excluded.cycle
 `
 
 type SaveAlertStateParams struct {
@@ -233,6 +234,7 @@ type SaveAlertStateParams struct {
 	RetryAt         int64
 	DeliveredAt     int64
 	DeliveryFailed  int64
+	Cycle           string
 }
 
 func (q *Queries) SaveAlertState(ctx context.Context, arg SaveAlertStateParams) error {
@@ -248,6 +250,7 @@ func (q *Queries) SaveAlertState(ctx context.Context, arg SaveAlertStateParams) 
 		arg.RetryAt,
 		arg.DeliveredAt,
 		arg.DeliveryFailed,
+		arg.Cycle,
 	)
 	return err
 }

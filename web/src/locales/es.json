@@ -85,6 +85,8 @@
   "alertsQuotaHint": "Ingrese 1–99; déjelo en blanco para desactivarlo. Sólo se utilizan observaciones de cuotas nuevas y relevantes para el modelo. Los datos desconocidos no prueban la recuperación.",
   "alertModelUnavailable": "Modelo de grupo no disponible",
   "alertQuotaLow": "Se alcanzó el umbral de cuota de la cuenta",
+  "alertAllowanceLow": "Umbral de asignación alcanzado",
+  "alertsAllowanceDescription": "Los webhooks activos también avisan al alcanzar el 80 % y el 95 % del uso liquidado, una vez por umbral y periodo.",
   "auditSettingsTest": "Solicitó una prueba de webhook",
   "modelPrices": "Precios de modelos",
   "pricingDescription": "Precios de referencia actuales utilizados para estimaciones de costos de solicitudes y revisiones de nuevas asignaciones. Estos no son cargos de suscripción. Las revisiones de asignaciones existentes utilizan sus precios guardados. Un precio listado no garantiza el acceso al modelo; Consulta el catálogo de modelos de tu llave.",

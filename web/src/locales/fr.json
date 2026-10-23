@@ -85,6 +85,8 @@
   "alertsQuotaHint": "Entrez 1–99; laissez-le en blanc pour désactiver. Seules les observations de quotas nouvelles et pertinentes pour le modèle sont utilisées.",
   "alertModelUnavailable": "Modèle de groupe non disponible",
   "alertQuotaLow": "Seuil de quota de compte atteint",
+  "alertAllowanceLow": "Seuil du quota membre atteint",
+  "alertsAllowanceDescription": "Les webhooks actifs signalent aussi 80 % et 95 % du quota membre comptabilisé, une fois par seuil et par période.",
   "auditSettingsTest": "Demande de test de webhook",
   "modelPrices": "Tarifs des modèles",
   "pricingDescription": "Les prix de référence actuels utilisés pour les estimations des coûts de la demande et les nouvelles révisions de l'allocation. Ce ne sont pas des frais d'abonnement. Les révisions de l'allocation existantes utilisent leurs prix économisés.",

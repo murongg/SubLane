@@ -20,6 +20,7 @@ const alertSchema = z.object({
           'request_failures',
           'model_unavailable',
           'quota_low',
+          'allowance_low',
         ]),
         subject: z.string().max(160),
         since: z.number().int(),
@@ -68,4 +69,5 @@ export const alertNames = {
   request_failures: 'alertRequestFailures',
   model_unavailable: 'alertModelUnavailable',
   quota_low: 'alertQuotaLow',
+  allowance_low: 'alertAllowanceLow',
 } as const
