@@ -1,8 +1,10 @@
 package server
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -40,6 +42,56 @@ func TestRoutesAndAssetBoundary(t *testing.T) {
 			}
 			if w.Header().Get("X-Content-Type-Options") != "nosniff" {
 				t.Fatal("missing content type protection")
+			}
+		})
+	}
+}
+
+func TestStaticCompressionPreservesNegotiationAndRouteBoundaries(t *testing.T) {
+	bundle := strings.Repeat("/* synthetic application bundle */\n", 128)
+	h := New(Options{Assets: fstest.MapFS{"assets/app.js": {Data: []byte(bundle)}}, Ping: func(context.Context) error { return nil }})
+	for _, tc := range []struct {
+		name, accept, path, byteRange string
+		compressed                    bool
+	}{
+		{name: "gzip", accept: "gzip", path: "/assets/app.js", compressed: true},
+		{name: "weighted gzip", accept: "br, gzip;q=0.5", path: "/assets/app.js", compressed: true},
+		{name: "wildcard", accept: "*;q=0.5", path: "/assets/app.js", compressed: true},
+		{name: "identity", path: "/assets/app.js"},
+		{name: "disabled gzip", accept: "gzip;q=0", path: "/assets/app.js"},
+		{name: "wildcard cannot override denial", accept: "*;q=1, gzip;q=0", path: "/assets/app.js"},
+		{name: "invalid quality", accept: "gzip;q=invalid", path: "/assets/app.js"},
+		{name: "unrelated encoding", accept: "synthetic-gzip", path: "/assets/app.js"},
+		{name: "byte range", accept: "gzip", path: "/assets/app.js", byteRange: "bytes=0-9"},
+		{name: "API boundary", accept: "gzip", path: "/healthz"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", tc.path, nil)
+			r.Header.Set("Accept-Encoding", tc.accept)
+			r.Header.Set("Range", tc.byteRange)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if got := w.Header().Get("Content-Encoding") == "gzip"; got != tc.compressed {
+				t.Fatalf("compressed=%v, want %v", got, tc.compressed)
+			}
+			if tc.compressed {
+				reader, err := gzip.NewReader(w.Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer reader.Close()
+				decoded, err := io.ReadAll(reader)
+				if err != nil || string(decoded) != bundle || !strings.Contains(w.Header().Get("Vary"), "Accept-Encoding") {
+					t.Fatal("compression changed the asset or lost cache negotiation", err)
+				}
+			} else if tc.path == "/assets/app.js" {
+				expected := bundle
+				if tc.byteRange != "" {
+					expected = bundle[:10]
+				}
+				if w.Body.String() != expected {
+					t.Fatal("identity/range response changed")
+				}
 			}
 		})
 	}

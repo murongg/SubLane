@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/netip"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -276,7 +277,7 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 }
 
 func assets(files fs.FS) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if files == nil {
 			writeJSON(w, 503, map[string]string{"error": "frontend_not_built", "message": "Use the Vite development server or make build."})
 			return
@@ -299,6 +300,46 @@ func assets(files fs.FS) http.Handler {
 		}
 		http.ServeFileFS(w, r, files, name)
 	})
+	compressed := middleware.Compress(5, "text/html", "text/css", "text/javascript", "application/javascript", "image/svg+xml")(handler)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Range offsets describe the identity representation; API/SSE routes never enter this handler.
+		if r.Header.Get("Range") == "" && acceptsGzip(r.Header.Get("Accept-Encoding")) {
+			request := r.Clone(r.Context())
+			request.Header.Set("Accept-Encoding", "gzip")
+			compressed.ServeHTTP(w, request)
+			return
+		}
+		w.Header().Add("Vary", "Accept-Encoding")
+		handler.ServeHTTP(w, r)
+	})
+}
+
+func acceptsGzip(header string) bool {
+	wildcard := false
+	// chi's compressor matches encoding substrings and ignores q=0, so negotiate before invoking it.
+	for _, entry := range strings.Split(strings.ToLower(header), ",") {
+		coding, parameters, _ := strings.Cut(strings.TrimSpace(entry), ";")
+		if coding != "gzip" && coding != "*" {
+			continue
+		}
+		quality := 1.0
+		for _, parameter := range strings.Split(parameters, ";") {
+			name, value, _ := strings.Cut(strings.TrimSpace(parameter), "=")
+			if name == "q" {
+				parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+				if err != nil {
+					return false
+				}
+				quality = parsed
+			}
+		}
+		accepted := quality > 0 && quality <= 1
+		if coding == "gzip" {
+			return accepted
+		}
+		wildcard = accepted
+	}
+	return wildcard
 }
 
 func accountSummary(ctx context.Context, service *accounts.Service) (map[string]any, error) {
