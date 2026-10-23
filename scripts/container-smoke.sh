@@ -4,11 +4,25 @@ image=${1:?Usage: scripts/container-smoke.sh IMAGE EXPECTED_VERSION}
 version=${2:?Expected version is required}
 name="sublane-smoke-${RANDOM}-$$"
 volume="${name}-data"
+migration_dir=''
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+migration_compose() {
+  docker compose --project-directory "$migration_dir" --env-file "$migration_dir/.env" \
+    -f "$migration_dir/docker.compose.yaml" "$@"
+}
+migration_root() {
+  if ((EUID == 0)); then "$@"; else sudo "$@"; fi
+}
 cleanup() {
   status=$?
   if [[ $status -ne 0 ]]; then docker logs "$name" >&2 || true; fi
   docker rm --force --volumes "$name" >/dev/null 2>&1 || true
   docker volume rm "$volume" >/dev/null 2>&1 || true
+  if [[ -n $migration_dir ]]; then
+    if [[ $status -ne 0 ]]; then migration_compose logs --tail 100 >&2 || true; fi
+    migration_compose down --volumes >/dev/null 2>&1 || true
+    migration_root rm -rf -- "$migration_dir"
+  fi
   exit "$status"
 }
 trap cleanup EXIT
@@ -54,3 +68,50 @@ wait_healthy
 read_state | jq -e '.initialized == true' >/dev/null
 docker exec "$name" test -f /data/restored/credentials.key
 printf 'Container smoke passed: %s (%s)\n' "$image" "$version"
+
+# This separate synthetic Compose project exercises real UID ownership, file binds and recovery.
+if [[ $(uname -s) != Linux ]]; then
+  printf 'Compose key migration smoke requires a Linux Docker host.\n'
+  exit 0
+fi
+migration_dir=$(mktemp -d)
+printf 'COMPOSE_PROJECT_NAME=%s-key-migration\nSUBLANE_IMAGE=%s\n' "$name" "$image" > "$migration_dir/.env"
+cat > "$migration_dir/docker.compose.yaml" <<'COMPOSE'
+services:
+  sublane:
+    image: ${SUBLANE_IMAGE}
+    environment:
+      SUBLANE_DATA_DIR: /data
+    volumes:
+      - data:/data
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      interval: 1s
+      start_period: 10s
+volumes:
+  data:
+COMPOSE
+migration_compose up --detach --wait --wait-timeout 90 >/dev/null
+migration_compose exec -T sublane wget -q -T 5 -O - \
+  --header='Content-Type: application/json' --header='Origin: http://127.0.0.1:8080' \
+  --post-data='{"username":"migration-owner","password":"synthetic-password","workspace_name":"Synthetic migration"}' \
+  http://127.0.0.1:8080/api/auth/setup | jq -e '.initialized == true' >/dev/null
+original_key=$(migration_compose exec -T sublane sha256sum /data/credentials.key)
+migration_root bash "$script_dir/separate-key.sh" --dir "$migration_dir" --key-dir "$migration_dir/keys"
+migration_compose exec -T sublane test ! -e /data/credentials.key
+separated_key=$(migration_compose exec -T sublane sha256sum /run/sublane-keys/credentials.key)
+[[ ${original_key%% *} == "${separated_key%% *}" ]]
+[[ $(migration_root stat -c %u "$migration_dir/keys") == 0 ]]
+[[ $(migration_root stat -c %a "$migration_dir/keys") == 700 ]]
+[[ $(migration_root stat -c %a "$migration_dir/keys/credentials.key") == 600 ]]
+migration_root bash "$script_dir/separate-key.sh" --dir "$migration_dir" --rollback
+restored_key=$(migration_compose exec -T sublane sha256sum /data/credentials.key)
+[[ ${original_key%% *} == "${restored_key%% *}" ]]
+migration_compose exec -T sublane wget -q -T 2 -O - http://127.0.0.1:8080/api/auth/state \
+  | jq -e '.initialized == true' >/dev/null
+printf 'Compose key migration and rollback smoke passed: %s\n' "$image"

@@ -43,10 +43,12 @@ jobs:
       - run: make check
         env:
           SUBLANE_TEST_CHANGELOG: "1"
+      - name: Verify key migration with encrypted credentials
+        run: SUBLANE_TEST_MIGRATION_BINARY="$PWD/bin/sublane" node --test --test-name-pattern='real CLI' scripts/separate-key.test.mjs
       - name: Validate workflow and shell scripts
         run: |
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-          shellcheck scripts/container-smoke.sh scripts/package.sh scripts/install.sh
+          shellcheck scripts/*.sh
       - name: Validate Compose configurations
         run: |
           docker compose -f docker.compose.yaml config --quiet
