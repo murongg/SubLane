@@ -305,7 +305,34 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 	// Isolate rotation across preference tiers so traffic using another protocol cannot starve this pool.
 	cursor := fmt.Sprintf("%d:%s:%s:%s:%d", groupID, scope, policy.Routing.Preference, preferred, bestRank)
 	id := candidates[s.next[cursor]%len(candidates)]
-	s.next[cursor] = (s.next[cursor] + 1) % len(candidates)
+	period := len(candidates)
+	if s.policy.QuotaWeighted && len(candidates) > 1 {
+		weights := make([]int, len(candidates))
+		total := 0
+		for i, candidate := range candidates {
+			row := snapshots[candidate]
+			decision := s.snapshotQuota(row.Provider, model, row.UsageSnapshot, row.UsageUpdatedAt)
+			// Percentages across providers are incomparable; partial observations keep equal rotation.
+			if row.Provider != snapshots[candidates[0]].Provider || decision.Weight == 0 {
+				total = 0
+				break
+			}
+			weights[i] = decision.Weight
+			total += decision.Weight
+		}
+		if total > 0 {
+			period = total
+			ticket := s.next[cursor] % total
+			for i, weight := range weights {
+				if ticket < weight {
+					id = candidates[i]
+					break
+				}
+				ticket -= weight
+			}
+		}
+	}
+	s.next[cursor] = (s.next[cursor] + 1) % period
 	if session != "" {
 		if replacement != nil && replacement.Provider == scope {
 			err = q.ReplaceAccountAffinity(ctx, db.ReplaceAccountAffinityParams{UserID: userID, GroupID: groupID, SessionHash: digest[:], Provider: scope, AccountID: id, Model: bindingModel, ExpiresAt: expires})

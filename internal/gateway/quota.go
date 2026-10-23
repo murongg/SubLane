@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
@@ -22,10 +23,12 @@ func (e *QuotaError) Unwrap() error { return ErrQuotaExhausted }
 type quotaDecision struct {
 	State   string
 	RetryAt int64
+	Weight  int
 }
 
 func quotaStatus(value upstream.Usage, now time.Time) quotaDecision {
 	result := quotaDecision{State: "unknown"}
+	mainLimits := 0
 	if value.UpdatedAt <= 0 {
 		return result
 	}
@@ -40,6 +43,7 @@ func quotaStatus(value upstream.Usage, now time.Time) quotaDecision {
 		if limit.Name != "" {
 			continue
 		}
+		mainLimits++
 		blocked := (limit.Allowed != nil && !*limit.Allowed) || (limit.LimitReached != nil && *limit.LimitReached)
 		known := (limit.Allowed != nil && *limit.Allowed) || (limit.LimitReached != nil && !*limit.LimitReached)
 		for _, window := range limit.Windows {
@@ -56,7 +60,22 @@ func quotaStatus(value upstream.Usage, now time.Time) quotaDecision {
 		}
 		if known {
 			result.State = "available"
+			remaining := 100.0
+			for _, window := range limit.Windows {
+				if window.UsedPercent == nil || math.IsNaN(*window.UsedPercent) || math.IsInf(*window.UsedPercent, 0) || *window.UsedPercent < 0 || *window.UsedPercent >= 100 {
+					remaining = 0
+					break
+				}
+				remaining = min(remaining, 100-*window.UsedPercent)
+			}
+			if len(limit.Windows) > 0 {
+				result.Weight = int(math.Ceil(remaining))
+			}
 		}
+	}
+	// Duplicate unnamed limits cannot establish one comparable remaining percentage.
+	if mainLimits != 1 {
+		result.Weight = 0
 	}
 	return result
 }
