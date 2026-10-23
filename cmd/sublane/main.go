@@ -52,7 +52,7 @@ func run() error {
 	if len(os.Args) > 1 && (os.Args[1] == "backup" || os.Args[1] == "restore") {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		return runMaintenance(ctx, os.Args[1:], os.Getenv("SUBLANE_DATA_DIR"), os.Stdout)
+		return runMaintenance(ctx, os.Args[1:], os.Getenv("SUBLANE_DATA_DIR"), os.Getenv("SUBLANE_CREDENTIALS_KEY_FILE"), os.Stdin, os.Stdout)
 	}
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
@@ -90,7 +90,7 @@ func run() error {
 		return err
 	}
 	defer db.Close()
-	cipher, err := openVault(ctx, db, cfg.DataDir)
+	cipher, err := openVault(ctx, db, cfg.DataDir, cfg.CredentialsKeyFile)
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func run() error {
 	registry := &tenantRegistry{ctx: ctx, db: db, vault: cipher, auth: authentication,
 		alerts:  notifications,
 		tenants: tenancy, provider: provider, pricing: priceCatalog, versions: codexVersions, grokVersions: grokVersions, claudeVersions: claudeVersions, timeZone: timeZone,
-		assets: web.Assets(), dataDir: cfg.DataDir, publicURL: cfg.PublicURL, trustedProxies: cfg.TrustedProxies,
+		assets: web.Assets(), dataDir: cfg.DataDir, keyFile: cfg.CredentialsKeyFile, publicURL: cfg.PublicURL, trustedProxies: cfg.TrustedProxies,
 		version: version, started: time.Now(), gatewayPolicy: cfg.Gateway}
 	defer registry.Close()
 	registry.Start()

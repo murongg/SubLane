@@ -36,13 +36,13 @@ func TestBackupVerifiesContentRules(t *testing.T) {
 	if _, err = content.New(conn, v, 1).Update(ctx, content.Input{Mode: "block", Rules: []content.RuleInput{{Name: "Synthetic", Kind: "text", Pattern: &pattern, Enabled: true}}}); err != nil {
 		t.Fatal(err)
 	}
-	if err = verifyCredentials(ctx, conn, dir); err != nil {
+	if err = verifyCredentials(ctx, conn, filepath.Join(dir, keyName)); err != nil {
 		t.Fatal(err)
 	}
 	if err = os.WriteFile(path, make([]byte, 32), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err = verifyCredentials(ctx, conn, dir); err == nil {
+	if err = verifyCredentials(ctx, conn, filepath.Join(dir, keyName)); err == nil {
 		t.Fatal("wrong content encryption key accepted")
 	}
 }

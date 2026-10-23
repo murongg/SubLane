@@ -39,13 +39,13 @@ func TestBackupVerifiesWebhookOnlyCredentials(t *testing.T) {
 	if _, err := alerts.New(conn, v, nil).Update(ctx, 1, alerts.Input{URL: "https://hooks.example.test/events"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyCredentials(ctx, conn, dir); err != nil {
+	if err := verifyCredentials(ctx, conn, filepath.Join(dir, keyName)); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, make([]byte, 32), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyCredentials(ctx, conn, dir); err == nil {
+	if err := verifyCredentials(ctx, conn, filepath.Join(dir, keyName)); err == nil {
 		t.Fatal("incorrect webhook key accepted")
 	}
 }
@@ -90,7 +90,7 @@ func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := filepath.Join(t.TempDir(), "test.sublane-backup.tar.gz")
-	info, err := Create(ctx, source, output, "synthetic-version")
+	info, err := Create(ctx, source, output, "synthetic-version", Options{Password: syntheticBackupPassword})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
 	if info.SchemaVersion != schemaVersion || info.Version != "synthetic-version" {
 		t.Fatal(info)
 	}
-	verified, err := Verify(ctx, output)
+	verified, err := Verify(ctx, output, syntheticBackupPassword)
 	if err != nil || verified.DatabaseBytes <= 0 {
 		t.Fatal(verified, err)
 	}
@@ -109,7 +109,7 @@ func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := filepath.Join(t.TempDir(), "restored")
-	if _, err := Restore(ctx, output, target); err != nil {
+	if _, err := Restore(ctx, output, target, syntheticBackupPassword); err != nil {
 		t.Fatal(err)
 	}
 	restored, err := storage.Open(ctx, filepath.Join(target, databaseName))
@@ -151,13 +151,13 @@ func TestBackupRoundTripPreservesDataAndRevokesRestoredSessions(t *testing.T) {
 	if state, err := identity.State(ctx, session.Token); err != nil || state.User == nil {
 		t.Fatal("backup changed source sessions", err)
 	}
-	if _, err := Create(ctx, source, output, "synthetic-version"); err == nil {
+	if _, err := Create(ctx, source, output, "synthetic-version", Options{Password: syntheticBackupPassword}); err == nil {
 		t.Fatal("overwrote backup")
 	}
-	if _, err := Restore(ctx, output, target); err == nil {
+	if _, err := Restore(ctx, output, target, syntheticBackupPassword); err == nil {
 		t.Fatal("overwrote restored data")
 	}
-	if _, err := Restore(ctx, output, source); err == nil {
+	if _, err := Restore(ctx, output, source, syntheticBackupPassword); err == nil {
 		t.Fatal("overwrote live source")
 	}
 	for _, path := range []string{output, filepath.Join(target, databaseName), filepath.Join(target, keyName)} {
@@ -230,15 +230,15 @@ INSERT INTO schema_migrations(name) VALUES('004_proxy_checks.sql')`); err != nil
 	}
 	info := Info{CreatedAt: time.Now().UTC().Truncate(time.Second), Version: "synthetic-version", SchemaVersion: 6, DatabaseBytes: stat.Size()}
 	archive := filepath.Join(t.TempDir(), "former-proxy.sublane-backup.tar.gz")
-	if err := writeArchive(ctx, source, archive, info); err != nil {
+	if err := writeArchive(ctx, source, archive, info, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	verified, err := Verify(ctx, archive)
+	verified, err := Verify(ctx, archive, syntheticBackupPassword)
 	if err != nil || verified.SchemaVersion != 6 {
 		t.Fatalf("former archive verification: %+v %v", verified, err)
 	}
 	target := filepath.Join(t.TempDir(), "restored")
-	if _, err := Restore(ctx, archive, target); err != nil {
+	if _, err := Restore(ctx, archive, target, syntheticBackupPassword); err != nil {
 		t.Fatal(err)
 	}
 	restored, err := storage.Open(ctx, filepath.Join(target, databaseName))

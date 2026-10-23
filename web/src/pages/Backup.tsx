@@ -69,35 +69,54 @@ function BackupForm({
   const [verified, setVerified] = useState<BackupInfo | null>(null)
   const [restored, setRestored] = useState<RestoredBackup | null>(null)
   const [tooLarge, setTooLarge] = useState(false)
+  const [exportPassword, setExportPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [restorePassword, setRestorePassword] = useState('')
+  const exportLength = [...exportPassword].length
+  const validExportPassword =
+    exportLength >= 12 && exportLength <= 128 && exportPassword === confirmation
   const current = () => {
     const user = client.getQueryData<AuthState>(authKey)?.user
     return user?.id === userID && user.role === 'admin'
   }
   const download = useAdminMutation({
     userID,
-    mutationFn: (_input: void, signal) => exportBackup(signal),
+    mutationFn: (_input: void, signal) => {
+      const password = exportPassword
+      setExportPassword('')
+      setConfirmation('')
+      return exportBackup(password, signal)
+    },
     onSuccess: (response) =>
       downloadBackup(response, settings.max_upload_bytes, current),
   })
   const verify = useAdminMutation({
     userID,
-    mutationFn: verifyBackup,
+    mutationFn: (file: File, signal) =>
+      verifyBackup(file, restorePassword, signal),
     onSuccess: setVerified,
   })
   const restore = useAdminMutation({
     userID,
-    mutationFn: restoreBackup,
+    mutationFn: (file: File, signal) => {
+      const password = restorePassword
+      setRestorePassword('')
+      return restoreBackup(file, password, signal)
+    },
     onSuccess: async (value) => {
       setRestored(value)
       await client.invalidateQueries({ queryKey: ['backup-settings', userID] })
     },
-    onError: () =>
-      client.invalidateQueries({ queryKey: ['backup-settings', userID] }),
+    onError: () => {
+      setVerified(null)
+      return client.invalidateQueries({ queryKey: ['backup-settings', userID] })
+    },
   })
   const busy = download.isPending || verify.isPending || restore.isPending
   const changed = (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.files?.[0] ?? null
     setFile(next)
+    setRestorePassword('')
     setVerified(null)
     setTooLarge(Boolean(next && next.size > settings.max_upload_bytes))
     verify.reset()
@@ -114,17 +133,76 @@ function BackupForm({
   const error = download.error ?? verify.error ?? restore.error
   return (
     <div className="mt-8 space-y-8">
-      <section className="flex flex-wrap items-center justify-between gap-4">
+      <p className="text-sm leading-6 text-muted-foreground">
+        {t(settings.key_separated ? 'backupKeySeparated' : 'backupKeyLegacy')}
+      </p>
+      <section className="space-y-4">
         <div className="max-w-lg">
           <h3 className="text-sm font-medium">{t('backupExportTitle')}</h3>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {t('backupExportDescription')}
           </p>
         </div>
+        <div className="grid max-w-lg gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label
+              htmlFor="backup-export-password"
+              className="text-sm font-medium"
+            >
+              {t('backupExportPassword')}
+            </label>
+            <Input
+              id="backup-export-password"
+              type="password"
+              autoComplete="new-password"
+              maxLength={512}
+              disabled={busy}
+              value={exportPassword}
+              onChange={(event) => setExportPassword(event.target.value)}
+              aria-describedby="backup-password-hint"
+            />
+          </div>
+          <div className="space-y-2">
+            <label
+              htmlFor="backup-confirm-password"
+              className="text-sm font-medium"
+            >
+              {t('backupConfirmPassword')}
+            </label>
+            <Input
+              id="backup-confirm-password"
+              type="password"
+              autoComplete="new-password"
+              maxLength={512}
+              disabled={busy}
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              aria-invalid={
+                confirmation !== '' && confirmation !== exportPassword
+              }
+              aria-describedby={
+                confirmation !== '' && confirmation !== exportPassword
+                  ? 'backup-password-mismatch'
+                  : 'backup-password-hint'
+              }
+            />
+          </div>
+        </div>
+        <p
+          id="backup-password-hint"
+          className="max-w-lg text-xs leading-5 text-muted-foreground"
+        >
+          {t('backupPasswordHint')}
+        </p>
+        {confirmation !== '' && confirmation !== exportPassword && (
+          <p id="backup-password-mismatch" className="text-sm text-error">
+            {t('backupPasswordMismatch')}
+          </p>
+        )}
         <Button
           variant="outline"
           onClick={() => download.mutate()}
-          disabled={busy}
+          disabled={busy || !validExportPassword}
         >
           {download.isPending ? (
             <LoaderCircle
@@ -151,7 +229,7 @@ function BackupForm({
           <Input
             id="backup-file"
             type="file"
-            accept=".gz,.tgz"
+            accept=".age,.gz,.tgz"
             disabled={busy}
             onChange={changed}
             aria-describedby="backup-file-limit"
@@ -164,6 +242,35 @@ function BackupForm({
             {t('backupFileLimit', {
               size: number.format(settings.max_upload_bytes / 1048576),
             })}
+          </p>
+        </div>
+        <div className="max-w-lg space-y-2">
+          <label
+            htmlFor="backup-restore-password"
+            className="text-sm font-medium"
+          >
+            {t('backupPassword')}
+          </label>
+          <Input
+            id="backup-restore-password"
+            type="password"
+            autoComplete="off"
+            maxLength={512}
+            value={restorePassword}
+            disabled={busy}
+            aria-describedby="backup-restore-password-hint"
+            onChange={(event) => {
+              setRestorePassword(event.target.value)
+              setVerified(null)
+              verify.reset()
+              restore.reset()
+            }}
+          />
+          <p
+            id="backup-restore-password-hint"
+            className="text-xs leading-5 text-muted-foreground"
+          >
+            {t('backupPasswordOptional')}
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -191,6 +298,7 @@ function BackupForm({
             disabled={
               !file ||
               !verified ||
+              (verified.encrypted && !restorePassword) ||
               busy ||
               settings.destination_exists ||
               restored !== null
@@ -210,7 +318,17 @@ function BackupForm({
         </div>
         {verified && (
           <div className="space-y-4 rounded-lg bg-muted/50 p-4">
-            <Status kind="success">{t('backupVerified')}</Status>
+            <div className="flex flex-wrap gap-2">
+              <Status kind="success">{t('backupVerified')}</Status>
+              <Status kind={verified.encrypted ? 'success' : 'warning'}>
+                {t(verified.encrypted ? 'backupEncrypted' : 'backupLegacy')}
+              </Status>
+            </div>
+            {!verified.encrypted && (
+              <p className="text-sm leading-6 text-warning">
+                {t('backupLegacyWarning')}
+              </p>
+            )}
             <dl className="grid gap-4 text-sm sm:grid-cols-3">
               <div>
                 <dt className="text-xs text-muted-foreground">
@@ -257,6 +375,7 @@ function BackupForm({
             <ol className="list-decimal space-y-1.5 pl-5 text-muted-foreground">
               <li>{t('backupRestartStop')}</li>
               <li>{t('backupRestartDirectory')}</li>
+              {settings.key_separated && <li>{t('backupRestartKey')}</li>}
               <li>{t('backupRestartStart')}</li>
             </ol>
             <p className="text-xs leading-5 text-muted-foreground">

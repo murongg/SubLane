@@ -2,6 +2,7 @@ package config
 
 import (
 	"net/netip"
+	"path/filepath"
 	"testing"
 )
 
@@ -116,5 +117,38 @@ func TestPublicOrigin(t *testing.T) {
 	})
 	if err != nil || cfg.PublicURL != "https://gateway.example.test" {
 		t.Fatalf("origin normalization: %+v %v", cfg, err)
+	}
+}
+
+func TestCredentialsKeyFileIsOptionalAndSeparated(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, "data")
+	outside := filepath.Join(root, "secrets", "credentials.key")
+	cfg, err := Load(func(key string) string {
+		switch key {
+		case "SUBLANE_DATA_DIR":
+			return directory
+		case "SUBLANE_CREDENTIALS_KEY_FILE":
+			return outside
+		}
+		return ""
+	})
+	if err != nil || cfg.CredentialsKeyFile != outside {
+		t.Fatalf("external key: %+v %v", cfg, err)
+	}
+	if _, err := Load(func(key string) string {
+		switch key {
+		case "SUBLANE_DATA_DIR":
+			return directory
+		case "SUBLANE_CREDENTIALS_KEY_FILE":
+			return filepath.Join(directory, "credentials.key")
+		}
+		return ""
+	}); err == nil {
+		t.Fatal("explicit key inside data directory was accepted")
+	}
+	defaults, err := Load(func(string) string { return "" })
+	if err != nil || defaults.CredentialsKeyFile != "" {
+		t.Fatalf("legacy default changed: %+v %v", defaults, err)
 	}
 }

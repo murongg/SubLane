@@ -35,6 +35,7 @@ type Info struct {
 	Version       string    `json:"version"`
 	SchemaVersion int       `json:"schema_version"`
 	DatabaseBytes int64     `json:"database_bytes"`
+	Encrypted     bool      `json:"encrypted"`
 }
 
 func vacant(path string) error {
@@ -55,8 +56,18 @@ func stageFor(path string) (string, error) {
 	return os.MkdirTemp(filepath.Dir(path), ".sublane-backup-")
 }
 
-func Create(ctx context.Context, dataDir, output, version string) (Info, error) {
-	info := Info{CreatedAt: time.Now().UTC().Truncate(time.Second), Version: version}
+func Create(ctx context.Context, dataDir, output, version string, options Options) (Info, error) {
+	if options.Password == "" {
+		return Info{}, ErrPasswordRequired
+	}
+	if !ValidPassword(options.Password) {
+		return Info{}, ErrPassword
+	}
+	keyFile, err := vault.KeyPath(dataDir, options.KeyFile)
+	if err != nil {
+		return Info{}, err
+	}
+	info := Info{CreatedAt: time.Now().UTC().Truncate(time.Second), Version: version, Encrypted: true}
 	ctx, cancel := context.WithTimeout(ctx, Timeout)
 	defer cancel()
 	stage, err := stageFor(output)
@@ -64,9 +75,6 @@ func Create(ctx context.Context, dataDir, output, version string) (Info, error) 
 		return info, err
 	}
 	defer os.RemoveAll(stage)
-	if err := copyKey(ctx, filepath.Join(dataDir, keyName), filepath.Join(stage, keyName)); err != nil {
-		return info, err
-	}
 	snapshot := filepath.Join(stage, databaseName)
 	if err := storage.Snapshot(ctx, filepath.Join(dataDir, databaseName), snapshot, MaxDatabaseBytes); err != nil {
 		return info, err
@@ -84,7 +92,7 @@ func Create(ctx context.Context, dataDir, output, version string) (Info, error) 
 		}
 	}
 	if err == nil {
-		err = verifyCredentials(ctx, connection, stage)
+		err = verifyCredentials(ctx, connection, keyFile)
 	}
 	closeErr := connection.Close()
 	if err == nil {
@@ -99,7 +107,7 @@ func Create(ctx context.Context, dataDir, output, version string) (Info, error) 
 	}
 	info.DatabaseBytes = stat.Size()
 	archive := filepath.Join(stage, "bundle.tar.gz")
-	if err := writeArchive(ctx, stage, archive, info); err != nil {
+	if err := writeArchive(ctx, stage, archive, info, keyFile, options.Password); err != nil {
 		return info, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -111,7 +119,7 @@ func Create(ctx context.Context, dataDir, output, version string) (Info, error) 
 	return info, nil
 }
 
-func Verify(ctx context.Context, input string) (Info, error) {
+func Verify(ctx context.Context, input, password string) (Info, error) {
 	ctx, cancel := context.WithTimeout(ctx, Timeout)
 	defer cancel()
 	stage, err := os.MkdirTemp("", ".sublane-backup-")
@@ -119,14 +127,14 @@ func Verify(ctx context.Context, input string) (Info, error) {
 		return Info{}, err
 	}
 	defer os.RemoveAll(stage)
-	info, connection, err := prepare(ctx, input, stage)
+	info, connection, err := prepare(ctx, input, stage, password)
 	if err != nil {
 		return info, err
 	}
 	return info, connection.Close()
 }
 
-func Restore(ctx context.Context, input, target string) (Info, error) {
+func Restore(ctx context.Context, input, target, password string) (Info, error) {
 	ctx, cancel := context.WithTimeout(ctx, Timeout)
 	defer cancel()
 	stage, err := stageFor(target)
@@ -134,7 +142,7 @@ func Restore(ctx context.Context, input, target string) (Info, error) {
 		return Info{}, err
 	}
 	defer os.RemoveAll(stage)
-	info, connection, err := prepare(ctx, input, stage)
+	info, connection, err := prepare(ctx, input, stage, password)
 	if err != nil {
 		return info, err
 	}
@@ -173,8 +181,8 @@ func Restore(ctx context.Context, input, target string) (Info, error) {
 	return info, nil
 }
 
-func prepare(ctx context.Context, input, stage string) (Info, *sql.DB, error) {
-	info, err := extractArchive(ctx, input, stage)
+func prepare(ctx context.Context, input, stage, password string) (Info, *sql.DB, error) {
+	info, err := extractArchive(ctx, input, stage, password)
 	if err != nil {
 		return info, nil, err
 	}
@@ -203,7 +211,7 @@ func prepare(ctx context.Context, input, stage string) (Info, *sql.DB, error) {
 		_, err = storage.ValidateSnapshot(ctx, connection)
 	}
 	if err == nil {
-		err = verifyCredentials(ctx, connection, stage)
+		err = verifyCredentials(ctx, connection, filepath.Join(stage, keyName))
 	}
 	if err != nil {
 		connection.Close()
@@ -211,7 +219,7 @@ func prepare(ctx context.Context, input, stage string) (Info, *sql.DB, error) {
 	}
 	return info, connection, nil
 }
-func verifyCredentials(ctx context.Context, connection *sql.DB, directory string) error {
+func verifyCredentials(ctx context.Context, connection *sql.DB, keyFile string) error {
 	oversized, err := db.New(connection).CountOversizedBackupRecords(ctx)
 	if err != nil {
 		return err
@@ -220,7 +228,7 @@ func verifyCredentials(ctx context.Context, connection *sql.DB, directory string
 		return fmt.Errorf("%w: credential records exceed backup bounds", ErrInvalid)
 	}
 
-	cipher, err := vault.Open(filepath.Join(directory, keyName), false)
+	cipher, err := vault.Open(keyFile, false)
 	if err != nil {
 		return errors.New("backup credential key is missing or invalid")
 	}

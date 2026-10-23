@@ -40,7 +40,7 @@ func TestContentOnlyInstanceRequiresOriginalVaultKey(t *testing.T) {
 	if err = os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = openVault(ctx, conn, dir); !errors.Is(err, os.ErrNotExist) {
+	if _, err = openVault(ctx, conn, dir, ""); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("missing content key recreated", err)
 	}
 }

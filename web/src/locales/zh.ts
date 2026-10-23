@@ -490,10 +490,26 @@ export const zh: Record<keyof typeof en, string> = {
 
   auditSettingsUpdate: '更新实例设置',
   auditSettings: '实例设置',
+  backupExportPassword: '导出密码',
+  backupConfirmPassword: '确认备份密码',
+  backupPassword: '备份密码',
+  backupPasswordHint: '使用 12–128 个字符。密码应单独保存，遗失后无法重置。',
+  backupPasswordMismatch: '两次输入的备份密码不一致。',
+  backupPasswordOptional: '加密备份必须填写密码；旧版未加密归档可留空。',
+  backupPasswordRequired: '请输入备份密码。',
+  backupDecryptFailed: '密码不正确，或加密备份已损坏、不受支持。',
+  backupEncrypted: '已使用密码加密',
+  backupLegacy: '旧版未加密备份',
+  backupLegacyWarning:
+    '此旧版归档包含可直接读取的凭据密钥。请保存在私有位置，恢复后重新导出加密备份。',
+  backupRestartKey:
+    '将恢复的 credentials.key 移至数据目录外的新私有路径，并在重启前更新 SUBLANE_CREDENTIALS_KEY_FILE。',
+  backupKeySeparated: '凭据密钥已与数据目录分开存放。',
+  backupKeyLegacy: '凭据密钥仍使用原有的数据目录位置，可在服务器配置独立存储。',
   backupTitle: '备份与恢复',
   backupExportTitle: '创建备份',
   backupExportDescription:
-    '服务运行时也可导出一致的数据库快照和加密密钥。备份包含凭据，请妥善保存在私有位置。',
+    '在实例运行时导出使用密码加密的数据库快照及凭据密钥。请将密码与备份分开保存。',
   backupDownload: '下载备份',
   backupExporting: '正在创建备份…',
   backupRestoreTitle: '从备份恢复',
@@ -501,7 +517,7 @@ export const zh: Record<keyof typeof en, string> = {
     '校验备份后生成新的数据目录，重启 SubLane 并切换到该目录后生效。',
   backupFile: '备份文件',
   backupFileLimit:
-    '选择 SubLane 的 .tar.gz 备份，最大 {{size}} MiB。更大的文件可使用命令行处理。',
+    '支持 SubLane 加密 .age 或旧版 .tar.gz 归档，最大 {{size}} MiB；更大文件请使用 CLI。',
   backupVerify: '校验备份',
   backupVerifying: '正在校验…',
   backupRestore: '准备恢复',

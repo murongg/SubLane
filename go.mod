@@ -3,6 +3,7 @@ module github.com/murongg/SubLane
 go 1.26.0
 
 require (
+	filippo.io/age v1.3.2
 	github.com/fxamacker/cbor/v2 v2.9.4
 	github.com/gin-gonic/gin v1.10.1
 	github.com/go-chi/chi/v5 v5.3.2
@@ -18,6 +19,7 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect

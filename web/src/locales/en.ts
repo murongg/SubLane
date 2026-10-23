@@ -533,10 +533,31 @@ export const en = {
 
   auditSettingsUpdate: 'Updated instance settings',
   auditSettings: 'Instance settings',
+  backupExportPassword: 'Export password',
+  backupConfirmPassword: 'Confirm backup password',
+  backupPassword: 'Backup password',
+  backupPasswordHint:
+    'Use 12–128 characters. Keep the password separately; it cannot be reset if lost.',
+  backupPasswordMismatch: 'The backup passwords do not match.',
+  backupPasswordOptional:
+    'Required for encrypted backups. Leave blank for historical unencrypted archives.',
+  backupPasswordRequired: 'Enter the backup password.',
+  backupDecryptFailed:
+    'The password is incorrect, or the encrypted backup is damaged or unsupported.',
+  backupEncrypted: 'Password-encrypted',
+  backupLegacy: 'Unencrypted legacy backup',
+  backupLegacyWarning:
+    'This legacy archive contains readable credential keys. Keep it private and create a new encrypted backup after restoring.',
+  backupRestartKey:
+    'Move the recovered credentials.key to a new private path outside the data directory and update SUBLANE_CREDENTIALS_KEY_FILE before restarting.',
+  backupKeySeparated:
+    'The credential key is stored separately from the data directory.',
+  backupKeyLegacy:
+    'The credential key uses the legacy data-directory location. Independent storage can be configured on the server.',
   backupTitle: 'Backup and restore',
   backupExportTitle: 'Create a backup',
   backupExportDescription:
-    'Export a consistent database snapshot and its encryption key while SubLane is running. The archive contains credentials; keep it private.',
+    'Export a password-encrypted database snapshot and its credential key while SubLane is running. Keep the password separately from the backup.',
   backupDownload: 'Download backup',
   backupExporting: 'Creating backup…',
   backupRestoreTitle: 'Restore from a backup',
@@ -544,7 +565,7 @@ export const en = {
     'Verify your archive, then prepare a new data directory. Restart SubLane with that directory to activate the restored data.',
   backupFile: 'Backup file',
   backupFileLimit:
-    'SubLane .tar.gz archive, up to {{size}} MiB. Use the CLI for larger archives.',
+    'SubLane encrypted .age or legacy .tar.gz archive, up to {{size}} MiB. Use the CLI for larger files.',
   backupVerify: 'Verify backup',
   backupVerifying: 'Verifying…',
   backupRestore: 'Prepare restore',

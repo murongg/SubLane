@@ -43,18 +43,18 @@ func TestBackupVerifiesTOTPSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyCredentials(ctx, conn, dir); err != nil {
+	if err := verifyCredentials(ctx, conn, filepath.Join(dir, keyName)); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.BeginPasskeyLogin(ctx, "https://example.test"); err != nil {
 		t.Fatal(err)
 	}
 	archive := filepath.Join(t.TempDir(), "synthetic.tar.gz")
-	if _, err := Create(ctx, dir, archive, "synthetic-version"); err != nil {
+	if _, err := Create(ctx, dir, archive, "synthetic-version", Options{Password: syntheticBackupPassword}); err != nil {
 		t.Fatal(err)
 	}
 	target := filepath.Join(t.TempDir(), "restored")
-	if _, err := Restore(ctx, archive, target); err != nil {
+	if _, err := Restore(ctx, archive, target, syntheticBackupPassword); err != nil {
 		t.Fatal(err)
 	}
 	restored, err := storage.Open(ctx, filepath.Join(target, databaseName))
@@ -80,7 +80,7 @@ func TestBackupVerifiesTOTPSecrets(t *testing.T) {
 	if err := os.WriteFile(path, make([]byte, 32), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyCredentials(ctx, conn, dir); err == nil {
+	if err := verifyCredentials(ctx, conn, filepath.Join(dir, keyName)); err == nil {
 		t.Fatal("backup accepted invalid TOTP encryption key")
 	}
 }

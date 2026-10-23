@@ -30,33 +30,34 @@ import (
 )
 
 type Options struct {
-	Demo              *DemoCredentials
-	DataDir           string
-	Assets            fs.FS
-	Version           string
-	StartedAt         time.Time
-	Ping              func(context.Context) error
-	Audit             *audit.Service
-	Alerts            *alerts.Service
-	Content           *content.Service
-	Auth              *auth.Service
-	Keys              *apikey.Service
-	Accounts          *accounts.Service
-	OAuth             *oauth.Flow
-	Gateway           *gateway.Service
-	Pricing           *pricing.Service
-	Groups            *groups.Service
-	Tenants           *tenants.Service
-	TenantID          int64
-	PublicURL         string
-	TrustedProxies    []netip.Prefix
-	LoginLimiter      *LoginLimiter
-	EnrollmentLimiter *LoginLimiter
-	CodexVersions     *versions.Service
-	GrokVersions      *versions.Service
-	ClaudeVersions    *versions.Service
-	TimeZone          *timezone.Service
-	ProxyCheck        func(context.Context, string) (upstream.ProxyCheck, error)
+	Demo               *DemoCredentials
+	DataDir            string
+	CredentialsKeyFile string
+	Assets             fs.FS
+	Version            string
+	StartedAt          time.Time
+	Ping               func(context.Context) error
+	Audit              *audit.Service
+	Alerts             *alerts.Service
+	Content            *content.Service
+	Auth               *auth.Service
+	Keys               *apikey.Service
+	Accounts           *accounts.Service
+	OAuth              *oauth.Flow
+	Gateway            *gateway.Service
+	Pricing            *pricing.Service
+	Groups             *groups.Service
+	Tenants            *tenants.Service
+	TenantID           int64
+	PublicURL          string
+	TrustedProxies     []netip.Prefix
+	LoginLimiter       *LoginLimiter
+	EnrollmentLimiter  *LoginLimiter
+	CodexVersions      *versions.Service
+	GrokVersions       *versions.Service
+	ClaudeVersions     *versions.Service
+	TimeZone           *timezone.Service
+	ProxyCheck         func(context.Context, string) (upstream.ProxyCheck, error)
 }
 
 func New(o Options) http.Handler {
@@ -222,7 +223,7 @@ func New(o Options) http.Handler {
 		management.Get("/audit", (&auditHTTP{service: o.Audit}).list)
 		management.Route("/settings/backup", func(settings chi.Router) {
 			settings.Use(requirePlatformAdmin(tenantID))
-			(&backupHTTP{directory: o.DataDir, version: o.Version, auth: o.Auth, audit: o.Audit, slots: make(chan struct{}, 1)}).register(settings)
+			(&backupHTTP{directory: o.DataDir, keyFile: o.CredentialsKeyFile, version: o.Version, auth: o.Auth, audit: o.Audit, slots: make(chan struct{}, 1)}).register(settings)
 		})
 		management.Route("/settings/codex", func(settings chi.Router) {
 			settings.Use(requirePlatformAdmin(tenantID))

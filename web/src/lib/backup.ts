@@ -8,12 +8,14 @@ const settingsSchema = z.object({
   max_upload_bytes: z.number().int().positive(),
   restore_directory: z.string().min(1),
   destination_exists: z.boolean(),
+  key_separated: z.boolean().default(false),
 })
 const infoSchema = z.object({
   created_at: z.string().datetime({ offset: true }),
   version: z.string().min(1).max(128),
   schema_version: z.number().int().positive(),
   database_bytes: z.number().int().positive(),
+  encrypted: z.boolean().default(false),
 })
 export type BackupSettings = z.infer<typeof settingsSchema>
 export type BackupInfo = z.infer<typeof infoSchema>
@@ -30,36 +32,48 @@ export function backupOptions(client: QueryClient, userID: number) {
     staleTime: 0,
   })
 }
-export function verifyBackup(file: File, signal: AbortSignal) {
+export function verifyBackup(
+  file: File,
+  password: string,
+  signal: AbortSignal,
+) {
   return request('/api/settings/backup/verify', infoSchema, {
     method: 'POST',
-    body: file,
+    body: backupUpload(file, password),
     signal,
-    headers: { 'Content-Type': 'application/gzip' },
   })
 }
-export function restoreBackup(file: File, signal: AbortSignal) {
+export function restoreBackup(
+  file: File,
+  password: string,
+  signal: AbortSignal,
+) {
   return request(
     '/api/settings/backup/restore',
     infoSchema.extend({ restore_directory: z.string().min(1) }),
     {
       method: 'POST',
-      body: file,
+      body: backupUpload(file, password),
       signal,
-      headers: { 'Content-Type': 'application/gzip' },
     },
   )
 }
-export async function exportBackup(signal: AbortSignal) {
+function backupUpload(file: File, password: string) {
+  const body = new FormData()
+  body.append('password', password)
+  body.append('file', file)
+  return body
+}
+export async function exportBackup(password: string, signal: AbortSignal) {
   const response = await fetch('/api/settings/backup/export', {
     method: 'POST',
-    body: '{}',
+    body: JSON.stringify({ password }),
     signal,
     credentials: 'same-origin',
     cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'application/gzip',
+      Accept: 'application/octet-stream',
       'X-SubLane-Workspace': String(selectedWorkspace()),
     },
   })
@@ -76,7 +90,7 @@ export async function exportBackup(signal: AbortSignal) {
       response.status,
     )
   }
-  if (response.headers.get('Content-Type') !== 'application/gzip')
+  if (response.headers.get('Content-Type') !== 'application/octet-stream')
     throw new ApiError('invalid_response', response.status)
   return response
 }
@@ -93,8 +107,8 @@ export async function downloadBackup(
     response.headers
       .get('Content-Disposition')
       ?.match(
-        /filename="(sublane-\d{8}-\d{6}\.sublane-backup\.tar\.gz)"/,
-      )?.[1] ?? 'sublane.sublane-backup.tar.gz'
+        /filename="(sublane-\d{8}-\d{6}\.sublane-backup\.tar\.gz\.age)"/,
+      )?.[1] ?? 'sublane.sublane-backup.tar.gz.age'
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -108,6 +122,10 @@ export async function downloadBackup(
 export function backupErrorKey(error: Error) {
   if (error instanceof ApiError) {
     if (error.code === 'demo_read_only') return 'demoReadOnly'
+    if (error.code === 'backup_password_required')
+      return 'backupPasswordRequired'
+    if (error.code === 'backup_password_invalid') return 'backupPasswordHint'
+    if (error.code === 'backup_decryption_failed') return 'backupDecryptFailed'
     if (error.code === 'invalid_backup') return 'backupInvalid'
     if (error.code === 'backup_too_large') return 'backupTooLarge'
     if (error.code === 'backup_destination_exists')

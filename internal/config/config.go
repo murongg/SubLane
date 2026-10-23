@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/murongg/SubLane/internal/gateway"
+	"github.com/murongg/SubLane/internal/vault"
 )
 
 type Config struct {
 	Demo                   bool
 	Addr                   string
 	DataDir                string
+	CredentialsKeyFile     string
 	LogLevel               slog.Level
 	MaxRequestBody         int64
 	PublicURL              string
@@ -48,6 +50,14 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	if v := getenv("SUBLANE_DATA_DIR"); v != "" {
 		c.DataDir = v
+	}
+	if v := getenv("SUBLANE_CREDENTIALS_KEY_FILE"); v != "" {
+		if !c.Demo {
+			if _, err := vault.KeyPath(c.DataDir, v); err != nil {
+				return c, fmt.Errorf("SUBLANE_CREDENTIALS_KEY_FILE: %w", err)
+			}
+		}
+		c.CredentialsKeyFile = v
 	}
 	if v := getenv("SUBLANE_LOG_LEVEL"); v != "" {
 		if err := c.LogLevel.UnmarshalText([]byte(v)); err != nil {
