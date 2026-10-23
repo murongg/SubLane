@@ -52,7 +52,7 @@ func run() error {
 	if len(os.Args) > 1 && (os.Args[1] == "backup" || os.Args[1] == "restore") {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		return runMaintenance(ctx, os.Args[1:], os.Getenv("SUBLANE_DATA_DIR"), os.Stdout)
+		return runMaintenance(ctx, os.Args[1:], os.Getenv("SUBLANE_DATA_DIR"), os.Getenv("SUBLANE_CREDENTIALS_KEY_FILE"), os.Stdin, os.Stdout)
 	}
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
@@ -69,7 +69,7 @@ func run() error {
 		if err := recoverPassword(context.Background(), cfg.DataDir, os.Stdin); err != nil {
 			return err
 		}
-		fmt.Println("Administrator password reset. All administrator browser sessions were revoked; API keys are unchanged.")
+		fmt.Println("Administrator password reset. Two-factor authentication and passkeys were cleared; all administrator browser sessions were revoked. API keys are unchanged.")
 		return nil
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
@@ -90,13 +90,16 @@ func run() error {
 		return err
 	}
 	defer db.Close()
-	authentication, err := auth.New(db)
+	cipher, err := openVault(ctx, db, cfg.DataDir, cfg.CredentialsKeyFile)
 	if err != nil {
 		return err
 	}
-	cipher, err := openVault(ctx, db, cfg.DataDir)
+	authentication, err := auth.NewWithVault(db, cipher)
 	if err != nil {
 		return err
+	}
+	if err := auth.VerifyFactors(ctx, db, cipher); err != nil {
+		return fmt.Errorf("verify authentication factors: %w", err)
 	}
 	if err := content.New(db, cipher, 1).Verify(ctx); err != nil {
 		return fmt.Errorf("verify workspace content rules: %w", err)
@@ -166,7 +169,7 @@ func run() error {
 	registry := &tenantRegistry{ctx: ctx, db: db, vault: cipher, auth: authentication,
 		alerts:  notifications,
 		tenants: tenancy, provider: provider, pricing: priceCatalog, versions: codexVersions, grokVersions: grokVersions, claudeVersions: claudeVersions, timeZone: timeZone,
-		assets: web.Assets(), dataDir: cfg.DataDir, publicURL: cfg.PublicURL, trustedProxies: cfg.TrustedProxies,
+		assets: web.Assets(), dataDir: cfg.DataDir, keyFile: cfg.CredentialsKeyFile, publicURL: cfg.PublicURL, trustedProxies: cfg.TrustedProxies,
 		version: version, started: time.Now(), gatewayPolicy: cfg.Gateway}
 	defer registry.Close()
 	registry.Start()

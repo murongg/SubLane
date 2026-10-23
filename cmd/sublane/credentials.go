@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/vault"
 )
 
-func openVault(ctx context.Context, connection *sql.DB, directory string) (*vault.Vault, error) {
+func openVault(ctx context.Context, connection *sql.DB, directory, configured string) (*vault.Vault, error) {
+	path, err := vault.KeyPath(directory, configured)
+	if err != nil {
+		return nil, err
+	}
 	q := db.New(connection)
 	accounts, err := q.CountAllAccounts(ctx)
 	if err != nil {
@@ -27,6 +30,10 @@ func openVault(ctx context.Context, connection *sql.DB, directory string) (*vaul
 	if err != nil {
 		return nil, err
 	}
+	factors, err := q.CountTOTPSecrets(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// Content rules may hold complete secrets even when no subscription account exists.
-	return vault.Open(filepath.Join(directory, "credentials.key"), accounts == 0 && keys == 0 && webhooks == 0 && rules == 0)
+	return vault.Open(path, accounts == 0 && keys == 0 && webhooks == 0 && rules == 0 && factors == 0)
 }

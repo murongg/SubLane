@@ -1,4 +1,58 @@
 export const en = {
+  totpTitle: 'Two-factor authentication',
+  totpDescription:
+    'Add a verification code from your authenticator app to password sign-in. Applies to your account in every workspace.',
+  totpEnabled: 'Enabled',
+  totpDisabled: 'Not enabled',
+  totpEnable: 'Enable 2FA',
+  totpEnableTitle: 'Enable two-factor authentication',
+  totpDisable: 'Disable 2FA',
+  totpScan:
+    'Scan this QR code with your authenticator app, or enter the setup key. Then enter a fresh code to finish.',
+  totpSecret: 'Setup key',
+  totpCode: 'Verification code',
+  totpQR: 'Authenticator setup QR code',
+  totpConfirm: 'Verify and enable',
+  factorCode: 'Verification code or recovery code',
+  factorRequired:
+    'Enter a fresh code from your authenticator app, or an unused recovery code.',
+  factorInvalid:
+    'This code is invalid, expired or already used. Try a fresh code or an unused recovery code.',
+  recoveryRegenerate: 'Replace recovery codes',
+  recoveryCodesTitle: 'Save your recovery codes',
+  recoveryDescription:
+    'Keep these codes somewhere safe. Each code works once instead of an authenticator code. They will not be shown again; replacing them invalidates all previous codes.',
+  recoveryRemaining: 'Recovery codes remaining: {{remaining}}',
+  recoveryDownload: 'Download codes',
+  recoverySaved: 'I saved these codes',
+  passkeysTitle: 'Passkeys',
+  passkeysDescription:
+    'Sign in without a password using your fingerprint, face or device PIN. A verified passkey also satisfies two-factor authentication. You can add up to 10.',
+  passkeysEmpty: 'No passkeys added.',
+  passkeyAdd: 'Add passkey',
+  passkeyDelete: 'Delete passkey',
+  passkeyDeleteNamed: 'Delete {{name}}',
+  passkeyName: 'Passkey name',
+  signInPasskey: 'Sign in with a passkey',
+  passkeyUnavailable:
+    'Passkeys require HTTPS or localhost and a browser with WebAuthn JSON support.',
+  passkeyFailed:
+    'Could not verify the passkey. Try again or use your password.',
+  passkeyCancelled:
+    'Passkey verification was cancelled or timed out. Try again when ready.',
+  securityProofHint:
+    'Confirm your current password and, if enabled, a fresh verification or recovery code. Other browser sessions will be signed out after a change.',
+  securityExpired:
+    'This setup has expired or the account changed. Close this dialog and start again.',
+  securityInvalid:
+    'Check your inputs. Passkey names must contain 1–64 characters, with at most 10 passkeys per account.',
+  securityContinue: 'Continue',
+  securitySaved: 'Security settings updated.',
+  auditTotpEnable: 'Enabled two-factor authentication',
+  auditTotpDisable: 'Disabled two-factor authentication',
+  auditRecoveryCodes: 'Replaced recovery codes',
+  auditPasskeyAdd: 'Added passkey',
+  auditPasskeyDelete: 'Deleted passkey',
   contentDetails: 'Scope and limits',
   contentScanLimit: 'Scan limit',
   contentScanSummary: '8 MiB JSON · 64 nesting levels',
@@ -479,10 +533,31 @@ export const en = {
 
   auditSettingsUpdate: 'Updated instance settings',
   auditSettings: 'Instance settings',
+  backupExportPassword: 'Export password',
+  backupConfirmPassword: 'Confirm backup password',
+  backupPassword: 'Backup password',
+  backupPasswordHint:
+    'Use 12–128 characters. Keep the password separately; it cannot be reset if lost.',
+  backupPasswordMismatch: 'The backup passwords do not match.',
+  backupPasswordOptional:
+    'Required for encrypted backups. Leave blank for historical unencrypted archives.',
+  backupPasswordRequired: 'Enter the backup password.',
+  backupDecryptFailed:
+    'The password is incorrect, or the encrypted backup is damaged or unsupported.',
+  backupEncrypted: 'Password-encrypted',
+  backupLegacy: 'Unencrypted legacy backup',
+  backupLegacyWarning:
+    'This legacy archive contains readable credential keys. Keep it private and create a new encrypted backup after restoring.',
+  backupRestartKey:
+    'Move the recovered credentials.key to a new private path outside the data directory and update SUBLANE_CREDENTIALS_KEY_FILE before restarting.',
+  backupKeySeparated:
+    'The credential key is stored separately from the data directory.',
+  backupKeyLegacy:
+    'The credential key uses the legacy data-directory location. Independent storage can be configured on the server.',
   backupTitle: 'Backup and restore',
   backupExportTitle: 'Create a backup',
   backupExportDescription:
-    'Export a consistent database snapshot and its encryption key while SubLane is running. The archive contains credentials; keep it private.',
+    'Export a password-encrypted database snapshot and its credential key while SubLane is running. Keep the password separately from the backup.',
   backupDownload: 'Download backup',
   backupExporting: 'Creating backup…',
   backupRestoreTitle: 'Restore from a backup',
@@ -490,7 +565,7 @@ export const en = {
     'Verify your archive, then prepare a new data directory. Restart SubLane with that directory to activate the restored data.',
   backupFile: 'Backup file',
   backupFileLimit:
-    'SubLane .tar.gz archive, up to {{size}} MiB. Use the CLI for larger archives.',
+    'SubLane encrypted .age or legacy .tar.gz archive, up to {{size}} MiB. Use the CLI for larger files.',
   backupVerify: 'Verify backup',
   backupVerifying: 'Verifying…',
   backupRestore: 'Prepare restore',

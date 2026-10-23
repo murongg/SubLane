@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/murongg/SubLane/internal/alerts"
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/vault"
+	"github.com/pquerna/otp/totp"
 )
 
 func TestVaultReopensInitializedWorkspace(t *testing.T) {
@@ -53,7 +55,7 @@ func TestVaultReopensInitializedWorkspace(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer reopened.Close()
-			cipher, err := openVault(ctx, reopened, dir)
+			cipher, err := openVault(ctx, reopened, dir, "")
 			if err != nil {
 				t.Fatalf("initialized workspace failed to reopen: %v", err)
 			}
@@ -90,7 +92,7 @@ func TestMissingVaultKeyIsNotRecreatedForWebhookOnlyInstance(t *testing.T) {
 	if err := os.Remove(key); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openVault(ctx, conn, dir); !errors.Is(err, os.ErrNotExist) {
+	if _, err := openVault(ctx, conn, dir, ""); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected missing webhook encryption key, got %v", err)
 	}
 }
@@ -124,10 +126,57 @@ func TestMissingVaultKeyIsNotRecreatedForGatewaySecrets(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := openVault(ctx, connection, dir); !errors.Is(err, os.ErrNotExist) {
+	if _, err := openVault(ctx, connection, dir, ""); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected missing gateway encryption key, got %v", err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatal("new encryption file was created")
+	}
+}
+
+func TestExternalVaultKeepsExistingCredentialsAndFailsClosed(t *testing.T) {
+	ctx := context.Background()
+	directory := t.TempDir()
+	conn, err := storage.Open(ctx, filepath.Join(directory, "sublane.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	original, err := openVault(ctx, conn, directory, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := auth.NewWithVault(conn, original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := identity.Setup(ctx, "synthetic-owner", "synthetic-password", "Synthetic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	setup, err := identity.BeginTOTP(ctx, owner.Token, auth.Proof{Password: "synthetic-password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, _ := totp.GenerateCode(setup.Secret, time.Now())
+	if _, err := identity.EnableTOTP(ctx, owner.Token, setup.Challenge, code); err != nil {
+		t.Fatal(err)
+	}
+	separated := filepath.Join(t.TempDir(), "credentials.key")
+	if err := os.Rename(filepath.Join(directory, "credentials.key"), separated); err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := openVault(ctx, conn, directory, separated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := auth.VerifyFactors(ctx, conn, cipher); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(separated); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openVault(ctx, conn, directory, separated); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("lost external key was replaced: %v", err)
 	}
 }

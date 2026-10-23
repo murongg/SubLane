@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { authOptions } from '@/lib/auth'
+import { Security } from '@/components/Security'
 import { PasswordDialog } from '@/components/PasswordDialog'
 import { Button } from '@/components/ui/Button'
 import { LanguageSelect, ThemeSelect } from '@/components/Preferences'
@@ -42,6 +43,7 @@ export function Settings() {
             {t('changePassword')}
           </Button>
         </section>
+        <Security />
       </div>
       {changing && data?.user && (
         <PasswordDialog

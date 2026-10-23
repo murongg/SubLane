@@ -91,6 +91,24 @@ func (s *Service) replacePassword(ctx context.Context, user db.GetPasswordUserRo
 	if n != 1 {
 		return ErrPasswordChanged
 	}
+	if err := q.BumpSecurityVersion(ctx, user.ID); err != nil {
+		return err
+	}
+	if err := q.DeleteUserAuthChallenges(ctx, &user.ID); err != nil {
+		return err
+	}
+	// Only local owner recovery clears lost factors; remote password resets cannot bypass 2FA.
+	if action == "user.recover" {
+		if err := q.DisableTOTP(ctx, user.ID); err != nil {
+			return err
+		}
+		if err := q.DeleteRecoveryCodes(ctx, user.ID); err != nil {
+			return err
+		}
+		if err := q.DeleteUserPasskeys(ctx, user.ID); err != nil {
+			return err
+		}
+	}
 	// Hash replacement and all-session revocation must either both commit or neither happen.
 	if err := q.DeleteUserSessions(ctx, user.ID); err != nil {
 		return err

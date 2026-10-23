@@ -34,6 +34,16 @@ function memberSession() {
           }),
         ),
       )
+    if (url === '/api/me/security')
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            totp_enabled: false,
+            recovery_codes: 0,
+            passkeys: [],
+          }),
+        ),
+      )
     if (url !== '/api/auth/state')
       return Promise.reject(new Error('Unexpected management request'))
     return Promise.resolve(new Response(JSON.stringify(memberAuthenticated)))
@@ -66,7 +76,8 @@ it('gives members their own workspace without management navigation or requests'
       ([url]) =>
         url === '/api/auth/state' ||
         url === '/api/workspaces' ||
-        url === '/api/connection',
+        url === '/api/connection' ||
+        url === '/api/me/security',
     ),
   ).toBe(true)
 })

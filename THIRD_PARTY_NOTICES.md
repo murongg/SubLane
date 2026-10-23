@@ -59,3 +59,13 @@ The Radix dropdown menu is pinned to 2.1.16 alongside Dialog 1.1.15 so they shar
 - License for the adapted template: MIT; full text in `licenses/git-cliff.txt` (upstream also offers Apache-2.0).
 - Adapted file: `cliff.toml`, based on the upstream Keep a Changelog example, with SubLane-specific Conventional Commit categories, breaking-change visibility and comparison links.
 - The generator is a development/CI tool and is not included in the application binary or container runtime.
+
+## Browser authentication
+
+- WebAuthn: https://github.com/go-webauthn/webauthn, version `v0.18.2`, BSD-3-Clause; full text in `licenses/webauthn.txt`. Validates passkey registration and assertions, including origin, challenge, user verification, and authenticator state.
+- OTP: https://github.com/pquerna/otp, version `v1.5.0`, Apache-2.0; full text in `licenses/otp.txt`, with its notice in `licenses/otp-NOTICE.txt`. Generates TOTP setup keys, QR codes and time-based verification codes. SubLane owns encryption, replay prevention, recovery-code consumption, sessions and policy.
+
+## Encrypted backups
+
+- Project: https://github.com/FiloSottile/age, version `v1.3.2`, BSD-3-Clause; full text in `licenses/age.txt`.
+- Integration: binary age v1 password encryption around the existing streamed gzip/tar backup. SubLane enforces password input limits, caps imported scrypt work, validates through authenticated EOF, and owns archive bounds, key separation, private staging and atomic publication.

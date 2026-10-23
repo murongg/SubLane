@@ -46,9 +46,9 @@ if docker exec --user 0 "$name" sh -c 'touch /app/readonly-test' >/dev/null 2>&1
   echo 'Runtime filesystem unexpectedly writable' >&2
   exit 1
 fi
-docker exec "$name" sublane backup --output /data/smoke.sublane-backup.tar.gz >/dev/null
-docker exec "$name" sublane backup verify --input /data/smoke.sublane-backup.tar.gz >/dev/null
-docker exec "$name" sublane restore --input /data/smoke.sublane-backup.tar.gz --data-dir /data/restored >/dev/null
+printf '%s\n' 'synthetic backup passphrase' | docker exec -i "$name" sublane backup --password-stdin --output /data/smoke.sublane-backup.tar.gz.age >/dev/null
+printf '%s\n' 'synthetic backup passphrase' | docker exec -i "$name" sublane backup verify --password-stdin --input /data/smoke.sublane-backup.tar.gz.age >/dev/null
+printf '%s\n' 'synthetic backup passphrase' | docker exec -i "$name" sublane restore --password-stdin --input /data/smoke.sublane-backup.tar.gz.age --data-dir /data/restored >/dev/null
 docker restart --time 20 "$name" >/dev/null
 wait_healthy
 read_state | jq -e '.initialized == true' >/dev/null

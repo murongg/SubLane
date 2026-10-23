@@ -84,15 +84,16 @@ func (q *Queries) GetEnabledUser(ctx context.Context, id int64) (GetEnabledUserR
 }
 
 const getLoginUser = `-- name: GetLoginUser :one
-SELECT id, username, role, password_hash FROM users
+SELECT id, username, role, password_hash, security_version FROM users
 WHERE username = ?1 AND enabled = 1
 `
 
 type GetLoginUserRow struct {
-	ID           int64
-	Username     string
-	Role         string
-	PasswordHash string
+	ID              int64
+	Username        string
+	Role            string
+	PasswordHash    string
+	SecurityVersion int64
 }
 
 func (q *Queries) GetLoginUser(ctx context.Context, username string) (GetLoginUserRow, error) {
@@ -103,6 +104,7 @@ func (q *Queries) GetLoginUser(ctx context.Context, username string) (GetLoginUs
 		&i.Username,
 		&i.Role,
 		&i.PasswordHash,
+		&i.SecurityVersion,
 	)
 	return i, err
 }

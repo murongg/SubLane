@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"filippo.io/age"
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/auth"
@@ -55,7 +56,7 @@ func archiveFixture(t *testing.T) (string, []testEntry) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(t.TempDir(), "backup.tar.gz")
-	if _, err := Create(ctx, dir, path, "synthetic-version"); err != nil {
+	if _, err := Create(ctx, dir, path, "synthetic-version", Options{Password: syntheticBackupPassword}); err != nil {
 		t.Fatal(err)
 	}
 	file, err := os.Open(path)
@@ -63,7 +64,15 @@ func archiveFixture(t *testing.T) (string, []testEntry) {
 		t.Fatal(err)
 	}
 	defer file.Close()
-	compressed, err := gzip.NewReader(file)
+	identityKey, err := age.NewScryptIdentity(syntheticBackupPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decrypted, err := age.Decrypt(file, identityKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compressed, err := gzip.NewReader(decrypted)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +191,7 @@ func TestArchiveRejectsCorruptionUnsafeEntriesAndWrongKey(t *testing.T) {
 				t.Fatal(err)
 			}
 			target := filepath.Join(t.TempDir(), "restored")
-			if _, err := Restore(context.Background(), bad, target); err == nil {
+			if _, err := Restore(context.Background(), bad, target, syntheticBackupPassword); err == nil {
 				t.Fatal("invalid archive accepted")
 			}
 			if _, err := os.Stat(target); !os.IsNotExist(err) {
@@ -192,14 +201,14 @@ func TestArchiveRejectsCorruptionUnsafeEntriesAndWrongKey(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := Verify(ctx, path); !errors.Is(err, context.Canceled) {
+	if _, err := Verify(ctx, path, syntheticBackupPassword); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancellation lost", err)
 	}
 }
 func TestRestoreDoesNotReplaceExistingEmptyDirectory(t *testing.T) {
 	path, _ := archiveFixture(t)
 	target := t.TempDir()
-	if _, err := Restore(context.Background(), path, target); !errors.Is(err, ErrExists) {
+	if _, err := Restore(context.Background(), path, target, syntheticBackupPassword); !errors.Is(err, ErrExists) {
 		t.Fatal("existing directory accepted", err)
 	}
 	entries, err := os.ReadDir(target)
@@ -230,7 +239,7 @@ func TestArchiveRejectsOversizedDeclaredEntry(t *testing.T) {
 	if err := os.WriteFile(path, data.Bytes(), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Verify(context.Background(), path); err == nil {
+	if _, err := Verify(context.Background(), path, syntheticBackupPassword); err == nil {
 		t.Fatal("oversized header accepted")
 	}
 }
@@ -263,7 +272,7 @@ func TestBackupRejectsOversizedDatabaseRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := filepath.Join(t.TempDir(), "bounded.tar.gz")
-	if _, err := Create(ctx, source, output, "synthetic-version"); err == nil {
+	if _, err := Create(ctx, source, output, "synthetic-version", Options{Password: syntheticBackupPassword}); err == nil {
 		t.Fatal("oversized account metadata was accepted")
 	}
 	if _, err := os.Stat(output); !os.IsNotExist(err) {

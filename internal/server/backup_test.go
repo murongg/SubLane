@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"filippo.io/age"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,10 +45,11 @@ func TestBackupManagementExportsVerifiesAndPreparesIsolatedRestore(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := vault.Open(filepath.Join(directory, "credentials.key"), true); err != nil {
+	keyFile := filepath.Join(t.TempDir(), "credentials.key")
+	if _, err := vault.Open(keyFile, true); err != nil {
 		t.Fatal(err)
 	}
-	h := New(Options{DataDir: directory, Version: "synthetic-version", Auth: identity, Audit: audit.New(connection)})
+	h := New(Options{DataDir: directory, CredentialsKeyFile: keyFile, Version: "synthetic-version", Auth: identity, Audit: audit.New(connection)})
 	adminCookie := &http.Cookie{Name: sessionCookie, Value: admin.Token}
 	memberCookie := &http.Cookie{Name: sessionCookie, Value: member.Token}
 	path := "/api/settings/backup"
@@ -60,18 +64,88 @@ func TestBackupManagementExportsVerifiesAndPreparesIsolatedRestore(t *testing.T)
 	if got := request(h, "POST", path+"/export", "https://foreign.example.test", map[string]any{}, adminCookie); got.Code != 403 {
 		t.Fatal("export origin", got.Code)
 	}
-	exported := request(h, "POST", path+"/export", "http://example.test", map[string]any{}, adminCookie)
-	if exported.Code != 200 || exported.Header().Get("Content-Type") != "application/gzip" || exported.Header().Get("Cache-Control") != "no-store" {
+	if rejected := request(h, "POST", path+"/export", "http://example.test", map[string]any{}, adminCookie); rejected.Code != 400 {
+		t.Fatal("export omitted encryption password", rejected.Code)
+	}
+	exported := request(h, "POST", path+"/export", "http://example.test", map[string]any{"password": "synthetic backup passphrase"}, adminCookie)
+	if exported.Code != 200 || exported.Header().Get("Content-Type") != "application/octet-stream" || exported.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("export", exported.Code, exported.Header())
 	}
-	upload := func(route string, body []byte, cookie *http.Cookie) *httptest.ResponseRecorder {
-		req := httptest.NewRequest("POST", "http://example.test"+route, bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/gzip")
+	uploadPassword := func(route string, body []byte, cookie *http.Cookie, password string) *httptest.ResponseRecorder {
+		var payload bytes.Buffer
+		writer := multipart.NewWriter(&payload)
+		if err := writer.WriteField("password", password); err != nil {
+			t.Fatal(err)
+		}
+		part, err := writer.CreateFormFile("file", "synthetic.age")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write(body); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest("POST", "http://example.test"+route, &payload)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
 		req.Header.Set("Origin", "http://example.test")
 		req.AddCookie(cookie)
 		result := httptest.NewRecorder()
 		h.ServeHTTP(result, req)
 		return result
+	}
+	upload := func(route string, body []byte, cookie *http.Cookie) *httptest.ResponseRecorder {
+		return uploadPassword(route, body, cookie, "synthetic backup passphrase")
+	}
+	settings := request(h, "GET", path, "", nil, adminCookie)
+	if !strings.Contains(settings.Body.String(), `"key_separated":true`) {
+		t.Fatal("external key state missing", settings.Body.String())
+	}
+	wrong := uploadPassword(path+"/verify", exported.Body.Bytes(), adminCookie, "incorrect synthetic passphrase")
+	if wrong.Code != 400 || !strings.Contains(wrong.Body.String(), "backup_decryption_failed") {
+		t.Fatal("wrong password accepted", wrong.Code, wrong.Body.String())
+	}
+	identityKey, err := age.NewScryptIdentity("synthetic backup passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plaintext, err := age.Decrypt(bytes.NewReader(exported.Body.Bytes()), identityKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := io.ReadAll(plaintext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyRequest := httptest.NewRequest("POST", "http://example.test"+path+"/verify", bytes.NewReader(legacy))
+	legacyRequest.Header.Set("Content-Type", "application/gzip")
+	legacyRequest.Header.Set("Origin", "http://example.test")
+	legacyRequest.AddCookie(adminCookie)
+	legacyResponse := httptest.NewRecorder()
+	h.ServeHTTP(legacyResponse, legacyRequest)
+	if legacyResponse.Code != 200 || !strings.Contains(legacyResponse.Body.String(), `"encrypted":false`) {
+		t.Fatal("legacy raw upload failed", legacyResponse.Code, legacyResponse.Body.String())
+	}
+	var duplicate bytes.Buffer
+	duplicateWriter := multipart.NewWriter(&duplicate)
+	if err := duplicateWriter.WriteField("password", "synthetic backup passphrase"); err != nil {
+		t.Fatal(err)
+	}
+	if err := duplicateWriter.WriteField("password", "another synthetic value"); err != nil {
+		t.Fatal(err)
+	}
+	if err := duplicateWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	duplicateRequest := httptest.NewRequest("POST", "http://example.test"+path+"/verify", &duplicate)
+	duplicateRequest.Header.Set("Content-Type", duplicateWriter.FormDataContentType())
+	duplicateRequest.Header.Set("Origin", "http://example.test")
+	duplicateRequest.AddCookie(adminCookie)
+	duplicateResponse := httptest.NewRecorder()
+	h.ServeHTTP(duplicateResponse, duplicateRequest)
+	if duplicateResponse.Code != 400 {
+		t.Fatal("duplicate password field accepted", duplicateResponse.Code)
 	}
 	if got := upload(path+"/verify", exported.Body.Bytes(), memberCookie); got.Code != 403 {
 		t.Fatal("member verify", got.Code)

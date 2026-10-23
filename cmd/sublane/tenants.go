@@ -63,6 +63,7 @@ type tenantRegistry struct {
 	timeZone          *timezone.Service
 	assets            fs.FS
 	dataDir           string
+	keyFile           string
 	publicURL         string
 	trustedProxies    []netip.Prefix
 	loginLimiter      *server.LoginLimiter
@@ -127,7 +128,7 @@ func (r *tenantRegistry) acquire(id int64) *tenantRuntime {
 		dataDir, codexVersions, grokVersions, claudeVersions = r.dataDir, r.versions, r.grokVersions, r.claudeVersions
 	}
 	handler := server.New(server.Options{
-		DataDir: dataDir, Assets: r.assets, Version: r.version, StartedAt: r.started,
+		DataDir: dataDir, CredentialsKeyFile: r.keyFile, Assets: r.assets, Version: r.version, StartedAt: r.started,
 		Ping: r.db.PingContext, Audit: audit.NewForTenant(r.db, id), Auth: r.auth,
 		Alerts:  r.alerts,
 		Content: rules,

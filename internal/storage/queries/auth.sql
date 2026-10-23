@@ -12,7 +12,7 @@ SELECT 1, sqlc.arg(username), 'admin', sqlc.arg(password_hash), sqlc.arg(created
 WHERE NOT EXISTS(SELECT 1 FROM users WHERE id = 1);
 
 -- name: GetLoginUser :one
-SELECT id, username, role, password_hash FROM users
+SELECT id, username, role, password_hash, security_version FROM users
 WHERE username = sqlc.arg(username) AND enabled = 1;
 
 -- name: GetEnabledUser :one

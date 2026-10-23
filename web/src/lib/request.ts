@@ -21,7 +21,9 @@ export async function request<T>(
     credentials: 'same-origin',
     headers: {
       Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.body && !(init.body instanceof FormData)
+        ? { 'Content-Type': 'application/json' }
+        : {}),
       'X-SubLane-Workspace': String(selectedWorkspace()),
       ...init?.headers,
     },

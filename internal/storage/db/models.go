@@ -92,6 +92,16 @@ type AuditEvent struct {
 	CreatedAt  int64
 }
 
+type AuthChallenge struct {
+	TokenHash       []byte
+	Kind            string
+	UserID          *int64
+	SessionHash     []byte
+	SecurityVersion int64
+	Data            string
+	ExpiresAt       int64
+}
+
 type GroupModel struct {
 	GroupID int64
 	Model   string

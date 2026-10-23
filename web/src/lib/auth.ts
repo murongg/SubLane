@@ -61,10 +61,23 @@ export const authOptions = () =>
     refetchInterval: 60_000,
   })
 
-export function signIn(input: { username: string; password: string }) {
+export function signIn(input: {
+  username: string
+  password: string
+  code?: string
+}) {
   return request('/api/auth/login', authSchema, {
     method: 'POST',
     body: JSON.stringify(input),
+  })
+}
+
+export function signInWithPasskey(
+  credential: ReturnType<PublicKeyCredential['toJSON']>,
+) {
+  return request('/api/auth/passkey/finish', authSchema, {
+    method: 'POST',
+    body: JSON.stringify({ credential }),
   })
 }
 

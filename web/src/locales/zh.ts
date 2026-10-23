@@ -1,6 +1,56 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  totpTitle: '双重验证',
+  totpDescription:
+    '密码登录时增加验证器动态码。此设置适用于你在所有工作区中的账户。',
+  totpEnabled: '已启用',
+  totpDisabled: '未启用',
+  totpEnable: '启用 2FA',
+  totpEnableTitle: '启用双重验证',
+  totpDisable: '停用 2FA',
+  totpScan:
+    '用验证器扫描二维码，或手动输入设置密钥，然后输入新验证码完成设置。',
+  totpSecret: '设置密钥',
+  totpCode: '验证码',
+  totpQR: '验证器设置二维码',
+  totpConfirm: '验证并启用',
+  factorCode: '验证码或恢复码',
+  factorRequired: '输入验证器中的新验证码，或尚未使用的恢复码。',
+  factorInvalid:
+    '此验证码无效、已过期或已使用。请使用新验证码或未使用的恢复码。',
+  recoveryRegenerate: '更换恢复码',
+  recoveryCodesTitle: '保存恢复码',
+  recoveryDescription:
+    '请妥善保存。每个恢复码只能使用一次，可代替验证器验证码。关闭后不再展示；更换后旧恢复码全部失效。',
+  recoveryRemaining: '剩余恢复码：{{remaining}}',
+  recoveryDownload: '下载恢复码',
+  recoverySaved: '我已保存恢复码',
+  passkeysTitle: '通行密钥',
+  passkeysDescription:
+    '使用指纹、面容或设备 PIN 免密码登录。经过设备验证的通行密钥也满足双重验证要求。最多可添加 10 个。',
+  passkeysEmpty: '尚未添加通行密钥。',
+  passkeyAdd: '添加通行密钥',
+  passkeyDelete: '删除通行密钥',
+  passkeyDeleteNamed: '删除 {{name}}',
+  passkeyName: '通行密钥名称',
+  signInPasskey: '使用通行密钥登录',
+  passkeyUnavailable:
+    '通行密钥需要 HTTPS 或 localhost，以及支持 WebAuthn JSON 的浏览器。',
+  passkeyFailed: '无法验证通行密钥，请重试或使用密码登录。',
+  passkeyCancelled: '通行密钥验证已取消或超时，准备好后可重试。',
+  securityProofHint:
+    '请输入当前密码；若已启用双重验证，还需新验证码或恢复码。修改后其他浏览器会话将退出登录。',
+  securityExpired: '设置已过期或账户已变更，请关闭对话框后重新开始。',
+  securityInvalid:
+    '请检查输入。通行密钥名称需为 1–64 个字符，每个账户最多 10 个。',
+  securityContinue: '继续',
+  securitySaved: '安全设置已更新。',
+  auditTotpEnable: '启用双重验证',
+  auditTotpDisable: '停用双重验证',
+  auditRecoveryCodes: '更换恢复码',
+  auditPasskeyAdd: '添加通行密钥',
+  auditPasskeyDelete: '删除通行密钥',
   contentDetails: '检查范围与限制',
   contentScanLimit: '扫描上限',
   contentScanSummary: '8 MiB JSON · 64 层嵌套',
@@ -440,10 +490,26 @@ export const zh: Record<keyof typeof en, string> = {
 
   auditSettingsUpdate: '更新实例设置',
   auditSettings: '实例设置',
+  backupExportPassword: '导出密码',
+  backupConfirmPassword: '确认备份密码',
+  backupPassword: '备份密码',
+  backupPasswordHint: '使用 12–128 个字符。密码应单独保存，遗失后无法重置。',
+  backupPasswordMismatch: '两次输入的备份密码不一致。',
+  backupPasswordOptional: '加密备份必须填写密码；旧版未加密归档可留空。',
+  backupPasswordRequired: '请输入备份密码。',
+  backupDecryptFailed: '密码不正确，或加密备份已损坏、不受支持。',
+  backupEncrypted: '已使用密码加密',
+  backupLegacy: '旧版未加密备份',
+  backupLegacyWarning:
+    '此旧版归档包含可直接读取的凭据密钥。请保存在私有位置，恢复后重新导出加密备份。',
+  backupRestartKey:
+    '将恢复的 credentials.key 移至数据目录外的新私有路径，并在重启前更新 SUBLANE_CREDENTIALS_KEY_FILE。',
+  backupKeySeparated: '凭据密钥已与数据目录分开存放。',
+  backupKeyLegacy: '凭据密钥仍使用原有的数据目录位置，可在服务器配置独立存储。',
   backupTitle: '备份与恢复',
   backupExportTitle: '创建备份',
   backupExportDescription:
-    '服务运行时也可导出一致的数据库快照和加密密钥。备份包含凭据，请妥善保存在私有位置。',
+    '在实例运行时导出使用密码加密的数据库快照及凭据密钥。请将密码与备份分开保存。',
   backupDownload: '下载备份',
   backupExporting: '正在创建备份…',
   backupRestoreTitle: '从备份恢复',
@@ -451,7 +517,7 @@ export const zh: Record<keyof typeof en, string> = {
     '校验备份后生成新的数据目录，重启 SubLane 并切换到该目录后生效。',
   backupFile: '备份文件',
   backupFileLimit:
-    '选择 SubLane 的 .tar.gz 备份，最大 {{size}} MiB。更大的文件可使用命令行处理。',
+    '支持 SubLane 加密 .age 或旧版 .tar.gz 归档，最大 {{size}} MiB；更大文件请使用 CLI。',
   backupVerify: '校验备份',
   backupVerifying: '正在校验…',
   backupRestore: '准备恢复',

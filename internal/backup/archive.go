@@ -58,29 +58,6 @@ func regular(path string) (*os.File, error) {
 	}
 	return file, nil
 }
-func copyKey(ctx context.Context, source, target string) error {
-	file, err := regular(source)
-	if err != nil {
-		return errors.New("backup requires credentials.key beside sublane.db")
-	}
-	defer file.Close()
-	stat, err := file.Stat()
-	if err != nil {
-		return err
-	}
-	if stat.Size() != 32 || stat.Mode().Perm()&0077 != 0 {
-		return errors.New("backup credential key must be private and exactly 32 bytes")
-	}
-	data, err := io.ReadAll(io.LimitReader(contextReader{ctx, file}, 33))
-	if err != nil {
-		return err
-	}
-	defer clear(data)
-	if len(data) != 32 {
-		return ErrInvalid
-	}
-	return os.WriteFile(target, data, 0600)
-}
 func hashFile(ctx context.Context, path string) (digest, error) {
 	file, err := regular(path)
 	if err != nil {
@@ -91,10 +68,14 @@ func hashFile(ctx context.Context, path string) (digest, error) {
 	size, err := io.Copy(hash, contextReader{ctx, file})
 	return digest{Size: size, SHA256: hex.EncodeToString(hash.Sum(nil))}, err
 }
-func writeArchive(ctx context.Context, directory, path string, info Info) (result error) {
+func writeArchive(ctx context.Context, directory, path string, info Info, keyFile, password string) (result error) {
+	if keyFile == "" {
+		keyFile = filepath.Join(directory, keyName)
+	}
+	sources := map[string]string{databaseName: filepath.Join(directory, databaseName), keyName: keyFile}
 	value := manifest{Format: "sublane-backup", FormatVersion: 1, Info: info, Files: map[string]digest{}}
 	for _, name := range []string{databaseName, keyName} {
-		sum, err := hashFile(ctx, filepath.Join(directory, name))
+		sum, err := hashFile(ctx, sources[name])
 		if err != nil {
 			return err
 		}
@@ -116,7 +97,16 @@ func writeArchive(ctx context.Context, directory, path string, info Info) (resul
 			result = err
 		}
 	}()
-	compressed := gzip.NewWriter(file)
+	var destination io.Writer = file
+	var encrypted io.WriteCloser
+	if password != "" {
+		encrypted, err = encryptArchive(file, password)
+		if err != nil {
+			return err
+		}
+		destination = encrypted
+	}
+	compressed := gzip.NewWriter(destination)
 	archive := tar.NewWriter(compressed)
 	write := func(name string, size int64, reader io.Reader) error {
 		if err := archive.WriteHeader(&tar.Header{Name: name, Mode: 0600, Size: size, Typeflag: tar.TypeReg, Format: tar.FormatUSTAR, ModTime: info.CreatedAt}); err != nil {
@@ -131,7 +121,7 @@ func writeArchive(ctx context.Context, directory, path string, info Info) (resul
 			break
 		}
 		var input *os.File
-		input, err = regular(filepath.Join(directory, name))
+		input, err = regular(sources[name])
 		if err != nil {
 			break
 		}
@@ -151,6 +141,11 @@ func writeArchive(ctx context.Context, directory, path string, info Info) (resul
 	}
 	if gzipErr != nil {
 		return gzipErr
+	}
+	if encrypted != nil {
+		if err := encrypted.Close(); err != nil {
+			return err
+		}
 	}
 	return file.Sync()
 }
@@ -176,10 +171,13 @@ func (value manifest) valid() bool {
 	}
 	return true
 }
-func extractArchive(ctx context.Context, path, directory string) (info Info, result error) {
+func extractArchive(ctx context.Context, path, directory, password string) (info Info, result error) {
+	var encrypted bool
 	defer func() {
 		if err := ctx.Err(); err != nil {
 			result = err
+		} else if encrypted && errors.Is(result, ErrInvalid) {
+			result = ErrDecrypt
 		}
 	}()
 	file, err := regular(path)
@@ -194,7 +192,12 @@ func extractArchive(ctx context.Context, path, directory string) (info Info, res
 	if stat.Size() <= 0 || stat.Size() > MaxArchiveBytes {
 		return Info{}, ErrInvalid
 	}
-	buffered := bufio.NewReader(contextReader{ctx, file})
+	ciphertext := bufio.NewReader(contextReader{ctx, file})
+	source, encrypted, err := decryptArchive(ciphertext, password)
+	if err != nil {
+		return Info{}, err
+	}
+	buffered := bufio.NewReader(source)
 	compressed, err := gzip.NewReader(buffered)
 	if err != nil {
 		return Info{}, ErrInvalid
@@ -254,6 +257,7 @@ func extractArchive(ctx context.Context, path, directory string) (info Info, res
 	if n, err := compressed.Read(trailing[:]); n != 0 || !errors.Is(err, io.EOF) {
 		return Info{}, ErrInvalid
 	}
+	// Decrypted EOF also authenticates age's final chunk; a valid gzip prefix is insufficient.
 	if _, err := buffered.Peek(1); !errors.Is(err, io.EOF) {
 		return Info{}, ErrInvalid
 	}
@@ -278,5 +282,6 @@ func extractArchive(ctx context.Context, path, directory string) (info Info, res
 			return Info{}, ErrInvalid
 		}
 	}
+	value.Info.Encrypted = encrypted
 	return value.Info, nil
 }
