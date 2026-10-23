@@ -28,7 +28,10 @@ func TestAllowanceAlertsDeduplicateAcrossRestartsAndRearmNextCycle(t *testing.T)
 	}
 	cycle := "1:1900086400"
 	failed := false
-	observer := func(context.Context, int64) ([]Allowance, error) {
+	observer := func(ctx context.Context, _ int64) ([]Allowance, error) {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("allowance observation has no deadline")
+		}
 		if failed {
 			return nil, ErrCapacityUnavailable
 		}

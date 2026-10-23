@@ -331,9 +331,12 @@ func (s *Service) checkWorkspace(ctx context.Context, tenantID int64, remaining 
 	s.mu.Unlock()
 	extra, unknown, errCapacity := observeCapacity(ctx, observer, tenantID, cfg)
 	var allowances []Allowance
+	// A missing observer cannot prove persisted incidents have recovered.
 	errAllowance := ErrCapacityUnavailable
 	if allowanceObserver != nil {
-		allowances, errAllowance = allowanceObserver(ctx, tenantID)
+		observation, cancel := context.WithTimeout(ctx, 5*time.Second)
+		allowances, errAllowance = allowanceObserver(observation, tenantID)
+		cancel()
 	}
 	if len(allowances) > 4096 {
 		errAllowance = ErrCapacityUnavailable
