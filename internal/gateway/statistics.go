@@ -78,13 +78,30 @@ func (s *Service) statistics(ctx context.Context, userID, days int64) (Statistic
 	if err != nil {
 		return page, err
 	}
-	totals, err := q.GetStatisticsTotals(ctx, db.GetStatisticsTotalsParams{TenantID: s.tenantID, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID})
+	var totals db.GetStatisticsTotalsRow
+	if userID == 0 {
+		totals, err = q.GetStatisticsTotals(ctx, db.GetStatisticsTotalsParams{TenantID: s.tenantID, FromDay: page.FromDay, ToDay: page.ToDay})
+	} else {
+		personal, readErr := q.GetUserStatisticsTotals(ctx, db.GetUserStatisticsTotalsParams{TenantID: s.tenantID, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID})
+		totals, err = db.GetStatisticsTotalsRow(personal), readErr
+	}
 	if err != nil {
 		return page, err
 	}
 	page.Totals = Metrics(totals)
 	list := func(dimension string, maxRows int64) ([]Statistic, error) {
-		rows, err := q.ListStatistics(ctx, db.ListStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID, MaxRows: maxRows})
+		var rows []db.ListStatisticsRow
+		var err error
+		// Separate SQL keeps the personal equality filter usable by SQLite's user/day index.
+		if userID == 0 {
+			rows, err = q.ListStatistics(ctx, db.ListStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: page.FromDay, ToDay: page.ToDay, MaxRows: maxRows})
+		} else {
+			personal, readErr := q.ListUserStatistics(ctx, db.ListUserStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID, MaxRows: maxRows})
+			err = readErr
+			for _, row := range personal {
+				rows = append(rows, db.ListStatisticsRow(row))
+			}
+		}
 		if err != nil {
 			return nil, err
 		}

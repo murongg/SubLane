@@ -65,14 +65,13 @@ CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
 FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
-WHERE g.tenant_id=?1 AND s.day>=?2 AND s.day<?3 AND (s.user_id=?4 OR ?4=0)
+WHERE g.tenant_id=?1 AND s.day>=?2 AND s.day<?3
 `
 
 type GetStatisticsTotalsParams struct {
 	TenantID int64
 	FromDay  int64
 	ToDay    int64
-	UserID   int64
 }
 
 type GetStatisticsTotalsRow struct {
@@ -92,13 +91,75 @@ type GetStatisticsTotalsRow struct {
 }
 
 func (q *Queries) GetStatisticsTotals(ctx context.Context, arg GetStatisticsTotalsParams) (GetStatisticsTotalsRow, error) {
-	row := q.db.QueryRowContext(ctx, getStatisticsTotals,
+	row := q.db.QueryRowContext(ctx, getStatisticsTotals, arg.TenantID, arg.FromDay, arg.ToDay)
+	var i GetStatisticsTotalsRow
+	err := row.Scan(
+		&i.Requests,
+		&i.Completed,
+		&i.Incomplete,
+		&i.Errors,
+		&i.Canceled,
+		&i.Rejected,
+		&i.DurationMs,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.CachedTokens,
+		&i.InputReported,
+		&i.OutputReported,
+		&i.CachedReported,
+	)
+	return i, err
+}
+
+const getUserStatisticsTotals = `-- name: GetUserStatisticsTotals :one
+SELECT CAST(COALESCE(SUM(s.requests),0) AS INTEGER) AS requests,
+CAST(COALESCE(SUM(s.completed),0) AS INTEGER) AS completed,
+CAST(COALESCE(SUM(s.incomplete),0) AS INTEGER) AS incomplete,
+CAST(COALESCE(SUM(s.errors),0) AS INTEGER) AS errors,
+CAST(COALESCE(SUM(s.canceled),0) AS INTEGER) AS canceled,
+CAST(COALESCE(SUM(s.rejected),0) AS INTEGER) AS rejected,
+CAST(COALESCE(SUM(s.duration_ms),0) AS INTEGER) AS duration_ms,
+CAST(COALESCE(SUM(s.input_tokens),0) AS INTEGER) AS input_tokens,
+CAST(COALESCE(SUM(s.output_tokens),0) AS INTEGER) AS output_tokens,
+CAST(COALESCE(SUM(s.cached_tokens),0) AS INTEGER) AS cached_tokens,
+CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
+CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
+CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
+FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
+WHERE g.tenant_id=?1 AND s.day>=?2 AND s.day<?3 AND s.user_id=?4
+`
+
+type GetUserStatisticsTotalsParams struct {
+	TenantID int64
+	FromDay  int64
+	ToDay    int64
+	UserID   int64
+}
+
+type GetUserStatisticsTotalsRow struct {
+	Requests       int64
+	Completed      int64
+	Incomplete     int64
+	Errors         int64
+	Canceled       int64
+	Rejected       int64
+	DurationMs     int64
+	InputTokens    int64
+	OutputTokens   int64
+	CachedTokens   int64
+	InputReported  int64
+	OutputReported int64
+	CachedReported int64
+}
+
+func (q *Queries) GetUserStatisticsTotals(ctx context.Context, arg GetUserStatisticsTotalsParams) (GetUserStatisticsTotalsRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserStatisticsTotals,
 		arg.TenantID,
 		arg.FromDay,
 		arg.ToDay,
 		arg.UserID,
 	)
-	var i GetStatisticsTotalsRow
+	var i GetUserStatisticsTotalsRow
 	err := row.Scan(
 		&i.Requests,
 		&i.Completed,
@@ -134,8 +195,8 @@ CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
 FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id JOIN account_groups g ON g.id=s.group_id
-WHERE g.tenant_id=?2 AND s.day>=?3 AND s.day<?4 AND (s.user_id=?5 OR ?5=0)
-GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT ?6
+WHERE g.tenant_id=?2 AND s.day>=?3 AND s.day<?4
+GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT ?5
 `
 
 type ListStatisticsParams struct {
@@ -143,7 +204,6 @@ type ListStatisticsParams struct {
 	TenantID  int64
 	FromDay   int64
 	ToDay     int64
-	UserID    int64
 	MaxRows   int64
 }
 
@@ -171,7 +231,6 @@ func (q *Queries) ListStatistics(ctx context.Context, arg ListStatisticsParams) 
 		arg.TenantID,
 		arg.FromDay,
 		arg.ToDay,
-		arg.UserID,
 		arg.MaxRows,
 	)
 	if err != nil {
@@ -181,6 +240,100 @@ func (q *Queries) ListStatistics(ctx context.Context, arg ListStatisticsParams) 
 	items := []ListStatisticsRow{}
 	for rows.Next() {
 		var i ListStatisticsRow
+		if err := rows.Scan(
+			&i.Bucket,
+			&i.Name,
+			&i.Requests,
+			&i.Completed,
+			&i.Incomplete,
+			&i.Errors,
+			&i.Canceled,
+			&i.Rejected,
+			&i.DurationMs,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CachedTokens,
+			&i.InputReported,
+			&i.OutputReported,
+			&i.CachedReported,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserStatistics = `-- name: ListUserStatistics :many
+SELECT CAST(CASE ?1 WHEN 'day' THEN s.day WHEN 'member' THEN s.user_id WHEN 'group' THEN s.group_id ELSE s.model END AS TEXT) AS bucket,
+CAST(COALESCE(CASE ?1 WHEN 'day' THEN '' WHEN 'member' THEN u.username WHEN 'group' THEN g.name ELSE s.model END,'') AS TEXT) AS name,
+CAST(COALESCE(SUM(s.requests),0) AS INTEGER) AS requests,
+CAST(COALESCE(SUM(s.completed),0) AS INTEGER) AS completed,
+CAST(COALESCE(SUM(s.incomplete),0) AS INTEGER) AS incomplete,
+CAST(COALESCE(SUM(s.errors),0) AS INTEGER) AS errors,
+CAST(COALESCE(SUM(s.canceled),0) AS INTEGER) AS canceled,
+CAST(COALESCE(SUM(s.rejected),0) AS INTEGER) AS rejected,
+CAST(COALESCE(SUM(s.duration_ms),0) AS INTEGER) AS duration_ms,
+CAST(COALESCE(SUM(s.input_tokens),0) AS INTEGER) AS input_tokens,
+CAST(COALESCE(SUM(s.output_tokens),0) AS INTEGER) AS output_tokens,
+CAST(COALESCE(SUM(s.cached_tokens),0) AS INTEGER) AS cached_tokens,
+CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
+CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
+CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
+FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id JOIN account_groups g ON g.id=s.group_id
+WHERE g.tenant_id=?2 AND s.day>=?3 AND s.day<?4 AND s.user_id=?5
+GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT ?6
+`
+
+type ListUserStatisticsParams struct {
+	Dimension string
+	TenantID  int64
+	FromDay   int64
+	ToDay     int64
+	UserID    int64
+	MaxRows   int64
+}
+
+type ListUserStatisticsRow struct {
+	Bucket         string
+	Name           string
+	Requests       int64
+	Completed      int64
+	Incomplete     int64
+	Errors         int64
+	Canceled       int64
+	Rejected       int64
+	DurationMs     int64
+	InputTokens    int64
+	OutputTokens   int64
+	CachedTokens   int64
+	InputReported  int64
+	OutputReported int64
+	CachedReported int64
+}
+
+func (q *Queries) ListUserStatistics(ctx context.Context, arg ListUserStatisticsParams) ([]ListUserStatisticsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUserStatistics,
+		arg.Dimension,
+		arg.TenantID,
+		arg.FromDay,
+		arg.ToDay,
+		arg.UserID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUserStatisticsRow{}
+	for rows.Next() {
+		var i ListUserStatisticsRow
 		if err := rows.Scan(
 			&i.Bucket,
 			&i.Name,
