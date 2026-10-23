@@ -32,7 +32,10 @@ it('exports usage coverage without converting unreported tokens to zero', () => 
   }
   const data = {
     totals: metrics,
-    days: [{ id: '1900000000', name: '', ...metrics }],
+    days: [
+      { id: '1900000000', name: '', ...metrics },
+      { id: '1899913600', name: '', ...metrics },
+    ],
     models: [],
     members: [],
     groups: [],

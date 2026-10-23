@@ -80,7 +80,9 @@ export function statisticsRows(data: Statistics) {
   ]
   const groups = {
     totals: [{ id: '', name: '', ...data.totals }],
-    days: data.days,
+    days: data.days.filter(
+      (row) => Number(row.id) + 86400 > data.tracking_since,
+    ),
     models: data.models,
     groups: data.groups,
     members: data.members,
