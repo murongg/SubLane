@@ -64,6 +64,7 @@ const statisticsSchema = z.object({
   activity: activitySchema,
 })
 export type Activity = z.infer<typeof activitySchema>
+export type Statistics = z.infer<typeof statisticsSchema>
 export type ActivityCell = z.infer<typeof activityCellSchema>
 export type Metrics = z.infer<typeof metricsSchema>
 export type Statistic = z.infer<typeof statisticSchema>

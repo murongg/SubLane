@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { accountOptions, providerLabels } from '@/lib/accounts'
 import {
   requestOptions,
+  requestExport,
   outcomeKeys,
   outcomes,
   cacheHitRate,
@@ -24,6 +25,8 @@ import {
 import { reasonKeys } from '@/lib/runtime'
 import { authKey, authOptions, type AuthState } from '@/lib/auth'
 import { Button } from '@/components/ui/Button'
+import { ExportCSV } from '@/components/ExportCSV'
+import { requestRows } from '@/lib/csv'
 import { RequestFilterForm } from '@/components/RequestFilters'
 import { RequestID } from '@/components/RequestID'
 import { RequestDetails } from '@/components/RequestDetails'
@@ -127,17 +130,29 @@ function RequestTable({
             )}
           </p>
         </div>
-        <Button
-          variant="outline"
-          disabled={query.isFetching}
-          onClick={() => query.refetch()}
-        >
-          <RefreshCw
-            aria-hidden="true"
-            className={query.isFetching ? 'motion-safe:animate-spin' : ''}
+        <div className="flex flex-wrap items-start gap-2">
+          <ExportCSV
+            userID={userID}
+            filename="sublane-requests.csv"
+            disabled={!query.data || query.isFetching}
+            load={async (signal) =>
+              requestRows(
+                await requestExport(client, userID, scope, filters, signal),
+              )
+            }
           />
-          {t('refresh')}
-        </Button>
+          <Button
+            variant="outline"
+            disabled={query.isFetching}
+            onClick={() => query.refetch()}
+          >
+            <RefreshCw
+              aria-hidden="true"
+              className={query.isFetching ? 'motion-safe:animate-spin' : ''}
+            />
+            {t('refresh')}
+          </Button>
+        </div>
       </div>
       <div className="flex flex-wrap gap-3">
         {!personal && (

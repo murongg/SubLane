@@ -1298,5 +1298,8 @@
   "backupLegacyWarning": "此舊版封存檔包含可直接讀取的憑據金鑰。請存放於私人位置，還原後重新匯出加密備份。",
   "backupRestartKey": "將還原的 credentials.key 移至資料目錄外的新私人路徑，並在重新啟動前更新 SUBLANE_CREDENTIALS_KEY_FILE。",
   "backupKeySeparated": "憑據金鑰已與資料目錄分開存放。",
-  "backupKeyLegacy": "憑據金鑰仍使用原有的資料目錄位置，可於伺服器設定獨立儲存。"
+  "backupKeyLegacy": "憑據金鑰仍使用原有的資料目錄位置，可於伺服器設定獨立儲存。",
+  "exportCSV": "匯出 CSV",
+  "exportCSVLoading": "正在匯出…",
+  "exportCSVFailed": "無法匯出 CSV，請重新整理後再試。"
 }

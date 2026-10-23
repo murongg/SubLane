@@ -1298,5 +1298,8 @@
   "backupLegacyWarning": "Dieses ältere Archiv enthält lesbare Zugangsschlüssel. Privat aufbewahren und nach der Wiederherstellung ein verschlüsseltes Backup erstellen.",
   "backupRestartKey": "Verschieben Sie die wiederhergestellte credentials.key an einen neuen privaten Ort außerhalb des Datenverzeichnisses und aktualisieren Sie SUBLANE_CREDENTIALS_KEY_FILE vor dem Neustart.",
   "backupKeySeparated": "Der Zugangsschlüssel wird getrennt vom Datenverzeichnis gespeichert.",
-  "backupKeyLegacy": "Der Zugangsschlüssel liegt noch im bisherigen Datenverzeichnis. Separater Speicher kann auf dem Server konfiguriert werden."
+  "backupKeyLegacy": "Der Zugangsschlüssel liegt noch im bisherigen Datenverzeichnis. Separater Speicher kann auf dem Server konfiguriert werden.",
+  "exportCSV": "CSV exportieren",
+  "exportCSVLoading": "Export wird erstellt…",
+  "exportCSVFailed": "CSV konnte nicht exportiert werden. Aktualisieren und erneut versuchen."
 }

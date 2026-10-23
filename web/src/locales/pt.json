@@ -1303,5 +1303,8 @@
   "backupLegacyWarning": "Este arquivo antigo contém chaves de credenciais legíveis. Guarde-o em local privado e crie um backup criptografado após restaurar.",
   "backupRestartKey": "Mova o credentials.key restaurado para um novo local privado fora do diretório de dados e atualize SUBLANE_CREDENTIALS_KEY_FILE antes de reiniciar.",
   "backupKeySeparated": "A chave de credenciais é armazenada separadamente do diretório de dados.",
-  "backupKeyLegacy": "A chave de credenciais ainda usa o diretório de dados original. O armazenamento separado pode ser configurado no servidor."
+  "backupKeyLegacy": "A chave de credenciais ainda usa o diretório de dados original. O armazenamento separado pode ser configurado no servidor.",
+  "exportCSV": "Exportar CSV",
+  "exportCSVLoading": "Exportando…",
+  "exportCSVFailed": "Não foi possível exportar o CSV. Atualize e tente novamente."
 }

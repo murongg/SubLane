@@ -10,6 +10,8 @@ import {
   type UsageScope,
 } from '@/lib/statistics'
 import { Button } from '@/components/ui/Button'
+import { ExportCSV } from '@/components/ExportCSV'
+import { statisticsRows } from '@/lib/csv'
 import { UsageChart } from '@/components/UsageChart'
 import { PersonalAllocations } from '@/components/PersonalAllocations'
 import { ActivityMap } from '@/components/ActivityMap'
@@ -125,27 +127,35 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
             </h1>
           )}
         </div>
-        <Button
-          variant="outline"
-          aria-label={
-            scope === 'personal'
-              ? `${t('yourUsage')}: ${t('refresh')}`
-              : undefined
-          }
-          disabled={query.isFetching}
-          onClick={() =>
-            Promise.all([
-              query.refetch(),
-              ...(scope === 'personal' ? [limits.refetch()] : []),
-            ])
-          }
-        >
-          <RefreshCw
-            aria-hidden="true"
-            className={query.isFetching ? 'motion-safe:animate-spin' : ''}
+        <div className="flex flex-wrap items-start gap-2">
+          <ExportCSV
+            userID={userID}
+            filename="sublane-usage.csv"
+            disabled={!query.data || query.isFetching}
+            load={async () => statisticsRows(query.data!)}
           />
-          {t('refresh')}
-        </Button>
+          <Button
+            variant="outline"
+            aria-label={
+              scope === 'personal'
+                ? `${t('yourUsage')}: ${t('refresh')}`
+                : undefined
+            }
+            disabled={query.isFetching}
+            onClick={() =>
+              Promise.all([
+                query.refetch(),
+                ...(scope === 'personal' ? [limits.refetch()] : []),
+              ])
+            }
+          >
+            <RefreshCw
+              aria-hidden="true"
+              className={query.isFetching ? 'motion-safe:animate-spin' : ''}
+            />
+            {t('refresh')}
+          </Button>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <DropdownMenu>

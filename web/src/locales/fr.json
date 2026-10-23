@@ -1303,5 +1303,8 @@
   "backupLegacyWarning": "Cette ancienne archive contient des clés d’accès lisibles. Gardez-la privée et créez une sauvegarde chiffrée après restauration.",
   "backupRestartKey": "Déplacez le fichier credentials.key restauré vers un nouvel emplacement privé hors du dossier de données et actualisez SUBLANE_CREDENTIALS_KEY_FILE avant de redémarrer.",
   "backupKeySeparated": "La clé des identifiants est stockée séparément du dossier de données.",
-  "backupKeyLegacy": "La clé des identifiants utilise encore le dossier de données historique. Un stockage séparé peut être configuré sur le serveur."
+  "backupKeyLegacy": "La clé des identifiants utilise encore le dossier de données historique. Un stockage séparé peut être configuré sur le serveur.",
+  "exportCSV": "Exporter en CSV",
+  "exportCSVLoading": "Exportation…",
+  "exportCSVFailed": "Impossible d’exporter le CSV. Actualisez et réessayez."
 }

@@ -1,6 +1,10 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  exportCSV: '导出 CSV',
+  exportCSVLoading: '正在导出…',
+  exportCSVFailed: '无法导出 CSV，请刷新后重试。',
+
   totpTitle: '双重验证',
   totpDescription:
     '密码登录时增加验证器动态码。此设置适用于你在所有工作区中的账户。',
