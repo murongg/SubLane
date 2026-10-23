@@ -16,7 +16,6 @@ import (
 )
 
 type Config struct {
-	MetricsToken           string
 	Demo                   bool
 	Addr                   string
 	DataDir                string
@@ -31,6 +30,7 @@ type Config struct {
 	PricingFallback        string
 	PricingOverride        string
 	PricingInterval        time.Duration
+	MetricsToken           string
 	Gateway                gateway.Policy
 	InferenceHeaderTimeout time.Duration
 }
