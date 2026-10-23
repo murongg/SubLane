@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { authKey, type AuthState } from './auth'
-import { request } from './request'
+import { ApiError, request } from './request'
+import { selectedWorkspace } from './workspace'
 import { providers } from './accounts'
 import { cachePage, paginationFields } from './pagination'
 
@@ -174,4 +175,53 @@ export function requestCallerOptions(
       ),
     staleTime: 30000,
   })
+}
+
+export async function requestExport(
+  client: QueryClient,
+  userID: number,
+  scope: 'personal' | 'all',
+  filters: RequestFilters,
+  signal: AbortSignal,
+) {
+  const workspace = selectedWorkspace()
+  const query = new URLSearchParams({ limit: '100' })
+  for (const [key, value] of Object.entries(filters)) {
+    if (scope === 'personal' && (key === 'account_id' || key === 'user_id'))
+      continue
+    if (value !== undefined && value !== '') query.set(key, String(value))
+  }
+  const records: RequestRecord[] = []
+  let cursor = 0
+  do {
+    if (
+      !currentScope(client, userID, scope) ||
+      selectedWorkspace() !== workspace
+    )
+      throw new ApiError('unauthorized', 401)
+    query.set('cursor', String(cursor))
+    const page = await request(
+      `${scope === 'personal' ? '/api/me/requests' : '/api/requests'}?${query}`,
+      z.object({
+        requests: z.array(recordSchema).max(100),
+        next_cursor: z.number().int().nonnegative(),
+      }),
+      { signal },
+    )
+    if (
+      !currentScope(client, userID, scope) ||
+      selectedWorkspace() !== workspace
+    )
+      throw new ApiError('unauthorized', 401)
+    if (
+      page.requests.some((record) => cursor > 0 && record.id >= cursor) ||
+      (page.next_cursor !== 0 &&
+        (page.requests.length === 0 ||
+          page.next_cursor !== page.requests.at(-1)?.id))
+    )
+      throw new ApiError('invalid_response', 500)
+    records.push(...page.requests)
+    cursor = page.next_cursor
+  } while (cursor > 0 && records.length < 5000)
+  return records.slice(0, 5000)
 }

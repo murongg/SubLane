@@ -1298,5 +1298,8 @@
   "backupLegacyWarning": "この従来形式には読み取り可能な認証情報の鍵が含まれます。安全に保管し、復元後に暗号化バックアップを作成してください。",
   "backupRestartKey": "復元した credentials.key をデータディレクトリ外の新しい非公開パスに移動し、再起動前に SUBLANE_CREDENTIALS_KEY_FILE を更新してください。",
   "backupKeySeparated": "認証情報の鍵はデータディレクトリと別に保管されています。",
-  "backupKeyLegacy": "認証情報の鍵は従来のデータディレクトリ内にあります。サーバーで別の保存先を設定できます。"
+  "backupKeyLegacy": "認証情報の鍵は従来のデータディレクトリ内にあります。サーバーで別の保存先を設定できます。",
+  "exportCSV": "CSV をエクスポート",
+  "exportCSVLoading": "エクスポート中…",
+  "exportCSVFailed": "CSV をエクスポートできませんでした。更新して再試行してください。"
 }

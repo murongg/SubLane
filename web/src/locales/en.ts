@@ -1,4 +1,8 @@
 export const en = {
+  exportCSV: 'Export CSV',
+  exportCSVLoading: 'Exporting…',
+  exportCSVFailed: 'Could not export CSV. Refresh and try again.',
+
   totpTitle: 'Two-factor authentication',
   totpDescription:
     'Add a verification code from your authenticator app to password sign-in. Applies to your account in every workspace.',
