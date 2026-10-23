@@ -7,6 +7,7 @@ import (
 
 // Policy is immutable after startup; each workspace receives its own capacity and queue.
 type Policy struct {
+	QuotaWeighted                                                      bool
 	Capacity, QueueLimit, Retries                                      int
 	QueueTimeout, RequestTimeout, StreamIdleTimeout, KeepaliveInterval time.Duration
 	RetryDelay, TransientWindow, TransientCooldown, RateLimitCooldown  time.Duration

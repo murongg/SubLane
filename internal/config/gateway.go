@@ -8,6 +8,12 @@ import (
 
 func (c *Config) loadGateway(getenv func(string) string) error {
 	p := &c.Gateway
+	if value := getenv("SUBLANE_GATEWAY_QUOTA_WEIGHTED"); value != "" {
+		if value != "true" && value != "false" {
+			return fmt.Errorf("SUBLANE_GATEWAY_QUOTA_WEIGHTED must be true or false")
+		}
+		p.QuotaWeighted = value == "true"
+	}
 	for key, target := range map[string]*int{
 		"SUBLANE_GATEWAY_CAPACITY": &p.Capacity, "SUBLANE_GATEWAY_QUEUE_LIMIT": &p.QueueLimit, "SUBLANE_GATEWAY_RETRIES": &p.Retries,
 	} {
