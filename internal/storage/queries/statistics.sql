@@ -47,7 +47,7 @@ CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
 FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
-WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND (s.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0);
+WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day);
 
 -- name: ListStatistics :many
 SELECT CAST(CASE sqlc.arg(dimension) WHEN 'day' THEN s.day WHEN 'member' THEN s.user_id WHEN 'group' THEN s.group_id ELSE s.model END AS TEXT) AS bucket,
@@ -66,5 +66,44 @@ CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
 FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id JOIN account_groups g ON g.id=s.group_id
-WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND (s.user_id=sqlc.arg(user_id) OR sqlc.arg(user_id)=0)
+WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day)
+GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT sqlc.arg(max_rows);
+
+
+-- name: GetUserStatisticsTotals :one
+SELECT CAST(COALESCE(SUM(s.requests),0) AS INTEGER) AS requests,
+CAST(COALESCE(SUM(s.completed),0) AS INTEGER) AS completed,
+CAST(COALESCE(SUM(s.incomplete),0) AS INTEGER) AS incomplete,
+CAST(COALESCE(SUM(s.errors),0) AS INTEGER) AS errors,
+CAST(COALESCE(SUM(s.canceled),0) AS INTEGER) AS canceled,
+CAST(COALESCE(SUM(s.rejected),0) AS INTEGER) AS rejected,
+CAST(COALESCE(SUM(s.duration_ms),0) AS INTEGER) AS duration_ms,
+CAST(COALESCE(SUM(s.input_tokens),0) AS INTEGER) AS input_tokens,
+CAST(COALESCE(SUM(s.output_tokens),0) AS INTEGER) AS output_tokens,
+CAST(COALESCE(SUM(s.cached_tokens),0) AS INTEGER) AS cached_tokens,
+CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
+CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
+CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
+FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
+WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND s.user_id=sqlc.arg(user_id);
+
+
+-- name: ListUserStatistics :many
+SELECT CAST(CASE sqlc.arg(dimension) WHEN 'day' THEN s.day WHEN 'member' THEN s.user_id WHEN 'group' THEN s.group_id ELSE s.model END AS TEXT) AS bucket,
+CAST(COALESCE(CASE sqlc.arg(dimension) WHEN 'day' THEN '' WHEN 'member' THEN u.username WHEN 'group' THEN g.name ELSE s.model END,'') AS TEXT) AS name,
+CAST(COALESCE(SUM(s.requests),0) AS INTEGER) AS requests,
+CAST(COALESCE(SUM(s.completed),0) AS INTEGER) AS completed,
+CAST(COALESCE(SUM(s.incomplete),0) AS INTEGER) AS incomplete,
+CAST(COALESCE(SUM(s.errors),0) AS INTEGER) AS errors,
+CAST(COALESCE(SUM(s.canceled),0) AS INTEGER) AS canceled,
+CAST(COALESCE(SUM(s.rejected),0) AS INTEGER) AS rejected,
+CAST(COALESCE(SUM(s.duration_ms),0) AS INTEGER) AS duration_ms,
+CAST(COALESCE(SUM(s.input_tokens),0) AS INTEGER) AS input_tokens,
+CAST(COALESCE(SUM(s.output_tokens),0) AS INTEGER) AS output_tokens,
+CAST(COALESCE(SUM(s.cached_tokens),0) AS INTEGER) AS cached_tokens,
+CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
+CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
+CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
+FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id JOIN account_groups g ON g.id=s.group_id
+WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND s.user_id=sqlc.arg(user_id)
 GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT sqlc.arg(max_rows);
