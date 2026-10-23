@@ -277,7 +277,7 @@ func (s *Service) warmCatalogs(ctx context.Context, userID, groupID int64, provi
 		ctx, cancel = context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
 	}
-	allowed, err := poolAccounts(ctx, s.queries, userID, groupID)
+	_, err := poolAccounts(ctx, s.queries, userID, groupID)
 	if err != nil {
 		return err
 	}
@@ -288,18 +288,33 @@ func (s *Service) warmCatalogs(ctx context.Context, userID, groupID int64, provi
 	if policy.Restricted && len(policy.Models) == 0 {
 		return nil
 	}
-	rows, err := s.accounts.List(ctx)
+	rows, err := s.queries.ListGroupCatalogs(ctx, groupID)
 	if err != nil {
 		return err
 	}
 	ids := []string{}
 	for _, account := range rows {
-		if !s.accounts.ProviderEnabled(account.Provider) || !allowed[account.ID] || !account.Enabled || account.Status == "reauth_required" || !policyHasProvider(policy, account.Provider) || (provider != "" && account.Provider != provider) {
+		if !s.accounts.ProviderEnabled(account.Provider) || !policyHasProvider(policy, account.Provider) || (provider != "" && account.Provider != provider) {
 			continue
 		}
-		ids = append(ids, account.ID)
-		if _, err := s.AccountCatalog(ctx, account.ID, false); err != nil && ctx.Err() != nil {
+		saved, err := accounts.DecodeCatalog(account.ModelsSnapshot, account.ModelsRevision)
+		if err != nil {
+			continue
+		}
+		c := s.catalog
+		c.mu.Lock()
+		state := c.state(saved, c.entries[account.ID], s.provider.CatalogSource(account.Provider))
+		c.mu.Unlock()
+		// Selection rechecks current policy and lifecycle; fresh pool snapshots need no per-account reads.
+		if !state.Stale {
+			continue
+		}
+		state, err = s.AccountCatalog(ctx, account.ID, false)
+		if err != nil && ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if err == nil && (!state.Known || state.sourceChanged) {
+			ids = append(ids, account.ID)
 		}
 	}
 	if wait {
@@ -418,13 +433,18 @@ func (s *Service) catalogSupport(ctx context.Context, q *db.Queries, id, model, 
 	if err != nil {
 		return false, false, err
 	}
+	known, supported := s.catalogSupports(value, model, provider)
+	return known, supported, nil
+}
+
+func (s *Service) catalogSupports(value accounts.Catalog, model, provider string) (bool, bool) {
 	known := catalogUsable(value, s.catalog.now())
 	supported := known && catalogContains(value.Models, model)
 	// An obsolete catalog can retain known capabilities, but cannot prove a new model unsupported.
 	if !supported && value.Source != s.provider.CatalogSource(provider) {
-		return false, false, nil
+		return false, false
 	}
-	return known, supported, nil
+	return known, supported
 }
 func catalogContains(models []string, model string) bool {
 	return slices.Contains(models, model) || slices.Contains(models, upstream.CatalogModelID(model))

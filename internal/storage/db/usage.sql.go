@@ -28,6 +28,50 @@ func (q *Queries) GetAccountUsage(ctx context.Context, accountID string) (GetAcc
 	return i, err
 }
 
+const listGroupUsage = `-- name: ListGroupUsage :many
+SELECT a.id, a.provider, a.models_revision AS revision, u.snapshot, u.updated_at
+FROM accounts a JOIN group_accounts ga ON ga.account_id=a.id
+LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
+WHERE ga.group_id=?1 AND a.enabled=1 AND a.status!='reauth_required'
+`
+
+type ListGroupUsageRow struct {
+	ID        string
+	Provider  string
+	Revision  int64
+	Snapshot  []byte
+	UpdatedAt *int64
+}
+
+func (q *Queries) ListGroupUsage(ctx context.Context, groupID int64) ([]ListGroupUsageRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupUsage, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGroupUsageRow{}
+	for rows.Next() {
+		var i ListGroupUsageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Provider,
+			&i.Revision,
+			&i.Snapshot,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const saveAccountUsage = `-- name: SaveAccountUsage :execrows
 INSERT INTO account_usage(account_id, snapshot, updated_at, revision)
 SELECT id, ?1, ?2, models_revision FROM accounts
