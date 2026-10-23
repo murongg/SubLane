@@ -8,6 +8,12 @@ services:
       SUBLANE_DATA_DIR: /data
       # Mount the configured key outside /data using a local Compose override.
       SUBLANE_CREDENTIALS_KEY_FILE: ${SUBLANE_CREDENTIALS_KEY_FILE:-}
+      # Mount the backup destination and private password file with a local Compose override.
+      SUBLANE_BACKUP_DIR: ${SUBLANE_BACKUP_DIR:-}
+      SUBLANE_BACKUP_PASSWORD_FILE: ${SUBLANE_BACKUP_PASSWORD_FILE:-}
+      SUBLANE_BACKUP_INTERVAL: ${SUBLANE_BACKUP_INTERVAL:-}
+      SUBLANE_BACKUP_KEEP: ${SUBLANE_BACKUP_KEEP:-}
+      SUBLANE_BACKUP_WEBHOOK_URL: ${SUBLANE_BACKUP_WEBHOOK_URL:-}
       SUBLANE_DEMO: ${SUBLANE_DEMO:-false}
       SUBLANE_PUBLIC_URL: ${SUBLANE_PUBLIC_URL:-}
       SUBLANE_TRUSTED_PROXIES: ${SUBLANE_TRUSTED_PROXIES:-}
