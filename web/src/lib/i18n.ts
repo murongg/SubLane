@@ -2,7 +2,6 @@ import i18n from 'i18next'
 import type { ReadCallback } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { en } from '@/locales/en'
-import { zh } from '@/locales/zh'
 
 export const languages = [
   { value: 'en', label: 'English' },
@@ -21,6 +20,7 @@ export const languages = [
 export type Language = (typeof languages)[number]['value']
 
 const loaders = {
+  zh: () => import('@/locales/zh').then(({ zh }) => ({ default: zh })),
   'zh-TW': () => import('@/locales/zh-TW.json'),
   ja: () => import('@/locales/ja.json'),
   ko: () => import('@/locales/ko.json'),
@@ -31,7 +31,7 @@ const loaders = {
   ru: () => import('@/locales/ru.json'),
   ar: () => import('@/locales/ar.json'),
 } satisfies Record<
-  Exclude<Language, 'en' | 'zh'>,
+  Exclude<Language, 'en'>,
   () => Promise<{ default: Record<keyof typeof en, string> }>
 >
 
@@ -60,11 +60,11 @@ i18n
   })
   .use(initReactI18next)
   .init({
-    resources: { en: { translation: en }, zh: { translation: zh } },
+    resources: { en: { translation: en } },
     lng: savedLanguage(),
     fallbackLng: 'en',
     supportedLngs: languages.map(({ value }) => value),
-    // Traditional Chinese must not resolve to the bundled Simplified Chinese dictionary.
+    // Traditional Chinese must not resolve to the Simplified Chinese dictionary.
     load: 'currentOnly',
     partialBundledLanguages: true,
     interpolation: { escapeValue: false },
