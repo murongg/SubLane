@@ -331,7 +331,7 @@ func (s *Service) checkWorkspace(ctx context.Context, tenantID int64, remaining 
 	s.mu.Unlock()
 	extra, unknown, errCapacity := observeCapacity(ctx, observer, tenantID, cfg)
 	var allowances []Allowance
-	var errAllowance error
+	errAllowance := ErrCapacityUnavailable
 	if allowanceObserver != nil {
 		allowances, errAllowance = allowanceObserver(ctx, tenantID)
 	}

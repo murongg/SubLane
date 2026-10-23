@@ -49,6 +49,14 @@ func TestAllowanceAlertsDeduplicateAcrossRestartsAndRearmNextCycle(t *testing.T)
 	if len(events) != 1 || events[0].Kind != "allowance_low" {
 		t.Fatal(events)
 	}
+	restarted.SetAllowanceObserver(nil)
+	if err := restarted.Check(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 {
+		t.Fatal("missing observer claimed recovery", events)
+	}
+	restarted.SetAllowanceObserver(observer)
 	failed = true
 	if err := restarted.Check(ctx); err != nil {
 		t.Fatal(err)
