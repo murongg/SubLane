@@ -28,6 +28,7 @@ type quotaDecision struct {
 
 func quotaStatus(value upstream.Usage, now time.Time) quotaDecision {
 	result := quotaDecision{State: "unknown"}
+	mainLimits := 0
 	if value.UpdatedAt <= 0 {
 		return result
 	}
@@ -42,6 +43,7 @@ func quotaStatus(value upstream.Usage, now time.Time) quotaDecision {
 		if limit.Name != "" {
 			continue
 		}
+		mainLimits++
 		blocked := (limit.Allowed != nil && !*limit.Allowed) || (limit.LimitReached != nil && *limit.LimitReached)
 		known := (limit.Allowed != nil && *limit.Allowed) || (limit.LimitReached != nil && !*limit.LimitReached)
 		for _, window := range limit.Windows {
@@ -70,6 +72,10 @@ func quotaStatus(value upstream.Usage, now time.Time) quotaDecision {
 				result.Weight = int(math.Ceil(remaining))
 			}
 		}
+	}
+	// Duplicate unnamed limits cannot establish one comparable remaining percentage.
+	if mainLimits != 1 {
+		result.Weight = 0
 	}
 	return result
 }

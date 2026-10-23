@@ -86,4 +86,8 @@ func TestQuotaWeightUsesMostConstrainedFreshWindow(t *testing.T) {
 	if got := quotaStatus(value, now).Weight; got != 0 {
 		t.Fatal("unknown weight", got)
 	}
+	value.Limits = append(value.Limits, upstream.UsageLimit{Windows: []upstream.UsageWindow{{UsedPercent: &low}}})
+	if got := quotaStatus(value, now).Weight; got != 0 {
+		t.Fatal("ambiguous main limits must retain equal rotation", got)
+	}
 }
