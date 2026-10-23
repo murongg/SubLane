@@ -47,12 +47,17 @@ type Runtime struct {
 
 // Caller holds s.mu. Cached state keeps a failed persistence attempt from reopening a cooling account.
 func (s *Service) loadRuntime(ctx context.Context) error {
+	_, err := s.loadRuntimeRows(ctx)
+	return err
+}
+
+func (s *Service) loadRuntimeRows(ctx context.Context) ([]db.ListAccountRuntimeRow, error) {
 	if err := s.queries.DeleteObsoleteModelRuntime(ctx, db.DeleteObsoleteModelRuntimeParams{WorkspaceID: s.tenantID, Now: s.now().Unix()}); err != nil {
-		return err
+		return nil, err
 	}
 	rows, err := s.queries.ListAccountRuntime(ctx, s.tenantID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	present := make(map[string]bool, len(rows))
 	current := make(map[string]db.ListAccountRuntimeRow, len(rows))
@@ -79,28 +84,40 @@ func (s *Service) loadRuntime(ctx context.Context) error {
 			delete(s.modelHealth, key)
 		}
 	}
-	return nil
+	return rows, nil
 }
 func (s *Service) Runtime(ctx context.Context) ([]Runtime, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.loadRuntime(ctx); err != nil {
+	usage, err := s.queries.ListWorkspaceUsage(ctx, s.tenantID)
+	if err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListAccountRuntime(ctx, s.tenantID)
+	type quotaSnapshot struct {
+		revision int64
+		decision quotaDecision
+	}
+	quotas := make(map[string]quotaSnapshot, len(usage))
+	// Decode quota outside admission's lock; a lifecycle change below invalidates the earlier snapshot.
+	for _, row := range usage {
+		quotas[row.ID] = quotaSnapshot{row.Revision, s.snapshotQuota(row.Provider, "", row.Snapshot, row.UpdatedAt)}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.loadRuntimeRows(ctx)
 	if err != nil {
 		return nil, err
 	}
 	result := make([]Runtime, 0, len(rows))
 	now := s.now().Unix()
+	failedLimits := make(map[string]int64)
+	for _, model := range s.modelHealth {
+		if model.persistFailed && model.version == 0 && model.cooldownUntil > 0 {
+			failedLimits[model.key.account]++
+		}
+	}
 	for _, row := range rows {
 		state := *s.health[row.ID]
 		state.LimitedModels = row.LimitedModels
-		for _, model := range s.modelHealth {
-			if model.key.account == row.ID && model.lifecycle == row.Lifecycle && model.runtimeRevision == row.Revision && model.persistFailed && model.version == 0 && model.cooldownUntil > 0 {
-				state.LimitedModels++
-			}
-		}
+		state.LimitedModels += failedLimits[row.ID]
 		state.State = "available"
 		if state.CooldownUntil > now {
 			state.State = "cooling"
@@ -110,13 +127,11 @@ func (s *Service) Runtime(ctx context.Context) ([]Runtime, error) {
 				state.State = "probing"
 			}
 		}
-		account, err := s.accounts.Get(ctx, row.ID)
-		if err != nil {
-			return nil, err
-		}
-		quota, err := s.accountQuota(ctx, s.queries, account, "")
-		if err != nil {
-			return nil, err
+		quota := quotaDecision{State: "unknown"}
+		if !quotaRoutingSupported(row.Provider) {
+			quota.State = "unsupported"
+		} else if saved, ok := quotas[row.ID]; ok && saved.revision == row.Lifecycle {
+			quota = saved.decision
 		}
 		state.QuotaState = quota.State
 		if state.State == "available" && quota.State == "exhausted" {

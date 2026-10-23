@@ -10,7 +10,7 @@ import (
 )
 
 const listAccountRuntime = `-- name: ListAccountRuntime :many
-SELECT a.id,a.max_concurrency,COALESCE(r.cooldown_until,0) AS cooldown_until,COALESCE(r.reason,'') AS reason,COALESCE(r.failures,0) AS failures,COALESCE(r.last_failure_at,0) AS last_failure_at,COALESCE(r.revision,0) AS revision,
+SELECT a.id,a.provider,a.max_concurrency,COALESCE(r.cooldown_until,0) AS cooldown_until,COALESCE(r.reason,'') AS reason,COALESCE(r.failures,0) AS failures,COALESCE(r.last_failure_at,0) AS last_failure_at,COALESCE(r.revision,0) AS revision,
  a.models_revision AS lifecycle,
  (SELECT COUNT(*) FROM account_model_runtime m WHERE m.account_id=a.id AND m.lifecycle=a.models_revision AND m.runtime_revision=COALESCE(r.revision,0) AND m.cooldown_until>0) AS limited_models
 FROM accounts a LEFT JOIN account_runtime r ON r.account_id=a.id WHERE a.tenant_id=?1
@@ -18,6 +18,7 @@ FROM accounts a LEFT JOIN account_runtime r ON r.account_id=a.id WHERE a.tenant_
 
 type ListAccountRuntimeRow struct {
 	ID             string
+	Provider       string
 	MaxConcurrency int64
 	CooldownUntil  int64
 	Reason         string
@@ -39,6 +40,7 @@ func (q *Queries) ListAccountRuntime(ctx context.Context, tenantID int64) ([]Lis
 		var i ListAccountRuntimeRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.Provider,
 			&i.MaxConcurrency,
 			&i.CooldownUntil,
 			&i.Reason,
