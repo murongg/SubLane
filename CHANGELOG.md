@@ -2,6 +2,22 @@
 
 All notable changes are documented here in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [0.12.0] - 2026-10-23
+
+### Changed
+
+- Batch catalog and quota snapshots
+- Batch catalog and quota snapshots (#112)
+- Use indexed personal usage queries (#114)
+- Batch account runtime snapshots (#115)
+- Target capacity notifications by pool (#116)
+- Gzip embedded static assets (#113)
+- Lazy-load the Simplified Chinese dictionary (#117)
+
+### Security
+
+- **BREAKING:** Add MFA, passkeys and encrypted backups (#111) — New backup exports require a separate password. CLI callers must supply --password-stdin; export API callers must send JSON {password}. Encrypted verification and restore use password plus file multipart uploads. Historical unencrypted archives remain readable.
+
 ## [0.11.0] - 2026-10-23
 
 ### Added
@@ -263,6 +279,7 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 - Distinguish remaining quota with status colors
 - Restore version-gated model discovery
 
+[0.12.0]: https://github.com/murongg/SubLane/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/murongg/SubLane/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/murongg/SubLane/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/murongg/SubLane/compare/v0.8.0...v0.9.0
