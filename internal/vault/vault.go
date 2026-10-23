@@ -129,3 +129,16 @@ func (v *Vault) OpenAPIKey(ownerID, keyID int64, encrypted []byte) ([]byte, erro
 	}
 	return v.open(fmt.Sprintf("sublane:api-key:%d:%d", ownerID, keyID), encrypted)
 }
+
+func (v *Vault) SealTOTP(userID int64, plaintext []byte) ([]byte, error) {
+	if userID <= 0 {
+		return nil, ErrDecrypt
+	}
+	return v.seal(fmt.Sprintf("sublane:totp:%d", userID), plaintext)
+}
+func (v *Vault) OpenTOTP(userID int64, encrypted []byte) ([]byte, error) {
+	if userID <= 0 {
+		return nil, ErrDecrypt
+	}
+	return v.open(fmt.Sprintf("sublane:totp:%d", userID), encrypted)
+}

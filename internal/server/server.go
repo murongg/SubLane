@@ -197,6 +197,7 @@ func New(o Options) http.Handler {
 			routeErrors(personal)
 			personal.Use(login.requireUser)
 			personal.NotFound(requireAdminRole(http.HandlerFunc(notFound)).ServeHTTP)
+			login.registerSecurity(personal)
 			personal.Get("/requests", accountManagement.personalRequests)
 			personal.Get("/requests/filters", accountManagement.personalRequestFilters)
 			personal.With(login.throttleLogin).Post("/password", login.changePassword)

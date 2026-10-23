@@ -21,6 +21,10 @@ SELECT count(*) FROM (
     SELECT 1 FROM api_keys WHERE octet_length(encrypted_secret) > 512 OR octet_length(token_hash) > 32
     UNION ALL
     SELECT 1 FROM tenants WHERE octet_length(content_config)>131072
+    UNION ALL
+    SELECT 1 FROM users WHERE octet_length(totp_secret)>512
+    UNION ALL
+    SELECT 1 FROM passkeys WHERE octet_length(credential)>32768 OR octet_length(credential_id)>1024 OR octet_length(name)>256
     LIMIT 1
 )
 `
@@ -31,6 +35,15 @@ func (q *Queries) CountOversizedBackupRecords(ctx context.Context) (int64, error
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const revokeRestoredAuthChallenges = `-- name: RevokeRestoredAuthChallenges :exec
+DELETE FROM auth_challenges
+`
+
+func (q *Queries) RevokeRestoredAuthChallenges(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, revokeRestoredAuthChallenges)
+	return err
 }
 
 const revokeRestoredSessions = `-- name: RevokeRestoredSessions :exec

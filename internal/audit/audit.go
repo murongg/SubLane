@@ -75,6 +75,7 @@ var actions = map[string]string{
 	"member.budget": "member", "member.budget_settle": "member", "member.create": "member", "member.update": "member", "member.groups": "member", "member.limits": "member", "member.password": "member",
 	"invitation.create": "invitation",
 	"user.password":     "user", "user.recover": "user",
+	"user.totp_enable": "user", "user.totp_disable": "user", "user.recovery_codes": "user", "user.passkey_add": "user", "user.passkey_delete": "user",
 	"account.create": "account", "account.authorize": "account", "account.update": "account", "account.delete": "account", "account.concurrency": "account", "account.resume": "account",
 	"account.proxy": "account", "proxy.create": "proxy", "proxy.update": "proxy", "proxy.delete": "proxy", "proxy.import": "proxy", "proxy.prune": "proxy",
 }

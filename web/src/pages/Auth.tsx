@@ -2,8 +2,19 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, LoaderCircle } from 'lucide-react'
-import { authKey, authOptions, setup, signIn } from '@/lib/auth'
+import { ArrowLeft, LoaderCircle, Fingerprint } from 'lucide-react'
+import {
+  authKey,
+  authOptions,
+  setup,
+  signIn,
+  signInWithPasskey,
+} from '@/lib/auth'
+import {
+  passkeyAssertion,
+  passkeySupported,
+  securityError,
+} from '@/lib/security'
 import { ApiError } from '@/lib/request'
 import { replaceAuthState } from '@/lib/query'
 import { validateCredentials, type CredentialError } from '@/lib/credentials'
@@ -13,6 +24,7 @@ import { Input } from '@/components/ui/Input'
 
 const messages = {
   invalid_credentials: 'invalidCredentials',
+  invalid_factor: 'factorInvalid',
   rate_limited: 'authRateLimited',
   auth_busy: 'authBusy',
   origin_rejected: 'authOriginError',
@@ -22,6 +34,8 @@ const messages = {
 
 export function Auth({ mode }: { mode: 'setup' | 'login' }) {
   const creating = mode === 'setup'
+  const [secondFactor, setSecondFactor] = useState(false)
+  const factorInput = useRef<HTMLInputElement>(null)
   const [setupStep, setSetupStep] = useState<'account' | 'workspace'>('account')
   const { t } = useTranslation()
   const client = useQueryClient()
@@ -33,6 +47,14 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
   useEffect(() => {
     if (creating) heading.current?.focus()
   }, [creating, setupStep])
+  useEffect(() => {
+    if (secondFactor) factorInput.current?.focus()
+  }, [secondFactor])
+  const passkey = useMutation({
+    gcTime: 0,
+    mutationFn: async () => signInWithPasskey(await passkeyAssertion()),
+    onSuccess: (state) => replaceAuthState(client, state),
+  })
   const mutation = useMutation({
     meta: { demoAllowed: !creating },
     // Drop submitted credentials when the authentication form is no longer observed.
@@ -41,6 +63,7 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
       username: string
       password: string
       workspace_name?: string
+      code?: string
     }) =>
       creating
         ? setup({
@@ -48,21 +71,26 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
             password: input.password,
             workspace_name: input.workspace_name ?? '',
           })
-        : signIn({ username: input.username, password: input.password }),
+        : signIn(input),
     onSuccess: (state) => replaceAuthState(client, state),
     onError: (error) => {
+      if (error instanceof ApiError && error.code === 'two_factor_required')
+        setSecondFactor(true)
       if (error instanceof ApiError && error.code === 'already_initialized')
         return client.invalidateQueries({ queryKey: authKey })
     },
   })
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (mutation.isPending) return
+    if (mutation.isPending || passkey.isPending) return
     const form = event.currentTarget
     const data = new FormData(form)
     const input = {
       username: String(data.get('username') ?? '').trim(),
       password: String(data.get('password') ?? ''),
+      ...(!creating && secondFactor
+        ? { code: String(data.get('code') ?? '').trim() }
+        : {}),
     }
     setFieldError(null)
     mutation.reset()
@@ -125,7 +153,7 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
         spellCheck={false}
         maxLength={name === 'username' ? 32 : 256}
         required
-        disabled={mutation.isPending}
+        disabled={mutation.isPending || passkey.isPending}
         aria-invalid={fieldError?.field === name}
         aria-describedby={
           fieldError?.field === name
@@ -156,7 +184,7 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
           variant="ghost"
           size="sm"
           className="-ml-2.5 mb-6 text-muted-foreground"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || passkey.isPending}
           onClick={() => {
             if (setupStep === 'workspace') {
               setFieldError(null)
@@ -199,7 +227,7 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
             type="button"
             variant="outline"
             className="w-full"
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || passkey.isPending}
             onClick={() => mutation.mutate(demo)}
           >
             {t('demoExplore')}
@@ -252,7 +280,7 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
               autoComplete="organization"
               maxLength={64}
               required
-              disabled={mutation.isPending}
+              disabled={mutation.isPending || passkey.isPending}
               aria-invalid={fieldError?.field === 'workspace_name'}
               aria-describedby={
                 fieldError?.field === 'workspace_name'
@@ -267,7 +295,32 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
             )}
           </div>
         )}
-        {mutation.isError && (
+        {!creating && secondFactor && (
+          <div className="space-y-2">
+            <label htmlFor="auth-code" className="text-sm font-medium">
+              {t('factorCode')}
+            </label>
+            <Input
+              ref={factorInput}
+              id="auth-code"
+              name="code"
+              autoComplete="one-time-code"
+              autoCapitalize="none"
+              spellCheck={false}
+              maxLength={64}
+              required
+              disabled={mutation.isPending || passkey.isPending}
+              aria-describedby="auth-factor-hint"
+            />
+            <p
+              id="auth-factor-hint"
+              className="text-sm leading-6 text-muted-foreground"
+            >
+              {t('factorRequired')}
+            </p>
+          </div>
+        )}
+        {mutation.isError && errorCode !== 'two_factor_required' && (
           <p role="alert" className="text-sm leading-6 text-error">
             {t(errorKey, {
               seconds:
@@ -277,15 +330,19 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
             })}
           </p>
         )}
-        <Button type="submit" className="w-full" disabled={mutation.isPending}>
-          {mutation.isPending && (
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={mutation.isPending || passkey.isPending}
+        >
+          {(mutation.isPending || passkey.isPending) && (
             <LoaderCircle
               className="motion-safe:animate-spin"
               aria-hidden="true"
             />
           )}
           {t(
-            mutation.isPending
+            mutation.isPending || passkey.isPending
               ? creating
                 ? 'setupFinishing'
                 : 'signingIn'
@@ -297,6 +354,44 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
           )}
         </Button>
       </form>
+      {!creating && !demo && (
+        <div className="mt-4 space-y-3">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={
+              !passkeySupported() || mutation.isPending || passkey.isPending
+            }
+            onClick={() => passkey.mutate()}
+          >
+            {passkey.isPending ? (
+              <LoaderCircle
+                className="motion-safe:animate-spin"
+                aria-hidden="true"
+              />
+            ) : (
+              <Fingerprint aria-hidden="true" />
+            )}
+            {t('signInPasskey')}
+          </Button>
+          {!passkeySupported() && (
+            <p className="text-xs leading-5 text-muted-foreground">
+              {t('passkeyUnavailable')}
+            </p>
+          )}
+          {passkey.isError && (
+            <p role="alert" className="text-sm text-error">
+              {t(securityError(passkey.error), {
+                seconds:
+                  passkey.error instanceof ApiError
+                    ? passkey.error.retryAfter || 60
+                    : 60,
+              })}
+            </p>
+          )}
+        </div>
+      )}
     </AuthShell>
   )
 }

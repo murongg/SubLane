@@ -486,3 +486,79 @@ it('handles unexpected server error codes without crashing the login form', asyn
     'The service is unavailable.',
   )
 })
+
+it('requests a second factor before completing password login', async () => {
+  const calls: unknown[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state') return Promise.resolve(response(anonymous))
+      if (url === '/api/auth/login') {
+        const input = JSON.parse(String(init?.body))
+        calls.push(input)
+        return Promise.resolve(
+          input.code
+            ? response(authenticated)
+            : response({ error: 'two_factor_required' }, 401),
+        )
+      }
+      if (url === '/api/workspaces')
+        return Promise.resolve(response(workspaces))
+      return Promise.resolve(response(system))
+    }),
+  )
+  const user = userEvent.setup()
+  open('/login')
+  await user.type(await screen.findByLabelText('Username'), 'admin-test')
+  await user.type(
+    screen.getByLabelText('Password', { exact: true }),
+    'synthetic-password',
+  )
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+  await user.type(
+    await screen.findByLabelText('Verification code or recovery code'),
+    '123456',
+  )
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+  await waitFor(() =>
+    expect(calls).toEqual([
+      { username: 'admin-test', password: 'synthetic-password' },
+      {
+        username: 'admin-test',
+        password: 'synthetic-password',
+        code: '123456',
+      },
+    ]),
+  )
+})
+
+it('shows the server retry interval when passkey login is throttled', async () => {
+  vi.stubGlobal('isSecureContext', true)
+  vi.stubGlobal(
+    'PublicKeyCredential',
+    class {
+      static parseCreationOptionsFromJSON() {}
+      static parseRequestOptionsFromJSON() {}
+      toJSON() {}
+    },
+  )
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) =>
+      Promise.resolve(
+        url === '/api/auth/passkey/begin'
+          ? new Response(JSON.stringify({ error: 'rate_limited' }), {
+              status: 429,
+              headers: { 'Retry-After': '17' },
+            })
+          : response(anonymous),
+      ),
+    ),
+  )
+  const user = userEvent.setup()
+  open('/login')
+  await user.click(
+    await screen.findByRole('button', { name: 'Sign in with a passkey' }),
+  )
+  expect((await screen.findByRole('alert')).textContent).toContain('17')
+})

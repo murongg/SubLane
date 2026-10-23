@@ -13,6 +13,7 @@ import (
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/alerts"
 	"github.com/murongg/SubLane/internal/apikey"
+	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/storage/db"
@@ -140,6 +141,9 @@ func Restore(ctx context.Context, input, target string) (Info, error) {
 	// A backup must not reactivate browser sessions that were revoked after the snapshot.
 	err = db.New(connection).RevokeRestoredSessions(ctx)
 	if err == nil {
+		err = db.New(connection).RevokeRestoredAuthChallenges(ctx)
+	}
+	if err == nil {
 		_, err = connection.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)")
 	}
 	closeErr := connection.Close()
@@ -231,6 +235,9 @@ func verifyCredentials(ctx context.Context, connection *sql.DB, directory string
 	}
 	if err := content.New(connection, cipher, 1).Verify(ctx); err != nil {
 		return errors.New("backup content rules cannot be decrypted")
+	}
+	if err := auth.VerifyFactors(ctx, connection, cipher); err != nil {
+		return errors.New("backup authentication factors cannot be decrypted")
 	}
 	return nil
 }

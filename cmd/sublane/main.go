@@ -69,7 +69,7 @@ func run() error {
 		if err := recoverPassword(context.Background(), cfg.DataDir, os.Stdin); err != nil {
 			return err
 		}
-		fmt.Println("Administrator password reset. All administrator browser sessions were revoked; API keys are unchanged.")
+		fmt.Println("Administrator password reset. Two-factor authentication and passkeys were cleared; all administrator browser sessions were revoked. API keys are unchanged.")
 		return nil
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
@@ -90,13 +90,16 @@ func run() error {
 		return err
 	}
 	defer db.Close()
-	authentication, err := auth.New(db)
-	if err != nil {
-		return err
-	}
 	cipher, err := openVault(ctx, db, cfg.DataDir)
 	if err != nil {
 		return err
+	}
+	authentication, err := auth.NewWithVault(db, cipher)
+	if err != nil {
+		return err
+	}
+	if err := auth.VerifyFactors(ctx, db, cipher); err != nil {
+		return fmt.Errorf("verify authentication factors: %w", err)
 	}
 	if err := content.New(db, cipher, 1).Verify(ctx); err != nil {
 		return fmt.Errorf("verify workspace content rules: %w", err)

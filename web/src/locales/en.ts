@@ -1,4 +1,58 @@
 export const en = {
+  totpTitle: 'Two-factor authentication',
+  totpDescription:
+    'Add a verification code from your authenticator app to password sign-in. Applies to your account in every workspace.',
+  totpEnabled: 'Enabled',
+  totpDisabled: 'Not enabled',
+  totpEnable: 'Enable 2FA',
+  totpEnableTitle: 'Enable two-factor authentication',
+  totpDisable: 'Disable 2FA',
+  totpScan:
+    'Scan this QR code with your authenticator app, or enter the setup key. Then enter a fresh code to finish.',
+  totpSecret: 'Setup key',
+  totpCode: 'Verification code',
+  totpQR: 'Authenticator setup QR code',
+  totpConfirm: 'Verify and enable',
+  factorCode: 'Verification code or recovery code',
+  factorRequired:
+    'Enter a fresh code from your authenticator app, or an unused recovery code.',
+  factorInvalid:
+    'This code is invalid, expired or already used. Try a fresh code or an unused recovery code.',
+  recoveryRegenerate: 'Replace recovery codes',
+  recoveryCodesTitle: 'Save your recovery codes',
+  recoveryDescription:
+    'Keep these codes somewhere safe. Each code works once instead of an authenticator code. They will not be shown again; replacing them invalidates all previous codes.',
+  recoveryRemaining: 'Recovery codes remaining: {{remaining}}',
+  recoveryDownload: 'Download codes',
+  recoverySaved: 'I saved these codes',
+  passkeysTitle: 'Passkeys',
+  passkeysDescription:
+    'Sign in without a password using your fingerprint, face or device PIN. A verified passkey also satisfies two-factor authentication. You can add up to 10.',
+  passkeysEmpty: 'No passkeys added.',
+  passkeyAdd: 'Add passkey',
+  passkeyDelete: 'Delete passkey',
+  passkeyDeleteNamed: 'Delete {{name}}',
+  passkeyName: 'Passkey name',
+  signInPasskey: 'Sign in with a passkey',
+  passkeyUnavailable:
+    'Passkeys require HTTPS or localhost and a browser with WebAuthn JSON support.',
+  passkeyFailed:
+    'Could not verify the passkey. Try again or use your password.',
+  passkeyCancelled:
+    'Passkey verification was cancelled or timed out. Try again when ready.',
+  securityProofHint:
+    'Confirm your current password and, if enabled, a fresh verification or recovery code. Other browser sessions will be signed out after a change.',
+  securityExpired:
+    'This setup has expired or the account changed. Close this dialog and start again.',
+  securityInvalid:
+    'Check your inputs. Passkey names must contain 1–64 characters, with at most 10 passkeys per account.',
+  securityContinue: 'Continue',
+  securitySaved: 'Security settings updated.',
+  auditTotpEnable: 'Enabled two-factor authentication',
+  auditTotpDisable: 'Disabled two-factor authentication',
+  auditRecoveryCodes: 'Replaced recovery codes',
+  auditPasskeyAdd: 'Added passkey',
+  auditPasskeyDelete: 'Deleted passkey',
   contentDetails: 'Scope and limits',
   contentScanLimit: 'Scan limit',
   contentScanSummary: '8 MiB JSON · 64 nesting levels',

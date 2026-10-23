@@ -9,11 +9,13 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/murongg/SubLane/internal/storage/db"
 	"github.com/murongg/SubLane/internal/tenants"
+	"github.com/murongg/SubLane/internal/vault"
 )
 
 var (
@@ -51,11 +53,14 @@ type Session struct {
 	ExpiresAt time.Time
 }
 type Service struct {
-	db        *sql.DB
-	queries   *db.Queries
-	now       func() time.Time
-	dummyHash string
-	hashSlots chan struct{}
+	factorMu       sync.Mutex
+	factorFailures map[int64]factorWindow
+	cipher         *vault.Vault
+	db             *sql.DB
+	queries        *db.Queries
+	now            func() time.Time
+	dummyHash      string
+	hashSlots      chan struct{}
 }
 
 func New(connection *sql.DB) (*Service, error) {
@@ -141,6 +146,10 @@ func (s *Service) Setup(ctx context.Context, username, password, workspaceName s
 }
 
 func (s *Service) Login(ctx context.Context, username, password string) (Session, error) {
+	return s.LoginWithCode(ctx, username, password, "")
+}
+
+func (s *Service) LoginWithCode(ctx context.Context, username, password, code string) (Session, error) {
 	username = strings.ToLower(strings.TrimSpace(username))
 	// Keep existing accounts usable if their passwords predate the 20-character setup limit.
 	if !validCredentials(username, password, 128) {
@@ -169,6 +178,21 @@ func (s *Service) Login(ctx context.Context, username, password string) (Session
 		return Session{}, err
 	}
 	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	security, err := q.GetSecurityUser(ctx, user.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Session{}, ErrCredentials
+	}
+	if err != nil {
+		return Session{}, err
+	}
+	if security.PasswordHash != hash || security.SecurityVersion != user.SecurityVersion {
+		return Session{}, ErrCredentials
+	}
+	// Factor consumption and session issuance share a transaction, so concurrent attempts cannot replay a code.
+	if err := s.verifyFactor(ctx, q, security, code); err != nil {
+		return Session{}, err
+	}
 	session, err := s.createSession(ctx, tx, User{ID: user.ID}, hash)
 	if err != nil {
 		return Session{}, err

@@ -14,5 +14,12 @@ SELECT count(*) FROM (
     SELECT 1 FROM api_keys WHERE octet_length(encrypted_secret) > 512 OR octet_length(token_hash) > 32
     UNION ALL
     SELECT 1 FROM tenants WHERE octet_length(content_config)>131072
+    UNION ALL
+    SELECT 1 FROM users WHERE octet_length(totp_secret)>512
+    UNION ALL
+    SELECT 1 FROM passkeys WHERE octet_length(credential)>32768 OR octet_length(credential_id)>1024 OR octet_length(name)>256
     LIMIT 1
 );
+
+-- name: RevokeRestoredAuthChallenges :exec
+DELETE FROM auth_challenges;

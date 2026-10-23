@@ -43,6 +43,7 @@ type authHTTP struct {
 type credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Code     string `json:"code,omitempty"`
 }
 
 type setupCredentials struct {
@@ -61,6 +62,8 @@ func (h *authHTTP) register(router chi.Router) {
 		public.With(h.requireOrigin, h.throttleLogin).Post("/login", func(w http.ResponseWriter, r *http.Request) { h.authenticate(w, r, false) })
 		public.With(h.requireOrigin, h.throttleEnrollment).Post("/register", h.registerInvitation)
 		public.With(h.requireOrigin).Post("/logout", h.logout)
+		public.With(h.requireOrigin, h.throttleLogin).Post("/passkey/begin", h.beginPasskeyLogin)
+		public.With(h.requireOrigin, h.throttleLogin).Post("/passkey/finish", h.finishPasskeyLogin)
 	})
 }
 
@@ -120,14 +123,7 @@ func (h *authHTTP) secure(r *http.Request) bool {
 }
 
 func (h *authHTTP) sameOrigin(w http.ResponseWriter, r *http.Request) bool {
-	expected := h.publicURL
-	if expected == "" {
-		scheme := "http"
-		if r.TLS != nil {
-			scheme = "https"
-		}
-		expected = scheme + "://" + r.Host
-	}
+	expected := h.origin(r)
 	if r.Header.Get("Origin") == expected && r.Header.Get("Sec-Fetch-Site") != "cross-site" {
 		return true
 	}
@@ -244,14 +240,19 @@ func (h *authHTTP) authenticate(w http.ResponseWriter, r *http.Request, setup bo
 		session, err = h.service.Setup(r.Context(), input.Username, input.Password, workspaceName)
 		status = 201
 	} else {
-		session, err = h.service.Login(r.Context(), input.Username, input.Password)
+		session, err = h.service.LoginWithCode(r.Context(), input.Username, input.Password, input.Code)
 	}
 	if err != nil {
 		authError(w, err)
 		return
 	}
+	h.completeSession(w, r, session, status)
+}
+
+func (h *authHTTP) completeSession(w http.ResponseWriter, r *http.Request, session auth.Session, status int) {
 	scoped, err := h.stateForTenant(r.Context(), session.Token)
 	if err != nil {
+		_ = h.service.Revoke(r.Context(), session.Token)
 		authError(w, err)
 		return
 	}
@@ -292,18 +293,7 @@ func (h *authHTTP) registerInvitation(w http.ResponseWriter, r *http.Request) {
 		authError(w, err)
 		return
 	}
-	state, err := h.stateForTenant(r.Context(), session.Token)
-	if err != nil {
-		authError(w, err)
-		return
-	}
-	if state.User == nil {
-		_ = h.service.Revoke(r.Context(), session.Token)
-		writeJSON(w, 403, map[string]string{"error": "forbidden"})
-		return
-	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: session.Token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: h.secure(r), MaxAge: int(auth.SessionTTL.Seconds()), Expires: session.ExpiresAt})
-	h.writeState(w, 201, state)
+	h.completeSession(w, r, session, 201)
 }
 
 type sessionUserKey struct{}
@@ -369,9 +359,23 @@ func (h *authHTTP) requireUser(next http.Handler) http.Handler {
 
 func authError(w http.ResponseWriter, err error) {
 	status, code := 503, "unavailable"
+	var limited *auth.FactorRateLimitError
 	switch {
+	case errors.As(err, &limited):
+		status, code = 429, "rate_limited"
+		w.Header().Set("Retry-After", strconv.Itoa(limited.RetryAfter))
 	case errors.Is(err, auth.ErrInitialized):
 		status, code = 409, "already_initialized"
+	case errors.Is(err, auth.ErrTwoFactorRequired):
+		status, code = 401, "two_factor_required"
+	case errors.Is(err, auth.ErrFactor):
+		status, code = 401, "invalid_factor"
+	case errors.Is(err, auth.ErrChallenge):
+		status, code = 400, "challenge_expired"
+	case errors.Is(err, auth.ErrPasskey):
+		status, code = 401, "passkey_failed"
+	case errors.Is(err, auth.ErrPasskeyUnavailable):
+		status, code = 400, "passkey_unavailable"
 	case errors.Is(err, auth.ErrCredentials):
 		status, code = 401, "invalid_credentials"
 	case errors.Is(err, auth.ErrCurrentPassword):
