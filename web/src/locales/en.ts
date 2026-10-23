@@ -158,6 +158,9 @@ export const en = {
     'Enter 1–99; leave blank to disable. Only fresh, model-relevant quota observations are used. Unknown data does not prove recovery.',
   alertModelUnavailable: 'Group model unavailable',
   alertQuotaLow: 'Account quota threshold reached',
+  alertAllowanceLow: 'Member allowance threshold reached',
+  alertsAllowanceDescription:
+    'Enabled webhooks also notify at 80% and 95% of a member’s settled allowance, once per threshold and period.',
   auditSettingsTest: 'Requested a webhook test',
   modelPrices: 'Model prices',
   pricingDescription:

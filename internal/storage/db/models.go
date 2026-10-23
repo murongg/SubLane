@@ -48,6 +48,7 @@ type AlertState struct {
 	RetryAt         int64
 	DeliveredAt     int64
 	DeliveryFailed  int64
+	Cycle           string
 }
 
 type AllocationEntry struct {

@@ -149,6 +149,9 @@ export const zh: Record<keyof typeof en, string> = {
     '填写 1–99；留空关闭。只使用新鲜且适用于对应模型的额度快照，未知信息不代表故障恢复。',
   alertModelUnavailable: '资源组模型不可用',
   alertQuotaLow: '账号额度达到提醒阈值',
+  alertAllowanceLow: '成员分配额度接近用尽',
+  alertsAllowanceDescription:
+    '启用 Webhook 后，成员已结算用量达到分配额度的 80% 和 95% 时也会提醒；每个阈值、每个周期仅提醒一次。',
   auditSettingsTest: '请求发送 Webhook 测试',
   modelPrices: '模型价格',
   pricingDescription:

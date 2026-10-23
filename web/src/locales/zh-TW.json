@@ -85,6 +85,8 @@
   "alertsQuotaHint": "填寫 1–99；留空關閉。只使用新鮮且適用於對應模型的額度快照，未知資訊不代表故障復原。",
   "alertModelUnavailable": "資源群組模型不可用",
   "alertQuotaLow": "帳號額度達到提醒閾值",
+  "alertAllowanceLow": "成員分配額度即將用盡",
+  "alertsAllowanceDescription": "啟用 Webhook 後，成員已結算用量達到分配額度的 80% 和 95% 時也會通知；每個門檻、每個週期僅通知一次。",
   "auditSettingsTest": "請求發送 Webhook 測試",
   "modelPrices": "模型價格",
   "pricingDescription": "目前參考單價用於請求費用估算和新建額度版本，並非訂閱實際帳單。已有額度版本以各自保存的價格計算。價格目錄不代表模型使用權限，可用模型請查看金鑰的模型清單。",

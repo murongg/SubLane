@@ -85,6 +85,8 @@
   "alertsQuotaHint": "Digite 1-99; deixe em branco para desabilitar. Somente as observações de quotas recentes e relevantes para o modelo são usadas. Dados desconhecidos não provam a recuperação.",
   "alertModelUnavailable": "Modelo de grupo não disponível",
   "alertQuotaLow": "Limiar de quota de conta atingido",
+  "alertAllowanceLow": "Limite de alocação atingido",
+  "alertsAllowanceDescription": "Webhooks ativos também avisam em 80% e 95% do uso consolidado da alocação, uma vez por limite e período.",
   "auditSettingsTest": "Solicitado um teste webhook",
   "modelPrices": "Preços dos modelos",
   "pricingDescription": "Preços de referência atuais usados para as estimativas de custos de solicitação e novas revisões de licenças. Estes não são custos de assinatura. Revisões de licenças existentes usam seus preços salvos. Um preço listado não garante o acesso ao modelo; verifique o catálogo do modelo da sua chave.",

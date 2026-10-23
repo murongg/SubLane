@@ -85,6 +85,8 @@
   "alertsQuotaHint": "Geben Sie 1–99 ein; leer lassen, um zu deaktivieren; es werden nur neue, modellrelevante Quotenbeobachtungen verwendet; unbekannte Daten belegen keine Wiederfindung.",
   "alertModelUnavailable": "Gruppenmodell nicht verfügbar",
   "alertQuotaLow": "Kontoquotenschwelle erreicht",
+  "alertAllowanceLow": "Mitgliedskontingent-Schwelle erreicht",
+  "alertsAllowanceDescription": "Aktive Webhooks melden auch 80 % und 95 % des abgerechneten Mitgliedskontingents, einmal je Schwelle und Zeitraum.",
   "auditSettingsTest": "Angeforderter Webhook-Test",
   "modelPrices": "Modellpreise",
   "pricingDescription": "Aktuelle Referenzpreise, die für Kostenschätzungen und neue Korrekturen von Zertifikaten verwendet werden. Dies sind keine Abonnementgebühren. Bestehende Korrekturen von Zertifikaten verwenden ihre gespeicherten Preise. Ein aufgelisteter Preis garantiert keinen Modellzugriff; überprüfen Sie den Modellkatalog Ihres Schlüssels.",
