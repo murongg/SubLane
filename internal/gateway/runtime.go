@@ -169,7 +169,7 @@ func (s *Service) SetConcurrency(ctx context.Context, id string, limit int64) er
 	if state := s.health[id]; state != nil {
 		state.MaxConcurrency = limit
 	}
-	s.notifyCapacity()
+	s.notifyCapacity(id)
 	return nil
 }
 func (s *Service) Resume(ctx context.Context, id string) error {
@@ -213,7 +213,7 @@ func (s *Service) Resume(ctx context.Context, id string) error {
 			delete(s.modelHealth, key)
 		}
 	}
-	s.notifyCapacity()
+	s.notifyCapacity(id)
 	return nil
 }
 func (s *Service) persistRuntime(ctx context.Context, state *Runtime) error {

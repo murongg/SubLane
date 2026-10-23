@@ -28,3 +28,7 @@ FROM accounts a JOIN group_accounts ga ON ga.account_id=a.id
 LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
 WHERE a.tenant_id=sqlc.arg(tenant_id) AND ga.group_id=sqlc.arg(group_id)
 ORDER BY a.created_at DESC,a.id DESC;
+
+-- name: ListResourceGroups :many
+SELECT ga.group_id FROM group_accounts ga JOIN account_groups g ON g.id=ga.group_id
+WHERE ga.account_id=sqlc.arg(account_id) AND g.tenant_id=sqlc.arg(tenant_id);

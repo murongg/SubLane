@@ -55,7 +55,7 @@ type Service struct {
 	modelHealth        map[modelKey]*modelRuntime
 	memberActive       map[int64]int64
 	waiting            map[int64]int
-	capacityChanged    chan struct{}
+	capacityChanged    map[int64]chan struct{}
 	accountWaitTimeout time.Duration
 	policy             Policy
 	now                func() time.Time
@@ -97,7 +97,7 @@ func NewForTenantWithPolicy(ctx context.Context, connection *sql.DB, accounts *a
 	if len(catalogs) > 0 {
 		catalog = catalogs[0]
 	}
-	return &Service{memberActive: make(map[int64]int64), waiting: make(map[int64]int), capacityChanged: make(chan struct{}), accountWaitTimeout: policy.QueueTimeout, policy: policy, next: make(map[string]int), health: make(map[string]*Runtime), modelHealth: make(map[modelKey]*modelRuntime), now: time.Now, runContext: runContext, stopRuntime: stopRuntime, db: connection, queries: db.New(connection), accounts: accounts, tenantID: tenantID, provider: provider, slots: make(chan struct{}, policy.Capacity), usage: newUsageCache(ctx), catalog: newCatalogCache(ctx), pricing: catalog}
+	return &Service{memberActive: make(map[int64]int64), waiting: make(map[int64]int), capacityChanged: make(map[int64]chan struct{}), accountWaitTimeout: policy.QueueTimeout, policy: policy, next: make(map[string]int), health: make(map[string]*Runtime), modelHealth: make(map[modelKey]*modelRuntime), now: time.Now, runContext: runContext, stopRuntime: stopRuntime, db: connection, queries: db.New(connection), accounts: accounts, tenantID: tenantID, provider: provider, slots: make(chan struct{}, policy.Capacity), usage: newUsageCache(ctx), catalog: newCatalogCache(ctx), pricing: catalog}
 }
 
 func (s *Service) Acquire() (func(), error) {

@@ -49,6 +49,39 @@ func (q *Queries) CreateAccountAffinity(ctx context.Context, arg CreateAccountAf
 	return err
 }
 
+const listResourceGroups = `-- name: ListResourceGroups :many
+SELECT ga.group_id FROM group_accounts ga JOIN account_groups g ON g.id=ga.group_id
+WHERE ga.account_id=?1 AND g.tenant_id=?2
+`
+
+type ListResourceGroupsParams struct {
+	AccountID string
+	TenantID  int64
+}
+
+func (q *Queries) ListResourceGroups(ctx context.Context, arg ListResourceGroupsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listResourceGroups, arg.AccountID, arg.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var group_id int64
+		if err := rows.Scan(&group_id); err != nil {
+			return nil, err
+		}
+		items = append(items, group_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRoutingAccounts = `-- name: ListRoutingAccounts :many
 SELECT a.id,a.provider,a.enabled,a.status,a.models_snapshot,a.models_revision,u.snapshot AS usage_snapshot,u.updated_at AS usage_updated_at
 FROM accounts a JOIN group_accounts ga ON ga.account_id=a.id
