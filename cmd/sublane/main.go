@@ -180,6 +180,23 @@ func run() error {
 		gateway.MaintainHistory(maintenanceCtx, db)
 	}()
 	defer func() { stopMaintenance(); <-maintenanceDone }()
+	if cfg.Backup.Directory != "" {
+		backupDone := make(chan struct{})
+		backupCtx, stopBackup := context.WithCancel(ctx)
+		go func() {
+			defer close(backupDone)
+			var onFailure func(context.Context)
+			if cfg.BackupWebhookURL != "" {
+				onFailure = func(ctx context.Context) {
+					if err := notifications.BackupFailure(ctx, cfg.BackupWebhookURL); err != nil {
+						logger.Error("Scheduled backup failure notification could not be delivered")
+					}
+				}
+			}
+			cfg.Backup.Maintain(backupCtx, cfg.DataDir, version, cfg.CredentialsKeyFile, logger, onFailure)
+		}()
+		defer func() { stopBackup(); <-backupDone }()
+	}
 	notifications.SetCapacityObserver(registry.Capacity)
 	notifications.Start(ctx)
 	return serve(ctx, logger, cfg.Addr, server.NewMulti(db, authentication, tenancy, cfg.PublicURL, registry.Handler))

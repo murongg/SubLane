@@ -186,11 +186,11 @@ func TestFailedDeliveryRetriesAndDisabledDestinationStopsDelivery(t *testing.T) 
 }
 
 func TestWebhookRejectsLocalOrAmbiguousDestinations(t *testing.T) {
-	if _, err := destination("https://" + strings.Repeat("a", 300) + ".example.test/events"); err == nil {
+	if _, err := ValidateDestination("https://" + strings.Repeat("a", 300) + ".example.test/events"); err == nil {
 		t.Fatal("overlong host would break bounded settings metadata")
 	}
 	for _, value := range []string{"http://hooks.example.test", "https://localhost/hook", "https://127.0.0.1", "https://[::1]", "https://169.254.169.254/latest", "https://10.0.0.1", "https://user:pass@example.test", "https://example.test/#fragment", "https://[::ffff:127.0.0.1]"} {
-		if _, err := destination(value); err == nil {
+		if _, err := ValidateDestination(value); err == nil {
 			t.Errorf("accepted %q", value)
 		}
 	}

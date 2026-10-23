@@ -34,7 +34,8 @@ func publicIP(ip netip.Addr) bool {
 	return true
 }
 
-func destination(raw string) (*url.URL, error) {
+// ValidateDestination checks a public HTTPS webhook URL; dialing rechecks DNS addresses.
+func ValidateDestination(raw string) (*url.URL, error) {
 	if len(raw) > 2048 || strings.TrimSpace(raw) != raw {
 		return nil, ErrInput
 	}
@@ -97,7 +98,7 @@ func newSender() *http.Client {
 }
 
 func deliver(ctx context.Context, sender Sender, endpoint string, event Event) error {
-	if _, err := destination(endpoint); err != nil {
+	if _, err := ValidateDestination(endpoint); err != nil {
 		return ErrDelivery
 	}
 	body, err := json.Marshal(event)
