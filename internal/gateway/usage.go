@@ -174,11 +174,15 @@ func (s *Service) usageSnapshot(ctx context.Context, id string, force, wait bool
 
 // Called under the cache lock; only small SQLite reads occur here, never provider IO.
 func (s *Service) loadUsage(ctx context.Context, id string, now time.Time) (*usageEntry, error) {
-	c := s.usage
 	row, err := s.queries.GetAccountUsage(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	return s.usage.load(id, row, now)
+}
+
+// Caller holds c.mu. Batched warmup and individual readers share decoded observations and eviction.
+func (c *usageCache) load(id string, row storedb.GetAccountUsageRow, now time.Time) (*usageEntry, error) {
 	if entry := c.entries[id]; entry != nil && entry.revision == row.Revision {
 		entry.accessed = now
 		return entry, nil

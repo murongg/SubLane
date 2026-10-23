@@ -33,16 +33,40 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 			return "", digest, err
 		}
 	}
-	available, err := s.accounts.List(ctx)
-	if err != nil {
-		return "", digest, err
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", digest, err
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
+	rows, err := q.ListRoutingAccounts(ctx, db.ListRoutingAccountsParams{TenantID: s.tenantID, GroupID: groupID})
+	if err != nil {
+		return "", digest, err
+	}
+	available := make([]accounts.Account, 0, len(rows))
+	snapshots := make(map[string]db.ListRoutingAccountsRow, len(rows))
+	for _, row := range rows {
+		available = append(available, accounts.Account{ID: row.ID, Provider: row.Provider, Enabled: row.Enabled, Status: row.Status})
+		snapshots[row.ID] = row
+	}
+	// Catalogs, quota and pool policy share this transaction; no decrypted management metadata is needed.
+	supports := func(id, model, provider string) (bool, bool, error) {
+		row := snapshots[id]
+		value, err := accounts.DecodeCatalog(row.ModelsSnapshot, row.ModelsRevision)
+		if err != nil {
+			return false, false, err
+		}
+		known, supported := s.catalogSupports(value, model, provider)
+		return known, supported, nil
+	}
+	quotaAdmission := func(account accounts.Account, model string) error {
+		row := snapshots[account.ID]
+		decision := s.snapshotQuota(account.Provider, model, row.UsageSnapshot, row.UsageUpdatedAt)
+		if decision.State == "exhausted" {
+			return &QuotaError{RetryAfter: max(1, decision.RetryAt-s.now().Unix())}
+		}
+		return nil
+	}
 	allowed, err := poolAccounts(ctx, q, userID, groupID)
 	if err != nil {
 		return "", digest, err
@@ -103,7 +127,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 				if affinity == continuationAffinity && existing.Rebound && existing.Model != "" && bindingModel != existing.Model {
 					return id, digest, ErrModelConflict
 				}
-				known, supported, err := s.catalogSupport(ctx, q, id, model, bound.Provider)
+				known, supported, err := supports(id, model, bound.Provider)
 				if err != nil {
 					return id, digest, err
 				}
@@ -131,7 +155,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 				if err := s.modelAdmission(ctx, q, id, model); err != nil {
 					return id, digest, err
 				}
-				if err := s.quotaAdmission(ctx, q, *bound, model); err != nil {
+				if err := quotaAdmission(*bound, model); err != nil {
 					return id, digest, err
 				}
 				if scheme != 0 {
@@ -185,7 +209,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 		}
 		eligible = true
 		if model != "" {
-			known, supported, err := s.catalogSupport(ctx, q, account.ID, model, account.Provider)
+			known, supported, err := supports(account.ID, model, account.Provider)
 			if err != nil {
 				return "", digest, err
 			}
@@ -208,7 +232,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 			}
 			continue
 		}
-		if err := s.quotaAdmission(ctx, q, account, model); err != nil {
+		if err := quotaAdmission(account, model); err != nil {
 			var quota *QuotaError
 			if !errors.As(err, &quota) {
 				return "", digest, err

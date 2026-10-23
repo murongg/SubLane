@@ -62,9 +62,13 @@ func quotaStatus(value upstream.Usage, now time.Time) quotaDecision {
 }
 
 func savedUsage(row db.GetAccountUsageRow) *upstream.Usage {
+	return decodeUsage(row.Snapshot, row.UpdatedAt)
+}
+
+func decodeUsage(raw []byte, updatedAt *int64) *upstream.Usage {
 	var value upstream.Usage
 	// A complete Antigravity snapshot can contain 512 limits, including hidden models.
-	if row.UpdatedAt == nil || len(row.Snapshot) > 256<<10 || json.Unmarshal(row.Snapshot, &value) != nil || value.Limits == nil || value.UpdatedAt != *row.UpdatedAt || value.UpdatedAt <= 0 {
+	if updatedAt == nil || len(raw) > 256<<10 || json.Unmarshal(raw, &value) != nil || value.Limits == nil || value.UpdatedAt != *updatedAt || value.UpdatedAt <= 0 {
 		return nil
 	}
 	return &value
@@ -81,10 +85,17 @@ func (s *Service) accountQuota(ctx context.Context, q *db.Queries, account accou
 	if err != nil {
 		return quotaDecision{}, err
 	}
-	if value := savedUsage(row); value != nil {
-		return quotaStatus(quotaForModel(*value, account.Provider, model), s.now()), nil
+	return s.snapshotQuota(account.Provider, model, row.Snapshot, row.UpdatedAt), nil
+}
+
+func (s *Service) snapshotQuota(provider, model string, raw []byte, updatedAt *int64) quotaDecision {
+	if !quotaRoutingSupported(provider) {
+		return quotaDecision{State: "unsupported"}
 	}
-	return quotaDecision{State: "unknown"}, nil
+	if value := decodeUsage(raw, updatedAt); value != nil {
+		return quotaStatus(quotaForModel(*value, provider, model), s.now())
+	}
+	return quotaDecision{State: "unknown"}
 }
 
 func quotaForModel(value upstream.Usage, provider, model string) upstream.Usage {
@@ -123,12 +134,24 @@ func (s *Service) warmUsage(ctx context.Context, userID, groupID int64, provider
 	if _, err := poolAccounts(ctx, s.queries, userID, groupID); err != nil {
 		return err
 	}
-	rows, err := s.queries.ListGroupCatalogs(ctx, groupID)
+	rows, err := s.queries.ListGroupUsage(ctx, groupID)
 	if err != nil {
 		return err
 	}
 	for _, row := range rows {
-		if quotaRoutingSupported(row.Provider) && (provider == "" || row.Provider == provider) {
+		if s.accounts.ProviderEnabled(row.Provider) && quotaRoutingSupported(row.Provider) && (provider == "" || row.Provider == provider) {
+			c := s.usage
+			c.mu.Lock()
+			now := c.now()
+			e, err := c.load(row.ID, db.GetAccountUsageRow{Snapshot: row.Snapshot, UpdatedAt: row.UpdatedAt, Revision: row.Revision}, now)
+			refresh := false
+			if err == nil {
+				refresh = e.flight == nil && !now.Before(e.retryAt) && (e.snapshot == nil || snapshotState(e, now).Stale)
+			}
+			c.mu.Unlock()
+			if !refresh {
+				continue
+			}
 			if _, err := s.usageSnapshot(ctx, row.ID, false, false); err != nil && ctx.Err() != nil {
 				return ctx.Err()
 			}

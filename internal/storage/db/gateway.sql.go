@@ -49,6 +49,62 @@ func (q *Queries) CreateAccountAffinity(ctx context.Context, arg CreateAccountAf
 	return err
 }
 
+const listRoutingAccounts = `-- name: ListRoutingAccounts :many
+SELECT a.id,a.provider,a.enabled,a.status,a.models_snapshot,a.models_revision,u.snapshot AS usage_snapshot,u.updated_at AS usage_updated_at
+FROM accounts a JOIN group_accounts ga ON ga.account_id=a.id
+LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
+WHERE a.tenant_id=?1 AND ga.group_id=?2
+ORDER BY a.created_at DESC,a.id DESC
+`
+
+type ListRoutingAccountsParams struct {
+	TenantID int64
+	GroupID  int64
+}
+
+type ListRoutingAccountsRow struct {
+	ID             string
+	Provider       string
+	Enabled        bool
+	Status         string
+	ModelsSnapshot []byte
+	ModelsRevision int64
+	UsageSnapshot  []byte
+	UsageUpdatedAt *int64
+}
+
+func (q *Queries) ListRoutingAccounts(ctx context.Context, arg ListRoutingAccountsParams) ([]ListRoutingAccountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRoutingAccounts, arg.TenantID, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRoutingAccountsRow{}
+	for rows.Next() {
+		var i ListRoutingAccountsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Provider,
+			&i.Enabled,
+			&i.Status,
+			&i.ModelsSnapshot,
+			&i.ModelsRevision,
+			&i.UsageSnapshot,
+			&i.UsageUpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSessionAffinities = `-- name: ListSessionAffinities :many
 SELECT provider, account_id, expires_at, model, rebound FROM account_affinity
 WHERE user_id = ?1 AND group_id = ?2
