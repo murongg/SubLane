@@ -261,7 +261,9 @@ if [[ $rollback_mode == false ]]; then
     fail 'Only bind mounts and local named data volumes are supported.'
   fi
   [[ $(printf '%s' "$configuration" | jq '[.services.sublane.volumes[]?|select(.target=="/run/sublane-keys" or .target=="/run/sublane-keys/credentials.key")]|length') == 0 ]] || fail 'The separate-key mount target is already used.'
-  private_file "$data_source/credentials.key" && [[ $(stat -c %s "$data_source/credentials.key") == 32 ]] || fail 'The original credential key must be a private regular 32-byte file.'
+  if ! { private_file "$data_source/credentials.key" && [[ $(stat -c %s "$data_source/credentials.key") == 32 ]]; }; then
+    fail 'The original credential key must be a private regular 32-byte file.'
+  fi
   service_uid=$(compose exec -T sublane id -u); service_gid=$(compose exec -T sublane id -g)
   [[ $service_uid =~ ^[0-9]+$ && $service_gid =~ ^[0-9]+$ ]] || fail 'Could not resolve the service user.'
   help=$(compose exec -T sublane sublane --help)
@@ -336,7 +338,9 @@ if ! { key_matches "$key_dir/credentials.key" && cmp -s "$state/source.key" "$ke
   fail 'External key copy validation failed.'
 fi
 sync -f "$key_dir/credentials.key"
-ready '' && [[ $(sha "$compose_path") == "$original_hash" ]] || fail 'Deployment changed during preflight.'
+if ! { ready '' && [[ $(sha "$compose_path") == "$original_hash" ]]; }; then
+  fail 'Deployment changed during preflight.'
+fi
 switching=true
 compose stop sublane >/dev/null
 install -m "$original_mode" -o "$original_uid" -g "$original_gid" "$state/candidate.compose" "$state/applying.compose"
