@@ -413,6 +413,7 @@
   "timeZoneSaveFailed": "無法儲存時區，目前設定保持不變。",
   "timeZoneSaved": "時區已儲存。",
   "timeZoneSave": "保存時區",
+  "clientVersionsTitle": "使用者端版本",
   "claudeVersionTitle": "Claude 使用者端版本",
   "claudeVersionDescription": "此配置影響整個實例的 Claude 訂閱請求。新請求使用目前生效版本，正在執行的請求保留原始版本。",
   "claudeVersionAutoHint": "每 6 小時檢查官方 Claude Code npm 軟體包的 stable 穩定頻道，檢查失敗時保留上次版本。",

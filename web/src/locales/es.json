@@ -413,6 +413,7 @@
   "timeZoneSaveFailed": "No se pudo guardar la zona horaria. La configuración actual no se modifica.",
   "timeZoneSaved": "Zona horaria guardada.",
   "timeZoneSave": "Guardar zona horaria",
+  "clientVersionsTitle": "Versiones de los clientes",
   "claudeVersionTitle": "Claude versión del cliente",
   "claudeVersionDescription": "Configuración de toda la instancia para Claude solicitudes de suscripción. Las nuevas solicitudes utilizan la versión seleccionada; Las solicitudes que ya se están ejecutando conservan su versión original.",
   "claudeVersionAutoHint": "Verifique el canal estable del paquete oficial Claude Code npm cada 6 horas. Las comprobaciones fallidas mantienen la última versión conocida.",

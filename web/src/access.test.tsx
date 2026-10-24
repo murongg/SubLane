@@ -124,6 +124,7 @@ it.each([
   '/admin/usage',
   '/admin/allocations',
   '/admin/settings',
+  '/admin/settings/clients',
   '/admin/settings/codex',
   '/admin/settings/backup',
   '/admin/settings/alerts',

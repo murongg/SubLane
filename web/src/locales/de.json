@@ -413,6 +413,7 @@
   "timeZoneSaveFailed": "Die Zeitzone konnte nicht gespeichert werden, die aktuelle Einstellung ist unverändert.",
   "timeZoneSaved": "Zeitzone gespeichert.",
   "timeZoneSave": "Zeitzone sparen",
+  "clientVersionsTitle": "Clientversionen",
   "claudeVersionTitle": "Claude Clientversion",
   "claudeVersionDescription": "Instanzweite Einstellungen für Claude Abonnementanfragen: Neue Anfragen verwenden die ausgewählte Version; bereits laufende Anfragen behalten ihre ursprüngliche Version bei.",
   "claudeVersionAutoHint": "Überprüfen Sie den Beamten Claude Der stabile Kanal des Code-NPM-Pakets alle 6 Stunden. Fehlgeschlagene Überprüfungen behalten die letzte bekannte Version.",

@@ -565,6 +565,7 @@ export const zh: Record<keyof typeof en, string> = {
   timeZoneSaveFailed: '无法保存时区，当前设置保持不变。',
   timeZoneSaved: '时区已保存。',
   timeZoneSave: '保存时区',
+  clientVersionsTitle: '客户端版本',
   claudeVersionTitle: 'Claude 客户端版本',
   claudeVersionDescription:
     '此配置影响整个实例的 Claude 订阅请求。新请求使用当前生效版本，正在执行的请求保留原版本。',
