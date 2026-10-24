@@ -637,6 +637,8 @@
   "usageSummary": "用量",
   "yourUsage": "我的用量",
   "teamUsage": "團隊用量",
+  "usageKey": "用量金鑰",
+  "usageAllKeys": "所有金鑰",
   "usagePeriod": "統計週期",
   "usageToday": "今天",
   "usageLastDays": "最近 {{days}} 天",

@@ -637,6 +637,8 @@
   "usageSummary": "Nutzung",
   "yourUsage": "Ihre Nutzung",
   "teamUsage": "Teamnutzung",
+  "usageKey": "Nutzungsschlüssel",
+  "usageAllKeys": "Alle Schlüssel",
   "usagePeriod": "Nutzungszeitraum",
   "usageToday": "Heute",
   "usageLastDays": "zuletzt {{days}} Tage",

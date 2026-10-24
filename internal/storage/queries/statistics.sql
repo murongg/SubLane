@@ -1,7 +1,7 @@
 -- name: RecordStatistics :exec
-INSERT INTO usage_daily(day,user_id,group_id,provider,model,requests,completed,incomplete,errors,canceled,rejected,duration_ms,input_tokens,output_tokens,cached_tokens,input_reported,output_reported,cached_reported)
-VALUES(sqlc.arg(day),sqlc.arg(user_id),sqlc.arg(group_id),sqlc.arg(provider),sqlc.arg(model),sqlc.arg(requests),sqlc.arg(completed),sqlc.arg(incomplete),sqlc.arg(errors),sqlc.arg(canceled),sqlc.arg(rejected),sqlc.arg(duration_ms),sqlc.arg(input_tokens),sqlc.arg(output_tokens),sqlc.arg(cached_tokens),sqlc.arg(input_reported),sqlc.arg(output_reported),sqlc.arg(cached_reported))
-ON CONFLICT(day,user_id,group_id,provider,model) DO UPDATE SET
+INSERT INTO usage_daily(day,user_id,group_id,provider,model,requests,completed,incomplete,errors,canceled,rejected,duration_ms,input_tokens,output_tokens,cached_tokens,input_reported,output_reported,cached_reported,key_id)
+VALUES(sqlc.arg(day),sqlc.arg(user_id),sqlc.arg(group_id),sqlc.arg(provider),sqlc.arg(model),sqlc.arg(requests),sqlc.arg(completed),sqlc.arg(incomplete),sqlc.arg(errors),sqlc.arg(canceled),sqlc.arg(rejected),sqlc.arg(duration_ms),sqlc.arg(input_tokens),sqlc.arg(output_tokens),sqlc.arg(cached_tokens),sqlc.arg(input_reported),sqlc.arg(output_reported),sqlc.arg(cached_reported),sqlc.arg(key_id))
+ON CONFLICT(day,user_id,group_id,provider,model,key_id) DO UPDATE SET
 requests=usage_daily.requests+excluded.requests,
 completed=usage_daily.completed+excluded.completed,
 incomplete=usage_daily.incomplete+excluded.incomplete,
@@ -18,6 +18,9 @@ cached_reported=usage_daily.cached_reported+excluded.cached_reported;
 
 -- name: GetStatisticsCoverage :one
 SELECT value FROM settings WHERE key='usage.daily.started_at';
+
+-- name: GetKeyStatisticsCoverage :one
+SELECT value FROM settings WHERE key='usage.keys.started_at';
 
 -- name: CanTrackStatisticsModel :one
 SELECT CAST(
@@ -85,7 +88,7 @@ CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
 FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
-WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND s.user_id=sqlc.arg(user_id);
+WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND s.user_id=sqlc.arg(user_id) AND (s.key_id=sqlc.arg(key_id) OR sqlc.arg(key_id)=0);
 
 
 -- name: ListUserStatistics :many
@@ -105,5 +108,5 @@ CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
 FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id JOIN account_groups g ON g.id=s.group_id
-WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND s.user_id=sqlc.arg(user_id)
+WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND s.user_id=sqlc.arg(user_id) AND (s.key_id=sqlc.arg(key_id) OR sqlc.arg(key_id)=0)
 GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT sqlc.arg(max_rows);

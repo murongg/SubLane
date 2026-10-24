@@ -637,6 +637,8 @@
   "usageSummary": "使用量",
   "yourUsage": "あなたの使用状況",
   "teamUsage": "チームの利用状況",
+  "usageKey": "使用量のキー",
+  "usageAllKeys": "すべてのキー",
   "usagePeriod": "利用期間",
   "usageToday": "今日",
   "usageLastDays": "過去 {{days}} 日間",

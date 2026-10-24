@@ -29,7 +29,7 @@ CAST(SUM(h.output_tokens) AS INTEGER) AS output_tokens,
 CAST(SUM(h.input_reported) AS INTEGER) AS input_reported,
 CAST(SUM(h.output_reported) AS INTEGER) AS output_reported
 FROM usage_hourly h
-WHERE h.tenant_id=?1 AND h.hour>=?2 AND h.hour<?3 AND (h.user_id=?4 OR ?4=0)
+WHERE h.tenant_id=?1 AND h.hour>=?2 AND h.hour<?3 AND (h.user_id=?4 OR ?4=0) AND (h.key_id=?5 OR ?5=0)
 GROUP BY 1,2 ORDER BY 1,2 LIMIT 168
 `
 
@@ -38,6 +38,7 @@ type ListHourlyActivityParams struct {
 	FromHour int64
 	ToHour   int64
 	UserID   int64
+	KeyID    int64
 }
 
 type ListHourlyActivityRow struct {
@@ -56,6 +57,7 @@ func (q *Queries) ListHourlyActivity(ctx context.Context, arg ListHourlyActivity
 		arg.FromHour,
 		arg.ToHour,
 		arg.UserID,
+		arg.KeyID,
 	)
 	if err != nil {
 		return nil, err
@@ -99,9 +101,9 @@ func (q *Queries) PruneHourlyUsage(ctx context.Context, beforeHour int64) (int64
 }
 
 const recordHourlyUsage = `-- name: RecordHourlyUsage :exec
-INSERT INTO usage_hourly(tenant_id,hour,user_id,requests,input_tokens,output_tokens,input_reported,output_reported)
-VALUES((SELECT tenant_id FROM account_groups WHERE id=?1),?2,?3,?4,?5,?6,?7,?8)
-ON CONFLICT(tenant_id,hour,user_id) DO UPDATE SET
+INSERT INTO usage_hourly(tenant_id,hour,user_id,requests,input_tokens,output_tokens,input_reported,output_reported,key_id)
+VALUES((SELECT tenant_id FROM account_groups WHERE id=?1),?2,?3,?4,?5,?6,?7,?8,?9)
+ON CONFLICT(tenant_id,hour,user_id,key_id) DO UPDATE SET
 requests=usage_hourly.requests+excluded.requests,
 input_tokens=usage_hourly.input_tokens+excluded.input_tokens,
 output_tokens=usage_hourly.output_tokens+excluded.output_tokens,
@@ -118,6 +120,7 @@ type RecordHourlyUsageParams struct {
 	OutputTokens   int64
 	InputReported  int64
 	OutputReported int64
+	KeyID          int64
 }
 
 func (q *Queries) RecordHourlyUsage(ctx context.Context, arg RecordHourlyUsageParams) error {
@@ -130,6 +133,7 @@ func (q *Queries) RecordHourlyUsage(ctx context.Context, arg RecordHourlyUsagePa
 		arg.OutputTokens,
 		arg.InputReported,
 		arg.OutputReported,
+		arg.KeyID,
 	)
 	return err
 }

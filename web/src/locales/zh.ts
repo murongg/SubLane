@@ -828,6 +828,8 @@ export const zh: Record<keyof typeof en, string> = {
   usageSummary: '用量概览',
   yourUsage: '我的用量',
   teamUsage: '团队用量',
+  usageKey: '用量密钥',
+  usageAllKeys: '所有密钥',
   usagePeriod: '统计周期',
   usageToday: '今天',
   usageLastDays: '最近 {{days}} 天',

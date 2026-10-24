@@ -39,6 +39,17 @@ func (q *Queries) CanTrackStatisticsModel(ctx context.Context, arg CanTrackStati
 	return column_1, err
 }
 
+const getKeyStatisticsCoverage = `-- name: GetKeyStatisticsCoverage :one
+SELECT value FROM settings WHERE key='usage.keys.started_at'
+`
+
+func (q *Queries) GetKeyStatisticsCoverage(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, getKeyStatisticsCoverage)
+	var value string
+	err := row.Scan(&value)
+	return value, err
+}
+
 const getStatisticsCoverage = `-- name: GetStatisticsCoverage :one
 SELECT value FROM settings WHERE key='usage.daily.started_at'
 `
@@ -126,7 +137,7 @@ CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
 FROM usage_daily s JOIN account_groups g ON g.id=s.group_id
-WHERE g.tenant_id=?1 AND s.day>=?2 AND s.day<?3 AND s.user_id=?4
+WHERE g.tenant_id=?1 AND s.day>=?2 AND s.day<?3 AND s.user_id=?4 AND (s.key_id=?5 OR ?5=0)
 `
 
 type GetUserStatisticsTotalsParams struct {
@@ -134,6 +145,7 @@ type GetUserStatisticsTotalsParams struct {
 	FromDay  int64
 	ToDay    int64
 	UserID   int64
+	KeyID    int64
 }
 
 type GetUserStatisticsTotalsRow struct {
@@ -158,6 +170,7 @@ func (q *Queries) GetUserStatisticsTotals(ctx context.Context, arg GetUserStatis
 		arg.FromDay,
 		arg.ToDay,
 		arg.UserID,
+		arg.KeyID,
 	)
 	var i GetUserStatisticsTotalsRow
 	err := row.Scan(
@@ -287,8 +300,8 @@ CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
 FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id JOIN account_groups g ON g.id=s.group_id
-WHERE g.tenant_id=?2 AND s.day>=?3 AND s.day<?4 AND s.user_id=?5
-GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT ?6
+WHERE g.tenant_id=?2 AND s.day>=?3 AND s.day<?4 AND s.user_id=?5 AND (s.key_id=?6 OR ?6=0)
+GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT ?7
 `
 
 type ListUserStatisticsParams struct {
@@ -297,6 +310,7 @@ type ListUserStatisticsParams struct {
 	FromDay   int64
 	ToDay     int64
 	UserID    int64
+	KeyID     int64
 	MaxRows   int64
 }
 
@@ -325,6 +339,7 @@ func (q *Queries) ListUserStatistics(ctx context.Context, arg ListUserStatistics
 		arg.FromDay,
 		arg.ToDay,
 		arg.UserID,
+		arg.KeyID,
 		arg.MaxRows,
 	)
 	if err != nil {
@@ -377,9 +392,9 @@ func (q *Queries) PruneStatistics(ctx context.Context, beforeDay int64) (int64, 
 }
 
 const recordStatistics = `-- name: RecordStatistics :exec
-INSERT INTO usage_daily(day,user_id,group_id,provider,model,requests,completed,incomplete,errors,canceled,rejected,duration_ms,input_tokens,output_tokens,cached_tokens,input_reported,output_reported,cached_reported)
-VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
-ON CONFLICT(day,user_id,group_id,provider,model) DO UPDATE SET
+INSERT INTO usage_daily(day,user_id,group_id,provider,model,requests,completed,incomplete,errors,canceled,rejected,duration_ms,input_tokens,output_tokens,cached_tokens,input_reported,output_reported,cached_reported,key_id)
+VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)
+ON CONFLICT(day,user_id,group_id,provider,model,key_id) DO UPDATE SET
 requests=usage_daily.requests+excluded.requests,
 completed=usage_daily.completed+excluded.completed,
 incomplete=usage_daily.incomplete+excluded.incomplete,
@@ -414,6 +429,7 @@ type RecordStatisticsParams struct {
 	InputReported  int64
 	OutputReported int64
 	CachedReported int64
+	KeyID          int64
 }
 
 func (q *Queries) RecordStatistics(ctx context.Context, arg RecordStatisticsParams) error {
@@ -436,6 +452,7 @@ func (q *Queries) RecordStatistics(ctx context.Context, arg RecordStatisticsPara
 		arg.InputReported,
 		arg.OutputReported,
 		arg.CachedReported,
+		arg.KeyID,
 	)
 	return err
 }

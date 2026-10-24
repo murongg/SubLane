@@ -637,6 +637,8 @@
   "usageSummary": "Использование",
   "yourUsage": "Ваше использование",
   "teamUsage": "Использование командой",
+  "usageKey": "Ключ статистики",
+  "usageAllKeys": "Все ключи",
   "usagePeriod": "Срок использования",
   "usageToday": "Сегодня",
   "usageLastDays": "Последний {{days}} дни",

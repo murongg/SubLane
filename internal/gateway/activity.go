@@ -25,7 +25,7 @@ type Activity struct {
 	Cells         []ActivityCell `json:"cells"`
 }
 
-func readActivity(ctx context.Context, q *db.Queries, tenantID, userID, from, to, now int64) (Activity, error) {
+func readActivity(ctx context.Context, q *db.Queries, tenantID, userID, keyID, from, to, now int64) (Activity, error) {
 	result := Activity{Cells: make([]ActivityCell, 168), ObservedUntil: min(now, to-1)}
 	for i := range result.Cells {
 		result.Cells[i].Weekday = int64(i / 24)
@@ -38,6 +38,18 @@ func readActivity(ctx context.Context, q *db.Queries, tenantID, userID, from, to
 	since, err := strconv.ParseInt(coverage, 10, 64)
 	if err != nil {
 		return result, err
+	}
+	if keyID != 0 {
+		coverage, err := q.GetKeyStatisticsCoverage(ctx)
+		if err != nil {
+			return result, err
+		}
+		keySince, err := strconv.ParseInt(coverage, 10, 64)
+		if err != nil {
+			return result, err
+		}
+		// Legacy hourly buckets have no key attribution; those hours must remain unobserved.
+		since = max(since, keySince)
 	}
 	result.TrackingSince = since
 	start := max(from, since)
@@ -52,7 +64,7 @@ func readActivity(ctx context.Context, q *db.Queries, tenantID, userID, from, to
 		index := (int(stamp.Weekday())+6)%7*24 + stamp.Hour()
 		result.Cells[index].Samples++
 	}
-	rows, err := q.ListHourlyActivity(ctx, db.ListHourlyActivityParams{TenantID: tenantID, UserID: userID, FromHour: firstHour, ToHour: result.ObservedUntil - result.ObservedUntil%3600 + 3600})
+	rows, err := q.ListHourlyActivity(ctx, db.ListHourlyActivityParams{TenantID: tenantID, UserID: userID, KeyID: keyID, FromHour: firstHour, ToHour: result.ObservedUntil - result.ObservedUntil%3600 + 3600})
 	if err != nil {
 		return result, err
 	}
