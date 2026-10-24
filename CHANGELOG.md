@@ -2,6 +2,17 @@
 
 All notable changes are documented here in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [0.13.0] - 2026-10-24
+
+### Added
+
+- Add scheduled encrypted backups (#119)
+- Add opt-in quota-weighted rotation (#120)
+- Export request history and usage as CSV (#121)
+- Notify at member allowance thresholds (#122)
+- Expose protected Prometheus gateway telemetry (#123)
+- Automate Compose credential-key separation (#124)
+
 ## [0.12.0] - 2026-10-23
 
 ### Changed
@@ -279,6 +290,7 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 - Distinguish remaining quota with status colors
 - Restore version-gated model discovery
 
+[0.13.0]: https://github.com/murongg/SubLane/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/murongg/SubLane/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/murongg/SubLane/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/murongg/SubLane/compare/v0.9.0...v0.10.0
