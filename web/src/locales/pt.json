@@ -413,6 +413,7 @@
   "timeZoneSaveFailed": "Não foi possível salvar o fuso horário. A configuração atual está inalterada.",
   "timeZoneSaved": "Fuso horário salvo.",
   "timeZoneSave": "Gravar o fuso horário",
+  "clientVersionsTitle": "Versões dos clientes",
   "claudeVersionTitle": "Claude versão do cliente",
   "claudeVersionDescription": "Configurações de toda a instância para Claude requisições de subscrição. Os pedidos novos usam a versão seleccionada; os pedidos já em execução mantêm a sua versão original.",
   "claudeVersionAutoHint": "Verificar o funcionário Claude Canal estável do pacote npm do código a cada 6 horas. Verificações falhadas mantêm a última versão conhecida.",

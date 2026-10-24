@@ -618,6 +618,7 @@ export const en = {
     'Could not save the time zone. The current setting is unchanged.',
   timeZoneSaved: 'Time zone saved.',
   timeZoneSave: 'Save time zone',
+  clientVersionsTitle: 'Client versions',
   claudeVersionTitle: 'Claude client version',
   claudeVersionDescription:
     'Instance-wide settings for Claude subscription requests. New requests use the selected version; requests already running retain their original version.',

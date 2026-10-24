@@ -69,7 +69,7 @@ const routes = root.addChildren([
       path: '/',
       beforeLoad: () => {
         // Redirect before rendering so an old index page cannot redirect a later navigation.
-        throw redirect({ to: '/admin/settings/codex', replace: true })
+        throw redirect({ to: '/admin/settings/clients', replace: true })
       },
     }),
     createRoute({
@@ -82,28 +82,22 @@ const routes = root.addChildren([
     }),
     createRoute({
       getParentRoute: () => settings,
-      path: 'claude',
+      path: 'clients',
       component: lazyRouteComponent(
         () => import('@/pages/System'),
-        'ClaudeSettings',
+        'ClientVersions',
       ),
     }),
-    createRoute({
-      getParentRoute: () => settings,
-      path: 'grok',
-      component: lazyRouteComponent(
-        () => import('@/pages/System'),
-        'GrokSettings',
-      ),
-    }),
-    createRoute({
-      getParentRoute: () => settings,
-      path: 'codex',
-      component: lazyRouteComponent(
-        () => import('@/pages/System'),
-        'CodexSettings',
-      ),
-    }),
+    ...(['codex', 'grok', 'claude'] as const).map((path) =>
+      createRoute({
+        getParentRoute: () => settings,
+        path,
+        beforeLoad: () => {
+          // Keep saved provider links working after consolidating version settings.
+          throw redirect({ to: '/admin/settings/clients', replace: true })
+        },
+      }),
+    ),
   ]),
   createRoute({
     getParentRoute: () => root,

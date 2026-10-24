@@ -36,24 +36,19 @@ export function AlertSettings() {
   ) : null
 }
 
-export function CodexSettings() {
+export function ClientVersions() {
   const { data } = useQuery(authOptions())
-  return data?.user?.role === 'admin' ? (
-    <ClientVersion key={data.user.id} userID={data.user.id} />
-  ) : null
-}
-
-export function GrokSettings() {
-  const { data } = useQuery(authOptions())
-  return data?.user?.role === 'admin' && data.user.id === 1 ? (
-    <ClientVersion key={data.user.id} userID={data.user.id} provider="grok" />
-  ) : null
-}
-
-export function ClaudeSettings() {
-  const { data } = useQuery(authOptions())
-  return data?.user?.role === 'admin' && data.user.id === 1 ? (
-    <ClientVersion key={data.user.id} userID={data.user.id} provider="claude" />
+  const user = data?.user
+  return user?.role === 'admin' && user.id === 1 ? (
+    <>
+      {(['codex', 'grok', 'claude'] as const).map((provider) => (
+        <ClientVersion
+          key={`${user.id}-${provider}`}
+          userID={user.id}
+          provider={provider}
+        />
+      ))}
+    </>
   ) : null
 }
 

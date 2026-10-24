@@ -413,6 +413,7 @@
   "timeZoneSaveFailed": "タイムゾーンを保存できませんでした。現在の設定は変更されません。",
   "timeZoneSaved": "タイムゾーンが保存されました。",
   "timeZoneSave": "タイムゾーンを保存する",
+  "clientVersionsTitle": "クライアントのバージョン",
   "claudeVersionTitle": "Claude クライアントのバージョン",
   "claudeVersionDescription": "Claude サブスクリプション リクエストのインスタンス全体の設定。新しいリクエストでは、選択したバージョンが使用されます。すでに実行されているリクエストは元のバージョンを保持します。",
   "claudeVersionAutoHint": "公式の Claude Code npm パッケージの安定したチャネルを 6 時間ごとに確認してください。チェックに失敗すると、既知の最後のバージョンが保持されます。",

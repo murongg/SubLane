@@ -413,6 +413,7 @@
   "timeZoneSaveFailed": "Impossible d'enregistrer le fuseau horaire. Le réglage actuel est inchangé.",
   "timeZoneSaved": "Le fuseau horaire a économisé.",
   "timeZoneSave": "Economisez un fuseau horaire",
+  "clientVersionsTitle": "Versions des clients",
   "claudeVersionTitle": "Claude version client",
   "claudeVersionDescription": "Paramètres à l'échelle de l'instance pour Claude Les nouvelles requêtes utilisent la version sélectionnée; les requêtes en cours d'exécution conservent leur version originale.",
   "claudeVersionAutoHint": "Vérifiez le fonctionnaire Claude Code npm packageS stable canal toutes les 6 heures. Les contrôles échoués gardent la dernière version connue.",
