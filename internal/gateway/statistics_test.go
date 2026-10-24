@@ -2,15 +2,99 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/storage/db"
 )
+
+func TestKeyStatisticsSurviveHistoryCleanupAndKeepUnknownCoverage(t *testing.T) {
+	ctx := context.Background()
+	var calls atomic.Int64
+	s, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
+		if calls.Add(1) == 1 {
+			return syntheticStream(), nil
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"synthetic\",\"output\":[]}}\n\n"))}, nil
+	}))
+	now := time.Now().UTC()
+	s.now = func() time.Time { return now }
+	since := now.Add(-30 * time.Minute).Unix()
+	if _, err := s.db.Exec(`UPDATE settings SET value=? WHERE key='usage.keys.started_at'`, since); err != nil {
+		t.Fatal(err)
+	}
+	var keyIDs []int64
+	for i := byte(1); i <= 2; i++ {
+		digest := make([]byte, 32)
+		digest[0] = i
+		id, err := s.queries.CreateKey(ctx, db.CreateKeyParams{UserID: 1, GroupID: 1, Name: "Synthetic key", Prefix: "sl_synthetic", TokenHash: digest, CreatedAt: since})
+		if err != nil {
+			t.Fatal(err)
+		}
+		keyIDs = append(keyIDs, id)
+		r, err := s.Open(WithRequestIdentity(ctx, id, "http"), 1, 1, []byte(`{"model":"synthetic-model","input":"synthetic"}`), nil, Responses)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := r.Events(func([]byte) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+		r.Body.Close()
+	}
+	if err := recordStatistics(ctx, s.queries, db.RecordRequestParams{UserID: 1, GroupID: 1, StartedAt: now.Add(-2 * time.Hour).Unix(), Outcome: "success"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec("DELETE FROM request_records"); err != nil {
+		t.Fatal(err)
+	}
+	restarted := New(ctx, s.db, s.accounts, s.provider)
+	defer restarted.Close()
+	restarted.now = s.now
+	for i, keyID := range keyIDs {
+		page, err := restarted.UserKeyStatistics(ctx, 1, keyID, 7)
+		if err != nil || page.Totals.Requests != 1 || page.TrackingSince != since || page.Activity.TrackingSince < since {
+			t.Fatal("key statistics lost their data or independent coverage", page, err)
+		}
+		if i == 0 && (page.Totals.InputReported != 1 || page.Totals.InputTokens != 3) || i == 1 && page.Totals.InputReported != 0 {
+			t.Fatal("key usage fabricated missing tokens", page.Totals)
+		}
+		var requests int64
+		for _, cell := range page.Activity.Cells {
+			requests += cell.Requests
+		}
+		if requests != 1 {
+			t.Fatal("key heatmap mixed legacy/other key usage", requests)
+		}
+	}
+	all, err := restarted.UserStatistics(ctx, 1, 7)
+	if err != nil || all.Totals.Requests != 3 {
+		t.Fatal("all-key totals lost legacy usage", all.Totals, err)
+	}
+	other := NewForTenant(ctx, s.db, nil, nil, 2)
+	defer other.Close()
+	if _, err := other.UserKeyStatistics(ctx, 1, keyIDs[0], 7); !errors.Is(err, apikey.ErrNotFound) {
+		t.Fatal("key statistics crossed workspace boundary", err)
+	}
+	for _, pair := range [][2]int64{{0, keyIDs[0]}, {1, 0}, {1, -1}} {
+		if _, err := s.UserKeyStatistics(ctx, pair[0], pair[1], 7); err == nil {
+			t.Fatal("unscoped key statistics admitted", pair)
+		}
+	}
+	if _, err := s.db.Exec(`UPDATE settings SET value='invalid' WHERE key='usage.keys.started_at'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UserKeyStatistics(ctx, 1, keyIDs[0], 7); err == nil {
+		t.Fatal("corrupt key coverage treated as zero")
+	}
+}
 
 func TestStatisticsAreDurableIndependentAndOwnerScoped(t *testing.T) {
 	ctx := context.Background()

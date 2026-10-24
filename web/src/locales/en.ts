@@ -909,6 +909,8 @@ export const en = {
   usageSummary: 'Usage',
   yourUsage: 'Your usage',
   teamUsage: 'Team usage',
+  usageKey: 'Usage key',
+  usageAllKeys: 'All keys',
   usagePeriod: 'Usage period',
   usageToday: 'Today',
   usageLastDays: 'Last {{days}} days',

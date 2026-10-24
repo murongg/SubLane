@@ -80,9 +80,11 @@ export function statisticsOptions(
   userID: number,
   scope: UsageScope,
   days: number,
+  keyID?: number,
 ) {
+  const selectedKey = scope === 'personal' ? keyID : undefined
   return queryOptions({
-    queryKey: ['statistics', userID, scope, days],
+    queryKey: ['statistics', userID, scope, days, selectedKey ?? null],
     enabled: () => {
       const user = client.getQueryData<AuthState>(authKey)?.user
       return (
@@ -91,7 +93,7 @@ export function statisticsOptions(
     },
     queryFn: ({ signal }) =>
       request(
-        `${scope === 'personal' ? '/api/me/usage' : '/api/usage'}?days=${days}`,
+        `${scope === 'personal' ? '/api/me/usage' : '/api/usage'}?days=${days}${selectedKey === undefined ? '' : `&key_id=${selectedKey}`}`,
         statisticsSchema,
         { signal },
       ),

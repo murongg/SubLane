@@ -78,6 +78,21 @@ func TestDemoLoginReadOnlyAndCleanup(t *testing.T) {
 	if requests != report.Totals.Requests || inputs != report.Totals.InputTokens || outputs != report.Totals.OutputTokens {
 		t.Fatal("daily usage does not match totals")
 	}
+	var personal, keyReport gateway.Statistics
+	if err := json.Unmarshal(call("GET", "/api/me/usage?days=30", "", cookie).Body.Bytes(), &personal); err != nil {
+		t.Fatal(err)
+	}
+	keyResponse := call("GET", "/api/me/usage?days=30&key_id=1", "", cookie)
+	if err := json.Unmarshal(keyResponse.Body.Bytes(), &keyReport); err != nil || keyResponse.Code != 200 || keyReport.Totals.Requests == 0 || keyReport.Totals != personal.Totals || keyReport.TrackingSince != personal.TrackingSince {
+		t.Fatal("demo key statistics missing seeded usage/coverage", keyReport.Totals, keyReport.TrackingSince, err)
+	}
+	var keyRequests int64
+	for _, cell := range keyReport.Activity.Cells {
+		keyRequests += cell.Requests
+	}
+	if keyRequests != keyReport.Totals.Requests {
+		t.Fatal("demo key heatmap lost seeded usage", keyRequests)
+	}
 	filtered := call("GET", "/api/requests?outcome=error&until="+strconv.FormatInt(time.Now().Unix()+1, 10), "", cookie)
 	if err := json.Unmarshal(filtered.Body.Bytes(), &history); err != nil || len(history.Requests) == 0 {
 		t.Fatalf("filtered history: %s %v", filtered.Body.String(), err)

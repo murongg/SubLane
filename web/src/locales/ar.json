@@ -637,6 +637,8 @@
   "usageSummary": "الاستخدام",
   "yourUsage": "استخدامك",
   "teamUsage": "استخدام الفريق",
+  "usageKey": "مفتاح الاستخدام",
+  "usageAllKeys": "كل المفاتيح",
   "usagePeriod": "فترة الاستخدام",
   "usageToday": "اليوم",
   "usageLastDays": "الأخير {{days}} أيام",

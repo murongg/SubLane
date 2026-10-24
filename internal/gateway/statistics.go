@@ -2,11 +2,14 @@ package gateway
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
+	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
@@ -43,15 +46,21 @@ type Statistics struct {
 }
 
 func (s *Service) Statistics(ctx context.Context, days int64) (Statistics, error) {
-	return s.statistics(ctx, 0, days)
+	return s.statistics(ctx, 0, days, 0)
 }
 func (s *Service) UserStatistics(ctx context.Context, userID, days int64) (Statistics, error) {
 	if userID <= 0 {
 		return Statistics{}, accounts.ErrInput
 	}
-	return s.statistics(ctx, userID, days)
+	return s.statistics(ctx, userID, days, 0)
 }
-func (s *Service) statistics(ctx context.Context, userID, days int64) (Statistics, error) {
+func (s *Service) UserKeyStatistics(ctx context.Context, userID, keyID, days int64) (Statistics, error) {
+	if userID <= 0 || keyID <= 0 {
+		return Statistics{}, accounts.ErrInput
+	}
+	return s.statistics(ctx, userID, days, keyID)
+}
+func (s *Service) statistics(ctx context.Context, userID, days, keyID int64) (Statistics, error) {
 	if days != 1 && days != 7 && days != 30 && days != 90 {
 		return Statistics{}, accounts.ErrInput
 	}
@@ -64,14 +73,29 @@ func (s *Service) statistics(ctx context.Context, userID, days int64) (Statistic
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
+	if keyID != 0 {
+		// Revoked keys keep their usage, but ownership and workspace still gate every read.
+		if _, err := q.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID, TenantID: s.tenantID}); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return page, apikey.ErrNotFound
+			}
+			return page, err
+		}
+	}
 	// All summaries use one snapshot; concurrent completions cannot make totals and breakdowns disagree.
-	page.Activity, err = readActivity(ctx, q, s.tenantID, userID, page.FromDay, page.ToDay, now.Unix())
+	page.Activity, err = readActivity(ctx, q, s.tenantID, userID, keyID, page.FromDay, page.ToDay, now.Unix())
 	if err != nil {
 		return page, err
 	}
 	coverage, err := q.GetStatisticsCoverage(ctx)
 	if err != nil {
 		return page, err
+	}
+	if keyID != 0 {
+		coverage, err = q.GetKeyStatisticsCoverage(ctx)
+		if err != nil {
+			return page, err
+		}
 	}
 	// Parse metadata explicitly: SQLite CAST would turn invalid text into a misleading zero.
 	page.TrackingSince, err = strconv.ParseInt(coverage, 10, 64)
@@ -82,7 +106,7 @@ func (s *Service) statistics(ctx context.Context, userID, days int64) (Statistic
 	if userID == 0 {
 		totals, err = q.GetStatisticsTotals(ctx, db.GetStatisticsTotalsParams{TenantID: s.tenantID, FromDay: page.FromDay, ToDay: page.ToDay})
 	} else {
-		personal, readErr := q.GetUserStatisticsTotals(ctx, db.GetUserStatisticsTotalsParams{TenantID: s.tenantID, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID})
+		personal, readErr := q.GetUserStatisticsTotals(ctx, db.GetUserStatisticsTotalsParams{TenantID: s.tenantID, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID, KeyID: keyID})
 		totals, err = db.GetStatisticsTotalsRow(personal), readErr
 	}
 	if err != nil {
@@ -96,7 +120,7 @@ func (s *Service) statistics(ctx context.Context, userID, days int64) (Statistic
 		if userID == 0 {
 			rows, err = q.ListStatistics(ctx, db.ListStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: page.FromDay, ToDay: page.ToDay, MaxRows: maxRows})
 		} else {
-			personal, readErr := q.ListUserStatistics(ctx, db.ListUserStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID, MaxRows: maxRows})
+			personal, readErr := q.ListUserStatistics(ctx, db.ListUserStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID, KeyID: keyID, MaxRows: maxRows})
 			err = readErr
 			for _, row := range personal {
 				rows = append(rows, db.ListStatisticsRow(row))
@@ -156,7 +180,7 @@ func recordStatistics(ctx context.Context, q *db.Queries, r db.RecordRequestPara
 	if tracked == 0 {
 		model = "[other models]"
 	}
-	entry := db.RecordStatisticsParams{Day: r.StartedAt - r.StartedAt%86400, UserID: r.UserID, GroupID: r.GroupID, Provider: r.Provider, Model: model, Requests: 1, DurationMs: r.DurationMs}
+	entry := db.RecordStatisticsParams{Day: r.StartedAt - r.StartedAt%86400, UserID: r.UserID, KeyID: r.KeyID, GroupID: r.GroupID, Provider: r.Provider, Model: model, Requests: 1, DurationMs: r.DurationMs}
 	switch r.Outcome {
 	case "success":
 		entry.Completed = 1
@@ -188,5 +212,5 @@ func recordStatistics(ctx context.Context, q *db.Queries, r db.RecordRequestPara
 	if err := q.RecordStatistics(ctx, entry); err != nil {
 		return err
 	}
-	return q.RecordHourlyUsage(ctx, db.RecordHourlyUsageParams{GroupID: r.GroupID, Hour: r.StartedAt - r.StartedAt%3600, UserID: r.UserID, Requests: entry.Requests, InputTokens: entry.InputTokens, OutputTokens: entry.OutputTokens, InputReported: entry.InputReported, OutputReported: entry.OutputReported})
+	return q.RecordHourlyUsage(ctx, db.RecordHourlyUsageParams{GroupID: r.GroupID, Hour: r.StartedAt - r.StartedAt%3600, UserID: r.UserID, KeyID: r.KeyID, Requests: entry.Requests, InputTokens: entry.InputTokens, OutputTokens: entry.OutputTokens, InputReported: entry.InputReported, OutputReported: entry.OutputReported})
 }

@@ -4,6 +4,7 @@ import { ChevronDown, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { authOptions } from '@/lib/auth'
 import { useTimeZone } from '@/lib/timezone'
+import type { APIKey } from '@/lib/keys'
 import {
   statisticsOptions,
   ownLimitOptions,
@@ -15,6 +16,7 @@ import { statisticsRows } from '@/lib/csv'
 import { UsageChart } from '@/components/UsageChart'
 import { PersonalAllocations } from '@/components/PersonalAllocations'
 import { ActivityMap } from '@/components/ActivityMap'
+import { UsageKey } from '@/components/UsageKey'
 import {
   metricLabels,
   type UsageMetric,
@@ -52,12 +54,16 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
   const timeZone = useTimeZone()
   const client = useQueryClient()
   const [days, setDays] = useState(7)
+  // Retain the selected label when its key is on another result page.
+  const [selectedKey, setSelectedKey] = useState<APIKey | null>(null)
   const [metric, setMetric] = useState<UsageMetric>('requests')
   const [showDetails, setShowDetails] = useState(false)
   const [view, setView] = useState<'days' | 'models' | 'groups' | 'members'>(
     'days',
   )
-  const query = useQuery(statisticsOptions(client, userID, scope, days))
+  const query = useQuery(
+    statisticsOptions(client, userID, scope, days, selectedKey?.id),
+  )
   const limits = useQuery(ownLimitOptions(client, userID, scope))
   const number = new Intl.NumberFormat(i18n.resolvedLanguage ?? 'en', {
     maximumFractionDigits: 1,
@@ -178,6 +184,13 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        {scope === 'personal' && (
+          <UsageKey
+            userID={userID}
+            value={selectedKey}
+            onChange={setSelectedKey}
+          />
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" aria-label={t('usageBreakdown')}>
@@ -327,7 +340,7 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
                   </p>
                 </div>
                 <ActivityMap
-                  key={days}
+                  key={days + ':' + selectedKey?.id}
                   activity={query.data.activity}
                   metric={metric}
                 />
@@ -339,7 +352,7 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
                   className="rounded-xl border border-border bg-card p-4 sm:p-6"
                 >
                   <UsageChart
-                    key={view + days + metric}
+                    key={view + days + metric + selectedKey?.id}
                     rows={rows.map((row) => ({ ...row, name: rowName(row) }))}
                     metric={metric}
                     daily={view === 'days'}
@@ -347,7 +360,7 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
                   />
                 </section>
                 <ActivityMap
-                  key={days}
+                  key={days + ':' + selectedKey?.id}
                   activity={query.data.activity}
                   metric={metric}
                 />

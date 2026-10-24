@@ -94,7 +94,7 @@ func seed(ctx context.Context, connection *sql.DB, identity *auth.Service, accou
 				Outcome: "success", InputTokens: &input, OutputTokens: &output, CachedTokens: &cached, FirstTokenMs: &first,
 				RequestID: fmt.Sprintf("req_demo_%02d_%02d", day, index), ReasoningEffort: "medium",
 			}
-			metrics := db.RecordStatisticsParams{Day: at.Truncate(24 * time.Hour).Unix(), UserID: record.UserID, GroupID: groupID, Provider: "codex", Model: model,
+			metrics := db.RecordStatisticsParams{Day: at.Truncate(24 * time.Hour).Unix(), UserID: record.UserID, KeyID: record.KeyID, GroupID: groupID, Provider: "codex", Model: model,
 				Requests: 1, Completed: 1, DurationMs: record.DurationMs, InputTokens: input, OutputTokens: output, CachedTokens: cached, InputReported: 1, OutputReported: 1, CachedReported: 1}
 			if index%13 == 12 {
 				record.Outcome, record.ErrorCode = "error", "upstream_error"
@@ -109,7 +109,7 @@ func seed(ctx context.Context, connection *sql.DB, identity *auth.Service, accou
 			if err := q.RecordStatistics(ctx, metrics); err != nil {
 				return err
 			}
-			if err := q.RecordHourlyUsage(ctx, db.RecordHourlyUsageParams{GroupID: groupID, Hour: at.Truncate(time.Hour).Unix(), UserID: record.UserID,
+			if err := q.RecordHourlyUsage(ctx, db.RecordHourlyUsageParams{GroupID: groupID, Hour: at.Truncate(time.Hour).Unix(), UserID: record.UserID, KeyID: record.KeyID,
 				Requests: 1, InputTokens: metrics.InputTokens, OutputTokens: metrics.OutputTokens, InputReported: metrics.InputReported, OutputReported: metrics.OutputReported}); err != nil {
 				return err
 			}
