@@ -43,6 +43,8 @@ export const auditActions: Record<string, keyof typeof en> = {
   'account.concurrency': 'auditAccountConcurrency',
   'account.resume': 'auditAccountResume',
   'account.proxy': 'auditAccountProxy',
+  'account.reset_settings': 'auditAccountResetSettings',
+  'account.reset_use': 'auditAccountResetUse',
   'proxy.create': 'auditProxyCreate',
   'proxy.update': 'auditProxyUpdate',
   'proxy.delete': 'auditProxyDelete',

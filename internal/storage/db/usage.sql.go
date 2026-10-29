@@ -10,8 +10,8 @@ import (
 )
 
 const getAccountUsage = `-- name: GetAccountUsage :one
-SELECT u.snapshot, u.updated_at, a.models_revision AS revision
-FROM accounts a LEFT JOIN account_usage u ON u.account_id = a.id AND u.revision = a.models_revision
+SELECT u.snapshot, u.updated_at, a.models_revision+a.usage_revision AS revision
+FROM accounts a LEFT JOIN account_usage u ON u.account_id = a.id AND u.revision = a.models_revision+a.usage_revision
 WHERE a.id = ?1
 `
 
@@ -29,9 +29,9 @@ func (q *Queries) GetAccountUsage(ctx context.Context, accountID string) (GetAcc
 }
 
 const listGroupUsage = `-- name: ListGroupUsage :many
-SELECT a.id, a.provider, a.models_revision AS revision, u.snapshot, u.updated_at
+SELECT a.id, a.provider, a.models_revision+a.usage_revision AS revision, u.snapshot, u.updated_at
 FROM accounts a JOIN group_accounts ga ON ga.account_id=a.id
-LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
+LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision+a.usage_revision
 WHERE ga.group_id=?1 AND a.enabled=1 AND a.status!='reauth_required'
 `
 
@@ -73,8 +73,8 @@ func (q *Queries) ListGroupUsage(ctx context.Context, groupID int64) ([]ListGrou
 }
 
 const listWorkspaceUsage = `-- name: ListWorkspaceUsage :many
-SELECT a.id, a.provider, a.models_revision AS revision, u.snapshot, u.updated_at
-FROM accounts a LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
+SELECT a.id, a.provider, a.models_revision+a.usage_revision AS revision, u.snapshot, u.updated_at
+FROM accounts a LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision+a.usage_revision
 WHERE a.tenant_id=?1
 `
 
@@ -117,8 +117,8 @@ func (q *Queries) ListWorkspaceUsage(ctx context.Context, tenantID int64) ([]Lis
 
 const saveAccountUsage = `-- name: SaveAccountUsage :execrows
 INSERT INTO account_usage(account_id, snapshot, updated_at, revision)
-SELECT id, ?1, ?2, models_revision FROM accounts
-WHERE id = ?3 AND models_revision = ?4
+SELECT id, ?1, ?2, models_revision+usage_revision FROM accounts
+WHERE id = ?3 AND models_revision+usage_revision = ?4
 AND enabled = 1 AND status != 'reauth_required'
 ON CONFLICT(account_id) DO UPDATE SET snapshot = excluded.snapshot, updated_at = excluded.updated_at, revision = excluded.revision
 WHERE excluded.revision != account_usage.revision OR excluded.updated_at >= account_usage.updated_at

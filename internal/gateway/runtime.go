@@ -130,7 +130,7 @@ func (s *Service) Runtime(ctx context.Context) ([]Runtime, error) {
 		quota := quotaDecision{State: "unknown"}
 		if !quotaRoutingSupported(row.Provider) {
 			quota.State = "unsupported"
-		} else if saved, ok := quotas[row.ID]; ok && saved.revision == row.Lifecycle {
+		} else if saved, ok := quotas[row.ID]; ok && saved.revision == row.UsageRevision {
 			quota = saved.decision
 		}
 		state.QuotaState = quota.State

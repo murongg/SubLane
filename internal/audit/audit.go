@@ -79,6 +79,7 @@ var actions = map[string]string{
 	"user.totp_enable": "user", "user.totp_disable": "user", "user.recovery_codes": "user", "user.passkey_add": "user", "user.passkey_delete": "user",
 	"account.create": "account", "account.authorize": "account", "account.update": "account", "account.delete": "account", "account.concurrency": "account", "account.resume": "account",
 	"account.proxy": "account", "proxy.create": "proxy", "proxy.update": "proxy", "proxy.delete": "proxy", "proxy.import": "proxy", "proxy.prune": "proxy",
+	"account.reset_settings": "account", "account.reset_use": "account",
 }
 var numericID = regexp.MustCompile(`^[1-9][0-9]{0,18}$`)
 var accountID = regexp.MustCompile(`^[a-f0-9]{32}$`)

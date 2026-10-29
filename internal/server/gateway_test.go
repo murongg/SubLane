@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net"
@@ -31,6 +32,7 @@ type gatewayTransport func(*http.Request) (*http.Response, error)
 func (f gatewayTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 type forwardFixture struct {
+	connection    *sql.DB
 	upgrades      *atomic.Int32
 	server        *httptest.Server
 	secret        string
@@ -139,7 +141,7 @@ func newConfiguredForwardFixture(t *testing.T, provider string, handler http.Han
 	}
 	server.Start()
 	t.Cleanup(server.Close)
-	return forwardFixture{groups: pools, accounts: service, forwarding: forwarding, content: rules, server: server, upgrades: upgrades, secret: created.Secret, keyID: created.Key.ID, userID: member.ID, keys: keys, identity: identity}
+	return forwardFixture{connection: db, groups: pools, accounts: service, forwarding: forwarding, content: rules, server: server, upgrades: upgrades, secret: created.Secret, keyID: created.Key.ID, userID: member.ID, keys: keys, identity: identity}
 }
 
 func TestGatewayLargeRequests(t *testing.T) {

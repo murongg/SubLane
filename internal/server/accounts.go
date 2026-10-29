@@ -10,13 +10,16 @@ import (
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/oauth"
+	"github.com/murongg/SubLane/internal/resets"
 	"github.com/murongg/SubLane/internal/upstream"
 )
 
 type accountHTTP struct {
-	service *accounts.Service
-	oauth   *oauth.Flow
-	gateway *gateway.Service
+	service  *accounts.Service
+	oauth    *oauth.Flow
+	gateway  *gateway.Service
+	resets   *resets.Service
+	tenantID int64
 }
 
 func (h *accountHTTP) register(router chi.Router) {
@@ -42,6 +45,10 @@ func (h *accountHTTP) register(router chi.Router) {
 		accounts.Post("/{id}/models/check", h.checkModel)
 		accounts.Get("/{id}/usage", h.usage)
 		accounts.Post("/{id}/usage/refresh", h.refreshUsage)
+		accounts.Get("/{id}/resets", h.resetState)
+		accounts.Put("/{id}/resets", h.resetSettings)
+		accounts.Post("/{id}/resets/consume", h.consumeReset)
+		accounts.Post("/{id}/resets/retry", h.retryReset)
 	})
 }
 
@@ -287,6 +294,12 @@ func accountError(w http.ResponseWriter, err error) {
 	status, code := 503, "unavailable"
 	var rejected *upstream.UpstreamError
 	switch {
+	case errors.Is(err, resets.ErrInput):
+		status, code = 400, err.Error()
+	case errors.Is(err, resets.ErrBusy), errors.Is(err, resets.ErrNoPending):
+		status, code = 409, err.Error()
+	case errors.Is(err, resets.ErrUnsupported):
+		status, code = 400, err.Error()
 	case errors.Is(err, accounts.ErrAllocated):
 		status, code = 409, err.Error()
 	case errors.Is(err, upstream.ErrUsageUnsupported):

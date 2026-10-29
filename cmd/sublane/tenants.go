@@ -22,6 +22,7 @@ import (
 	"github.com/murongg/SubLane/internal/metrics"
 	"github.com/murongg/SubLane/internal/oauth"
 	"github.com/murongg/SubLane/internal/pricing"
+	"github.com/murongg/SubLane/internal/resets"
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/tenants"
 	"github.com/murongg/SubLane/internal/timezone"
@@ -74,6 +75,7 @@ type tenantRegistry struct {
 	vault             *vault.Vault
 	auth              *auth.Service
 	alerts            *alerts.Service
+	resetCredits      *resets.Service
 	tenants           *tenants.Service
 	provider          *upstream.Client
 	pricing           *pricing.Service
@@ -154,7 +156,7 @@ func (r *tenantRegistry) acquire(id int64) *tenantRuntime {
 		Alerts:  r.alerts,
 		Content: rules,
 		Keys:    apikey.NewForTenant(r.db, r.vault, id), Accounts: accountService,
-		OAuth: oauth.New(accountService, r.provider), Gateway: forwarding, Pricing: r.pricing,
+		OAuth: oauth.New(accountService, r.provider), Gateway: forwarding, Pricing: r.pricing, ResetCredits: r.resetCredits,
 		Groups: groups.NewForTenant(r.db, id), Tenants: r.tenants, TenantID: id,
 		PublicURL: r.publicURL, TrustedProxies: r.trustedProxies, LoginLimiter: r.loginLimiter, EnrollmentLimiter: r.enrollmentLimiter,
 		CodexVersions: codexVersions, GrokVersions: grokVersions, ClaudeVersions: claudeVersions, TimeZone: r.timeZone,
@@ -182,6 +184,14 @@ func (r *tenantRegistry) Start() {
 	}
 	r.stopReap = make(chan struct{})
 	r.reapDone = make(chan struct{})
+	location := func() *time.Location {
+		if r.timeZone != nil {
+			return r.timeZone.Location()
+		}
+		return time.UTC
+	}
+	r.resetCredits = resets.New(r.db, location, r.resetObservation, r.redeemResetCredit)
+	r.resetCredits.Start(r.ctx)
 	stop, done := r.stopReap, r.reapDone
 	r.mu.Unlock()
 	go func() {
@@ -222,6 +232,9 @@ func (r *tenantRegistry) reapIdle() {
 }
 
 func (r *tenantRegistry) Close() {
+	if r.resetCredits != nil {
+		r.resetCredits.Close()
+	}
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
@@ -256,4 +269,22 @@ func (r *tenantRegistry) Pressure() (inFlight, queued int64) {
 		queued += waiting
 	}
 	return inFlight, queued
+}
+
+func (r *tenantRegistry) resetObservation(ctx context.Context, tenant int64, id string) (resets.Observation, error) {
+	runtime := r.acquire(tenant)
+	if runtime == nil {
+		return resets.Observation{}, resets.ErrBusy
+	}
+	defer r.release(runtime)
+	return runtime.gateway.ResetObservation(ctx, id)
+}
+
+func (r *tenantRegistry) redeemResetCredit(ctx context.Context, tenant int64, id, key string) (string, error) {
+	runtime := r.acquire(tenant)
+	if runtime == nil {
+		return "", resets.ErrBusy
+	}
+	defer r.release(runtime)
+	return runtime.gateway.RedeemResetCredit(ctx, id, key)
 }

@@ -24,6 +24,7 @@ import {
 } from '@/lib/accounts'
 import { CatalogDialog } from '@/components/CatalogDialog'
 import { AccountUsage } from '@/components/AccountUsage'
+import { AccountResets } from '@/components/AccountResets'
 import { ConnectAccount } from '@/components/ConnectAccount'
 import { DeleteAccount } from '@/components/DeleteAccount'
 import { Status } from '@/components/Status'
@@ -319,7 +320,7 @@ export function Accounts() {
                   </div>
                 </div>
                 <div className="grid gap-5 border-t border-border px-5 py-4 @2xl:grid-cols-[minmax(0,1fr)_minmax(14rem,0.65fr)]">
-                  <div className="min-w-0">
+                  <div className="min-w-0 space-y-3">
                     {account.enabled && account.status !== 'reauth_required' ? (
                       <AccountUsage
                         id={account.id}
@@ -339,6 +340,16 @@ export function Accounts() {
                           )}
                         </p>
                       </div>
+                    )}
+                    {account.provider === 'codex' && (
+                      <AccountResets
+                        id={account.id}
+                        name={account.name}
+                        enabled={
+                          account.enabled &&
+                          account.status !== 'reauth_required'
+                        }
+                      />
                     )}
                   </div>
                   <div className="min-w-0 space-y-4 border-t border-border pt-4 @2xl:border-l @2xl:border-t-0 @2xl:pl-5 @2xl:pt-0">
