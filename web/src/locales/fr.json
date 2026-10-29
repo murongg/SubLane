@@ -1,4 +1,12 @@
 {
+  "memberRemovedStatus": "Retiré",
+  "memberRemove": "Retirer de cet espace de travail",
+  "memberRemoveTitle": "Retirer un membre de cet espace de travail",
+  "memberRemoveDescription": "Retirer « {{username}} » de cet espace de travail ? Son accès et ses clés API dans cet espace seront révoqués. Les requêtes et la consommation passées seront conservées. Une nouvelle adhésion nécessitera de nouvelles clés et autorisations de groupes de ressources.",
+  "memberRemoveConfirm": "Retirer le membre",
+  "memberRemoveFailed": "Impossible de retirer ce membre. Actualisez la liste et réessayez.",
+  "memberRemoved": "{{username}} a été retiré de cet espace de travail.",
+  "auditMemberRemove": "Membre retiré de cet espace de travail",
   "contentDetails": "Portée et limites",
   "contentScanLimit": "Limite de balayage",
   "contentScanSummary": "8 Mio JSON · 64 niveaux de nidification",

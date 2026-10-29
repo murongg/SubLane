@@ -249,6 +249,99 @@ function open() {
   )
 }
 
+it('confirms removal, keeps errors retryable, and refreshes the roster after success', async () => {
+  let removed = false
+  let attempts = 0
+  let finish: (() => void) | undefined
+  const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    if (url === '/api/auth/state')
+      return Promise.resolve(response(authenticated))
+    if (url === '/api/tenants/1/members' && init?.method === 'POST') {
+      removed = false
+      return Promise.resolve(response(syntheticMember, 201))
+    }
+    if (url === '/api/members/2' && init?.method === 'DELETE') {
+      attempts++
+      if (attempts === 1)
+        return Promise.resolve(response({ error: 'unavailable' }, 503))
+      return new Promise<Response>((resolve) => {
+        finish = () => {
+          removed = true
+          resolve(new Response(null, { status: 204 }))
+        }
+      })
+    }
+    return Promise.resolve(
+      response({
+        members: removed ? [] : [{ ...syntheticMember, can_remove: true }],
+        next_cursor: 0,
+      }),
+    )
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  open()
+  const user = userEvent.setup()
+  const trigger = await screen.findByRole('button', {
+    name: 'More actions for member-test',
+  })
+  await user.click(trigger)
+  await user.click(
+    screen.getByRole('menuitem', { name: 'Remove from workspace' }),
+  )
+  let dialog = await screen.findByRole('dialog', {
+    name: 'Remove member from workspace',
+  })
+  expect(dialog.textContent).toContain(
+    'Historical requests and usage are retained',
+  )
+  expect(attempts).toBe(0)
+  await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(document.activeElement).toBe(trigger))
+  await user.click(trigger)
+  await user.click(
+    screen.getByRole('menuitem', { name: 'Remove from workspace' }),
+  )
+  dialog = await screen.findByRole('dialog', {
+    name: 'Remove member from workspace',
+  })
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Remove member' }),
+  )
+  expect((await within(dialog).findByRole('alert')).textContent).toContain(
+    'Could not remove',
+  )
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Remove member' }),
+  )
+  await waitFor(() => expect(finish).toBeTypeOf('function'))
+  expect(
+    within(dialog)
+      .getByRole('button', { name: 'Cancel' })
+      .hasAttribute('disabled'),
+  ).toBe(true)
+  await user.keyboard('{Escape}')
+  expect(screen.getByRole('dialog')).toBeTruthy()
+  await act(async () => finish?.())
+  await screen.findByText('member-test was removed from this workspace.')
+  await waitFor(() =>
+    expect(screen.queryByRole('row', { name: /member-test/ })).toBeNull(),
+  )
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement).toBe(
+    screen.getByRole('button', { name: 'Add member' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Add existing account' }))
+  const rejoin = await screen.findByRole('dialog', {
+    name: 'Add existing account',
+  })
+  await user.type(within(rejoin).getByLabelText('Username'), 'member-test')
+  await user.click(within(rejoin).getByRole('button', { name: 'Save access' }))
+  await screen.findByRole('row', { name: /member-test/ })
+  expect(
+    screen.queryByText('member-test was removed from this workspace.'),
+  ).toBeNull()
+})
+
 it('creates a one-time invitation link for the selected workspace', async () => {
   const fetchMock = vi
     .fn()

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { MoreHorizontal, Gauge, KeyRound } from 'lucide-react'
+import { MoreHorizontal, Gauge, KeyRound, UserMinus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Member } from '@/lib/members'
 import { Button } from './ui/Button'
@@ -11,16 +11,21 @@ import {
 } from './ui/DropdownMenu'
 import { MemberLimits } from './MemberLimits'
 import { PasswordDialog } from './PasswordDialog'
+import { RemoveMember } from './RemoveMember'
 
 export function MemberActions({
   member,
   onPasswordReset,
+  onRemoved,
 }: {
   member: Member
   onPasswordReset?: () => void
+  onRemoved?: () => Promise<void>
 }) {
   const { t } = useTranslation()
-  const [action, setAction] = useState<'limits' | 'password' | null>(null)
+  const [action, setAction] = useState<'limits' | 'password' | 'remove' | null>(
+    null,
+  )
   const trigger = useRef<HTMLButtonElement>(null)
   const focus = () => trigger.current?.focus()
   return (
@@ -47,6 +52,15 @@ export function MemberActions({
               {t('resetPassword')}
             </DropdownMenuItem>
           )}
+          {member.can_remove && onRemoved && (
+            <DropdownMenuItem
+              variant="destructive"
+              onSelect={() => setAction('remove')}
+            >
+              <UserMinus aria-hidden="true" />
+              {t('memberRemove')}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       {action === 'limits' && (
@@ -62,6 +76,14 @@ export function MemberActions({
           onClose={() => setAction(null)}
           onSaved={onPasswordReset}
           returnFocus={focus}
+        />
+      )}
+      {action === 'remove' && onRemoved && (
+        <RemoveMember
+          member={member}
+          onClose={() => setAction(null)}
+          onRemoved={onRemoved}
+          restoreFocus={focus}
         />
       )}
     </>

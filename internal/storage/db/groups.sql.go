@@ -492,7 +492,7 @@ func (q *Queries) ListPoolMembers(ctx context.Context, groupID int64) ([]ListPoo
 
 const memberExistsInTenant = `-- name: MemberExistsInTenant :one
 SELECT EXISTS(SELECT 1 FROM memberships m
-WHERE m.tenant_id=?1 AND m.user_id=?2)
+WHERE m.tenant_id=?1 AND m.user_id=?2 AND m.removed_at IS NULL)
 `
 
 type MemberExistsInTenantParams struct {

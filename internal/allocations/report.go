@@ -10,6 +10,7 @@ import (
 type Balance struct {
 	UserID         int64  `json:"user_id"`
 	Username       string `json:"username"`
+	Removed        bool   `json:"removed"`
 	WindowKind     string `json:"window_kind"`
 	WindowSeconds  int64  `json:"window_seconds"`
 	Mode           string `json:"mode"`
@@ -109,7 +110,8 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 			}
 			out.Balances = append(out.Balances, Balance{
 				UserID: m.UserID, Username: member.Username, WindowKind: window.kind, WindowSeconds: window.seconds, Mode: mode,
-				Limit: state.limit, Used: state.used, Tokens: state.tokens, Pending: n,
+				Removed: member.RemovedAt != nil,
+				Limit:   state.limit, Used: state.used, Tokens: state.tokens, Pending: n,
 				PendingCurrent: state.pending, InFlight: state.active,
 				Reserved: state.risk.reserved, AdmissionRoom: state.risk.room,
 				Admission: admission, ResetAt: window.end,

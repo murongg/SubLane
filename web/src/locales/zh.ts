@@ -1,6 +1,15 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  memberRemovedStatus: '已移出',
+  memberRemove: '移出工作区',
+  memberRemoveTitle: '移出工作区成员',
+  memberRemoveDescription:
+    '将「{{username}}」移出当前工作区？该成员在此工作区的访问权限和 API 密钥将被撤销，历史请求和用量记录保留。重新加入后需创建新密钥并重新分配资源组权限。',
+  memberRemoveConfirm: '移出成员',
+  memberRemoveFailed: '无法移出此成员，请刷新列表后重试。',
+  memberRemoved: '已将 {{username}} 移出当前工作区。',
+  auditMemberRemove: '移出工作区成员',
   exportCSV: '导出 CSV',
   exportCSVLoading: '正在导出…',
   exportCSVFailed: '无法导出 CSV，请刷新后重试。',

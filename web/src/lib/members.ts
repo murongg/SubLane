@@ -11,6 +11,7 @@ const memberSchema = z.object({
   role: z.enum(['member', 'admin', 'owner']),
   enabled: z.boolean(),
   created_at: z.number().int().nonnegative(),
+  can_remove: z.boolean().optional(),
 })
 const pageSchema = z.object({
   members: z.array(memberSchema).max(100),
@@ -90,4 +91,8 @@ export function resetMemberPassword(id: number, password: string) {
     method: 'POST',
     body: JSON.stringify({ new_password: password }),
   })
+}
+
+export function removeMember(id: number) {
+  return request(`/api/members/${id}`, z.undefined(), { method: 'DELETE' })
 }

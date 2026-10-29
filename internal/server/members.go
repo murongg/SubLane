@@ -14,6 +14,7 @@ func (h *authHTTP) registerMembers(router chi.Router) {
 	router.Post("/", h.createMember)
 	router.With(h.requireOrigin).Post("/invitations", h.createInvitation)
 	router.Patch("/{id}", h.memberStatus)
+	router.Delete("/{id}", h.removeMember)
 	router.Patch("/{id}/role", h.memberRole)
 	router.With(h.throttleLogin).Post("/{id}/password", h.resetMemberPassword)
 }
@@ -83,7 +84,41 @@ func (h *authHTTP) listMembers(w http.ResponseWriter, r *http.Request) {
 		authError(w, err)
 		return
 	}
+	actor, ok, err := h.tenants.Membership(r.Context(), h.tenantID, sessionUser(r).ID)
+	if err != nil || !ok {
+		writeJSON(w, 503, map[string]string{"error": "unavailable"})
+		return
+	}
+	for i := range page.Members {
+		member := &page.Members[i]
+		member.CanRemove = member.ID != actor.UserID && member.Role != tenants.RoleOwner &&
+			(member.Role == tenants.RoleMember || actor.Role == tenants.RoleOwner)
+	}
 	writeJSON(w, 200, page)
+}
+
+func (h *authHTTP) removeMember(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil || id <= 0 {
+		writeJSON(w, 400, map[string]string{"error": "invalid_input"})
+		return
+	}
+	if h.tenants == nil {
+		writeJSON(w, 503, map[string]string{"error": "unavailable"})
+		return
+	}
+	if err := h.tenants.RemoveMember(r.Context(), sessionUser(r).ID, h.tenantID, id); err != nil {
+		switch {
+		case errors.Is(err, tenants.ErrNotFound):
+			writeJSON(w, 404, map[string]string{"error": "member_not_found"})
+		case errors.Is(err, tenants.ErrForbidden):
+			writeJSON(w, 403, map[string]string{"error": "forbidden"})
+		default:
+			writeJSON(w, 503, map[string]string{"error": "unavailable"})
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *authHTTP) createMember(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/murongg/SubLane/internal/auth"
+	"github.com/murongg/SubLane/internal/tenants"
 	"strings"
 	"testing"
 )
@@ -119,5 +120,68 @@ func TestMemberHTTPValidationAndOwnerProtection(t *testing.T) {
 	list := request(h, "GET", "/api/members", "", nil, cookie)
 	if list.Code != 200 || strings.Contains(list.Body.String(), "password") || !strings.Contains(list.Body.String(), `"username":"owner-test","role":"owner"`) {
 		t.Fatalf("bad list: %s", list.Body.String())
+	}
+}
+
+func TestMemberHTTPRemovalAndExplicitRejoin(t *testing.T) {
+	h := authFixture(t, "")
+	origin := "http://example.test"
+	setup := request(h, "POST", "/api/auth/setup", origin, map[string]string{"username": "synthetic-owner", "password": "synthetic password", "workspace_name": "Synthetic workspace"}, nil)
+	owner := setup.Result().Cookies()[0]
+	input := map[string]string{"username": "synthetic-member", "password": "synthetic password"}
+	created := request(h, "POST", "/api/members", origin, input, owner)
+	var member auth.Member
+	if err := json.Unmarshal(created.Body.Bytes(), &member); err != nil || created.Code != 201 {
+		t.Fatalf("create: %s %v", created.Body.String(), err)
+	}
+	login := request(h, "POST", "/api/auth/login", origin, input, nil)
+	cookie := login.Result().Cookies()[0]
+	path := fmt.Sprintf("/api/members/%d", member.ID)
+	for _, tc := range []struct {
+		name, path, origin string
+		owner, loggedIn    bool
+		want               int
+	}{
+		{"anonymous", path, origin, false, false, 401}, {"member", path, origin, false, true, 403},
+		{"origin", path, "https://evil.example.test", true, true, 403}, {"invalid", "/api/members/invalid", origin, true, true, 400},
+		{"owner", "/api/members/1", origin, true, true, 403}, {"missing", "/api/members/999", origin, true, true, 404},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := cookie
+			if tc.owner {
+				c = owner
+			}
+			if !tc.loggedIn {
+				c = nil
+			}
+			if result := request(h, "DELETE", tc.path, tc.origin, nil, c); result.Code != tc.want {
+				t.Fatalf("got %d want %d: %s", result.Code, tc.want, result.Body.String())
+			}
+		})
+	}
+	listed := request(h, "GET", "/api/members", "", nil, owner)
+	var roster tenants.MemberPage
+	if err := json.Unmarshal(listed.Body.Bytes(), &roster); err != nil || len(roster.Members) != 2 {
+		t.Fatalf("missing removal capability: %s", listed.Body.String())
+	}
+	for _, target := range roster.Members {
+		if target.CanRemove != (target.ID == member.ID) {
+			t.Fatalf("incorrect removal capability: %+v", target)
+		}
+	}
+	if result := request(h, "DELETE", path, origin, nil, owner); result.Code != 204 {
+		t.Fatalf("remove: %d %s", result.Code, result.Body.String())
+	}
+	if result := request(h, "GET", "/api/members", "", nil, owner); strings.Contains(result.Body.String(), member.Username) {
+		t.Fatalf("removed member remains visible: %s", result.Body.String())
+	}
+	if result := request(h, "GET", "/api/auth/state", "", nil, cookie); result.Code != 200 || !strings.Contains(result.Body.String(), `"needs_workspace":true`) {
+		t.Fatalf("removed session still reaches workspace: %d %s", result.Code, result.Body.String())
+	}
+	if result := request(h, "PATCH", path, origin, map[string]bool{"enabled": true}, owner); result.Code != 404 {
+		t.Fatalf("ordinary enable revived member: %d", result.Code)
+	}
+	if result := request(h, "POST", "/api/tenants/1/members", origin, map[string]string{"username": member.Username, "role": "member"}, owner); result.Code != 201 {
+		t.Fatalf("rejoin: %d %s", result.Code, result.Body.String())
 	}
 }

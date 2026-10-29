@@ -47,7 +47,7 @@ AND group_id IN (SELECT id FROM account_groups WHERE tenant_id=sqlc.arg(tenant_i
 
 -- name: MemberExistsInTenant :one
 SELECT EXISTS(SELECT 1 FROM memberships m
-WHERE m.tenant_id=sqlc.arg(tenant_id) AND m.user_id=sqlc.arg(user_id));
+WHERE m.tenant_id=sqlc.arg(tenant_id) AND m.user_id=sqlc.arg(user_id) AND m.removed_at IS NULL);
 
 -- name: GrantMemberGroup :exec
 INSERT INTO group_members(group_id,user_id) VALUES(sqlc.arg(group_id),sqlc.arg(user_id));

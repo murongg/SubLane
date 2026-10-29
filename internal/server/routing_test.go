@@ -50,7 +50,7 @@ func TestRouterGroupsProtectMethodErrorsAndFallbacks(t *testing.T) {
 		{name: "anonymous member method", method: "DELETE", path: "/api/members", status: 401},
 		{name: "member management method", method: "DELETE", path: "/api/members", token: session.Token, status: 403},
 		{name: "owner member method", method: "DELETE", path: "/api/members", token: owner.Token, status: 405, allow: "GET, POST"},
-		{name: "owner status method", method: "GET", path: "/api/members/2", token: owner.Token, status: 405, allow: "PATCH"},
+		{name: "owner status method", method: "GET", path: "/api/members/2", token: owner.Token, status: 405, allow: "PATCH, DELETE"},
 		{name: "member status method", method: "GET", path: "/api/members/2", token: session.Token, status: 403},
 		{name: "personal key method", method: "DELETE", path: "/api/keys", token: session.Token, status: 405, allow: "GET, POST"},
 		{name: "personal revoke method", method: "GET", path: "/api/keys/1/revoke", token: session.Token, status: 405, allow: "POST"},

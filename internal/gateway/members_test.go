@@ -12,7 +12,40 @@ import (
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/groups"
+	"github.com/murongg/SubLane/internal/tenants"
 )
+
+func TestMemberRemovalAllowsInFlightHistoryButRejectsNewRequests(t *testing.T) {
+	ctx := context.Background()
+	s, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
+	member := runtimeMember(t, s)
+	raw := []byte(`{"model":"synthetic-model","input":"synthetic"}`)
+	response, err := s.Open(ctx, member, 1, raw, nil, Responses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tenants.New(s.db).RemoveMember(ctx, 1, 1, member); err != nil {
+		t.Fatal(err)
+	}
+	if err := response.Events(func([]byte) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	history, err := s.Requests(ctx, RequestFilter{MemberID: member})
+	if err != nil || len(history.Requests) != 1 || history.Requests[0].Outcome != "success" {
+		t.Fatalf("in-flight history lost: %+v %v", history, err)
+	}
+	statistics, err := s.Statistics(ctx, 1)
+	if err != nil || statistics.Totals.Completed != 1 {
+		t.Fatalf("in-flight usage lost: %+v %v", statistics, err)
+	}
+	if response, err := s.Open(ctx, member, 1, raw, nil, Responses); err == nil {
+		response.Body.Close()
+		t.Fatal("removed member opened another request")
+	}
+}
 
 func runtimeMember(t *testing.T, s *Service) int64 {
 	t.Helper()

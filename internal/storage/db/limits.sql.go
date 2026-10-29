@@ -66,7 +66,7 @@ func (q *Queries) GetMemberWindow(ctx context.Context, arg GetMemberWindowParams
 
 const setMemberLimits = `-- name: SetMemberLimits :execrows
 UPDATE memberships SET requests_per_minute=?1,max_concurrency=?2
-WHERE tenant_id=?3 AND user_id=?4
+WHERE tenant_id=?3 AND user_id=?4 AND removed_at IS NULL
 `
 
 type SetMemberLimitsParams struct {
