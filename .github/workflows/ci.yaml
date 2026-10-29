@@ -16,8 +16,13 @@ on:
 permissions:
   contents: read
 
+# Superseded PR runs need no runner time; release and push runs stay independent.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  check:
+  validation:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -40,9 +45,16 @@ jobs:
         with:
           tool: git-cliff@2.14.2
       - run: make setup
-      - run: make check
+      - name: Check generated code and lint
+        run: make generate-check lint
+      - name: Test maintenance scripts
+        run: node --test scripts/*.test.mjs
         env:
           SUBLANE_TEST_CHANGELOG: "1"
+      - name: Test frontend
+        run: pnpm --dir web test
+      - name: Build production binary
+        run: make build
       - name: Verify key migration with encrypted credentials
         run: SUBLANE_TEST_MIGRATION_BINARY="$PWD/bin/sublane" node --test --test-name-pattern='real CLI' scripts/separate-key.test.mjs
       - name: Validate workflow and shell scripts
@@ -53,6 +65,41 @@ jobs:
         run: |
           docker compose -f docker.compose.yaml config --quiet
           docker compose -f docker.compose.yaml -f docker.compose.build.yaml config --quiet
+
+  go-tests:
+    name: Go race (${{ matrix.group }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [gateway-server-a, gateway-server-b, other]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Test with race detector
+        shell: bash
+        env:
+          TEST_GROUP: ${{ matrix.group }}
+        run: |
+          case "$TEST_GROUP" in
+            gateway-server-a)
+              go test -race -timeout=20m -run '^Test[A-L]' ./internal/gateway ./internal/server
+              ;;
+            gateway-server-b)
+              # The complementary skip also includes examples, fuzz seeds and future test names.
+              go test -race -timeout=20m -skip '^Test[A-L]' ./internal/gateway ./internal/server
+              ;;
+            other)
+              package_list=$(go list ./... | grep -vE '/internal/(gateway|server)$')
+              mapfile -t packages <<< "$package_list"
+              go test -race -timeout=20m "${packages[@]}"
+              ;;
+          esac
 
   containers:
     name: Container (${{ matrix.arch }})
@@ -122,3 +169,20 @@ jobs:
           # Re-running all jobs uses the same workflow run and artifact names.
           overwrite: true
           retention-days: 7
+
+  # Keep the existing required check name and fail if any parallel job fails or is skipped.
+  check:
+    if: always()
+    needs: [validation, go-tests, containers]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every check to pass
+        env:
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+          GO_TESTS_RESULT: ${{ needs.go-tests.result }}
+          CONTAINERS_RESULT: ${{ needs.containers.result }}
+        run: |
+          test "$VALIDATION_RESULT" = success
+          test "$GO_TESTS_RESULT" = success
+          test "$CONTAINERS_RESULT" = success
