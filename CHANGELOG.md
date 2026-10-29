@@ -2,6 +2,14 @@
 
 All notable changes are documented here in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [0.14.0] - 2026-10-29
+
+### Added
+
+- Combine client version settings (#126)
+- Filter personal statistics by API key (#128)
+- Support removing workspace members (#131)
+
 ## [0.13.0] - 2026-10-24
 
 ### Added
@@ -290,6 +298,7 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 - Distinguish remaining quota with status colors
 - Restore version-gated model discovery
 
+[0.14.0]: https://github.com/murongg/SubLane/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/murongg/SubLane/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/murongg/SubLane/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/murongg/SubLane/compare/v0.10.0...v0.11.0
