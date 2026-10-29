@@ -35,6 +35,22 @@ function mount() {
     </QueryClientProvider>,
   )
 }
+
+it('opens at the dialog heading so card details are reachable before the settings', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(initial))),
+  )
+  mount()
+  await userEvent
+    .setup()
+    .click(screen.getByRole('button', { name: 'Reset card settings' }))
+  const heading = await screen.findByRole('heading', {
+    name: 'Reset card settings',
+    level: 2,
+  })
+  await waitFor(() => expect(document.activeElement).toBe(heading))
+})
 it('saves both triggers and the shared daily limit', async () => {
   let saved: unknown
   vi.stubGlobal(

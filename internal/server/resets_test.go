@@ -11,12 +11,17 @@ import (
 )
 
 func TestResetManagementRequiresAdminOriginAndWorkspaceOwnership(t *testing.T) {
-	f := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) { t.Error("unexpected upstream IO") })
+	f := newQuotaForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/backend-api/wham/rate-limit-reset-credits" {
+			t.Error("unexpected upstream IO")
+		}
+		w.Write([]byte(`{"available_count":1,"credits":[{"id":"synthetic-card","title":"Synthetic reset card","status":"available","reset_type":"codex_rate_limits","granted_at":"2026-01-01T00:00:00Z","expires_at":null}]}`))
+	})
 	count := int64(2)
 	calls := 0
 	s := resets.New(f.connection, func() *time.Location { return time.UTC }, func(context.Context, int64, string) (resets.Observation, error) {
-		return resets.Observation{Fresh: true, Blocked: true, Credits: &count}, nil
-	}, func(context.Context, int64, string, string) (string, error) { calls++; return "reset", nil })
+		return resets.Observation{Fresh: true, Blocked: true, Credits: &count, Cards: []resets.Card{{ID: "synthetic-card", Status: "available", Supported: true}}}, nil
+	}, func(context.Context, int64, string, string, string) (string, error) { calls++; return "reset", nil })
 	h := New(Options{Auth: f.identity, Accounts: f.accounts, Keys: f.keys, Groups: f.groups, Gateway: f.forwarding, ResetCredits: s})
 	list, err := f.accounts.List(context.Background())
 	if err != nil {
@@ -26,6 +31,15 @@ func TestResetManagementRequiresAdminOriginAndWorkspaceOwnership(t *testing.T) {
 	origin := "http://example.test"
 	owner := request(h, "POST", "/api/auth/login", origin, map[string]string{"username": "owner-test", "password": "owner pass 42"}, nil).Result().Cookies()[0]
 	member := request(h, "POST", "/api/auth/login", origin, map[string]string{"username": "member-test", "password": "member pass 42"}, nil).Result().Cookies()[0]
+	if got := request(h, "GET", path+"/cards", "", nil, nil); got.Code != 401 {
+		t.Fatal(got.Code)
+	}
+	if got := request(h, "GET", path+"/cards", "", nil, member); got.Code != 403 {
+		t.Fatal(got.Code)
+	}
+	if got := request(h, "GET", path+"/cards", "", nil, owner); got.Code != 200 || !strings.Contains(got.Body.String(), "Synthetic reset card") {
+		t.Fatal(got.Code, got.Body)
+	}
 	for _, method := range []string{"GET", "PUT", "POST"} {
 		endpoint := path
 		if method == "POST" {

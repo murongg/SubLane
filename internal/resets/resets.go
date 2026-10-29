@@ -52,9 +52,10 @@ type State struct {
 type Observation struct {
 	Fresh, Blocked bool
 	Credits        *int64
+	Cards          []Card
 }
 type Inspector func(context.Context, int64, string) (Observation, error)
-type Redeemer func(context.Context, int64, string, string) (string, error)
+type Redeemer func(context.Context, int64, string, string, string) (string, error)
 
 type Service struct {
 	conn     *sql.DB
@@ -278,6 +279,15 @@ func (s *Service) Run(ctx context.Context, tenant int64, id, trigger string) (St
 	if *observation.Credits <= 0 {
 		return s.skip(ctx, tenant, id, trigger, occurrence, "no_credit")
 	}
+	// An unavailable inventory is different from a known empty list; neither permits an unspecified spend.
+	now = s.now()
+	if observation.Cards == nil {
+		return s.skip(ctx, tenant, id, trigger, occurrence, "cards_unavailable")
+	}
+	selected := PrepareCards(CardList{Cards: observation.Cards}, now).NextID
+	if selected == "" {
+		return s.skip(ctx, tenant, id, trigger, occurrence, "no_eligible_credit")
+	}
 
 	// The reservation commits before provider IO: a crash or another trigger cannot create a new attempt.
 	tx, err := s.conn.BeginTx(ctx, nil)
@@ -310,7 +320,7 @@ func (s *Service) Run(ctx context.Context, tenant int64, id, trigger string) (St
 		return s.skip(ctx, tenant, id, trigger, occurrence, "daily_limit")
 	}
 	key := rand.Text()
-	n, err := q.CreateResetRun(ctx, db.CreateResetRunParams{RequestID: key, AccountID: id, TriggerKind: trigger, Occurrence: occurrence, Outcome: "pending", Reason: "confirmation_required", Now: now.Unix()})
+	n, err := q.CreateResetRun(ctx, db.CreateResetRunParams{RequestID: key, AccountID: id, TriggerKind: trigger, Occurrence: occurrence, Outcome: "pending", Reason: "confirmation_required", Now: now.Unix(), CreditID: selected})
 	if err != nil {
 		return State{}, err
 	}
@@ -321,7 +331,7 @@ func (s *Service) Run(ctx context.Context, tenant int64, id, trigger string) (St
 	if err := tx.Commit(); err != nil {
 		return State{}, err
 	}
-	return s.consume(ctx, tenant, id, key)
+	return s.consume(ctx, tenant, id, key, selected)
 }
 
 func (s *Service) skip(ctx context.Context, tenant int64, id, trigger string, occurrence *int64, reason string) (State, error) {
@@ -368,11 +378,12 @@ func (s *Service) Retry(ctx context.Context, tenant int64, id string) (State, er
 		return State{}, err
 	}
 	// Replaying the persisted key is the only way to resolve uncertainty; card counts cannot prove consumption.
-	return s.consume(ctx, tenant, id, run.RequestID)
+	return s.consume(ctx, tenant, id, run.RequestID, run.CreditID)
 }
 
-func (s *Service) consume(ctx context.Context, tenant int64, id, key string) (State, error) {
-	result, err := s.redeem(ctx, tenant, id, key)
+func (s *Service) consume(ctx context.Context, tenant int64, id, key, cardID string) (State, error) {
+	// Keep the selected card paired with its idempotency key, even if its expiry or inventory changes.
+	result, err := s.redeem(ctx, tenant, id, key, cardID)
 	// A local replay failure cannot prove that the original request did not spend a card.
 	status, reason := "pending", "confirmation_required"
 	if err == nil {

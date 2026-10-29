@@ -280,11 +280,11 @@ func (r *tenantRegistry) resetObservation(ctx context.Context, tenant int64, id 
 	return runtime.gateway.ResetObservation(ctx, id)
 }
 
-func (r *tenantRegistry) redeemResetCredit(ctx context.Context, tenant int64, id, key string) (string, error) {
+func (r *tenantRegistry) redeemResetCredit(ctx context.Context, tenant int64, id, key, cardID string) (string, error) {
 	runtime := r.acquire(tenant)
 	if runtime == nil {
 		return "", resets.ErrBusy
 	}
 	defer r.release(runtime)
-	return runtime.gateway.RedeemResetCredit(ctx, id, key)
+	return runtime.gateway.RedeemResetCredit(ctx, id, key, cardID)
 }

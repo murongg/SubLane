@@ -43,7 +43,8 @@ func setup(t *testing.T) *fixture {
 	}
 	count := int64(3)
 	f := &fixture{db: conn, now: time.Date(2026, 10, 29, 0, 59, 0, 0, time.UTC), observation: Observation{Fresh: true, Blocked: true, Credits: &count}, outcome: "reset"}
-	f.s = New(conn, func() *time.Location { return time.FixedZone("Synthetic/UTC+8", 8*3600) }, func(context.Context, int64, string) (Observation, error) { return f.observation, nil }, func(_ context.Context, _ int64, _ string, key string) (string, error) {
+	f.observation.Cards = []Card{{ID: "synthetic-default-card", Status: "available", Supported: true}}
+	f.s = New(conn, func() *time.Location { return time.FixedZone("Synthetic/UTC+8", 8*3600) }, func(context.Context, int64, string) (Observation, error) { return f.observation, nil }, func(_ context.Context, _ int64, _ string, key, card string) (string, error) {
 		f.calls++
 		f.keys = append(f.keys, key)
 		return f.outcome, f.err
@@ -195,7 +196,7 @@ func TestConcurrentTriggersHaveOnePersistentClaim(t *testing.T) {
 	release := make(chan struct{})
 	done := make(chan error, 1)
 	var calls atomic.Int32
-	f.s.redeem = func(context.Context, int64, string, string) (string, error) {
+	f.s.redeem = func(context.Context, int64, string, string, string) (string, error) {
 		calls.Add(1)
 		close(entered)
 		<-release
@@ -273,7 +274,7 @@ func TestWorkerRunsWithoutBrowserAndJoinsOnShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	entered := make(chan struct{})
-	f.s.redeem = func(ctx context.Context, _ int64, _ string, _ string) (string, error) {
+	f.s.redeem = func(ctx context.Context, _ int64, _ string, _ string, _ string) (string, error) {
 		close(entered)
 		<-ctx.Done()
 		return "", ctx.Err()

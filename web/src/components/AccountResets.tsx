@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import {
   useMutation,
   useQuery,
@@ -11,6 +11,7 @@ import { usageOptions } from '@/lib/usage'
 import { runtimeOptions } from '@/lib/runtime'
 import {
   resetOptions,
+  resetCardsOptions,
   saveResetSettings,
   consumeResetCredit,
   resetErrorKey,
@@ -18,6 +19,7 @@ import {
   type ResetConfig,
   type ResetState,
 } from '@/lib/resets'
+import { ResetCards } from './ResetCards'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import {
@@ -61,6 +63,7 @@ export function AccountResets({
   }, [client, id, confirmedAt])
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const heading = useRef<HTMLHeadingElement>(null)
   const dates = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? 'en', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -82,6 +85,10 @@ export function AccountResets({
         </DialogTrigger>
         <DialogContent
           className="max-h-[85svh] overflow-y-auto"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            heading.current?.focus()
+          }}
           onInteractOutside={(event) => {
             if (busy) event.preventDefault()
           }}
@@ -91,7 +98,9 @@ export function AccountResets({
           showCloseButton={!busy}
         >
           <DialogHeader>
-            <DialogTitle>{t('resetSettings')}</DialogTitle>
+            <DialogTitle ref={heading} tabIndex={-1}>
+              {t('resetSettings')}
+            </DialogTitle>
             <DialogDescription>{name}</DialogDescription>
           </DialogHeader>
           {query.isPending ? (
@@ -114,6 +123,12 @@ export function AccountResets({
                   {t('resetLoadFailed')}
                 </p>
               )}
+              <ResetCards
+                id={id}
+                enabled={enabled}
+                timeZone={query.data.time_zone}
+                pending={query.data.pending}
+              />
               <ResetForm
                 id={id}
                 enabled={enabled}
@@ -144,6 +159,7 @@ function refreshAccountUsage(client: QueryClient, id: string) {
   return Promise.all([
     client.invalidateQueries({ queryKey: usageOptions(id).queryKey }),
     client.invalidateQueries({ queryKey: runtimeOptions.queryKey }),
+    client.invalidateQueries({ queryKey: resetCardsOptions(id).queryKey }),
   ])
 }
 

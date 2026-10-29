@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Refreshable synthetic snapshots keep long-running demos useful without ever dialing a provider.
@@ -20,6 +21,12 @@ func (transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	var value any
 	switch r.URL.Path {
+	case "/backend-api/wham/rate-limit-reset-credits":
+		now := time.Now().UTC()
+		value = map[string]any{"available_count": 2, "credits": []map[string]any{
+			{"id": "demo-reset-soon", "title": "Demo usage reset", "status": "available", "reset_type": "codex_rate_limits", "granted_at": now.Add(-24 * time.Hour).Format(time.RFC3339), "expires_at": now.Add(24 * time.Hour).Format(time.RFC3339)},
+			{"id": "demo-reset-bank", "title": "Demo banked reset", "status": "available", "reset_type": "codex_rate_limits", "granted_at": now.Add(-48 * time.Hour).Format(time.RFC3339), "expires_at": nil},
+		}}
 	case "/backend-api/wham/usage":
 		value = map[string]any{"rate_limit": map[string]any{
 			"allowed": true, "limit_reached": false,

@@ -46,6 +46,7 @@ func (h *accountHTTP) register(router chi.Router) {
 		accounts.Get("/{id}/usage", h.usage)
 		accounts.Post("/{id}/usage/refresh", h.refreshUsage)
 		accounts.Get("/{id}/resets", h.resetState)
+		accounts.Get("/{id}/resets/cards", h.resetCards)
 		accounts.Put("/{id}/resets", h.resetSettings)
 		accounts.Post("/{id}/resets/consume", h.consumeReset)
 		accounts.Post("/{id}/resets/retry", h.retryReset)

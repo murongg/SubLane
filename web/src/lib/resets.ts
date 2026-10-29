@@ -31,6 +31,43 @@ const stateSchema = z.object({
 })
 export type ResetConfig = z.infer<typeof configSchema>
 export type ResetState = z.infer<typeof stateSchema>
+const cardsSchema = z.object({
+  cards: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(256),
+        title: z.string().max(256),
+        status: z.enum([
+          'available',
+          'redeeming',
+          'redeemed',
+          'expired',
+          'unknown',
+        ]),
+        supported: z.boolean(),
+        granted_at: z.number().int().nonnegative(),
+        expires_at: z.number().int().nonnegative().nullable(),
+      }),
+    )
+    .max(256),
+  available_count: z.number().int().nonnegative().nullable(),
+  observed_at: z.number().int().positive(),
+  next_card_id: z.string().max(256),
+})
+export function resetCardsOptions(id: string) {
+  return queryOptions({
+    queryKey: ['accounts', 'reset-cards', id],
+    queryFn: ({ signal }) =>
+      request(
+        `/api/accounts/${encodeURIComponent(id)}/resets/cards`,
+        cardsSchema,
+        { signal },
+      ),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchInterval: 60_000,
+  })
+}
 export function resetOptions(id: string) {
   return queryOptions({
     queryKey: ['accounts', 'resets', id],
@@ -77,6 +114,8 @@ export function resetErrorKey(error: unknown): keyof typeof en {
   return 'resetFailed'
 }
 export const resetReasons: Record<string, keyof typeof en> = {
+  cards_unavailable: 'resetCardsUnavailable',
+  no_eligible_credit: 'resetCardsNoEligible',
   reset: 'resetResultSuccess',
   already_redeemed: 'resetResultConfirmed',
   nothing_to_reset: 'resetResultUnneeded',
