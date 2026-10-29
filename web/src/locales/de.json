@@ -1,4 +1,12 @@
 {
+  "memberRemovedStatus": "Entfernt",
+  "memberRemove": "Aus Arbeitsbereich entfernen",
+  "memberRemoveTitle": "Mitglied aus Arbeitsbereich entfernen",
+  "memberRemoveDescription": "„{{username}}“ aus diesem Arbeitsbereich entfernen? Zugriff und API-Schlüssel für diesen Arbeitsbereich werden widerrufen. Bisherige Anfragen und Nutzungsdaten bleiben erhalten. Bei erneutem Beitritt sind neue Schlüssel und Ressourcengruppen-Berechtigungen erforderlich.",
+  "memberRemoveConfirm": "Mitglied entfernen",
+  "memberRemoveFailed": "Das Mitglied konnte nicht entfernt werden. Aktualisieren Sie die Liste und versuchen Sie es erneut.",
+  "memberRemoved": "{{username}} wurde aus diesem Arbeitsbereich entfernt.",
+  "auditMemberRemove": "Arbeitsbereichsmitglied entfernt",
   "contentDetails": "Anwendungsbereich und Grenzen",
   "contentScanLimit": "Scan-Grenzwert",
   "contentScanSummary": "8 MiB JSON · 64 Nesting-Ebenen",

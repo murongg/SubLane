@@ -9,6 +9,37 @@ import (
 	"context"
 )
 
+const addTenantMember = `-- name: AddTenantMember :execrows
+INSERT INTO memberships(tenant_id,user_id,role,created_at)
+SELECT ?1,id,?2,?3 FROM users WHERE id=?4 AND enabled=1
+ON CONFLICT(tenant_id,user_id) DO UPDATE SET role=excluded.role,enabled=1,
+requests_per_minute=CASE WHEN memberships.removed_at IS NOT NULL THEN 0 ELSE memberships.requests_per_minute END,
+max_concurrency=CASE WHEN memberships.removed_at IS NOT NULL THEN 10 ELSE memberships.max_concurrency END,
+first_request_at=CASE WHEN memberships.removed_at IS NOT NULL THEN 0 ELSE memberships.first_request_at END,
+created_at=CASE WHEN memberships.removed_at IS NOT NULL THEN excluded.created_at ELSE memberships.created_at END,
+removed_at=NULL
+`
+
+type AddTenantMemberParams struct {
+	TenantID  int64
+	Role      string
+	CreatedAt int64
+	UserID    int64
+}
+
+func (q *Queries) AddTenantMember(ctx context.Context, arg AddTenantMemberParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, addTenantMember,
+		arg.TenantID,
+		arg.Role,
+		arg.CreatedAt,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const canManageTenant = `-- name: CanManageTenant :one
 SELECT EXISTS(SELECT 1 FROM memberships m JOIN tenants t ON t.id=m.tenant_id JOIN users u ON u.id=m.user_id
 WHERE m.tenant_id=?1 AND m.user_id=?2
@@ -29,7 +60,7 @@ func (q *Queries) CanManageTenant(ctx context.Context, arg CanManageTenantParams
 
 const countTenantMembers = `-- name: CountTenantMembers :one
 SELECT COUNT(*) FROM memberships m JOIN users u ON u.id=m.user_id
-WHERE m.tenant_id=?1 AND m.role IN ('owner','member','admin')
+WHERE m.tenant_id=?1 AND m.removed_at IS NULL AND m.role IN ('owner','member','admin')
 `
 
 func (q *Queries) CountTenantMembers(ctx context.Context, tenantID int64) (int64, error) {
@@ -40,7 +71,7 @@ func (q *Queries) CountTenantMembers(ctx context.Context, tenantID int64) (int64
 }
 
 const getTenantMember = `-- name: GetTenantMember :one
-SELECT u.id,u.username,m.role,m.enabled,u.enabled AS user_enabled,m.created_at
+SELECT u.id,u.username,m.role,m.enabled,u.enabled AS user_enabled,m.created_at,m.removed_at
 FROM memberships m JOIN users u ON u.id=m.user_id
 WHERE m.tenant_id=?1 AND m.user_id=?2
 `
@@ -57,6 +88,7 @@ type GetTenantMemberRow struct {
 	Enabled     int64
 	UserEnabled bool
 	CreatedAt   int64
+	RemovedAt   *int64
 }
 
 func (q *Queries) GetTenantMember(ctx context.Context, arg GetTenantMemberParams) (GetTenantMemberRow, error) {
@@ -69,6 +101,7 @@ func (q *Queries) GetTenantMember(ctx context.Context, arg GetTenantMemberParams
 		&i.Enabled,
 		&i.UserEnabled,
 		&i.CreatedAt,
+		&i.RemovedAt,
 	)
 	return i, err
 }
@@ -76,7 +109,7 @@ func (q *Queries) GetTenantMember(ctx context.Context, arg GetTenantMemberParams
 const listTenantMembers = `-- name: ListTenantMembers :many
 SELECT u.id,u.username,m.role,m.enabled,u.enabled AS user_enabled,m.created_at
 FROM memberships m JOIN users u ON u.id=m.user_id
-WHERE m.tenant_id=?1 AND m.role IN ('owner','member','admin')
+WHERE m.tenant_id=?1 AND m.removed_at IS NULL AND m.role IN ('owner','member','admin')
 AND (u.id<?2 OR ?2=0)
 ORDER BY u.id DESC LIMIT ?4 OFFSET ?3
 `
@@ -132,9 +165,42 @@ func (q *Queries) ListTenantMembers(ctx context.Context, arg ListTenantMembersPa
 	return items, nil
 }
 
+const removeTenantMember = `-- name: RemoveTenantMember :exec
+UPDATE memberships SET enabled=0,removed_at=?1
+WHERE tenant_id=?2 AND user_id=?3 AND role!='owner' AND removed_at IS NULL
+`
+
+type RemoveTenantMemberParams struct {
+	Now      *int64
+	TenantID int64
+	UserID   int64
+}
+
+func (q *Queries) RemoveTenantMember(ctx context.Context, arg RemoveTenantMemberParams) error {
+	_, err := q.db.ExecContext(ctx, removeTenantMember, arg.Now, arg.TenantID, arg.UserID)
+	return err
+}
+
+const revokeTenantMemberKeys = `-- name: RevokeTenantMemberKeys :exec
+UPDATE api_keys SET revoked_at=COALESCE(revoked_at,?1),encrypted_secret=NULL
+WHERE user_id=?2
+AND group_id IN (SELECT id FROM account_groups WHERE tenant_id=?3)
+`
+
+type RevokeTenantMemberKeysParams struct {
+	Now      *int64
+	UserID   int64
+	TenantID int64
+}
+
+func (q *Queries) RevokeTenantMemberKeys(ctx context.Context, arg RevokeTenantMemberKeysParams) error {
+	_, err := q.db.ExecContext(ctx, revokeTenantMemberKeys, arg.Now, arg.UserID, arg.TenantID)
+	return err
+}
+
 const setTenantMemberEnabled = `-- name: SetTenantMemberEnabled :execrows
 UPDATE memberships SET enabled=?1
-WHERE tenant_id=?2 AND user_id=?3 AND role='member'
+WHERE tenant_id=?2 AND user_id=?3 AND role='member' AND removed_at IS NULL
 `
 
 type SetTenantMemberEnabledParams struct {
@@ -153,7 +219,7 @@ func (q *Queries) SetTenantMemberEnabled(ctx context.Context, arg SetTenantMembe
 
 const updateTenantMemberRole = `-- name: UpdateTenantMemberRole :exec
 UPDATE memberships SET role=?1
-WHERE tenant_id=?2 AND user_id=?3 AND role IN ('member','admin')
+WHERE tenant_id=?2 AND user_id=?3 AND role IN ('member','admin') AND removed_at IS NULL
 `
 
 type UpdateTenantMemberRoleParams struct {

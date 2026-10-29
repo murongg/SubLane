@@ -1,4 +1,12 @@
 {
+  "memberRemovedStatus": "削除済み",
+  "memberRemove": "ワークスペースから削除",
+  "memberRemoveTitle": "ワークスペースからメンバーを削除",
+  "memberRemoveDescription": "「{{username}}」をこのワークスペースから削除しますか？このワークスペースのアクセス権と API キーは失効します。過去のリクエストと使用量は保持されます。再参加後は新しいキーとリソースグループの権限設定が必要です。",
+  "memberRemoveConfirm": "メンバーを削除",
+  "memberRemoveFailed": "メンバーを削除できませんでした。一覧を更新して再試行してください。",
+  "memberRemoved": "{{username}} をこのワークスペースから削除しました。",
+  "auditMemberRemove": "ワークスペースのメンバーを削除",
   "contentDetails": "範囲と制限",
   "contentScanLimit": "スキャン制限",
   "contentScanSummary": "8 MiB JSON · 64 ネストレベル",

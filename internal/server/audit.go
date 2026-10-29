@@ -124,6 +124,9 @@ func auditTarget(r *http.Request) (string, string, string) {
 			}
 		case "members":
 			resource = "member"
+			if tail == "" && r.Method == "DELETE" {
+				action = "member.remove"
+			}
 			if tail == "" && r.Method == "PATCH" {
 				action = "member.update"
 			}

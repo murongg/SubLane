@@ -590,62 +590,66 @@ it('splits amount shares exactly while editing', async () => {
   )
 })
 
-it('explains token-share balances without upstream quota settlement', async () => {
-  const { AllocationBalances } = await import('./AllocationBalances')
-  render(
-    <AllocationBalances
-      detail={{
-        id: 1,
-        name: 'Synthetic shares',
-        group_id: 2,
-        group_name: 'Synthetic pool',
-        enabled: true,
-        created_at: 1,
-        effective_at: 1,
-        next: null,
-        config: {
-          mode: 'ratio',
-          period: 'month',
-          ratio_unit: 'tokens',
-          total: 1_000_000,
-          members: [{ user_id: 2, limit: 2500 }],
-          rates: [],
-        },
-        available: true,
-        pending: [],
-        balances: [
-          {
-            user_id: 2,
-            username: 'synthetic-member',
-            window_kind: 'month',
-            window_seconds: 0,
-            mode: 'tokens',
-            limit: 250_000,
-            used: 210_000,
-            tokens: 210_000,
-            pending: 1,
-            pending_current: 1,
-            in_flight: 0,
-            reserved: 0,
-            admission_room: 65_000,
-            admission: 'active',
-            reset_at: 2_000_000_000,
+it.each([false, true])(
+  'retains token-share balances when removed=%s',
+  async (removed) => {
+    const { AllocationBalances } = await import('./AllocationBalances')
+    render(
+      <AllocationBalances
+        detail={{
+          id: 1,
+          name: 'Synthetic shares',
+          group_id: 2,
+          group_name: 'Synthetic pool',
+          enabled: true,
+          created_at: 1,
+          effective_at: 1,
+          next: null,
+          config: {
+            mode: 'ratio',
+            period: 'month',
+            ratio_unit: 'tokens',
+            total: 1_000_000,
+            members: [{ user_id: 2, limit: 2500 }],
+            rates: [],
           },
-        ],
-      }}
-    />,
-  )
-  expect(
-    screen.getByText(/total token budget × assigned percentage/),
-  ).toBeTruthy()
-  expect(screen.getByText('0.25 M')).toBeTruthy()
-  expect(screen.getByText('Active')).toBeTruthy()
-  expect(screen.queryByText(/temporarily reserved/)).toBeNull()
-  expect(screen.getByText(/1 awaiting usage this cycle/)).toBeTruthy()
-  expect(
-    screen.getByText(/unconfirmed usage is not charged or reserved/),
-  ).toBeTruthy()
-})
+          available: true,
+          pending: [],
+          balances: [
+            {
+              user_id: 2,
+              username: 'synthetic-member',
+              removed,
+              window_kind: 'month',
+              window_seconds: 0,
+              mode: 'tokens',
+              limit: 250_000,
+              used: 210_000,
+              tokens: 210_000,
+              pending: 1,
+              pending_current: 1,
+              in_flight: 0,
+              reserved: 0,
+              admission_room: 65_000,
+              admission: 'active',
+              reset_at: 2_000_000_000,
+            },
+          ],
+        }}
+      />,
+    )
+    expect(
+      screen.getByText(/total token budget × assigned percentage/),
+    ).toBeTruthy()
+    expect(screen.getByText('0.25 M')).toBeTruthy()
+    expect(screen.getByText(removed ? 'Removed' : 'Active')).toBeTruthy()
+    expect(screen.queryByText(/temporarily reserved/)).toBeNull()
+    expect(screen.getByText(/1 awaiting usage this cycle/)).toBeTruthy()
+    expect(
+      screen.getByText(/unconfirmed usage is not charged or reserved/),
+    ).toBeTruthy()
+  },
+)
 
 it('shows a risk pause and provisional usage beside positive remaining allowance', async () => {
   const { AllocationBalances } = await import('./AllocationBalances')

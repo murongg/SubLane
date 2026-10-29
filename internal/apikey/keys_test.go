@@ -86,6 +86,25 @@ func TestPersonalKeysAreBoundToWorkspace(t *testing.T) {
 			t.Fatalf("foreign workspace key secret disclosed: %v", err)
 		}
 	}
+	if err := tenants.New(connection).RemoveMember(ctx, 1, 1, member.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := first.Authenticate(ctx, a.Secret); !errors.Is(err, ErrInvalidKey) {
+		t.Fatalf("removed member key authenticated: %v", err)
+	}
+	if _, err := second.Authenticate(ctx, b.Secret); err != nil {
+		t.Fatalf("other workspace key revoked: %v", err)
+	}
+	if _, err := tenants.New(connection).AddMemberByUsername(ctx, 1, 1, member.Username, tenants.RoleMember); err != nil {
+		t.Fatal(err)
+	}
+	if err := groups.New(connection).SetMemberGroups(ctx, member.ID, []int64{firstPool.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := first.Authenticate(ctx, a.Secret); !errors.Is(err, ErrInvalidKey) {
+		t.Fatalf("rejoin revived old key: %v", err)
+	}
+
 }
 
 func TestUsableKeyReadinessRequiresAnActiveKeyAndReadyPoolAccount(t *testing.T) {

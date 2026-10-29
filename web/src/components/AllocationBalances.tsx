@@ -41,13 +41,17 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
         <div className="divide-y divide-border">
           {[...members].map(([userID, windows]) => {
             const b = windows[0]
-            const state = !detail.available
-              ? 'allocationUnavailableShort'
-              : windows.some((window) => window.admission === 'exhausted')
-                ? 'allocationExhausted'
-                : windows.some((window) => window.admission === 'risk_limited')
-                  ? 'allocationRiskPaused'
-                  : 'active'
+            const state = b.removed
+              ? 'memberRemovedStatus'
+              : !detail.available
+                ? 'allocationUnavailableShort'
+                : windows.some((window) => window.admission === 'exhausted')
+                  ? 'allocationExhausted'
+                  : windows.some(
+                        (window) => window.admission === 'risk_limited',
+                      )
+                    ? 'allocationRiskPaused'
+                    : 'active'
             return (
               <section key={userID} className="space-y-3 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -56,7 +60,8 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                   </h3>
                   <Status
                     kind={
-                      state === 'allocationUnavailableShort'
+                      state === 'allocationUnavailableShort' ||
+                      state === 'memberRemovedStatus'
                         ? 'neutral'
                         : state === 'allocationRiskPaused'
                           ? 'warning'

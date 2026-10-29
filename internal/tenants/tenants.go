@@ -50,6 +50,7 @@ type MemberSummary struct {
 	Role      Role   `json:"role"`
 	Enabled   bool   `json:"enabled"`
 	CreatedAt int64  `json:"created_at"`
+	CanRemove bool   `json:"can_remove"`
 }
 
 type MemberPage struct {
@@ -292,8 +293,8 @@ func (s *Service) addMember(ctx context.Context, actorID, tenantID, userID int64
 		return MemberSummary{}, ErrForbidden
 	}
 	if username != "" {
-		var exists bool
-		if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM memberships WHERE tenant_id=? AND user_id=?)", tenantID, userID).Scan(&exists); err != nil {
+		exists, err := q.MemberExistsInTenant(ctx, storageDB.MemberExistsInTenantParams{TenantID: tenantID, UserID: userID})
+		if err != nil {
 			return MemberSummary{}, err
 		}
 		if exists {
@@ -301,13 +302,8 @@ func (s *Service) addMember(ctx context.Context, actorID, tenantID, userID int64
 		}
 	}
 	now := time.Now().Unix()
-	result, err := tx.ExecContext(ctx, `INSERT INTO memberships(tenant_id,user_id,role,created_at)
-		SELECT ?,id,?,? FROM users WHERE id=? AND enabled=1
-		ON CONFLICT(tenant_id,user_id) DO UPDATE SET role=excluded.role,enabled=1`, tenantID, role, now, userID)
-	if err != nil {
-		return MemberSummary{}, err
-	}
-	affected, err := result.RowsAffected()
+	// Rejoining resets membership settings; grants and revoked keys stay cleared, and accounting retains the user ID.
+	affected, err := q.AddTenantMember(ctx, storageDB.AddTenantMemberParams{TenantID: tenantID, UserID: userID, Role: string(role), CreatedAt: now})
 	if err != nil {
 		return MemberSummary{}, err
 	}
@@ -353,6 +349,9 @@ func (s *Service) SetMemberRole(ctx context.Context, actorID, tenantID, userID i
 	}
 	if err != nil {
 		return MemberSummary{}, err
+	}
+	if current.RemovedAt != nil {
+		return MemberSummary{}, ErrNotFound
 	}
 	if current.Role == string(RoleOwner) {
 		return MemberSummary{}, ErrForbidden

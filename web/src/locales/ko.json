@@ -1,4 +1,12 @@
 {
+  "memberRemovedStatus": "제거됨",
+  "memberRemove": "워크스페이스에서 제거",
+  "memberRemoveTitle": "워크스페이스 멤버 제거",
+  "memberRemoveDescription": "이 워크스페이스에서 {{username}} 님을 제거할까요? 이 워크스페이스의 접근 권한과 API 키가 취소됩니다. 기존 요청과 사용량 기록은 유지됩니다. 다시 참여하면 새 키와 리소스 그룹 권한 설정이 필요합니다.",
+  "memberRemoveConfirm": "멤버 제거",
+  "memberRemoveFailed": "멤버를 제거하지 못했습니다. 목록을 새로 고친 후 다시 시도하세요.",
+  "memberRemoved": "{{username}} 님을 이 워크스페이스에서 제거했습니다.",
+  "auditMemberRemove": "워크스페이스 멤버 제거",
   "contentDetails": "범위 및 한도",
   "contentScanLimit": "스캔 제한",
   "contentScanSummary": "8MiBJSON · 64개의 중첩 수준",

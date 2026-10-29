@@ -61,6 +61,7 @@ export const schemeSchema = revisionSchema.extend({
 const balanceSchema = z.object({
   user_id: integer,
   username: z.string(),
+  removed: z.boolean().optional(),
   window_kind: z.enum(['day', 'month', 'duration']),
   window_seconds: integer,
   mode: unitSchema,

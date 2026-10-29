@@ -1,4 +1,12 @@
 {
+  "memberRemovedStatus": "Removido",
+  "memberRemove": "Remover do espaço de trabalho",
+  "memberRemoveTitle": "Remover membro do espaço de trabalho",
+  "memberRemoveDescription": "Remover «{{username}}» deste espaço de trabalho? O acesso e as chaves API deste espaço serão revogados. O histórico de pedidos e utilização será mantido. Ao regressar, serão necessárias novas chaves e permissões dos grupos de recursos.",
+  "memberRemoveConfirm": "Remover membro",
+  "memberRemoveFailed": "Não foi possível remover este membro. Atualize a lista e tente novamente.",
+  "memberRemoved": "{{username}} foi removido deste espaço de trabalho.",
+  "auditMemberRemove": "Membro removido do espaço de trabalho",
   "contentDetails": "Âmbito de aplicação e limites",
   "contentScanLimit": "Limite de digitalização",
   "contentScanSummary": "8 MiB JSON · 64 níveis de ninho",

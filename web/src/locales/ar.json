@@ -1,4 +1,12 @@
 {
+  "memberRemovedStatus": "تمت الإزالة",
+  "memberRemove": "إزالة من مساحة العمل",
+  "memberRemoveTitle": "إزالة عضو من مساحة العمل",
+  "memberRemoveDescription": "هل تريد إزالة «{{username}}» من مساحة العمل هذه؟ سيتم إلغاء وصوله ومفاتيح API الخاصة به في هذه المساحة. سيتم الاحتفاظ بسجل الطلبات والاستخدام. تتطلب إعادة الانضمام مفاتيح جديدة وأذونات لمجموعات الموارد.",
+  "memberRemoveConfirm": "إزالة العضو",
+  "memberRemoveFailed": "تعذرت إزالة هذا العضو. حدّث القائمة وحاول مرة أخرى.",
+  "memberRemoved": "تمت إزالة {{username}} من مساحة العمل هذه.",
+  "auditMemberRemove": "إزالة عضو من مساحة العمل",
   "contentDetails": "النطاق والحدود",
   "contentScanLimit": "الحد الأقصى للمسح",
   "contentScanSummary": "8 MiB JSON :: 64 مستوياً للتشهير",

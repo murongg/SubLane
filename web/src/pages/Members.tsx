@@ -1,7 +1,7 @@
 import { Pagination } from '@/components/Pagination'
 import { TableViewport } from '@/components/TableViewport'
 import { useTablePagination } from '@/lib/pagination'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   keepPreviousData,
   useMutation,
@@ -42,6 +42,8 @@ export function Members() {
   const [createdMember, setCreatedMember] = useState<Member | null>(null)
   const [accessSaved, setAccessSaved] = useState<Member | null>(null)
   const [resetName, setResetName] = useState('')
+  const [removedName, setRemovedName] = useState('')
+  const addButton = useRef<HTMLButtonElement>(null)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>(
     'idle',
   )
@@ -89,6 +91,7 @@ export function Members() {
             {t('memberExistingAdd')}
           </Button>
           <Button
+            ref={addButton}
             onClick={() => {
               setCreatedMember(null)
               setCreating(true)
@@ -187,6 +190,11 @@ export function Members() {
       {resetName && (
         <p role="status" className="text-sm text-success">
           {t('memberPasswordReset', { username: resetName })}
+        </p>
+      )}
+      {removedName && (
+        <p role="status" className="text-sm text-success">
+          {t('memberRemoved', { username: removedName })}
         </p>
       )}
       {query.isPending ? (
@@ -329,6 +337,32 @@ export function Members() {
                         )}
                       <MemberActions
                         member={member}
+                        onRemoved={async () => {
+                          setRemovedName(member.username)
+                          setCreatedMember((value) =>
+                            value?.id === member.id ? null : value,
+                          )
+                          setAccessSaved((value) =>
+                            value?.id === member.id ? null : value,
+                          )
+                          await Promise.all([
+                            client.invalidateQueries({ queryKey: ['members'] }),
+                            client.invalidateQueries({ queryKey: ['groups'] }),
+                            client.invalidateQueries({
+                              queryKey: ['allocations'],
+                            }),
+                            client.invalidateQueries({
+                              queryKey: ['allocation'],
+                            }),
+                            client.invalidateQueries({
+                              queryKey: ['member-groups', member.id],
+                            }),
+                            client.invalidateQueries({
+                              queryKey: ['pool-members'],
+                            }),
+                          ])
+                          addButton.current?.focus()
+                        }}
                         onPasswordReset={
                           canResetPasswords && member.role !== 'owner'
                             ? () => setResetName(member.username)
@@ -369,6 +403,7 @@ export function Members() {
           member={membershipTarget === 'new' ? undefined : membershipTarget}
           onClose={() => setMembershipTarget(null)}
           onSaved={async (member) => {
+            setRemovedName('')
             setAccessSaved(member)
             setMembershipTarget(null)
             changePage(1)

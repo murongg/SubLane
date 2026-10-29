@@ -1,4 +1,12 @@
 {
+  "memberRemovedStatus": "已移出",
+  "memberRemove": "移出工作區",
+  "memberRemoveTitle": "移出工作區成員",
+  "memberRemoveDescription": "將「{{username}}」移出目前工作區？該成員在此工作區的存取權限及 API 金鑰將被撤銷，歷史請求及用量紀錄保留。重新加入後需建立新金鑰並重新指派資源群組權限。",
+  "memberRemoveConfirm": "移出成員",
+  "memberRemoveFailed": "無法移出此成員，請重新整理清單後再試。",
+  "memberRemoved": "已將 {{username}} 移出目前工作區。",
+  "auditMemberRemove": "移出工作區成員",
   "contentDetails": "檢查範圍與限制",
   "contentScanLimit": "掃描上限",
   "contentScanSummary": "8 MiB JSON · 64 層嵌套",

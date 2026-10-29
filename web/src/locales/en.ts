@@ -1,4 +1,14 @@
 export const en = {
+  memberRemovedStatus: 'Removed',
+  memberRemove: 'Remove from workspace',
+  memberRemoveTitle: 'Remove member from workspace',
+  memberRemoveDescription:
+    'Remove “{{username}}” from this workspace? Their access and API keys in this workspace will be revoked. Historical requests and usage are retained. Rejoining requires new keys and resource-group access.',
+  memberRemoveConfirm: 'Remove member',
+  memberRemoveFailed:
+    'Could not remove this member. Refresh the list and try again.',
+  memberRemoved: '{{username}} was removed from this workspace.',
+  auditMemberRemove: 'Removed workspace member',
   exportCSV: 'Export CSV',
   exportCSVLoading: 'Exporting…',
   exportCSVFailed: 'Could not export CSV. Refresh and try again.',
