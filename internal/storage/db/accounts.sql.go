@@ -93,7 +93,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) (i
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at, models_snapshot, models_revision, tenant_id, proxy_id, max_concurrency FROM accounts WHERE id = ?1 AND tenant_id = ?2
+SELECT id, provider, name, account_id, email, "plan", enabled, status, credential, expires_at, created_at, updated_at, models_snapshot, models_revision, tenant_id, proxy_id, max_concurrency, reset_config, reset_revision, reset_next_run_at, reset_time_zone, reset_check_at, usage_revision FROM accounts WHERE id = ?1 AND tenant_id = ?2
 `
 
 type GetAccountParams struct {
@@ -122,6 +122,12 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (Account
 		&i.TenantID,
 		&i.ProxyID,
 		&i.MaxConcurrency,
+		&i.ResetConfig,
+		&i.ResetRevision,
+		&i.ResetNextRunAt,
+		&i.ResetTimeZone,
+		&i.ResetCheckAt,
+		&i.UsageRevision,
 	)
 	return i, err
 }

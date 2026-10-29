@@ -24,6 +24,7 @@ import (
 	"github.com/murongg/SubLane/internal/gateway"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/pricing"
+	"github.com/murongg/SubLane/internal/resets"
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/tenants"
@@ -128,7 +129,7 @@ func New(ctx context.Context, options Options) (_ *Instance, err error) {
 		DataDir: directory, Assets: options.Assets, Version: options.Version, StartedAt: time.Now(),
 		Ping: connection.PingContext, Audit: audit.NewForTenant(connection, 1), Auth: identity,
 		Keys: keys, Accounts: accountService, Gateway: forwarding, Groups: poolService,
-		Pricing: pricing.NewStatic(nil),
+		Pricing: pricing.NewStatic(nil), ResetCredits: resets.New(connection, zone.Location, nil, nil),
 		Tenants: tenancy, TenantID: 1, PublicURL: options.PublicURL, TrustedProxies: options.TrustedProxies,
 		CodexVersions: versionPolicy, GrokVersions: grokPolicy, ClaudeVersions: claudePolicy, TimeZone: zone,
 		// Expose configuration reads without starting the outbound notification worker.

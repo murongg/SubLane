@@ -24,6 +24,7 @@ import (
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/oauth"
 	"github.com/murongg/SubLane/internal/pricing"
+	"github.com/murongg/SubLane/internal/resets"
 	"github.com/murongg/SubLane/internal/tenants"
 	"github.com/murongg/SubLane/internal/timezone"
 	"github.com/murongg/SubLane/internal/upstream"
@@ -46,6 +47,7 @@ type Options struct {
 	Accounts           *accounts.Service
 	OAuth              *oauth.Flow
 	Gateway            *gateway.Service
+	ResetCredits       *resets.Service
 	Pricing            *pricing.Service
 	Groups             *groups.Service
 	Tenants            *tenants.Service
@@ -83,7 +85,7 @@ func New(o Options) http.Handler {
 	}
 	login := &authHTTP{demo: o.Demo, audit: o.Audit, service: o.Auth, tenants: o.Tenants, timeZone: o.TimeZone, tenantID: tenantID, publicURL: o.PublicURL, limiter: loginLimiter, enrollmentLimiter: enrollmentLimiter, trustedProxies: o.TrustedProxies}
 	keys := &keyHTTP{groups: o.Groups, service: o.Keys, gateway: o.Gateway, publicURL: o.PublicURL, sockets: make(chan struct{}, 8)}
-	accountManagement := &accountHTTP{service: o.Accounts, oauth: o.OAuth, gateway: o.Gateway}
+	accountManagement := &accountHTTP{service: o.Accounts, oauth: o.OAuth, gateway: o.Gateway, resets: o.ResetCredits, tenantID: tenantID}
 	memberManagement := &memberHTTP{gateway: o.Gateway}
 	allocationManagement := &allocationHTTP{gateway: o.Gateway}
 

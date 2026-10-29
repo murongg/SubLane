@@ -81,6 +81,9 @@ func TestProxyAuditTargets(t *testing.T) {
 		{http.MethodPut, "/api/proxies/" + id, "proxy.update", "proxy", id},
 		{http.MethodDelete, "/api/proxies/" + id, "proxy.delete", "proxy", id},
 		{http.MethodPut, "/api/accounts/" + id + "/proxy", "account.proxy", "account", id},
+		{http.MethodPut, "/api/accounts/" + id + "/resets", "account.reset_settings", "account", id},
+		{http.MethodPost, "/api/accounts/" + id + "/resets/consume", "account.reset_use", "account", id},
+		{http.MethodPost, "/api/accounts/" + id + "/resets/retry", "account.reset_use", "account", id},
 	} {
 		action, resource, target := auditTarget(httptest.NewRequest(check.method, check.path, nil))
 		if action != check.action || resource != check.resource || target != check.id {

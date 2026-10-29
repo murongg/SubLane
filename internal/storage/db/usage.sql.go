@@ -10,8 +10,8 @@ import (
 )
 
 const getAccountUsage = `-- name: GetAccountUsage :one
-SELECT u.snapshot, u.updated_at, a.models_revision AS revision
-FROM accounts a LEFT JOIN account_usage u ON u.account_id = a.id AND u.revision = a.models_revision
+SELECT u.snapshot, u.updated_at, a.models_revision+a.usage_revision AS revision
+FROM accounts a LEFT JOIN account_usage u ON u.account_id = a.id AND u.revision = a.models_revision+a.usage_revision
 WHERE a.id = ?1
 `
 
@@ -117,8 +117,8 @@ func (q *Queries) ListWorkspaceUsage(ctx context.Context, tenantID int64) ([]Lis
 
 const saveAccountUsage = `-- name: SaveAccountUsage :execrows
 INSERT INTO account_usage(account_id, snapshot, updated_at, revision)
-SELECT id, ?1, ?2, models_revision FROM accounts
-WHERE id = ?3 AND models_revision = ?4
+SELECT id, ?1, ?2, models_revision+usage_revision FROM accounts
+WHERE id = ?3 AND models_revision+usage_revision = ?4
 AND enabled = 1 AND status != 'reauth_required'
 ON CONFLICT(account_id) DO UPDATE SET snapshot = excluded.snapshot, updated_at = excluded.updated_at, revision = excluded.revision
 WHERE excluded.revision != account_usage.revision OR excluded.updated_at >= account_usage.updated_at

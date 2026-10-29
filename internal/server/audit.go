@@ -92,6 +92,9 @@ func auditTarget(r *http.Request) (string, string, string) {
 		action, resource = "account.authorize", "account"
 	default:
 		parts := strings.Split(strings.TrimPrefix(path, "/api/"), "/")
+		if len(parts) == 4 && parts[0] == "accounts" && parts[2] == "resets" && (parts[3] == "consume" || parts[3] == "retry") && r.Method == "POST" && audit.ValidTarget("account.reset_use", "account", parts[1]) {
+			return "account.reset_use", "account", parts[1]
+		}
 		if len(parts) < 2 || len(parts) > 3 {
 			return "", "", ""
 		}
@@ -146,6 +149,9 @@ func auditTarget(r *http.Request) (string, string, string) {
 			}
 		case "accounts":
 			resource = "account"
+			if tail == "resets" && r.Method == "PUT" {
+				action = "account.reset_settings"
+			}
 			if tail == "proxy" && r.Method == "PUT" {
 				action = "account.proxy"
 			}

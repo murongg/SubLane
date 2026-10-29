@@ -22,6 +22,12 @@ type Account struct {
 	TenantID       int64
 	ProxyID        *string
 	MaxConcurrency int64
+	ResetConfig    string
+	ResetRevision  int64
+	ResetNextRunAt int64
+	ResetTimeZone  string
+	ResetCheckAt   int64
+	UsageRevision  int64
 }
 
 type AccountGroup struct {
@@ -124,4 +130,16 @@ type Proxy struct {
 	City       string
 	LatencyMs  int64
 	CheckError string
+}
+
+type ResetRun struct {
+	ID          int64
+	RequestID   string
+	AccountID   string
+	TriggerKind string
+	Occurrence  *int64
+	Outcome     string
+	Reason      string
+	StartedAt   int64
+	UpdatedAt   int64
 }
