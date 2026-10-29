@@ -12,6 +12,7 @@ import (
 const listAccountRuntime = `-- name: ListAccountRuntime :many
 SELECT a.id,a.provider,a.max_concurrency,COALESCE(r.cooldown_until,0) AS cooldown_until,COALESCE(r.reason,'') AS reason,COALESCE(r.failures,0) AS failures,COALESCE(r.last_failure_at,0) AS last_failure_at,COALESCE(r.revision,0) AS revision,
  a.models_revision AS lifecycle,
+ a.models_revision+a.usage_revision AS usage_revision,
  (SELECT COUNT(*) FROM account_model_runtime m WHERE m.account_id=a.id AND m.lifecycle=a.models_revision AND m.runtime_revision=COALESCE(r.revision,0) AND m.cooldown_until>0) AS limited_models
 FROM accounts a LEFT JOIN account_runtime r ON r.account_id=a.id WHERE a.tenant_id=?1
 `
@@ -26,6 +27,7 @@ type ListAccountRuntimeRow struct {
 	LastFailureAt  int64
 	Revision       int64
 	Lifecycle      int64
+	UsageRevision  int64
 	LimitedModels  int64
 }
 
@@ -48,6 +50,7 @@ func (q *Queries) ListAccountRuntime(ctx context.Context, tenantID int64) ([]Lis
 			&i.LastFailureAt,
 			&i.Revision,
 			&i.Lifecycle,
+			&i.UsageRevision,
 			&i.LimitedModels,
 		); err != nil {
 			return nil, err

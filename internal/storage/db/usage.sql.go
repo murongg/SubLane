@@ -29,9 +29,9 @@ func (q *Queries) GetAccountUsage(ctx context.Context, accountID string) (GetAcc
 }
 
 const listGroupUsage = `-- name: ListGroupUsage :many
-SELECT a.id, a.provider, a.models_revision AS revision, u.snapshot, u.updated_at
+SELECT a.id, a.provider, a.models_revision+a.usage_revision AS revision, u.snapshot, u.updated_at
 FROM accounts a JOIN group_accounts ga ON ga.account_id=a.id
-LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
+LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision+a.usage_revision
 WHERE ga.group_id=?1 AND a.enabled=1 AND a.status!='reauth_required'
 `
 
@@ -73,8 +73,8 @@ func (q *Queries) ListGroupUsage(ctx context.Context, groupID int64) ([]ListGrou
 }
 
 const listWorkspaceUsage = `-- name: ListWorkspaceUsage :many
-SELECT a.id, a.provider, a.models_revision AS revision, u.snapshot, u.updated_at
-FROM accounts a LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
+SELECT a.id, a.provider, a.models_revision+a.usage_revision AS revision, u.snapshot, u.updated_at
+FROM accounts a LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision+a.usage_revision
 WHERE a.tenant_id=?1
 `
 

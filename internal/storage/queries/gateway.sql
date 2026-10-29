@@ -25,7 +25,7 @@ ORDER BY provider;
 -- name: ListRoutingAccounts :many
 SELECT a.id,a.provider,a.enabled,a.status,a.models_snapshot,a.models_revision,u.snapshot AS usage_snapshot,u.updated_at AS usage_updated_at
 FROM accounts a JOIN group_accounts ga ON ga.account_id=a.id
-LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision
+LEFT JOIN account_usage u ON u.account_id=a.id AND u.revision=a.models_revision+a.usage_revision
 WHERE a.tenant_id=sqlc.arg(tenant_id) AND ga.group_id=sqlc.arg(group_id)
 ORDER BY a.created_at DESC,a.id DESC;
 
