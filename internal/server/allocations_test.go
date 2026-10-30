@@ -44,6 +44,19 @@ func TestAllocationScheduleEndpointsRequireConditionsAndPreserveInitial(t *testi
 	if r.Code != 409 || !strings.Contains(r.Body.String(), "allocation_initial_schedule_required") {
 		t.Fatal("initial cancel", r.Code, r.Body.String())
 	}
+	body["config"].(map[string]any)["members"] = []map[string]any{{"user_id": owner.User.ID, "limit": 100}}
+	body["expected_current_revision_id"] = nil
+	body["expected_next_revision_id"] = scheme.Next.ID
+	body["expected_effective_at"] = scheme.Next.EffectiveAt
+	r = request(h, "PATCH", path, "http://example.test", body, cookie)
+	if r.Code != 200 {
+		t.Fatal("initial member correction", r.Code, r.Body.String())
+	}
+	var corrected allocations.Scheme
+	if err := json.Unmarshal(r.Body.Bytes(), &corrected); err != nil || corrected.Next == nil || corrected.Next.EffectiveAt != scheme.Next.EffectiveAt || corrected.Next.AccountingAnchorAt != scheme.Next.AccountingAnchorAt || corrected.WriteConditions.Current != nil {
+		t.Fatal("initial correction changed activation", corrected, err)
+	}
+	conditions["expected_next_revision_id"] = corrected.Next.ID
 	r = request(h, "POST", path+"/preview", "http://example.test", map[string]any{"action": "reschedule"}, cookie)
 	if r.Code != 200 {
 		t.Fatal("preview", r.Code, r.Body.String())

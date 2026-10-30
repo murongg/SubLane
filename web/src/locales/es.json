@@ -1420,5 +1420,7 @@
   "turnstileFailed": "La verificación falló o caducó. Completa el desafío de nuevo.",
   "turnstileUnavailable": "La verificación no está disponible. Vuelve a intentarlo.",
   "turnstileVerification": "Verificación humana",
-  "turnstileRetry": "Reintentar"
+  "turnstileRetry": "Reintentar",
+  "allocationInitialEditHint": "Antes de la primera activación, puedes corregir aquí los miembros iniciales. Se conservan la hora de inicio revisada y el anclaje contable.",
+  "allocationReplacePendingHint": "Para cambiar miembros de este nuevo período programado, confirma la sustitución abajo. Los cambios de presupuesto y precio pueden conservar el plan existente."
 }

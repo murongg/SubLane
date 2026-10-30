@@ -1,4 +1,8 @@
 export const en = {
+  allocationInitialEditHint:
+    'Before the first activation, edit the initial member plan here. Saving keeps its reviewed start time and accounting anchor.',
+  allocationReplacePendingHint:
+    'To change members in this scheduled new period, confirm the replacement below. Budget and price edits can keep the existing plan.',
   allocationSharedBudgetBlocked:
     'The shared group budget is temporarily unavailable. Retry later or after renewal.',
   allocationChanged:

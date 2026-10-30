@@ -1415,5 +1415,7 @@
   "turnstileFailed": "Verifizierung fehlgeschlagen oder abgelaufen. Bitte erneut durchführen.",
   "turnstileUnavailable": "Verifizierung nicht verfügbar. Bitte erneut versuchen.",
   "turnstileVerification": "Menschliche Verifizierung",
-  "turnstileRetry": "Erneut versuchen"
+  "turnstileRetry": "Erneut versuchen",
+  "allocationInitialEditHint": "Vor der ersten Aktivierung können Sie hier die anfänglichen Mitglieder korrigieren. Der geprüfte Startzeitpunkt und der Messanker bleiben erhalten.",
+  "allocationReplacePendingHint": "Bestätigen Sie unten die Ersetzung, um Mitglieder dieses geplanten neuen Zeitraums zu ändern. Budget- und Preisänderungen können den bestehenden Plan beibehalten."
 }

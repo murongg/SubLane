@@ -1415,5 +1415,7 @@
   "turnstileFailed": "인증에 실패했거나 만료되었습니다. 다시 인증하세요.",
   "turnstileUnavailable": "인증을 사용할 수 없습니다. 다시 시도하세요.",
   "turnstileVerification": "사람 확인",
-  "turnstileRetry": "다시 시도"
+  "turnstileRetry": "다시 시도",
+  "allocationInitialEditHint": "첫 적용 전에 여기서 초기 구성원 계획을 수정할 수 있습니다. 저장해도 검토한 시작 시각과 측정 기준점은 유지됩니다.",
+  "allocationReplacePendingHint": "이 예약된 새 기간의 구성원을 바꾸려면 아래 교체 확인을 선택하세요. 예산과 가격만 바꾸면 기존 계획을 유지할 수 있습니다."
 }

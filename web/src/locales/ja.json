@@ -1415,5 +1415,7 @@
   "turnstileFailed": "認証に失敗したか、有効期限が切れました。もう一度認証してください。",
   "turnstileUnavailable": "認証を利用できません。再試行してください。",
   "turnstileVerification": "人間であることの確認",
-  "turnstileRetry": "再試行"
+  "turnstileRetry": "再試行",
+  "allocationInitialEditHint": "初回の有効化前は、ここで初期メンバー計画を修正できます。保存しても確認済みの開始時刻と計測起点を維持します。",
+  "allocationReplacePendingHint": "この予約済み新期間のメンバーを変更するには、下の置換確認を選択してください。予算や価格だけの編集では既存計画を維持できます。"
 }

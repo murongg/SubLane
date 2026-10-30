@@ -65,6 +65,8 @@ INSERT INTO allocation_entries(request_id,scheme_id,revision_id,user_id,account_
 VALUES(?,?,?,?,?,?,?,?,?,?,'active');
 -- name: GetAllocationEntry :one
 SELECT * FROM allocation_entries WHERE request_id=?;
+-- name: AllocationHasEntries :one
+SELECT EXISTS(SELECT 1 FROM allocation_entries WHERE scheme_id=?);
 -- name: FinishAllocationEntry :exec
 UPDATE allocation_entries SET finished_at=?,state=?,input_tokens=?,output_tokens=?,cached_tokens=?,cost=?,manual=? WHERE request_id=?;
 -- name: RecoverAllocationEntries :exec
@@ -85,10 +87,15 @@ WHERE scheme_id=sqlc.arg(scheme_id) AND started_at>=sqlc.arg(started_from) AND s
 AND mode=sqlc.arg(mode) AND state='settled';
 
 -- name: AllocationActiveEntries :many
-SELECT e.*,r.config AS revision_config FROM allocation_entries e JOIN allocation_revisions r ON r.id=e.revision_id
+SELECT e.user_id,e.revision_id,e.started_at FROM allocation_entries e
 WHERE e.scheme_id=sqlc.arg(scheme_id) AND (sqlc.arg(user_id)=0 OR e.user_id=sqlc.arg(user_id))
 AND e.started_at>=sqlc.arg(started_from) AND e.started_at<sqlc.arg(started_to) AND e.mode=sqlc.arg(mode) AND e.state='active'
 ORDER BY e.request_id LIMIT 4097;
+
+-- name: AllocationReservationConfig :one
+-- Reservation math never needs the captured price catalog; settlement still reads the full revision.
+SELECT CAST(json_remove(config,'$.rates') AS TEXT) AS config FROM allocation_revisions
+WHERE id=sqlc.arg(id) AND scheme_id=sqlc.arg(scheme_id);
 
 -- name: AllocationMemberExposure :one
 SELECT CAST(COALESCE(SUM(CASE WHEN state='active' THEN 1 ELSE 0 END),0) AS INTEGER) AS active,

@@ -21,7 +21,7 @@ func (q *Queries) AccountHasAllocation(ctx context.Context, accountID string) (b
 }
 
 const allocationActiveEntries = `-- name: AllocationActiveEntries :many
-SELECT e.request_id, e.scheme_id, e.revision_id, e.user_id, e.account_id, e.model, e.mode, e.window_start, e.reset_at, e.started_at, e.finished_at, e.state, e.input_tokens, e.output_tokens, e.cached_tokens, e.cost, e.manual,r.config AS revision_config FROM allocation_entries e JOIN allocation_revisions r ON r.id=e.revision_id
+SELECT e.user_id,e.revision_id,e.started_at FROM allocation_entries e
 WHERE e.scheme_id=?1 AND (?2=0 OR e.user_id=?2)
 AND e.started_at>=?3 AND e.started_at<?4 AND e.mode=?5 AND e.state='active'
 ORDER BY e.request_id LIMIT 4097
@@ -36,24 +36,9 @@ type AllocationActiveEntriesParams struct {
 }
 
 type AllocationActiveEntriesRow struct {
-	RequestID      string
-	SchemeID       int64
-	RevisionID     int64
-	UserID         int64
-	AccountID      string
-	Model          string
-	Mode           string
-	WindowStart    int64
-	ResetAt        int64
-	StartedAt      int64
-	FinishedAt     int64
-	State          string
-	InputTokens    int64
-	OutputTokens   int64
-	CachedTokens   int64
-	Cost           int64
-	Manual         int64
-	RevisionConfig string
+	UserID     int64
+	RevisionID int64
+	StartedAt  int64
 }
 
 func (q *Queries) AllocationActiveEntries(ctx context.Context, arg AllocationActiveEntriesParams) ([]AllocationActiveEntriesRow, error) {
@@ -71,26 +56,7 @@ func (q *Queries) AllocationActiveEntries(ctx context.Context, arg AllocationAct
 	items := []AllocationActiveEntriesRow{}
 	for rows.Next() {
 		var i AllocationActiveEntriesRow
-		if err := rows.Scan(
-			&i.RequestID,
-			&i.SchemeID,
-			&i.RevisionID,
-			&i.UserID,
-			&i.AccountID,
-			&i.Model,
-			&i.Mode,
-			&i.WindowStart,
-			&i.ResetAt,
-			&i.StartedAt,
-			&i.FinishedAt,
-			&i.State,
-			&i.InputTokens,
-			&i.OutputTokens,
-			&i.CachedTokens,
-			&i.Cost,
-			&i.Manual,
-			&i.RevisionConfig,
-		); err != nil {
+		if err := rows.Scan(&i.UserID, &i.RevisionID, &i.StartedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -143,6 +109,17 @@ func (q *Queries) AllocationGroupUsage(ctx context.Context, arg AllocationGroupU
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const allocationHasEntries = `-- name: AllocationHasEntries :one
+SELECT EXISTS(SELECT 1 FROM allocation_entries WHERE scheme_id=?)
+`
+
+func (q *Queries) AllocationHasEntries(ctx context.Context, schemeID int64) (bool, error) {
+	row := q.db.QueryRowContext(ctx, allocationHasEntries, schemeID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const allocationMemberExposure = `-- name: AllocationMemberExposure :one
@@ -266,6 +243,24 @@ func (q *Queries) AllocationPoolAccounts(ctx context.Context, groupID int64) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const allocationReservationConfig = `-- name: AllocationReservationConfig :one
+SELECT CAST(json_remove(config,'$.rates') AS TEXT) AS config FROM allocation_revisions
+WHERE id=?1 AND scheme_id=?2
+`
+
+type AllocationReservationConfigParams struct {
+	ID       int64
+	SchemeID int64
+}
+
+// Reservation math never needs the captured price catalog; settlement still reads the full revision.
+func (q *Queries) AllocationReservationConfig(ctx context.Context, arg AllocationReservationConfigParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, allocationReservationConfig, arg.ID, arg.SchemeID)
+	var config string
+	err := row.Scan(&config)
+	return config, err
 }
 
 const beginAllocationEntry = `-- name: BeginAllocationEntry :exec

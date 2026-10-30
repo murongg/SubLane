@@ -100,13 +100,13 @@ type memberWindowUsage struct {
 	risk      riskBudget
 }
 
-func readMemberWindow(ctx context.Context, q *db.Queries, scheme, user int64, member Share, config Config, window allocationWindow) (memberWindowUsage, error) {
+func (a *accounting) member(ctx context.Context, member Share, config Config, window allocationWindow) (memberWindowUsage, error) {
 	mode := entryMode(config)
-	usage, err := q.AllocationMemberUsage(ctx, db.AllocationMemberUsageParams{SchemeID: scheme, UserID: user, StartedFrom: window.start, StartedTo: window.end, Mode: mode})
+	usage, err := a.q.AllocationMemberUsage(ctx, db.AllocationMemberUsageParams{SchemeID: a.scheme, UserID: member.UserID, StartedFrom: window.start, StartedTo: window.end, Mode: mode})
 	if err != nil {
 		return memberWindowUsage{}, err
 	}
-	exposure, err := q.AllocationMemberExposure(ctx, db.AllocationMemberExposureParams{SchemeID: scheme, UserID: user, StartedFrom: window.start, StartedTo: window.end, Mode: mode})
+	exposure, err := a.q.AllocationMemberExposure(ctx, db.AllocationMemberExposureParams{SchemeID: a.scheme, UserID: member.UserID, StartedFrom: window.start, StartedTo: window.end, Mode: mode})
 	if err != nil {
 		return memberWindowUsage{}, err
 	}
@@ -114,7 +114,7 @@ func readMemberWindow(ctx context.Context, q *db.Queries, scheme, user int64, me
 	unlimited := config.Mode == "windows" && limit == 0
 	risk := riskBudget{}
 	if !unlimited {
-		active, held, err := activeReservations(ctx, q, scheme, user, config, window)
+		active, held, err := a.reservations(ctx, member.UserID, member, config, window)
 		if err != nil {
 			return memberWindowUsage{}, err
 		}
@@ -140,13 +140,15 @@ func Check(ctx context.Context, q *db.Queries, scheme, user, group int64, accoun
 			return rev, err
 		}
 	}
+	windows := effectiveWindows(rev, now, location)
+	accounting := newAccounting(q, scheme, rev, windows)
 	for _, m := range rev.Config.Members {
 		if m.UserID != user {
 			continue
 		}
 		riskLimited := false
-		for _, window := range effectiveWindows(rev, now, location) {
-			state, err := readMemberWindow(ctx, q, scheme, user, m, rev.Config, window)
+		for _, window := range windows {
+			state, err := accounting.member(ctx, m, rev.Config, window)
 			if err != nil {
 				return rev, err
 			}
@@ -154,14 +156,14 @@ func Check(ctx context.Context, q *db.Queries, scheme, user, group int64, accoun
 				return rev, ErrQuota
 			}
 			if rev.Config.Mode == "ratio" {
-				used, _, room, err := groupRoom(ctx, q, scheme, rev.Config, window)
+				group, err := accounting.group(ctx, window)
 				if err != nil {
 					return rev, err
 				}
-				if used >= window.total(rev.Config) {
+				if group.used >= window.total(rev.Config) {
 					return rev, ErrQuota
 				}
-				riskLimited = riskLimited || room < reservation(state.limit)
+				riskLimited = riskLimited || group.room < reservation(state.limit)
 			}
 			riskLimited = riskLimited || state.risk.limited
 		}

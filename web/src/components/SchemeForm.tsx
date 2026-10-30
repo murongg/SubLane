@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { formatInstanceDate, useTimeZone } from '@/lib/timezone'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
@@ -6,6 +6,7 @@ import {
   type Scheme,
   type SchemeInput,
   type AllocationMode,
+  type AllocationConfig,
   modeLabels,
   parseAllocationValue,
   allocationValue,
@@ -86,6 +87,39 @@ function durationSeconds(draft: WindowDraft): number | null {
   const seconds =
     Number(draft.duration) * (draft.unit === 'days' ? 86400 : 3600)
   return seconds <= 365 * 86400 ? seconds : null
+}
+
+function memberFields(
+  config: AllocationConfig | undefined,
+  rules: WindowDraft[],
+) {
+  const values: Record<number, string> = {}
+  const selected: Record<number, boolean> = {}
+  const customization: Record<number, boolean> = {}
+  const overrides: Record<number, Record<string, string>> = {}
+  if (!config) return { values, selected, customization, overrides }
+  for (const member of config.members) {
+    values[member.user_id] =
+      config.mode === 'windows' && member.limit === 0
+        ? ''
+        : allocationValue(member.limit, config.mode)
+    selected[member.user_id] = true
+    if (config.mode === 'windows') {
+      customization[member.user_id] = (member.window_overrides?.length ?? 0) > 0
+      const limits: Record<string, string> = {}
+      for (const override of member.window_overrides ?? []) {
+        const rule = rules.find(
+          (rule) => durationSeconds(rule) === override.duration_seconds,
+        )
+        if (rule)
+          limits[rule.id] = override.limit
+            ? allocationValue(override.limit, 'amount')
+            : ''
+      }
+      overrides[member.user_id] = limits
+    }
+  }
+  return { values, selected, customization, overrides }
 }
 
 export function SchemeForm(
@@ -190,62 +224,25 @@ function SchemeFields({
   const applyNow = membersOnly
   const [confirmReplacement, setConfirmReplacement] = useState(false)
   const [previewAnchor] = useState(() => Math.floor(Date.now() / 1000))
-  const [values, setValues] = useState<Record<number, string>>(
-    Object.fromEntries(
-      initial?.members.map((m) => [
-        m.user_id,
-        initial.mode === 'windows' && m.limit === 0
-          ? ''
-          : allocationValue(m.limit, initial.mode),
-      ]) ?? [],
-    ),
+  const originalMembers = useMemo(
+    () => memberFields(initial, windowRules),
+    [initial, windowRules],
   )
-  const [selectedMembers, setSelectedMembers] = useState<
+  const [draftValues, setValues] = useState<Record<number, string>>(
+    originalMembers.values,
+  )
+  const [draftSelected, setSelectedMembers] = useState<Record<number, boolean>>(
+    originalMembers.selected,
+  )
+  const [draftCustomization, setMemberCustomization] = useState<
     Record<number, boolean>
-  >(
-    Object.fromEntries(
-      initial?.members.map((member) => [member.user_id, true]) ?? [],
-    ),
-  )
-  const [memberCustomization, setMemberCustomization] = useState<
-    Record<number, boolean>
-  >(
-    Object.fromEntries(
-      initial?.mode === 'windows'
-        ? initial.members.map((member) => [
-            member.user_id,
-            (member.window_overrides?.length ?? 0) > 0,
-          ])
-        : [],
-    ),
-  )
-  const [windowOverrideValues, setWindowOverrideValues] = useState<
+  >(originalMembers.customization)
+  const [draftOverrides, setWindowOverrideValues] = useState<
     Record<number, Record<string, string>>
-  >(
-    Object.fromEntries(
-      initial?.mode === 'windows'
-        ? initial.members.map((member): [number, Record<string, string>] => {
-            const values: Record<string, string> = {}
-            for (const override of member.window_overrides ?? []) {
-              const index = (initial.windows ?? []).findIndex(
-                (rule) => rule.duration_seconds === override.duration_seconds,
-              )
-              if (index >= 0)
-                values[`saved-${index}`] = override.limit
-                  ? allocationValue(override.limit, 'amount')
-                  : ''
-            }
-            return [member.user_id, values]
-          })
-        : [],
-    ),
-  )
+  >(originalMembers.overrides)
   const [invalid, setInvalid] = useState(false)
   const shareMode = mode === 'ratio'
   const durationMode = period === 'durations'
-  const selectedCount = members.filter(
-    (member) => selectedMembers[member.id],
-  ).length
   const longestDraftWindow = Math.max(
     0,
     ...windowRules.map((rule) => durationSeconds(rule) ?? 0),
@@ -278,26 +275,52 @@ function SchemeFields({
       setInvalid(false)
     }
   }
+  const draftStructure = allocationStructure({
+    mode,
+    period,
+    reset_time: period === 'durations' ? undefined : resetTime,
+    reset_day: period === 'month' ? Number(resetDay) : undefined,
+    ratio_unit: shareMode ? ratioUnit : undefined,
+    members: [],
+    rates: [],
+    windows: durationMode
+      ? windowRules.map((w) => ({
+          duration_seconds: durationSeconds(w) ?? 0,
+          limit: 0,
+        }))
+      : undefined,
+  })
   const structureChanged =
+    !!scheme && !!initial && allocationStructure(initial) !== draftStructure
+  const initialPending =
+    !!scheme?.next &&
+    scheme.write_conditions?.expected_current_revision_id === null
+  const replacementBase =
+    scheme?.write_conditions?.expected_current_revision_id != null
+      ? scheme.config
+      : initial
+  const replacementAvailable =
     !!scheme &&
-    !!initial &&
-    allocationStructure(initial) !==
-      allocationStructure({
-        mode,
-        period,
-        reset_time: period === 'durations' ? undefined : resetTime,
-        reset_day: period === 'month' ? Number(resetDay) : undefined,
-        ratio_unit: shareMode ? ratioUnit : undefined,
-        members: [],
-        rates: [],
-        windows: durationMode
-          ? windowRules.map((w) => ({
-              duration_seconds: durationSeconds(w) ?? 0,
-              limit: 0,
-            }))
-          : undefined,
-      })
-  const preserveMembers = !!scheme && !applyNow && !structureChanged
+    !applyNow &&
+    !!replacementBase &&
+    allocationStructure(replacementBase) !== draftStructure
+  const replacing = replacementAvailable && confirmReplacement
+  const preserveMembers =
+    !!scheme && !applyNow && !initialPending && !structureChanged && !replacing
+  // Locked rows must display the saved member instruction that will actually be submitted.
+  const values = preserveMembers ? originalMembers.values : draftValues
+  const selectedMembers = preserveMembers
+    ? originalMembers.selected
+    : draftSelected
+  const memberCustomization = preserveMembers
+    ? originalMembers.customization
+    : draftCustomization
+  const windowOverrideValues = preserveMembers
+    ? originalMembers.overrides
+    : draftOverrides
+  const selectedCount = members.filter(
+    (member) => selectedMembers[member.id],
+  ).length
   const total = preserveMembers
     ? (initial?.members.reduce((sum, member) => sum + member.limit, 0) ?? 0)
     : members.reduce(
@@ -388,7 +411,7 @@ function SchemeFields({
           ? parsedWindows.every((w) => validShareBudget(w.limit))
           : validShareBudget(totalBudget))) ||
       (!!scheme && !scheme.write_conditions) ||
-      (!!scheme && structureChanged && !confirmReplacement)
+      (!!scheme && structureChanged && !replacing)
     setInvalid(bad)
     if (bad) return
     onSubmit({
@@ -401,7 +424,7 @@ function SchemeFields({
         ? {
             ...scheme.write_conditions,
             expected_effective_at: scheme.edit_effective_at,
-            confirm_replacement: structureChanged && confirmReplacement,
+            confirm_replacement: replacing,
           }
         : {}),
       config: {
@@ -836,7 +859,12 @@ function SchemeFields({
             />
           )}
         </fieldset>
-        {scheme && structureChanged && (
+        {scheme?.next && replacementAvailable && !structureChanged && (
+          <p className="text-sm leading-6 text-muted-foreground">
+            {t('allocationReplacePendingHint')}
+          </p>
+        )}
+        {scheme && replacementAvailable && (
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"
@@ -848,7 +876,7 @@ function SchemeFields({
           </label>
         )}
         <fieldset
-          disabled={!!scheme && !applyNow && !structureChanged}
+          disabled={preserveMembers}
           className="space-y-4 border-t border-border pt-7"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1108,7 +1136,7 @@ function SchemeFields({
           <h3 className="text-base font-semibold">
             {t('allocationSectionActivation')}
           </h3>
-          {scheme && !applyNow && (
+          {scheme && !applyNow && !initialPending && (
             <p className="text-sm leading-6 text-muted-foreground">
               {t('allocationNextHint')}
             </p>
@@ -1158,7 +1186,11 @@ function SchemeFields({
             )}
             {scheme && !applyNow && (
               <p className="text-sm leading-6 text-muted-foreground">
-                {t('allocationScheduledHint')}
+                {t(
+                  initialPending
+                    ? 'allocationInitialEditHint'
+                    : 'allocationScheduledHint',
+                )}
               </p>
             )}
           </div>

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/storage/db"
 )
 
@@ -51,6 +52,128 @@ func TestCancelInitialPreservesReadableDataAndPauseStillWorks(t *testing.T) {
 		if err != nil || len(rows) != 1 || rows[0].Next == nil || rows[0].Next.ID != out.Next.ID || rows[0].Config.Mode != "ratio" || rows[0].Enabled != enabled {
 			t.Fatal("initial schedule lost", rows, err)
 		}
+	}
+}
+
+func TestInitialCorrectionRetainsTimeAnchorAndConditions(t *testing.T) {
+	s, _, out, in := pendingInitial(t)
+	ctx := context.Background()
+	in.Config.Members = []Share{{UserID: 1, Limit: 10000}}
+	in = conditioned(t, s, out.ID, in)
+	updated, err := s.SaveScheme(ctx, out.ID, in)
+	if err != nil || updated.Next == nil {
+		t.Fatal("initial member correction rejected", updated, err)
+	}
+	if updated.ID != out.ID || updated.GroupID != out.GroupID || updated.CreatedAt != out.CreatedAt || updated.WriteConditions.Current != nil || updated.Next.ID <= out.Next.ID || updated.Next.EffectiveAt != out.Next.EffectiveAt || updated.Next.AccountingAnchorAt != out.Next.AccountingAnchorAt || updated.Next.Config.Members[0].UserID != 1 {
+		t.Fatal("correction changed identity, time or anchor", updated)
+	}
+	if _, err := s.SaveScheme(ctx, out.ID, in); err != ErrVersionConflict {
+		t.Fatal("stale initial draft overwritten", err)
+	}
+	missing := conditioned(t, s, out.ID, in)
+	missing.Config.Members = out.Config.Members
+	missing.ExpectedEffectiveAt = nil
+	if _, err := s.SaveScheme(ctx, out.ID, missing); err != ErrEffectiveRequired {
+		t.Fatal("initial correction omitted time confirmation", err)
+	}
+	fake := conditioned(t, s, out.ID, in)
+	fake.ConfirmReplacement = true
+	if _, err := s.SaveScheme(ctx, out.ID, fake); err != ErrReplacement {
+		t.Fatal("member-only correction declared a new term", err)
+	}
+	if _, err := s.ChangeSchedule(ctx, out.ID, "cancel", conditioned(t, s, out.ID, in).Conditions); err != ErrInitialSchedule {
+		t.Fatal("correction made initial cancellation possible", err)
+	}
+	detail, err := s.Detail(ctx, out.ID, 1)
+	if err != nil || detail.Available || detail.Next == nil || detail.Next.ID != updated.Next.ID {
+		t.Fatal("corrected initial version is unreadable or active too early", detail, err)
+	}
+}
+
+func TestInitialCorrectionRequiresCurrentRecipientPermission(t *testing.T) {
+	s, _, out, in := pendingInitial(t)
+	ctx := context.Background()
+	identity, err := auth.New(s.conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outsider, err := identity.CreateMember(ctx, "synthetic-ungranted", "synthetic-pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Config.Members = []Share{{UserID: outsider.ID, Limit: 10000}}
+	if _, err := s.SaveScheme(ctx, out.ID, conditioned(t, s, out.ID, in)); err != ErrInput {
+		t.Fatal("initial correction did not validate group permission", err)
+	}
+	state, err := s.readSchemeCore(ctx, db.New(s.conn), out.ID, s.now().Unix())
+	if err != nil || state.Next == nil || state.Next.ID != out.Next.ID {
+		t.Fatal("invalid recipient replaced the initial version", state, err)
+	}
+}
+
+func TestInitialCorrectionRollsBackOnFailureOrActivation(t *testing.T) {
+	for _, failure := range []string{"write", "activation"} {
+		t.Run(failure, func(t *testing.T) {
+			s, _, out, in := pendingInitial(t)
+			ctx := context.Background()
+			in.Name = "Synthetic corrected initial name"
+			in.Config.Members = []Share{{UserID: 1, Limit: 10000}}
+			in = conditioned(t, s, out.ID, in)
+			start := s.now().Unix()
+			if failure == "write" {
+				if _, err := s.conn.Exec(`CREATE TRIGGER synthetic_reject_initial_correction BEFORE UPDATE ON allocation_schemes BEGIN SELECT RAISE(ABORT,'synthetic correction failure'); END`); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				calls := 0
+				s.now = func() time.Time {
+					calls++
+					if calls >= 4 {
+						return time.Unix(out.Next.EffectiveAt, 0)
+					}
+					return time.Unix(start, 0)
+				}
+			}
+			_, err := s.SaveScheme(ctx, out.ID, in)
+			if failure == "write" && (err == nil || !strings.Contains(err.Error(), "synthetic correction failure")) {
+				t.Fatal("injected write failure did not run", err)
+			}
+			if failure == "activation" && err != ErrVersionConflict && err != ErrEffectiveConflict {
+				t.Fatal("activation crossing did not conflict", err)
+			}
+			s.now = func() time.Time { return time.Unix(start, 0) }
+			state, err := s.readSchemeCore(ctx, db.New(s.conn), out.ID, start)
+			if err != nil || state.Name != out.Name || state.Next == nil || state.Next.ID != out.Next.ID || !sameMembers(state.Config.Members, out.Config.Members) {
+				t.Fatal("failed initial correction left a partial version", state, err)
+			}
+		})
+	}
+}
+
+func TestInitialCorrectionRejectsCapturedHistoryAndPausedCurrent(t *testing.T) {
+	for _, existing := range []string{"captured", "paused-current"} {
+		t.Run(existing, func(t *testing.T) {
+			s, user, out, in := pendingInitial(t)
+			ctx := context.Background()
+			want := ErrStateConflict
+			if existing == "captured" {
+				err := db.New(s.conn).BeginAllocationEntry(ctx, db.BeginAllocationEntryParams{RequestID: "synthetic-before-clock-change", SchemeID: out.ID, RevisionID: out.Next.ID, UserID: user, AccountID: "synthetic-account", Model: "synthetic-model", Mode: "tokens", StartedAt: out.Next.EffectiveAt, WindowStart: out.Next.EffectiveAt, ResetAt: out.Next.EffectiveAt + 18000})
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				s.now = func() time.Time { return time.Unix(out.Next.EffectiveAt+1, 0) }
+				if err := s.SetEnabled(ctx, out.ID, false); err != nil {
+					t.Fatal(err)
+				}
+				in.Enabled = false
+				want = ErrMemberConflict
+			}
+			in.Config.Members = []Share{{UserID: 1, Limit: 10000}}
+			if _, err := s.SaveScheme(ctx, out.ID, conditioned(t, s, out.ID, in)); err != want {
+				t.Fatal("non-initial history was treated as an unpublished initial version", err)
+			}
+		})
 	}
 }
 
@@ -167,6 +290,37 @@ func TestReplacementPreviewBindsNewTermAndRejectsFakeReplacement(t *testing.T) {
 		t.Fatal("replacement anchor not bound", changed, err)
 	}
 	*now = p.ProposedEffectiveAt + 1
+}
+
+func TestPendingReplacementCanReconfirmMembersWithoutMovingTime(t *testing.T) {
+	s, _, user, _ := fixture(t)
+	syntheticClock(s)
+	ctx := context.Background()
+	in := SchemeInput{Name: "Synthetic pending replacement", GroupID: 2, Enabled: true, Config: Config{Mode: "ratio", RatioUnit: "tokens", Period: "durations", Windows: []WindowCondition{{DurationSeconds: 18000, Limit: 100}, {DurationSeconds: 604800, Limit: 1000}}, Members: []Share{{UserID: 1, Limit: 5000}, {UserID: user, Limit: 5000}}}}
+	current, err := s.SaveScheme(ctx, 0, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Config.Windows[0].DurationSeconds = 14400
+	pending, err := s.SaveScheme(ctx, current.ID, conditioned(t, s, current.ID, in))
+	if err != nil || pending.Next == nil {
+		t.Fatal(pending, err)
+	}
+	in.Config.Windows[0].Limit = 120
+	priced, err := s.SaveScheme(ctx, current.ID, conditioned(t, s, current.ID, in))
+	if err != nil || priced.Next == nil || priced.Next.EffectiveAt != pending.Next.EffectiveAt || priced.Next.AccountingAnchorAt != pending.Next.AccountingAnchorAt {
+		t.Fatal("ordinary pending edit changed its approved term", priced, err)
+	}
+	in.Config.Members = []Share{{UserID: 1, Limit: 4000}, {UserID: user, Limit: 6000}}
+	input := conditioned(t, s, current.ID, in)
+	if _, err := s.SaveScheme(ctx, current.ID, input); err != ErrMemberConflict {
+		t.Fatal("ordinary pending save redistributed members", err)
+	}
+	input.ConfirmReplacement = true
+	updated, err := s.SaveScheme(ctx, current.ID, input)
+	if err != nil || updated.Next == nil || updated.Next.Config.Members[0].Limit != 4000 || updated.Next.EffectiveAt != pending.Next.EffectiveAt || updated.Next.AccountingAnchorAt != pending.Next.AccountingAnchorAt || updated.Revision.ID != current.Revision.ID || !sameMembers(updated.Config.Members, current.Config.Members) {
+		t.Fatal("explicit reconfirmation changed the current rule or moved the pending term", updated, err)
+	}
 }
 
 func TestNewScheduleFinalTimeFenceRollsBackAfterWrites(t *testing.T) {

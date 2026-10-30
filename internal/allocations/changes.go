@@ -221,14 +221,16 @@ func (s *Service) checkFunding(ctx context.Context, q *db.Queries, id int64, cur
 	if current.Config.Mode != "ratio" {
 		return nil
 	}
-	for _, window := range effectiveWindows(current, now, s.location()) {
-		used, held, _, err := groupRoom(ctx, q, id, current.Config, window)
+	windows := effectiveWindows(current, now, s.location())
+	accounting := newAccounting(q, id, current, windows)
+	for _, window := range windows {
+		group, err := accounting.group(ctx, window)
 		if err != nil {
 			return err
 		}
-		required := used + held
+		required := group.used + group.held
 		for _, member := range proposed.Members {
-			state, err := readMemberWindow(ctx, q, id, member.UserID, member, proposed, window)
+			state, err := accounting.member(ctx, member, proposed, window)
 			if err != nil {
 				return err
 			}
@@ -390,6 +392,8 @@ func (s *Service) updateScheme(ctx context.Context, id int64, in SchemeInput) (S
 	if state.Next != nil {
 		base = state.Next
 	}
+	initial := activeRevision(state) == nil && state.Next != nil
+	membersChanged := !sameMembers(base.Config.Members, in.Config.Members)
 	comparison := base
 	if in.ConfirmReplacement && activeRevision(state) != nil {
 		comparison = activeRevision(state)
@@ -398,8 +402,18 @@ func (s *Service) updateScheme(ctx context.Context, id int64, in SchemeInput) (S
 	if structural != in.ConfirmReplacement {
 		return Scheme{}, ErrReplacement
 	}
-	if !structural && !sameMembers(base.Config.Members, in.Config.Members) {
+	if !structural && membersChanged && !initial {
 		return Scheme{}, ErrMemberConflict
+	}
+	if initial && membersChanged {
+		// Captured history proves prior publication even if a clock change makes current disappear.
+		published, err := q.AllocationHasEntries(ctx, id)
+		if err != nil {
+			return Scheme{}, err
+		}
+		if published {
+			return Scheme{}, ErrStateConflict
+		}
 	}
 	previous := append([]Rate(nil), state.Config.Rates...)
 	if state.Next != nil {
@@ -412,7 +426,7 @@ func (s *Service) updateScheme(ctx context.Context, id int64, in SchemeInput) (S
 		return Scheme{}, err
 	}
 	// Ordinary edits retain the exact member section; independent revocation must not block them.
-	if structural {
+	if structural || initial && membersChanged {
 		if err := s.validateRecipients(ctx, q, state.GroupID, in.Config.Members); err != nil {
 			return Scheme{}, err
 		}

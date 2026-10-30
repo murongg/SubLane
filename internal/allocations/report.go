@@ -82,6 +82,7 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 		out.Pending = append(out.Pending, Pending{RequestID: e.RequestID, UserID: e.UserID, Mode: e.Mode, Model: e.Model, State: e.State, Input: e.InputTokens, Output: e.OutputTokens, Cached: e.CachedTokens})
 	}
 	windows := effectiveWindows(scheme.Revision, now, s.location())
+	accounting := newAccounting(q, id, scheme.Revision, windows)
 	mode := entryMode(scheme.Config)
 	for _, m := range scheme.Config.Members {
 		if user > 0 && m.UserID != user {
@@ -97,7 +98,7 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 			return out, err
 		}
 		for _, window := range windows {
-			state, err := readMemberWindow(ctx, q, id, m.UserID, m, scheme.Config, window)
+			state, err := accounting.member(ctx, m, scheme.Config, window)
 			if err != nil {
 				return out, err
 			}
@@ -111,14 +112,14 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 			}
 			sharedBlocked := false
 			if scheme.Config.Mode == "ratio" {
-				used, _, room, err := groupRoom(ctx, q, id, scheme.Config, window)
+				group, err := accounting.group(ctx, window)
 				if err != nil {
 					return out, err
 				}
-				if used >= window.total(scheme.Config) {
+				if group.used >= window.total(scheme.Config) {
 					sharedBlocked = true
 					admission = "exhausted"
-				} else if admission == "active" && room < reservation(state.limit) {
+				} else if admission == "active" && group.room < reservation(state.limit) {
 					sharedBlocked = true
 					admission = "risk_limited"
 				}

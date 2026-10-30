@@ -1415,5 +1415,7 @@
   "turnstileFailed": "驗證失敗或已過期，請重新完成人機驗證。",
   "turnstileUnavailable": "人機驗證暫時無法使用，請重試。",
   "turnstileVerification": "人機驗證",
-  "turnstileRetry": "重試"
+  "turnstileRetry": "重試",
+  "allocationInitialEditHint": "首次生效前可在此修正初始成員配置；儲存保留已核對的生效時間和計量錨點。",
+  "allocationReplacePendingHint": "如需修改這個已排程新週期的成員，請勾選下方替換確認。僅改預算和價格可保留原計畫。"
 }

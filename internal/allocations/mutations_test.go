@@ -280,10 +280,10 @@ func TestMemberRemovalKeepsCapturedReservationUntilSettlement(t *testing.T) {
 	if err != nil {
 		t.Fatal("revocation failed", err)
 	}
-	window := effectiveWindows(out.Revision, *now, time.UTC)[0]
-	_, held, _, err := groupRoom(ctx, q, out.ID, out.Config, window)
-	if err != nil || held != 5 {
-		t.Fatal("revocation resized or released the admitted reservation", held, err)
+	windows := effectiveWindows(out.Revision, *now, time.UTC)
+	group, err := newAccounting(q, out.ID, out.Revision, windows).group(ctx, windows[0])
+	if err != nil || group.held != 5 {
+		t.Fatal("revocation resized or released the admitted reservation", group.held, err)
 	}
 	in.Config.Members[0].Limit = 10000
 	if _, err := s.SaveScheme(ctx, out.ID, conditioned(t, s, out.ID, in)); err != ErrFunding {

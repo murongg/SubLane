@@ -1,6 +1,10 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  allocationInitialEditHint:
+    '首次生效前可在此修正初始成员配置；保存保留已核对的生效时间和计量锚点。',
+  allocationReplacePendingHint:
+    '如需修改这个已排期新周期的成员，请勾选下方替换确认。只改预算和价格可保留原计划。',
   allocationSharedBudgetBlocked:
     '资源组的共享预算暂不可用，请稍后或重置后重试。',
   allocationChanged: '分配规则已变化或确认时间已过期。请刷新并核对后保存。',

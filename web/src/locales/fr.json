@@ -1420,5 +1420,7 @@
   "turnstileFailed": "La vérification a échoué ou a expiré. Recommencez le défi.",
   "turnstileUnavailable": "La vérification est indisponible. Réessayez.",
   "turnstileVerification": "Vérification humaine",
-  "turnstileRetry": "Réessayer"
+  "turnstileRetry": "Réessayer",
+  "allocationInitialEditHint": "Avant la première activation, corrigez ici les membres initiaux. L’enregistrement conserve l’heure de début vérifiée et l’ancrage comptable.",
+  "allocationReplacePendingHint": "Pour changer les membres de cette nouvelle période planifiée, confirmez le remplacement ci-dessous. Les modifications de budget et de prix peuvent conserver le plan existant."
 }
