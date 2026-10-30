@@ -7,12 +7,61 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/murongg/SubLane/internal/allocations"
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/groups"
 	"github.com/murongg/SubLane/internal/upstream"
 )
+
+func TestAllowanceEntryUsesAdmissionTimeAfterWaiting(t *testing.T) {
+	ctx := context.Background()
+	s, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) { return syntheticStream(), nil }))
+	ids, err := s.queries.ListGroupAccounts(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := groups.New(s.db).Save(ctx, 0, groups.Input{Name: "Synthetic admission pool", Enabled: true, AccountIDs: ids})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := groups.New(s.db).Save(ctx, 1, groups.Input{Name: "Default", Enabled: true, AccountIDs: []string{}}); err != nil {
+		t.Fatal(err)
+	}
+	scheme, err := allocations.New(s.db).SaveScheme(ctx, 0, allocations.SchemeInput{Name: "Synthetic admission clock", GroupID: pool.ID, Enabled: true, Config: allocations.Config{Mode: "tokens", Period: "day", Members: []allocations.Share{{UserID: 1, Limit: 100}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := s.db.Exec(`INSERT INTO api_keys(user_id,group_id,name,prefix,token_hash,created_at) VALUES(1,?,'synthetic','sl_synthetic',randomblob(32),1)`, pool.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _ := result.LastInsertId()
+	if _, err := s.db.Exec(`INSERT INTO allocation_keys(key_id,scheme_id) VALUES(?,?)`, key, scheme.ID); err != nil {
+		t.Fatal(err)
+	}
+	realNow := time.Now().UTC()
+	boundary := time.Date(realNow.Year(), realNow.Month(), realNow.Day()+1, 0, 0, 0, 0, time.UTC)
+	now := boundary.Add(-time.Second)
+	s.now = func() time.Time { return now }
+	entry, err := s.begin(WithRequestIdentity(ctx, key, "http"), 1, pool.ID, Responses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer entry.fail(context.Canceled)
+	now = boundary.Add(time.Second)
+	if _, _, err := s.leaseAccount(ctx, entry, "", "codex", "synthetic-model", Responses, pinnedAffinity, ""); err != nil {
+		t.Fatal(err)
+	}
+	var started int64
+	if err := s.db.QueryRow(`SELECT started_at FROM allocation_entries WHERE request_id=?`, entry.record.RequestID).Scan(&started); err != nil || started != now.Unix() {
+		t.Fatal("arrival time escaped checked allowance interval", started, now.Unix(), err)
+	}
+	if !entry.started.Before(boundary) {
+		t.Fatal("diagnostic arrival was changed", entry.started)
+	}
+}
 
 func TestFailedTerminalUsageSettlesAllocation(t *testing.T) {
 	ctx := context.Background()
@@ -240,7 +289,7 @@ func TestPrepareAllocationsRecoversWithoutLegacyBudgetTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err = s.db.ExecContext(ctx, "INSERT INTO allocation_revisions(scheme_id,effective_at,config) VALUES(?,1,'{}')", schemeID)
+	created, err = s.db.ExecContext(ctx, "INSERT INTO allocation_revisions(scheme_id,effective_at,accounting_anchor_at,config) VALUES(?,1,1,'{}')", schemeID)
 	if err != nil {
 		t.Fatal(err)
 	}

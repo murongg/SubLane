@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { formatInstanceDate, useTimeZone } from '@/lib/timezone'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown } from 'lucide-react'
@@ -6,9 +6,11 @@ import {
   type Scheme,
   type SchemeInput,
   type AllocationMode,
+  type AllocationConfig,
   modeLabels,
   parseAllocationValue,
   allocationValue,
+  allocationStructure,
 } from '@/lib/allocations'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
@@ -87,7 +89,74 @@ function durationSeconds(draft: WindowDraft): number | null {
   return seconds <= 365 * 86400 ? seconds : null
 }
 
-export function SchemeForm({
+function memberFields(
+  config: AllocationConfig | undefined,
+  rules: WindowDraft[],
+) {
+  const values: Record<number, string> = {}
+  const selected: Record<number, boolean> = {}
+  const customization: Record<number, boolean> = {}
+  const overrides: Record<number, Record<string, string>> = {}
+  if (!config) return { values, selected, customization, overrides }
+  for (const member of config.members) {
+    values[member.user_id] =
+      config.mode === 'windows' && member.limit === 0
+        ? ''
+        : allocationValue(member.limit, config.mode)
+    selected[member.user_id] = true
+    if (config.mode === 'windows') {
+      customization[member.user_id] = (member.window_overrides?.length ?? 0) > 0
+      const limits: Record<string, string> = {}
+      for (const override of member.window_overrides ?? []) {
+        const rule = rules.find(
+          (rule) => durationSeconds(rule) === override.duration_seconds,
+        )
+        if (rule)
+          limits[rule.id] = override.limit
+            ? allocationValue(override.limit, 'amount')
+            : ''
+      }
+      overrides[member.user_id] = limits
+    }
+  }
+  return { values, selected, customization, overrides }
+}
+
+export function SchemeForm(
+  props: Omit<Parameters<typeof SchemeFields>[0], 'membersOnly'>,
+) {
+  const { t } = useTranslation()
+  // A live list refresh must not attach new version IDs to an old unsaved draft.
+  const [snapshot] = useState(props.scheme)
+  const [membersOnly, setMembersOnly] = useState(false)
+  return (
+    <div className="space-y-5">
+      {snapshot && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={membersOnly}
+            disabled={
+              props.pending ||
+              !snapshot.write_conditions?.expected_current_revision_id
+            }
+            onChange={(e) => setMembersOnly(e.target.checked)}
+            className="size-4 accent-primary"
+          />
+          {t('allocationApplyNow')}
+        </label>
+      )}
+      <SchemeFields
+        key={membersOnly ? 'current' : 'next'}
+        {...props}
+        scheme={snapshot}
+        membersOnly={membersOnly}
+      />
+    </div>
+  )
+}
+
+function SchemeFields({
   groups,
   groupID,
   onGroupChange,
@@ -96,6 +165,7 @@ export function SchemeForm({
   onSubmit,
   onCancel,
   pending,
+  membersOnly,
 }: {
   groups: { id: number; name: string; enabled: boolean }[]
   groupID: number
@@ -105,10 +175,13 @@ export function SchemeForm({
   onSubmit: (input: SchemeInput) => void
   onCancel: () => void
   pending: boolean
+  membersOnly: boolean
 }) {
   const { t, i18n } = useTranslation()
   const timeZone = useTimeZone()
-  const initial = scheme?.next?.config ?? scheme?.config
+  const initial = membersOnly
+    ? scheme?.config
+    : (scheme?.next?.config ?? scheme?.config)
   const [name, setName] = useState(scheme?.name ?? '')
   const [mode, setMode] = useState<AllocationMode>(initial?.mode ?? 'ratio')
   const [ratioUnit, setRatioUnit] = useState<'amount' | 'tokens'>(
@@ -126,7 +199,7 @@ export function SchemeForm({
       : '',
   )
   const [windowRules, setWindowRules] = useState<WindowDraft[]>(
-    initial?.mode === 'windows'
+    initial?.period === 'durations'
       ? (initial.windows ?? []).map((rule, index) => ({
           id: `saved-${index}`,
           duration: String(
@@ -135,86 +208,52 @@ export function SchemeForm({
               : rule.duration_seconds / 3600,
           ),
           unit: rule.duration_seconds % 86400 === 0 ? 'days' : 'hours',
-          limit: rule.limit ? allocationValue(rule.limit, 'amount') : '',
+          limit: rule.limit
+            ? allocationValue(
+                rule.limit,
+                initial.mode === 'ratio'
+                  ? (initial.ratio_unit ?? 'tokens')
+                  : 'amount',
+              )
+            : '',
         }))
       : [],
   )
   const nextRuleID = useRef(0)
   const [startNext, setStartNext] = useState(false)
-  const [applyNow, setApplyNow] = useState(false)
+  const applyNow = membersOnly
+  const [confirmReplacement, setConfirmReplacement] = useState(false)
   const [previewAnchor] = useState(() => Math.floor(Date.now() / 1000))
-  const [values, setValues] = useState<Record<number, string>>(
-    Object.fromEntries(
-      initial?.members.map((m) => [
-        m.user_id,
-        initial.mode === 'windows' && m.limit === 0
-          ? ''
-          : allocationValue(m.limit, initial.mode),
-      ]) ?? [],
-    ),
+  const originalMembers = useMemo(
+    () => memberFields(initial, windowRules),
+    [initial, windowRules],
   )
-  const [selectedMembers, setSelectedMembers] = useState<
+  const [draftValues, setValues] = useState<Record<number, string>>(
+    originalMembers.values,
+  )
+  const [draftSelected, setSelectedMembers] = useState<Record<number, boolean>>(
+    originalMembers.selected,
+  )
+  const [draftCustomization, setMemberCustomization] = useState<
     Record<number, boolean>
-  >(
-    Object.fromEntries(
-      initial?.members.map((member) => [member.user_id, true]) ?? [],
-    ),
-  )
-  const [memberCustomization, setMemberCustomization] = useState<
-    Record<number, boolean>
-  >(
-    Object.fromEntries(
-      initial?.mode === 'windows'
-        ? initial.members.map((member) => [
-            member.user_id,
-            (member.window_overrides?.length ?? 0) > 0,
-          ])
-        : [],
-    ),
-  )
-  const [windowOverrideValues, setWindowOverrideValues] = useState<
+  >(originalMembers.customization)
+  const [draftOverrides, setWindowOverrideValues] = useState<
     Record<number, Record<string, string>>
-  >(
-    Object.fromEntries(
-      initial?.mode === 'windows'
-        ? initial.members.map((member): [number, Record<string, string>] => {
-            const values: Record<string, string> = {}
-            for (const override of member.window_overrides ?? []) {
-              const index = (initial.windows ?? []).findIndex(
-                (rule) => rule.duration_seconds === override.duration_seconds,
-              )
-              if (index >= 0)
-                values[`saved-${index}`] = override.limit
-                  ? allocationValue(override.limit, 'amount')
-                  : ''
-            }
-            return [member.user_id, values]
-          })
-        : [],
-    ),
-  )
+  >(originalMembers.overrides)
   const [invalid, setInvalid] = useState(false)
   const shareMode = mode === 'ratio'
-  const total = members.reduce(
-    (sum, m) =>
-      sum +
-      (selectedMembers[m.id]
-        ? (parseAllocationValue(values[m.id] ?? '', mode) ?? 0)
-        : 0),
-    0,
-  )
-  const selectedCount = members.filter(
-    (member) => selectedMembers[member.id],
-  ).length
+  const durationMode = period === 'durations'
   const longestDraftWindow = Math.max(
     0,
     ...windowRules.map((rule) => durationSeconds(rule) ?? 0),
   )
-  const effectivePreview = scheme
-    ? (scheme.edit_effective_at ?? 0)
-    : startNext && mode === 'windows' && longestDraftWindow > 0
-      ? previewAnchor + longestDraftWindow
-      : 0
+  const effectivePreview = applyNow
+    ? 0
+    : scheme
+      ? (scheme.edit_effective_at ?? 0)
+      : startNext && durationMode && longestDraftWindow > 0
+        ? previewAnchor + longestDraftWindow
+        : 0
   const effectivePreviewDate = effectivePreview
     ? formatInstanceDate(
         effectivePreview * 1000,
@@ -236,45 +275,107 @@ export function SchemeForm({
       setInvalid(false)
     }
   }
+  const draftStructure = allocationStructure({
+    mode,
+    period,
+    reset_time: period === 'durations' ? undefined : resetTime,
+    reset_day: period === 'month' ? Number(resetDay) : undefined,
+    ratio_unit: shareMode ? ratioUnit : undefined,
+    members: [],
+    rates: [],
+    windows: durationMode
+      ? windowRules.map((w) => ({
+          duration_seconds: durationSeconds(w) ?? 0,
+          limit: 0,
+        }))
+      : undefined,
+  })
+  const structureChanged =
+    !!scheme && !!initial && allocationStructure(initial) !== draftStructure
+  const initialPending =
+    !!scheme?.next &&
+    scheme.write_conditions?.expected_current_revision_id === null
+  const replacementBase =
+    scheme?.write_conditions?.expected_current_revision_id != null
+      ? scheme.config
+      : initial
+  const replacementAvailable =
+    !!scheme &&
+    !applyNow &&
+    !!replacementBase &&
+    allocationStructure(replacementBase) !== draftStructure
+  const replacing = replacementAvailable && confirmReplacement
+  const preserveMembers =
+    !!scheme && !applyNow && !initialPending && !structureChanged && !replacing
+  // Locked rows must display the saved member instruction that will actually be submitted.
+  const values = preserveMembers ? originalMembers.values : draftValues
+  const selectedMembers = preserveMembers
+    ? originalMembers.selected
+    : draftSelected
+  const memberCustomization = preserveMembers
+    ? originalMembers.customization
+    : draftCustomization
+  const windowOverrideValues = preserveMembers
+    ? originalMembers.overrides
+    : draftOverrides
+  const selectedCount = members.filter(
+    (member) => selectedMembers[member.id],
+  ).length
+  const total = preserveMembers
+    ? (initial?.members.reduce((sum, member) => sum + member.limit, 0) ?? 0)
+    : members.reduce(
+        (sum, m) =>
+          sum +
+          (selectedMembers[m.id]
+            ? (parseAllocationValue(values[m.id] ?? '', mode) ?? 0)
+            : 0),
+        0,
+      )
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (pending) return
     const windowLimit = (value: string | undefined) =>
-      parseAllocationValue(value?.trim() ? value : '0', 'amount') ?? -1
-    const parsedWindows =
-      mode === 'windows'
-        ? windowRules.map((rule) => ({
-            duration_seconds: durationSeconds(rule) ?? -1,
-            limit: windowLimit(rule.limit),
-          }))
-        : []
-    const shares = members
-      .filter((m) => selectedMembers[m.id])
-      .map((m) => {
-        if (mode !== 'windows')
-          return {
-            user_id: m.id,
-            limit: parseAllocationValue(values[m.id], mode) ?? -1,
-          }
-        const overrides = memberCustomization[m.id]
-          ? windowRules.flatMap((rule, index) => {
-              const value = windowOverrideValues[m.id]?.[rule.id]
-              return value === undefined
-                ? []
-                : [
-                    {
-                      duration_seconds: parsedWindows[index].duration_seconds,
-                      limit: windowLimit(value),
-                    },
-                  ]
-            })
-          : []
-        return {
-          user_id: m.id,
-          limit: 0,
-          ...(overrides.length > 0 ? { window_overrides: overrides } : {}),
-        }
-      })
+      parseAllocationValue(
+        value?.trim() ? value : shareMode ? '' : '0',
+        shareMode ? ratioUnit : 'amount',
+      ) ?? -1
+    const parsedWindows = durationMode
+      ? windowRules.map((rule) => ({
+          duration_seconds: durationSeconds(rule) ?? -1,
+          limit: windowLimit(rule.limit),
+        }))
+      : []
+    // The access roster can omit revoked recipients; a budget edit preserves the saved instruction.
+    const shares = preserveMembers
+      ? initial!.members
+      : members
+          .filter((m) => selectedMembers[m.id])
+          .map((m) => {
+            if (mode !== 'windows')
+              return {
+                user_id: m.id,
+                limit: parseAllocationValue(values[m.id], mode) ?? -1,
+              }
+            const overrides = memberCustomization[m.id]
+              ? windowRules.flatMap((rule, index) => {
+                  const value = windowOverrideValues[m.id]?.[rule.id]
+                  return value === undefined
+                    ? []
+                    : [
+                        {
+                          duration_seconds:
+                            parsedWindows[index].duration_seconds,
+                          limit: windowLimit(value),
+                        },
+                      ]
+                })
+              : []
+            return {
+              user_id: m.id,
+              limit: 0,
+              ...(overrides.length > 0 ? { window_overrides: overrides } : {}),
+            }
+          })
     const totalBudget = shareMode
       ? (parseAllocationValue(ratioTotal, ratioUnit) ?? -1)
       : 0
@@ -285,14 +386,13 @@ export function SchemeForm({
     const bad =
       !name.trim() ||
       !groupID ||
-      (mode !== 'windows' &&
-        !/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(resetTime)) ||
+      (!durationMode && !/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(resetTime)) ||
       (period === 'month' &&
         (!/^\d{1,2}$/.test(resetDay) ||
           Number(resetDay) < 1 ||
           Number(resetDay) > 31)) ||
       shares.length === 0 ||
-      (mode === 'windows' &&
+      (durationMode &&
         (parsedWindows.length === 0 ||
           parsedWindows.length > 8 ||
           new Set(parsedWindows.map((rule) => rule.duration_seconds)).size !==
@@ -306,7 +406,12 @@ export function SchemeForm({
           : m.limit <= 0,
       ) ||
       (shareMode && total > 10000) ||
-      (shareMode && !validShareBudget(totalBudget))
+      (shareMode &&
+        !(durationMode
+          ? parsedWindows.every((w) => validShareBudget(w.limit))
+          : validShareBudget(totalBudget))) ||
+      (!!scheme && !scheme.write_conditions) ||
+      (!!scheme && structureChanged && !replacing)
     setInvalid(bad)
     if (bad) return
     onSubmit({
@@ -315,6 +420,13 @@ export function SchemeForm({
       enabled,
       start_next: startNext,
       apply_now: applyNow,
+      ...(scheme
+        ? {
+            ...scheme.write_conditions,
+            expected_effective_at: scheme.edit_effective_at,
+            confirm_replacement: replacing,
+          }
+        : {}),
       config: {
         mode,
         period,
@@ -322,8 +434,13 @@ export function SchemeForm({
         ...(period === 'month' ? { reset_day: Number(resetDay) } : {}),
         members: shares,
         rates: [],
-        ...(shareMode ? { ratio_unit: ratioUnit, total: totalBudget } : {}),
-        ...(mode === 'windows' ? { windows: parsedWindows } : {}),
+        ...(shareMode
+          ? {
+              ratio_unit: ratioUnit,
+              ...(!durationMode ? { total: totalBudget } : {}),
+            }
+          : {}),
+        ...(durationMode ? { windows: parsedWindows } : {}),
       },
     })
   }
@@ -341,6 +458,7 @@ export function SchemeForm({
               </label>
               <Input
                 id="scheme-name"
+                disabled={applyNow}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={64}
@@ -373,7 +491,10 @@ export function SchemeForm({
             {t('allocationExclusiveHint')}
           </p>
         </section>
-        <section className="space-y-4 border-t border-border pt-7">
+        <fieldset
+          disabled={applyNow}
+          className="space-y-4 border-t border-border pt-7"
+        >
           <h3 className="text-base font-semibold">
             {t('allocationSectionPolicy')}
           </h3>
@@ -453,7 +574,7 @@ export function SchemeForm({
             </fieldset>
           )}
           <div className="grid max-w-2xl gap-4 sm:grid-cols-2">
-            {shareMode && (
+            {shareMode && !durationMode && (
               <div className="space-y-2">
                 <label
                   htmlFor="scheme-token-total"
@@ -475,7 +596,7 @@ export function SchemeForm({
                 </div>
               </div>
             )}
-            {mode === 'windows' && (
+            {durationMode && (
               <div className="space-y-3 sm:col-span-2">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1">
@@ -483,7 +604,11 @@ export function SchemeForm({
                       {t('allocationWindowConditions')}
                     </h4>
                     <p className="text-xs leading-5 text-muted-foreground">
-                      {t('allocationWindowConditionsHint')}
+                      {t(
+                        shareMode
+                          ? 'allocationWindowSharesHint'
+                          : 'allocationWindowConditionsHint',
+                      )}
                     </p>
                   </div>
                   <Button
@@ -587,12 +712,14 @@ export function SchemeForm({
                                 ),
                               )
                             }
-                            placeholder={t('allocationUnlimited')}
+                            placeholder={
+                              shareMode ? undefined : t('allocationUnlimited')
+                            }
                             inputMode="decimal"
                             className="min-w-0 text-right tabular-nums"
                           />
                           <span className="text-sm text-muted-foreground">
-                            USD
+                            {shareMode && ratioUnit === 'tokens' ? 'M' : 'USD'}
                           </span>
                         </div>
                       </div>
@@ -636,8 +763,13 @@ export function SchemeForm({
                       value: 'month',
                       label: t('periodMonthly', { zone: timeZone }),
                     },
+                    ...(shareMode
+                      ? [{ value: 'durations', label: t('allocationWindows') }]
+                      : []),
                   ]}
-                  onChange={(value) => setPeriod(value as 'day' | 'month')}
+                  onChange={(value) =>
+                    setPeriod(value as 'day' | 'month' | 'durations')
+                  }
                 />
               </div>
             )}
@@ -686,7 +818,7 @@ export function SchemeForm({
                 : t('allocationResetZoneHint', { zone: timeZone })}{' '}
               {period === 'month' && t('allocationResetShortMonthHint')}
             </p>
-            {mode === 'windows' && longestDraftWindow > 0 && (
+            {durationMode && !applyNow && longestDraftWindow > 0 && (
               <p className="text-sm leading-6 text-warning sm:col-span-2">
                 {t('allocationFutureEditDelay', {
                   duration: t(
@@ -726,8 +858,27 @@ export function SchemeForm({
               effectiveAt={scheme.edit_effective_at}
             />
           )}
-        </section>
-        <section className="space-y-4 border-t border-border pt-7">
+        </fieldset>
+        {scheme?.next && replacementAvailable && !structureChanged && (
+          <p className="text-sm leading-6 text-muted-foreground">
+            {t('allocationReplacePendingHint')}
+          </p>
+        )}
+        {scheme && replacementAvailable && (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={confirmReplacement}
+              onChange={(e) => setConfirmReplacement(e.target.checked)}
+              className="mt-1 size-4 accent-primary"
+            />
+            {t('allocationConfirmReplacement')}
+          </label>
+        )}
+        <fieldset
+          disabled={preserveMembers}
+          className="space-y-4 border-t border-border pt-7"
+        >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-base font-semibold">
               {t(shareMode ? 'allocationShares' : 'allocationMembers')}
@@ -980,12 +1131,12 @@ export function SchemeForm({
               )}
             </p>
           )}
-        </section>
+        </fieldset>
         <section className="space-y-4 border-t border-border pt-7">
           <h3 className="text-base font-semibold">
             {t('allocationSectionActivation')}
           </h3>
-          {scheme && (
+          {scheme && !applyNow && !initialPending && (
             <p className="text-sm leading-6 text-muted-foreground">
               {t('allocationNextHint')}
             </p>
@@ -1006,6 +1157,7 @@ export function SchemeForm({
                 type="checkbox"
                 className="size-4 accent-primary"
                 checked={enabled}
+                disabled={!!scheme}
                 onChange={(e) => setEnabled(e.target.checked)}
               />
               {t('allocationEnabled')}
@@ -1021,17 +1173,7 @@ export function SchemeForm({
                 {t('allocationStartNext')}
               </label>
             )}
-            {scheme && (
-              <label className="flex items-start gap-2 text-sm leading-6">
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4 shrink-0 accent-primary"
-                  checked={applyNow}
-                  onChange={(e) => setApplyNow(e.target.checked)}
-                />
-                {t('allocationApplyNow')}
-              </label>
-            )}
+
             {!scheme && !startNext && (
               <p className="text-sm leading-6 text-muted-foreground">
                 {t('allocationImmediateHint')}
@@ -1039,12 +1181,16 @@ export function SchemeForm({
             )}
             {scheme && applyNow && (
               <p className="text-sm leading-6 text-yellow-600 dark:text-yellow-500">
-                ⚠️ {t('allocationApplyNowWarning')}
+                {t('allocationApplyNowWarning')}
               </p>
             )}
             {scheme && !applyNow && (
               <p className="text-sm leading-6 text-muted-foreground">
-                {t('allocationScheduledHint')}
+                {t(
+                  initialPending
+                    ? 'allocationInitialEditHint'
+                    : 'allocationScheduledHint',
+                )}
               </p>
             )}
           </div>

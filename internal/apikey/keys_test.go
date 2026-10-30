@@ -382,7 +382,7 @@ func TestManagedPoolRequiresSchemeBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Minimal synthetic scheme fixture deliberately exercises authentication independent of management validation.
-	for _, stmt := range []string{"INSERT OR IGNORE INTO group_members(group_id,user_id) VALUES(1,2)", "INSERT INTO allocation_schemes(id,name,group_id,enabled,created_at) VALUES(1,'Synthetic',1,1,1)", `INSERT INTO allocation_revisions(scheme_id,effective_at,config) VALUES(1,1,'{"mode":"tokens","period":"day","members":[{"user_id":2,"limit":100}],"rates":[] }')`} {
+	for _, stmt := range []string{"INSERT OR IGNORE INTO group_members(group_id,user_id) VALUES(1,2)", "INSERT INTO allocation_schemes(id,name,group_id,enabled,created_at) VALUES(1,'Synthetic',1,1,1)", `INSERT INTO allocation_revisions(scheme_id,effective_at,accounting_anchor_at,config) VALUES(1,1,1,'{"mode":"tokens","period":"day","members":[{"user_id":2,"limit":100}],"rates":[] }')`} {
 		if _, err = conn.Exec(stmt); err != nil {
 			t.Fatal(err)
 		}

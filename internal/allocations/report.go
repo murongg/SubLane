@@ -8,22 +8,23 @@ import (
 )
 
 type Balance struct {
-	UserID         int64  `json:"user_id"`
-	Username       string `json:"username"`
-	Removed        bool   `json:"removed"`
-	WindowKind     string `json:"window_kind"`
-	WindowSeconds  int64  `json:"window_seconds"`
-	Mode           string `json:"mode"`
-	Limit          int64  `json:"limit"`
-	Used           int64  `json:"used"`
-	Tokens         int64  `json:"tokens"`
-	Pending        int64  `json:"pending"`
-	PendingCurrent int64  `json:"pending_current"`
-	InFlight       int64  `json:"in_flight"`
-	Reserved       int64  `json:"reserved"`
-	AdmissionRoom  int64  `json:"admission_room"`
-	Admission      string `json:"admission"`
-	ResetAt        int64  `json:"reset_at"`
+	UserID              int64  `json:"user_id"`
+	Username            string `json:"username"`
+	Removed             bool   `json:"removed"`
+	WindowKind          string `json:"window_kind"`
+	WindowSeconds       int64  `json:"window_seconds"`
+	Mode                string `json:"mode"`
+	Limit               int64  `json:"limit"`
+	Used                int64  `json:"used"`
+	Tokens              int64  `json:"tokens"`
+	Pending             int64  `json:"pending"`
+	PendingCurrent      int64  `json:"pending_current"`
+	InFlight            int64  `json:"in_flight"`
+	Reserved            int64  `json:"reserved"`
+	AdmissionRoom       int64  `json:"admission_room"`
+	Admission           string `json:"admission"`
+	SharedBudgetBlocked bool   `json:"shared_budget_blocked,omitempty"`
+	ResetAt             int64  `json:"reset_at"`
 }
 
 type Pending struct {
@@ -81,6 +82,7 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 		out.Pending = append(out.Pending, Pending{RequestID: e.RequestID, UserID: e.UserID, Mode: e.Mode, Model: e.Model, State: e.State, Input: e.InputTokens, Output: e.OutputTokens, Cached: e.CachedTokens})
 	}
 	windows := effectiveWindows(scheme.Revision, now, s.location())
+	accounting := newAccounting(q, id, scheme.Revision, windows)
 	mode := entryMode(scheme.Config)
 	for _, m := range scheme.Config.Members {
 		if user > 0 && m.UserID != user {
@@ -96,7 +98,7 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 			return out, err
 		}
 		for _, window := range windows {
-			state, err := readMemberWindow(ctx, q, id, m.UserID, m, scheme.Config, window)
+			state, err := accounting.member(ctx, m, scheme.Config, window)
 			if err != nil {
 				return out, err
 			}
@@ -108,6 +110,20 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 			} else if state.risk.limited {
 				admission = "risk_limited"
 			}
+			sharedBlocked := false
+			if scheme.Config.Mode == "ratio" {
+				group, err := accounting.group(ctx, window)
+				if err != nil {
+					return out, err
+				}
+				if group.used >= window.total(scheme.Config) {
+					sharedBlocked = true
+					admission = "exhausted"
+				} else if admission == "active" && group.room < reservation(state.limit) {
+					sharedBlocked = true
+					admission = "risk_limited"
+				}
+			}
 			out.Balances = append(out.Balances, Balance{
 				UserID: m.UserID, Username: member.Username, WindowKind: window.kind, WindowSeconds: window.seconds, Mode: mode,
 				Removed: member.RemovedAt != nil,
@@ -115,6 +131,7 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 				PendingCurrent: state.pending, InFlight: state.active,
 				Reserved: state.risk.reserved, AdmissionRoom: state.risk.room,
 				Admission: admission, ResetAt: window.end,
+				SharedBudgetBlocked: sharedBlocked,
 			})
 		}
 	}

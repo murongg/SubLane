@@ -2,6 +2,7 @@
 package allocations
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -81,18 +82,22 @@ type PriceCoverage struct {
 	CatalogUnavailable   bool     `json:"catalog_unavailable,omitempty"`
 }
 type SchemeInput struct {
-	Name      string `json:"name"`
-	GroupID   int64  `json:"group_id"`
-	Enabled   bool   `json:"enabled"`
-	StartNext bool   `json:"start_next"`
-	ApplyNow  bool   `json:"apply_now"` // If true, edit takes effect immediately instead of at period end
-	Config    Config `json:"config"`
+	Conditions
+	ConfirmReplacement bool `json:"confirm_replacement,omitempty"`
+	enabledProvided    bool
+	Name               string `json:"name"`
+	GroupID            int64  `json:"group_id"`
+	Enabled            bool   `json:"enabled"`
+	StartNext          bool   `json:"start_next"`
+	ApplyNow           bool   `json:"apply_now"` // If true, edit takes effect immediately instead of at period end
+	Config             Config `json:"config"`
 }
 type Revision struct {
-	ID            int64         `json:"id"`
-	EffectiveAt   int64         `json:"effective_at"`
-	Config        Config        `json:"config"`
-	PriceCoverage PriceCoverage `json:"price_coverage"`
+	ID                 int64         `json:"id"`
+	EffectiveAt        int64         `json:"effective_at"`
+	AccountingAnchorAt int64         `json:"accounting_anchor_at"`
+	Config             Config        `json:"config"`
+	PriceCoverage      PriceCoverage `json:"price_coverage"`
 }
 type Scheme struct {
 	ID              int64  `json:"id"`
@@ -103,7 +108,8 @@ type Scheme struct {
 	CreatedAt       int64  `json:"created_at"`
 	EditEffectiveAt int64  `json:"edit_effective_at"`
 	Revision
-	Next *Revision `json:"next"`
+	Next            *Revision       `json:"next"`
+	WriteConditions WriteConditions `json:"write_conditions"`
 }
 type Service struct {
 	conn     *sql.DB
@@ -144,7 +150,18 @@ func validMemberLimit(c Config, m Share) bool {
 	}
 	switch c.Mode {
 	case "ratio":
-		return m.Limit > 0 && m.Limit <= 10000 && ratioLimit(c.Total, m.Limit) > 0 && len(m.WindowOverrides) == 0
+		if m.Limit <= 0 || m.Limit > 10000 || len(m.WindowOverrides) != 0 {
+			return false
+		}
+		if c.Period == "durations" {
+			for _, window := range c.Windows {
+				if ratioLimit(window.Limit, m.Limit) <= 0 {
+					return false
+				}
+			}
+			return true
+		}
+		return ratioLimit(c.Total, m.Limit) > 0
 	case "windows":
 		if m.Limit != 0 {
 			return false
@@ -166,11 +183,11 @@ func normalize(c *Config) error {
 	if (c.Mode != "tokens" && c.Mode != "amount" && c.Mode != "ratio" && c.Mode != "windows") || len(c.Members) == 0 || len(c.Members) > 100 || len(c.Rates) > 4096 {
 		return ErrInput
 	}
-	if (c.Period != "day" && c.Period != "month" && c.Period != "durations") || !validResetSchedule(*c) || (c.Period == "durations") != (c.Mode == "windows") {
+	if !validPeriod(*c) {
 		return ErrInput
 	}
 	if c.Mode == "ratio" {
-		if (c.RatioUnit != "tokens" && c.RatioUnit != "amount") || c.Total <= 0 || c.Total > 1_000_000_000_000 {
+		if (c.RatioUnit != "tokens" && c.RatioUnit != "amount") || (c.Period == "durations" && c.Total != 0) || (c.Period != "durations" && (c.Total <= 0 || c.Total > 1_000_000_000_000)) {
 			return ErrInput
 		}
 		if c.RatioUnit == "tokens" && len(c.Rates) > 0 {
@@ -179,13 +196,13 @@ func normalize(c *Config) error {
 	} else if c.Total != 0 || c.RatioUnit != "" {
 		return ErrInput
 	}
-	if c.Mode == "windows" {
+	if c.Period == "durations" {
 		if len(c.Windows) == 0 || len(c.Windows) > 8 {
 			return ErrInput
 		}
 		seen := map[int64]bool{}
 		for _, condition := range c.Windows {
-			if condition.DurationSeconds < 3600 || condition.DurationSeconds > 365*86400 || condition.DurationSeconds%3600 != 0 || seen[condition.DurationSeconds] || condition.Limit < 0 || condition.Limit > 1_000_000_000_000 {
+			if condition.DurationSeconds < 3600 || condition.DurationSeconds > 365*86400 || condition.DurationSeconds%3600 != 0 || seen[condition.DurationSeconds] || (condition.Limit < 0 || c.Mode == "ratio" && condition.Limit == 0) || condition.Limit > 1_000_000_000_000 {
 				return ErrInput
 			}
 			seen[condition.DurationSeconds] = true
@@ -249,20 +266,31 @@ func Current(ctx context.Context, q *db.Queries, id, now int64) (Revision, error
 	if err != nil {
 		return Revision{}, err
 	}
-	return decodeRevision(r.ID, r.EffectiveAt, r.Config)
+	return storedRevision(r)
 }
 func decodeRevision(id, at int64, raw string) (Revision, error) {
-	r := Revision{ID: id, EffectiveAt: at}
+	r := Revision{ID: id, EffectiveAt: at, AccountingAnchorAt: at}
 	if err := json.Unmarshal([]byte(raw), &r.Config); err != nil {
 		return r, err
 	}
-	if (r.Config.Period != "day" && r.Config.Period != "month" && r.Config.Period != "durations") || !validResetSchedule(r.Config) || (r.Config.Period == "durations") != (r.Config.Mode == "windows") {
+	if !validPeriod(r.Config) {
 		return r, ErrInput
 	}
 	return r, nil
 }
+func storedRevision(row db.AllocationRevision) (Revision, error) {
+	r, err := decodeRevision(row.ID, row.EffectiveAt, row.Config)
+	r.AccountingAnchorAt = row.AccountingAnchorAt
+	return r, err
+}
+
 func (s *Service) Schemes(ctx context.Context) ([]Scheme, error) {
-	q := db.New(s.conn)
+	tx, err := s.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	q := db.New(tx)
 	rows, err := q.ListAllocationSchemes(ctx, s.tenantID)
 	if err != nil {
 		return nil, err
@@ -317,15 +345,20 @@ func (s *Service) readSchemeCore(ctx context.Context, q *db.Queries, id, now int
 		return out, err
 	}
 	if err == nil {
-		out.EditEffectiveAt = nextEffective(out.Config, now, s.location(), out.EffectiveAt)
+		currentID := out.Revision.ID
+		out.WriteConditions.Current = &currentID
+		out.EditEffectiveAt = nextEffective(out.Config, now, s.location(), out.AccountingAnchorAt)
 	}
 	next, e := q.NextAllocationRevision(ctx, db.NextAllocationRevisionParams{SchemeID: id, EffectiveAt: now})
 	if e == nil {
-		rev, e := decodeRevision(next.ID, next.EffectiveAt, next.Config)
+		rev, e := storedRevision(next)
 		if e != nil {
 			return out, e
 		}
 		out.Next = &rev
+		nextID := rev.ID
+		out.WriteConditions.Next = &nextID
+		out.EditEffectiveAt = rev.EffectiveAt
 		if out.Revision.ID == 0 {
 			out.Revision = rev
 			out.EditEffectiveAt = rev.EffectiveAt
@@ -357,18 +390,38 @@ func (s *Service) fillPriceCoverage(ctx context.Context, q *db.Queries, scheme *
 	}
 	return nil
 }
+func (in *SchemeInput) UnmarshalJSON(data []byte) error {
+	type plain SchemeInput
+	var value plain
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	*in = SchemeInput(value)
+	_, in.enabledProvided = fields["enabled"]
+	return nil
+}
+
 func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Scheme, error) {
-	if id < 0 || !validName(in.Name) || in.GroupID <= 0 {
+	if id < 0 || !validName(in.Name) || in.GroupID <= 0 || !validPeriod(in.Config) {
 		return Scheme{}, ErrInput
 	}
 	if in.Config.Mode == "ratio" {
-		var total int64
-		for _, member := range in.Config.Members {
-			total += member.Limit
+		var sum int64
+		for _, m := range in.Config.Members {
+			sum += m.Limit
 		}
-		if total > 10000 {
+		if sum > 10000 {
 			return Scheme{}, ErrInput
 		}
+	}
+	if id > 0 {
+		return s.updateScheme(ctx, id, in)
 	}
 	tx, err := s.conn.BeginTx(ctx, nil)
 	if err != nil {
@@ -378,19 +431,10 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 	q := db.New(tx)
 	now := s.now().Unix()
 	if _, err := q.GetTenantGroup(ctx, db.GetTenantGroupParams{ID: in.GroupID, TenantID: s.tenantID}); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return Scheme{}, ErrInput
-		}
-		return Scheme{}, err
+		return Scheme{}, ErrInput
 	}
-	for _, m := range in.Config.Members {
-		allowed, err := q.CanUseGroup(ctx, db.CanUseGroupParams{UserID: m.UserID, GroupID: in.GroupID})
-		if err != nil {
-			return Scheme{}, err
-		}
-		if !allowed {
-			return Scheme{}, ErrInput
-		}
+	if err := s.validateRecipients(ctx, q, in.GroupID, in.Config.Members); err != nil {
+		return Scheme{}, err
 	}
 	accounts, err := q.AllocationPoolAccounts(ctx, in.GroupID)
 	if err != nil {
@@ -404,92 +448,53 @@ func (s *Service) SaveScheme(ctx context.Context, id int64, in SchemeInput) (Sch
 			return Scheme{}, ErrPoolConflict
 		}
 	}
-	var previousRates []Rate
-	if id != 0 {
-		previous, err := s.readSchemeCore(ctx, q, id, now)
-		if err != nil {
-			return Scheme{}, err
-		}
-		if previous.GroupID != in.GroupID {
-			return Scheme{}, ErrInput
-		}
-		previousRates = append(previousRates, previous.Config.Rates...)
-		if previous.Next != nil {
-			// The scheduled revision is newer; its rates must win in the fallback map.
-			previousRates = append(previousRates, previous.Next.Config.Rates...)
-		}
-	}
-	catalog, err := s.applyPrices(ctx, q, in.GroupID, &in.Config, previousRates)
-	if err != nil {
+	if _, err := s.applyPrices(ctx, q, in.GroupID, &in.Config, nil); err != nil {
 		return Scheme{}, err
 	}
 	if err := normalize(&in.Config); err != nil {
 		return Scheme{}, err
 	}
-	effective := now
-	if id == 0 {
-		if _, err = q.GetPoolAllocation(ctx, in.GroupID); err == nil {
-			return Scheme{}, ErrPoolConflict
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return Scheme{}, err
-		}
-		rows, e := q.ListAllocationSchemes(ctx, s.tenantID)
-		if e != nil {
-			return Scheme{}, e
-		}
-		if len(rows) >= 32 {
-			return Scheme{}, ErrInput
-		}
-		id, err = q.CreateAllocationScheme(ctx, db.CreateAllocationSchemeParams{Name: in.Name, GroupID: in.GroupID, Enabled: bit(in.Enabled), CreatedAt: now})
-		if err != nil {
-			return Scheme{}, err
-		}
-		if in.StartNext {
-			effective = nextEffective(in.Config, now, s.location(), now)
-		}
-	} else {
-		if err = q.UpdateAllocationScheme(ctx, db.UpdateAllocationSchemeParams{ID: id, Name: in.Name, Enabled: bit(in.Enabled)}); err != nil {
-			return Scheme{}, err
-		}
-		current, err := Current(ctx, q, id, now)
-		if err == nil {
-			// Support immediate application of edits via ApplyNow flag
-			if in.ApplyNow {
-				effective = now
-			} else {
-				effective = nextEffective(current.Config, now, s.location(), current.EffectiveAt)
-			}
-		} else if errors.Is(err, ErrUnavailable) {
-			next, e := q.NextAllocationRevision(ctx, db.NextAllocationRevisionParams{SchemeID: id, EffectiveAt: now})
-			if e != nil {
-				return Scheme{}, e
-			}
-			effective = next.EffectiveAt
-		} else {
-			return Scheme{}, err
-		}
-		if err = q.DeleteNextAllocationRevisions(ctx, db.DeleteNextAllocationRevisionsParams{SchemeID: id, EffectiveAt: now}); err != nil {
-			return Scheme{}, err
-		}
+	if _, err = q.GetPoolAllocation(ctx, in.GroupID); err == nil {
+		return Scheme{}, ErrPoolConflict
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return Scheme{}, err
 	}
-	raw, err := json.Marshal(in.Config)
+	rows, err := q.ListAllocationSchemes(ctx, s.tenantID)
 	if err != nil {
 		return Scheme{}, err
 	}
-	if _, err = q.SaveAllocationRevision(ctx, db.SaveAllocationRevisionParams{SchemeID: id, EffectiveAt: effective, Config: string(raw)}); err != nil {
-		return Scheme{}, err
+	if len(rows) >= 32 {
+		return Scheme{}, ErrInput
 	}
-	if err = audit.Record(ctx, q, "allocation.save", "allocation", audit.ID(id)); err != nil {
-		return Scheme{}, err
-	}
-	out, err := s.readSchemeCore(ctx, q, id, now)
+	effective, err := s.creationTime(in, now)
 	if err != nil {
 		return Scheme{}, err
 	}
-	if err := s.fillPriceCoverage(ctx, q, &out, catalog); err != nil {
+	id, err = q.CreateAllocationScheme(ctx, db.CreateAllocationSchemeParams{Name: in.Name, GroupID: in.GroupID, Enabled: bit(in.Enabled), CreatedAt: now})
+	if err != nil {
 		return Scheme{}, err
 	}
-	return out, tx.Commit()
+	if _, err := appendRevision(ctx, q, id, effective, effective, in.Config); err != nil {
+		return Scheme{}, err
+	}
+	if err := audit.Record(ctx, q, "allocation.save", "allocation", audit.ID(id)); err != nil {
+		return Scheme{}, err
+	}
+	out, err := s.readScheme(ctx, q, id, now)
+	if err != nil {
+		return out, err
+	}
+	if len(in.ExpectedEffectiveAt) > 0 {
+		if at, err := s.creationTime(in, s.now().Unix()); err != nil {
+			return Scheme{}, err
+		} else if at != effective {
+			return Scheme{}, ErrEffectiveConflict
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return Scheme{}, err
+	}
+	return out, nil
 }
 
 type poolModelCatalog struct {

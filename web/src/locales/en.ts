@@ -1,4 +1,29 @@
 export const en = {
+  allocationInitialEditHint:
+    'Before the first activation, edit the initial member plan here. Saving keeps its reviewed start time and accounting anchor.',
+  allocationReplacePendingHint:
+    'To change members in this scheduled new period, confirm the replacement below. Budget and price edits can keep the existing plan.',
+  allocationSharedBudgetBlocked:
+    'The shared group budget is temporarily unavailable. Retry later or after renewal.',
+  allocationChanged:
+    'This allowance changed or the confirmed time expired. Refresh and review before saving.',
+  allocationMemberConflict:
+    'The scheduled rule has a separate member plan or incompatible limits. Review or cancel it explicitly.',
+  allocationFundingGap:
+    'The remaining shared budget cannot fund these shares. Reduce them or retry after renewal.',
+  allocationReplacementRequired:
+    'Changing the unit or reset schedule requires confirming a new accounting period.',
+  allocationInitialScheduleRequired:
+    'The initial schedule cannot be cancelled. Pause the allowance or move its start time.',
+  allocationConfirmReplacement:
+    'Confirm a new accounting period at the displayed time. Existing requests keep their original accounting.',
+  allocationReschedule: 'Move to next boundary',
+  allocationCancelSchedule: 'Cancel scheduled change',
+  allocationWindowSharesHint:
+    'Each condition is a shared group budget. The same member percentages apply independently to every window.',
+  allocationConfirmStart: 'Confirm start time',
+  allocationReviewLatest: 'Refresh and review',
+
   turnstileRetry: 'Retry',
   turnstileTitle: 'Turnstile',
   turnstileDescription:
@@ -434,7 +459,7 @@ export const en = {
   allocationRemove: 'Remove',
   allocationEnabled: 'Enable this resource allowance',
   allocationNextHint:
-    'Changes to allowances, prices, type or reset schedule take effect next period. Pausing or enabling access takes effect immediately. Current usage and unsettled entries remain recorded.',
+    'Budget and price edits remain scheduled and retain usage. Edit current members separately. A new unit or reset schedule requires confirming a new accounting period. Pause access with the separate control.',
   allocationEditEffectivePreview:
     'With the current schedule, changes saved now are expected to take effect on {{date}}. Pausing or enabling access takes effect immediately.',
   allocationStartEffectivePreview:
@@ -454,11 +479,11 @@ export const en = {
   allocationCurrentPricing: 'Current price coverage',
   allocationScheduledPricing: 'Scheduled price coverage',
   allocationStartNext: 'Start next period',
-  allocationApplyNow: 'Apply immediately',
+  allocationApplyNow: 'Edit current members',
   allocationApplyNowWarning:
-    'Changes will apply to new requests immediately. Ongoing requests are not affected.',
+    'Member edits retain usage and ongoing requests; an independent scheduled member plan must be resolved first.',
   allocationScheduledHint:
-    'Changes will take effect at the start of the next period (safer)',
+    'Scheduled budget and price changes retain period boundaries and recorded usage.',
   allocationImmediateHint:
     'Start immediately: the budget counts new requests from activation. Earlier usage is not backfilled.',
   allocationScheduled: '{{mode}} takes effect {{date}}',

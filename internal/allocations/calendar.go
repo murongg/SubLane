@@ -8,6 +8,35 @@ import (
 
 var resetClock = regexp.MustCompile(`^(?:[01][0-9]|2[0-3]):[0-5][0-9]$`)
 
+func validPeriod(c Config) bool {
+	if !validResetSchedule(c) {
+		return false
+	}
+	if c.Period == "durations" {
+		return c.Mode == "windows" || c.Mode == "ratio"
+	}
+	return (c.Period == "day" || c.Period == "month") && c.Mode != "windows"
+}
+
+func sameSchedule(a, b Config) bool {
+	if !validPeriod(a) || !validPeriod(b) {
+		return false
+	}
+	if a.Mode != b.Mode || entryMode(a) != entryMode(b) || a.Period != b.Period || resetMinutes(a) != resetMinutes(b) || max(1, a.ResetDay) != max(1, b.ResetDay) || len(a.Windows) != len(b.Windows) {
+		return false
+	}
+	for _, x := range a.Windows {
+		found := false
+		for _, y := range b.Windows {
+			found = found || x.DurationSeconds == y.DurationSeconds
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func validResetSchedule(c Config) bool {
 	if c.Period == "durations" {
 		return c.ResetTime == "" && c.ResetDay == 0
@@ -126,7 +155,7 @@ func effectiveWindows(rev Revision, now int64, location *time.Location) []alloca
 	if rev.Config.Period == "durations" {
 		windows := make([]allocationWindow, 0, len(rev.Config.Windows))
 		for _, condition := range rev.Config.Windows {
-			window := durationWindow(now, rev.EffectiveAt, condition.DurationSeconds)
+			window := durationWindow(now, rev.AccountingAnchorAt, condition.DurationSeconds)
 			window.kind = "duration"
 			window.seconds = condition.DurationSeconds
 			window.limit = condition.Limit
@@ -135,7 +164,7 @@ func effectiveWindows(rev Revision, now int64, location *time.Location) []alloca
 		return windows
 	}
 	start, end := Window(unix(now), rev.Config, location)
-	return []allocationWindow{{kind: rev.Config.Period, start: max(start, rev.EffectiveAt), end: end}}
+	return []allocationWindow{{kind: rev.Config.Period, start: max(start, rev.AccountingAnchorAt), end: end}}
 }
 
 func nextEffective(c Config, now int64, location *time.Location, anchor int64) int64 {

@@ -17,11 +17,105 @@ import (
 	"time"
 )
 
+func TestAllocationScheduleEndpointsRequireConditionsAndPreserveInitial(t *testing.T) {
+	f := newForwardFixture(t, func(http.ResponseWriter, *http.Request) { t.Error("unexpected upstream IO") })
+	owner, err := f.identity.Login(context.Background(), "owner-test", "owner pass 42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{Name: sessionCookie, Value: owner.Token}
+	h := f.server.Config.Handler
+	body := map[string]any{"name": "Synthetic delayed allocation", "group_id": 1, "enabled": true, "start_next": true, "config": map[string]any{"mode": "tokens", "period": "day", "members": []map[string]any{{"user_id": f.userID, "limit": 100}}, "rates": []any{}}}
+	r := request(h, "POST", "/api/allocations", "http://example.test", body, cookie)
+	if r.Code != 201 {
+		t.Fatal("legacy delayed creation", r.Code, r.Body.String())
+	}
+	var scheme allocations.Scheme
+	if err := json.Unmarshal(r.Body.Bytes(), &scheme); err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/api/allocations/%d", scheme.ID)
+	r = request(h, "PATCH", path, "http://example.test", body, cookie)
+	if r.Code != 409 || !strings.Contains(r.Body.String(), "allocation_version_required") {
+		t.Fatal("unconditioned edit", r.Code, r.Body.String())
+	}
+	conditions := map[string]any{"expected_current_revision_id": nil, "expected_next_revision_id": scheme.Next.ID}
+	r = request(h, "POST", path+"/cancel", "http://example.test", conditions, cookie)
+	if r.Code != 409 || !strings.Contains(r.Body.String(), "allocation_initial_schedule_required") {
+		t.Fatal("initial cancel", r.Code, r.Body.String())
+	}
+	body["config"].(map[string]any)["members"] = []map[string]any{{"user_id": owner.User.ID, "limit": 100}}
+	body["expected_current_revision_id"] = nil
+	body["expected_next_revision_id"] = scheme.Next.ID
+	body["expected_effective_at"] = scheme.Next.EffectiveAt
+	r = request(h, "PATCH", path, "http://example.test", body, cookie)
+	if r.Code != 200 {
+		t.Fatal("initial member correction", r.Code, r.Body.String())
+	}
+	var corrected allocations.Scheme
+	if err := json.Unmarshal(r.Body.Bytes(), &corrected); err != nil || corrected.Next == nil || corrected.Next.EffectiveAt != scheme.Next.EffectiveAt || corrected.Next.AccountingAnchorAt != scheme.Next.AccountingAnchorAt || corrected.WriteConditions.Current != nil {
+		t.Fatal("initial correction changed activation", corrected, err)
+	}
+	conditions["expected_next_revision_id"] = corrected.Next.ID
+	r = request(h, "POST", path+"/preview", "http://example.test", map[string]any{"action": "reschedule"}, cookie)
+	if r.Code != 200 {
+		t.Fatal("preview", r.Code, r.Body.String())
+	}
+	var preview struct {
+		At int64 `json:"proposed_effective_at"`
+	}
+	json.Unmarshal(r.Body.Bytes(), &preview)
+	conditions["expected_effective_at"] = preview.At
+	r = request(h, "POST", path+"/reschedule", "http://example.test", conditions, cookie)
+	if r.Code != 200 {
+		t.Fatal("reschedule", r.Code, r.Body.String())
+	}
+	var updated allocations.Scheme
+	json.Unmarshal(r.Body.Bytes(), &updated)
+	if updated.Next == nil || updated.Next.EffectiveAt != preview.At || updated.WriteConditions.Current != nil {
+		t.Fatal("invalid replacement", updated)
+	}
+	r = request(h, "POST", path+"/reschedule", "http://example.test", conditions, cookie)
+	if r.Code != 409 {
+		t.Fatal("stale retry", r.Code, r.Body.String())
+	}
+	r = request(h, "GET", "/api/allocations", "", nil, cookie)
+	if r.Code != 200 || !strings.Contains(r.Body.String(), "Synthetic delayed allocation") {
+		t.Fatal("mixed reader failed", r.Code, r.Body.String())
+	}
+}
+
 func TestUnknownWindowOverrideHasSpecificAPIError(t *testing.T) {
 	w := httptest.NewRecorder()
 	allocationError(w, allocations.ErrUnknownWindowOverride)
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "allocation_unknown_window_override") {
 		t.Fatal(w.Code, w.Body.String())
+	}
+}
+
+func TestInitialAllowancePreviewDoesNotCreateRows(t *testing.T) {
+	f := newForwardFixture(t, func(http.ResponseWriter, *http.Request) { t.Error("unexpected provider IO") })
+	owner, err := f.identity.Login(context.Background(), "owner-test", "owner pass 42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := map[string]any{"name": "Synthetic preview", "group_id": 1, "enabled": true, "start_next": true, "config": map[string]any{"mode": "tokens", "period": "day", "members": []map[string]any{{"user_id": f.userID, "limit": 100}}, "rates": []any{}}}
+	r := request(f.server.Config.Handler, "POST", "/api/allocations/preview", "http://example.test", body, &http.Cookie{Name: sessionCookie, Value: owner.Token})
+	if r.Code != 200 {
+		t.Fatal("creation preview", r.Code, r.Body.String())
+	}
+	var preview allocations.Preview
+	if err := json.Unmarshal(r.Body.Bytes(), &preview); err != nil || preview.ProposedEffectiveAt <= time.Now().Unix() {
+		t.Fatal("invalid preview", preview, err)
+	}
+	rows, err := f.forwarding.Allocations().Schemes(context.Background())
+	if err != nil || len(rows) != 0 {
+		t.Fatal("preview wrote a scheme", rows, err)
+	}
+	body["expected_effective_at"] = preview.ProposedEffectiveAt
+	r = request(f.server.Config.Handler, "POST", "/api/allocations", "http://example.test", body, &http.Cookie{Name: sessionCookie, Value: owner.Token})
+	if r.Code != 201 {
+		t.Fatal("confirmed create", r.Code, r.Body.String())
 	}
 }
 

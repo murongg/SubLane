@@ -20,6 +20,108 @@ func (q *Queries) AccountHasAllocation(ctx context.Context, accountID string) (b
 	return exists, err
 }
 
+const allocationActiveEntries = `-- name: AllocationActiveEntries :many
+SELECT e.user_id,e.revision_id,e.started_at FROM allocation_entries e
+WHERE e.scheme_id=?1 AND (?2=0 OR e.user_id=?2)
+AND e.started_at>=?3 AND e.started_at<?4 AND e.mode=?5 AND e.state='active'
+ORDER BY e.request_id LIMIT 4097
+`
+
+type AllocationActiveEntriesParams struct {
+	SchemeID    int64
+	UserID      interface{}
+	StartedFrom int64
+	StartedTo   int64
+	Mode        string
+}
+
+type AllocationActiveEntriesRow struct {
+	UserID     int64
+	RevisionID int64
+	StartedAt  int64
+}
+
+func (q *Queries) AllocationActiveEntries(ctx context.Context, arg AllocationActiveEntriesParams) ([]AllocationActiveEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, allocationActiveEntries,
+		arg.SchemeID,
+		arg.UserID,
+		arg.StartedFrom,
+		arg.StartedTo,
+		arg.Mode,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AllocationActiveEntriesRow{}
+	for rows.Next() {
+		var i AllocationActiveEntriesRow
+		if err := rows.Scan(&i.UserID, &i.RevisionID, &i.StartedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const allocationAnchorRevision = `-- name: AllocationAnchorRevision :one
+SELECT id FROM allocation_revisions WHERE scheme_id=? AND accounting_anchor_at=? ORDER BY effective_at,id LIMIT 1
+`
+
+type AllocationAnchorRevisionParams struct {
+	SchemeID           int64
+	AccountingAnchorAt int64
+}
+
+func (q *Queries) AllocationAnchorRevision(ctx context.Context, arg AllocationAnchorRevisionParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, allocationAnchorRevision, arg.SchemeID, arg.AccountingAnchorAt)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const allocationGroupUsage = `-- name: AllocationGroupUsage :one
+SELECT CAST(COALESCE(sum(cost),0) AS INTEGER) FROM allocation_entries
+WHERE scheme_id=?1 AND started_at>=?2 AND started_at<?3
+AND mode=?4 AND state='settled'
+`
+
+type AllocationGroupUsageParams struct {
+	SchemeID    int64
+	StartedFrom int64
+	StartedTo   int64
+	Mode        string
+}
+
+func (q *Queries) AllocationGroupUsage(ctx context.Context, arg AllocationGroupUsageParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, allocationGroupUsage,
+		arg.SchemeID,
+		arg.StartedFrom,
+		arg.StartedTo,
+		arg.Mode,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const allocationHasEntries = `-- name: AllocationHasEntries :one
+SELECT EXISTS(SELECT 1 FROM allocation_entries WHERE scheme_id=?)
+`
+
+func (q *Queries) AllocationHasEntries(ctx context.Context, schemeID int64) (bool, error) {
+	row := q.db.QueryRowContext(ctx, allocationHasEntries, schemeID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const allocationMemberExposure = `-- name: AllocationMemberExposure :one
 SELECT CAST(COALESCE(SUM(CASE WHEN state='active' THEN 1 ELSE 0 END),0) AS INTEGER) AS active,
 CAST(COALESCE(SUM(CASE WHEN state='pending' THEN 1 ELSE 0 END),0) AS INTEGER) AS pending
@@ -143,6 +245,24 @@ func (q *Queries) AllocationPoolAccounts(ctx context.Context, groupID int64) ([]
 	return items, nil
 }
 
+const allocationReservationConfig = `-- name: AllocationReservationConfig :one
+SELECT CAST(json_remove(config,'$.rates') AS TEXT) AS config FROM allocation_revisions
+WHERE id=?1 AND scheme_id=?2
+`
+
+type AllocationReservationConfigParams struct {
+	ID       int64
+	SchemeID int64
+}
+
+// Reservation math never needs the captured price catalog; settlement still reads the full revision.
+func (q *Queries) AllocationReservationConfig(ctx context.Context, arg AllocationReservationConfigParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, allocationReservationConfig, arg.ID, arg.SchemeID)
+	var config string
+	err := row.Scan(&config)
+	return config, err
+}
+
 const beginAllocationEntry = `-- name: BeginAllocationEntry :exec
 INSERT INTO allocation_entries(request_id,scheme_id,revision_id,user_id,account_id,model,mode,window_start,reset_at,started_at,state)
 VALUES(?,?,?,?,?,?,?,?,?,?,'active')
@@ -234,7 +354,7 @@ func (q *Queries) CreateAllocationScheme(ctx context.Context, arg CreateAllocati
 }
 
 const currentAllocationRevision = `-- name: CurrentAllocationRevision :one
-SELECT id, scheme_id, effective_at, config FROM allocation_revisions WHERE scheme_id=? AND effective_at<=? ORDER BY effective_at DESC LIMIT 1
+SELECT id, scheme_id, effective_at, accounting_anchor_at, config FROM allocation_revisions WHERE scheme_id=? AND effective_at<=? ORDER BY effective_at DESC,id DESC LIMIT 1
 `
 
 type CurrentAllocationRevisionParams struct {
@@ -249,22 +369,28 @@ func (q *Queries) CurrentAllocationRevision(ctx context.Context, arg CurrentAllo
 		&i.ID,
 		&i.SchemeID,
 		&i.EffectiveAt,
+		&i.AccountingAnchorAt,
 		&i.Config,
 	)
 	return i, err
 }
 
-const deleteNextAllocationRevisions = `-- name: DeleteNextAllocationRevisions :exec
-DELETE FROM allocation_revisions WHERE scheme_id=? AND effective_at>?
+const deleteAllocationPendingAt = `-- name: DeleteAllocationPendingAt :exec
+DELETE FROM allocation_revisions
+WHERE allocation_revisions.scheme_id=?1
+AND allocation_revisions.effective_at=?2
+AND allocation_revisions.effective_at>?3
+AND NOT EXISTS(SELECT 1 FROM allocation_entries e WHERE e.revision_id=allocation_revisions.id)
 `
 
-type DeleteNextAllocationRevisionsParams struct {
+type DeleteAllocationPendingAtParams struct {
 	SchemeID    int64
 	EffectiveAt int64
+	Now         int64
 }
 
-func (q *Queries) DeleteNextAllocationRevisions(ctx context.Context, arg DeleteNextAllocationRevisionsParams) error {
-	_, err := q.db.ExecContext(ctx, deleteNextAllocationRevisions, arg.SchemeID, arg.EffectiveAt)
+func (q *Queries) DeleteAllocationPendingAt(ctx context.Context, arg DeleteAllocationPendingAtParams) error {
+	_, err := q.db.ExecContext(ctx, deleteAllocationPendingAt, arg.SchemeID, arg.EffectiveAt, arg.Now)
 	return err
 }
 
@@ -327,7 +453,7 @@ func (q *Queries) GetAllocationEntry(ctx context.Context, requestID string) (All
 }
 
 const getAllocationRevision = `-- name: GetAllocationRevision :one
-SELECT id, scheme_id, effective_at, config FROM allocation_revisions WHERE id=?
+SELECT id, scheme_id, effective_at, accounting_anchor_at, config FROM allocation_revisions WHERE id=?
 `
 
 func (q *Queries) GetAllocationRevision(ctx context.Context, id int64) (AllocationRevision, error) {
@@ -337,6 +463,7 @@ func (q *Queries) GetAllocationRevision(ctx context.Context, id int64) (Allocati
 		&i.ID,
 		&i.SchemeID,
 		&i.EffectiveAt,
+		&i.AccountingAnchorAt,
 		&i.Config,
 	)
 	return i, err
@@ -629,7 +756,7 @@ func (q *Queries) ListAllocationSchemes(ctx context.Context, tenantID int64) ([]
 }
 
 const nextAllocationRevision = `-- name: NextAllocationRevision :one
-SELECT id, scheme_id, effective_at, config FROM allocation_revisions WHERE scheme_id=? AND effective_at>? ORDER BY effective_at LIMIT 1
+SELECT id, scheme_id, effective_at, accounting_anchor_at, config FROM allocation_revisions WHERE scheme_id=? AND effective_at>? ORDER BY effective_at,id DESC LIMIT 1
 `
 
 type NextAllocationRevisionParams struct {
@@ -644,6 +771,7 @@ func (q *Queries) NextAllocationRevision(ctx context.Context, arg NextAllocation
 		&i.ID,
 		&i.SchemeID,
 		&i.EffectiveAt,
+		&i.AccountingAnchorAt,
 		&i.Config,
 	)
 	return i, err
@@ -675,17 +803,23 @@ func (q *Queries) RecoverAllocationEntries(ctx context.Context, tenantID int64) 
 }
 
 const saveAllocationRevision = `-- name: SaveAllocationRevision :execlastid
-INSERT INTO allocation_revisions(scheme_id,effective_at,config) VALUES(?,?,?)
+INSERT INTO allocation_revisions(scheme_id,effective_at,accounting_anchor_at,config) VALUES(?,?,?,?)
 `
 
 type SaveAllocationRevisionParams struct {
-	SchemeID    int64
-	EffectiveAt int64
-	Config      string
+	SchemeID           int64
+	EffectiveAt        int64
+	AccountingAnchorAt int64
+	Config             string
 }
 
 func (q *Queries) SaveAllocationRevision(ctx context.Context, arg SaveAllocationRevisionParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, saveAllocationRevision, arg.SchemeID, arg.EffectiveAt, arg.Config)
+	result, err := q.db.ExecContext(ctx, saveAllocationRevision,
+		arg.SchemeID,
+		arg.EffectiveAt,
+		arg.AccountingAnchorAt,
+		arg.Config,
+	)
 	if err != nil {
 		return 0, err
 	}
