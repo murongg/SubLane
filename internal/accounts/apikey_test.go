@@ -116,3 +116,41 @@ func TestAPIKeyCredentialValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestAPIChannelPlatformConfiguration(t *testing.T) {
+	for _, tc := range []struct{ platform, protocol string }{
+		{"openai", "openai"}, {"anthropic", "anthropic"}, {"gemini", "gemini"},
+		{"deepseek", "openai"}, {"openrouter", "openai"}, {"opencode", "openai"},
+		{"opencode-go", "openai"}, {"custom", "responses"},
+		{"xai", "openai"}, {"moonshot", "openai"}, {"moonshot-cn", "openai"},
+		{"zhipu", "openai"}, {"zai", "openai"}, {"minimax", "openai"}, {"minimax-cn", "openai"},
+		{"qwen", "openai"}, {"qwen-cn", "openai"}, {"mistral", "openai"}, {"groq", "openai"},
+		{"together", "openai"}, {"fireworks", "openai"}, {"siliconflow", "openai"},
+		{"siliconflow-global", "openai"}, {"nvidia", "openai"}, {"modelscope", "openai"},
+		{"azure", "responses"}, {"volcengine", "openai"}, {"baidu", "openai"}, {"tencent", "openai"}, {"stepfun", "openai"}, {"xiaomi", "openai"},
+	} {
+		t.Run(tc.platform, func(t *testing.T) {
+			raw, _ := json.Marshal(map[string]string{"api_key": "synthetic-key", "base_url": "https://relay.example.test/v1", "platform": tc.platform, "protocol": tc.protocol})
+			credential, err := ParseFor("openai", raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, _ := json.Marshal(credential)
+			var saved map[string]any
+			json.Unmarshal(encoded, &saved)
+			if saved["api_platform"] != tc.platform || saved["api_protocol"] != tc.protocol {
+				t.Fatalf("channel configuration lost: %s", encoded)
+			}
+		})
+	}
+	for _, fields := range []map[string]string{
+		{"platform": "unknown", "protocol": "openai"},
+		{"platform": "custom", "protocol": "unknown"},
+	} {
+		fields["api_key"], fields["base_url"] = "synthetic-key", "https://relay.example.test/v1"
+		raw, _ := json.Marshal(fields)
+		if _, err := ParseFor("openai", raw); !errors.Is(err, ErrInput) {
+			t.Fatal("unsupported channel configuration accepted", err)
+		}
+	}
+}

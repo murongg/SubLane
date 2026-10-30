@@ -14,15 +14,18 @@ import (
 )
 
 func TestGeneratedQueriesKeepTransactionsOnTheirConnection(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	connection, err := storage.Open(ctx, filepath.Join(t.TempDir(), "queries.db"))
+	setupCtx, cancelSetup := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancelSetup()
+	connection, err := storage.Open(setupCtx, filepath.Join(t.TempDir(), "queries.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer connection.Close()
 	queries := db.New(connection)
 	for _, commit := range []bool{false, true} {
+		// Race-instrumented migrations must not consume the WithTx deadlock-check budget.
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
 		tx, err := connection.BeginTx(ctx, nil)
 		if err != nil {
 			t.Fatal(err)

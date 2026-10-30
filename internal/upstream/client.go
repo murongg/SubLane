@@ -331,8 +331,8 @@ func (c *Client) execute(ctx context.Context, credential accounts.Credential, ra
 		return nil, ErrInput
 	}
 	body["model"], _ = json.Marshal(model)
-	if credential.Kind() == "claude" && adaptiveClaudeModel(model) {
-		// The intermediate Codex translator drops output limits; Claude's hard limit must survive that hop.
+	if credential.Kind() == "openai" || credential.Kind() == "claude" && adaptiveClaudeModel(model) {
+		// The intermediate Codex translator drops output limits; API and Claude limits must survive that hop.
 		keys := []string{"max_output_tokens", "max_completion_tokens", "max_tokens"}
 		for _, key := range keys {
 			if value, ok := input[key]; ok && string(value) != "null" {

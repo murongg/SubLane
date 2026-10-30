@@ -173,7 +173,7 @@ func (c *Client) startEngine(parent context.Context, claudeVersions ...string) (
 
 }
 func (c *Client) executor(provider string) (core.ProviderExecutor, error) {
-	if !accounts.ValidProvider(provider) {
+	if !accounts.ValidProvider(provider) && provider != "gemini" {
 		return nil, ErrInput
 	}
 	if provider == "openai" {
@@ -196,7 +196,7 @@ func (c *Client) executor(provider string) (core.ProviderExecutor, error) {
 func sdkAuth(c accounts.Credential) *core.Auth {
 	if c.Kind() == "openai" {
 		// The shared SDK executor receives only this account's ephemeral key and endpoint; its store stays empty.
-		return &core.Auth{ID: c.Kind() + ":" + c.AccountID, Provider: "openai-compatibility", Status: core.StatusActive, Attributes: map[string]string{"api_key": c.AccessToken, "base_url": c.BaseURL}}
+		return channelAuth(c)
 	}
 	metadata := map[string]any{}
 	for key, value := range c.Metadata {
@@ -225,7 +225,7 @@ func sdkAuth(c accounts.Credential) *core.Auth {
 }
 func (c *Client) sdkContext(ctx context.Context, credential accounts.Credential) context.Context {
 	// This is the public SDK's documented per-request transport hook; it also provides a synthetic test seam.
-	return context.WithValue(ctx, "cliproxy.roundtripper", &engineTransport{base: &boundTransport{base: c.inference.Transport, address: credential.ProxyURL}, codexVersion: c.codexVersion(), grokVersion: c.currentGrokVersion()})
+	return context.WithValue(ctx, "cliproxy.roundtripper", c.executionTransport(credential, nil, nil))
 }
 func sdkError(err error) error {
 	if err == nil {
@@ -266,9 +266,22 @@ func sdkError(err error) error {
 }
 func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, body []byte, headers http.Header, opts exec.Options) (*http.Response, error) {
 	ctx = credentialContext(ctx, credential)
-	executor, err := c.executor(credential.Kind())
+	// Check before protocol dispatch so a Responses channel cannot turn compaction into generation.
+	if opts.Alt == "responses/compact" && credential.Kind() != "codex" {
+		return nil, ErrInput
+	}
+	provider := credential.Kind()
+	if provider == "openai" {
+		provider = channelExecutor(credential)
+	}
+	executor, err := c.executor(provider)
 	if err != nil {
 		return nil, err
+	}
+	if credential.Kind() == "openai" {
+		if scoped, ok := executor.(core.APIKeyConfigExecutor); ok {
+			executor = scoped.ForAPIKey()
+		}
 	}
 	if credential.Kind() == "claude" {
 		executor, err = c.versionedClaudeExecutor(ctx, c.currentClaudeVersion())
@@ -281,12 +294,15 @@ func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, bod
 		}
 	}
 	version := c.codexVersion()
-	transport := &engineTransport{base: &boundTransport{base: c.inference.Transport, address: credential.ProxyURL}, codexVersion: version, grokVersion: c.currentGrokVersion(), provider: credential.Kind()}
+	transport := c.executionTransport(credential, headers, body)
 	transport.validateGeminiStream = credential.Kind() == "antigravity" && (opts.SourceFormat == translator.FormatClaude || opts.SourceFormat == translator.FormatGemini)
 	if !opts.Stream {
 		transport.maxResponseBytes = MaxBody
 	}
 	ctx = context.WithValue(ctx, "cliproxy.roundtripper", transport)
+	if credential.Kind() == "openai" && credential.APIConfig().Protocol == "responses" {
+		return c.channelResponses(ctx, executor, credential, body, opts, transport)
+	}
 	auth := sdkAuth(credential)
 	if credential.Kind() == "codex" {
 		auth.Attributes = map[string]string{"base_url": c.baseURL}
@@ -322,9 +338,6 @@ func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, bod
 	opts.Headers, opts.OriginalRequest = clean, body
 	req := exec.Request{Model: request.Model, Payload: body}
 	if !opts.Stream {
-		if opts.Alt == "responses/compact" && credential.Kind() != "codex" {
-			return nil, ErrInput
-		}
 		result, err := executor.Execute(ctx, auth, req, opts)
 		if err != nil {
 			logSDKFailure(ctx, "execute", err, transport)

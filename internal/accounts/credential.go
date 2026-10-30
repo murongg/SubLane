@@ -11,6 +11,8 @@ import (
 // Credential is internal secret material. HTTP responses must use Account instead.
 type Credential struct {
 	BaseURL      string                     `json:"base_url,omitempty"`
+	APIPlatform  string                     `json:"api_platform,omitempty"`
+	APIProtocol  string                     `json:"api_protocol,omitempty"`
 	ProxyURL     string                     `json:"-"`
 	Provider     string                     `json:"provider,omitempty"`
 	Metadata     map[string]json.RawMessage `json:"metadata,omitempty"`
@@ -123,7 +125,10 @@ func (c Credential) validate() error {
 		if err != nil || endpoint != c.BaseURL || c.RefreshToken != "" || c.ExpiresAt != 0 || c.IDToken != "" || len(c.Metadata) != 0 {
 			return ErrInput
 		}
-	} else if c.BaseURL != "" {
+		if _, err := normalizeAPIConfig(c.BaseURL, c.APIPlatform, c.APIProtocol); err != nil {
+			return err
+		}
+	} else if c.BaseURL != "" || c.APIPlatform != "" || c.APIProtocol != "" {
 		return ErrInput
 	}
 	for _, value := range []string{c.AccountID, c.Email, c.Plan} {

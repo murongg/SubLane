@@ -27,6 +27,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Bound JSDOM contention so lazy routes and full-table interactions can settle on CI.
+    maxWorkers: 2,
     setupFiles: ['./src/test/setup.ts'],
     restoreMocks: true,
     unstubGlobals: true,

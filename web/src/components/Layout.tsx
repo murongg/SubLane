@@ -154,15 +154,11 @@ function NavigationItem({
           </SidebarMenuSub>
         </>
       ) : (
-        <SidebarMenuButton
-          asChild
-          isActive={pathname === item.to}
-          className="h-10"
-        >
+        <SidebarMenuButton asChild isActive={active} className="h-10">
           <Link
             to={item.to}
             onClick={() => setOpenMobile(false)}
-            aria-current={pathname === item.to ? 'page' : undefined}
+            aria-current={active ? 'page' : undefined}
           >
             <Icon aria-hidden="true" />
             <span>{t(item.label)}</span>
