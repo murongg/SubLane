@@ -165,7 +165,7 @@ func TestStoredRevisionRejectsInvalidResetClock(t *testing.T) {
 
 func TestNewRevisionDoesNotCountPreviousCycleAfterResetTimeChange(t *testing.T) {
 	effective := time.Date(2030, 4, 2, 0, 0, 0, 0, time.UTC).Unix()
-	rev := Revision{EffectiveAt: effective, Config: Config{Mode: "tokens", Period: "day", ResetTime: "09:00"}}
+	rev := Revision{EffectiveAt: effective, AccountingAnchorAt: effective, Config: Config{Mode: "tokens", Period: "day", ResetTime: "09:00"}}
 	start, end := effectiveWindow(rev, effective+3600, time.UTC)
 	if start != effective || end != time.Date(2030, 4, 2, 9, 0, 0, 0, time.UTC).Unix() {
 		t.Fatal(start, end)
@@ -503,7 +503,7 @@ func TestTeamsSchemesAndExclusiveCapacity(t *testing.T) {
 	input.Config.Total = 1_000_000
 	input.Config.Period = "month"
 	input.Config.Members[0].Limit = 10001
-	if _, err = s.SaveScheme(ctx, scheme.ID, input); !errors.Is(err, ErrInput) {
+	if _, err = s.SaveScheme(ctx, scheme.ID, conditioned(t, s, scheme.ID, input)); !errors.Is(err, ErrInput) {
 		t.Fatal("overallocated ratio", err)
 	}
 	input.Config.Mode = "amount"
@@ -511,7 +511,7 @@ func TestTeamsSchemesAndExclusiveCapacity(t *testing.T) {
 	input.Config.Total = 0
 	input.Config.Period = "month"
 	input.Config.Members[0].Limit = 1000000
-	if _, err = s.SaveScheme(ctx, scheme.ID, input); !errors.Is(err, ErrUnpriced) {
+	if _, err = s.SaveScheme(ctx, scheme.ID, conditioned(t, s, scheme.ID, input)); !errors.Is(err, ErrUnpriced) {
 		t.Fatal("unpriced amount scheme", err)
 	}
 }
@@ -610,7 +610,7 @@ func TestAutomaticPricesReuseSavedRateWhenCatalogPriceDisappears(t *testing.T) {
 	}
 	manager.pricing = pricing.NewStatic(map[string]pricing.Price{})
 	input.Name = "Synthetic renamed"
-	updated, err := manager.SaveScheme(ctx, scheme.ID, input)
+	updated, err := manager.SaveScheme(ctx, scheme.ID, conditioned(t, manager, scheme.ID, input))
 	if err != nil {
 		t.Fatal("existing allowance should remain editable", err)
 	}
@@ -644,7 +644,7 @@ func TestAutomaticPricesKeepSavedRateWhenAccountCatalogIsUnavailable(t *testing.
 	}
 	manager.pricing = pricing.NewStatic(map[string]pricing.Price{})
 	input.Name = "Synthetic renamed"
-	updated, err := manager.SaveScheme(ctx, scheme.ID, input)
+	updated, err := manager.SaveScheme(ctx, scheme.ID, conditioned(t, manager, scheme.ID, input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -781,7 +781,7 @@ func TestNewlyPricedModelStillNeedsARevision(t *testing.T) {
 		t.Fatal("saved revision should still warn about its missing rate", listed, err)
 	}
 	input.Name = "Synthetic updated coverage"
-	updated, err := manager.SaveScheme(ctx, scheme.ID, input)
+	updated, err := manager.SaveScheme(ctx, scheme.ID, conditioned(t, manager, scheme.ID, input))
 	if err != nil || updated.Next == nil || len(updated.Next.PriceCoverage.UncoveredModels) != 0 {
 		t.Fatal("new revision should cover newly priced model", updated.Next, err)
 	}
@@ -808,13 +808,13 @@ func TestMissingCatalogPricePrefersScheduledRateOverCurrentRate(t *testing.T) {
 		"synthetic-priced": {Input: 3_000_000, Output: 4_000_000},
 	})
 	input.Name = "Synthetic second"
-	updated, err := manager.SaveScheme(ctx, scheme.ID, input)
+	updated, err := manager.SaveScheme(ctx, scheme.ID, conditioned(t, manager, scheme.ID, input))
 	if err != nil || updated.Next == nil || updated.Next.Config.Rates[0].Input != 3_000_000 {
 		t.Fatal("new catalog price was not scheduled", updated.Next, err)
 	}
 	manager.pricing = pricing.NewStatic(map[string]pricing.Price{})
 	input.Name = "Synthetic third"
-	updated, err = manager.SaveScheme(ctx, scheme.ID, input)
+	updated, err = manager.SaveScheme(ctx, scheme.ID, conditioned(t, manager, scheme.ID, input))
 	if err != nil || updated.Next == nil || updated.Next.Config.Rates[0].Input != 3_000_000 {
 		t.Fatal("older active price replaced newer scheduled price", updated.Next, err)
 	}
@@ -846,7 +846,7 @@ func TestEditBoundaryUsesCurrentDurationWhenDraftIsLonger(t *testing.T) {
 	}
 	manager.now = func() time.Time { return unix(anchor + 3600) }
 	input.Config.Windows = []WindowCondition{{DurationSeconds: 30 * 86400, Limit: 1_000_000}}
-	updated, err := manager.SaveScheme(ctx, scheme.ID, input)
+	updated, err := manager.SaveScheme(ctx, scheme.ID, conditioned(t, manager, scheme.ID, input))
 	if err != nil || updated.Next == nil || updated.Next.EffectiveAt != anchor+5*3600 {
 		t.Fatal("draft duration incorrectly delayed this edit", updated.Next, err)
 	}
@@ -874,7 +874,7 @@ func TestLongWindowEditReportsActualEffectiveDate(t *testing.T) {
 		t.Fatal("edit preview did not match longest current window", listed)
 	}
 	input.Name = "Synthetic longer name"
-	updated, err := manager.SaveScheme(ctx, scheme.ID, input)
+	updated, err := manager.SaveScheme(ctx, scheme.ID, conditioned(t, manager, scheme.ID, input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -972,7 +972,7 @@ func TestSchemeRevisionDoesNotResetCurrentAllowance(t *testing.T) {
 	input.Config.Mode = "amount"
 	input.Config.Members[0].Limit = 200
 	input.Config.Rates = []Rate{{Model: "synthetic-model", Input: 1, Cached: 1, Output: 1}}
-	updated, err := s.SaveScheme(ctx, scheme.ID, input)
+	updated, err := s.SaveScheme(ctx, scheme.ID, conditioned(t, s, scheme.ID, input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1341,7 +1341,7 @@ func TestWindowedAmountChangesStartAtLongestWindowBoundary(t *testing.T) {
 	}
 	now += 3600
 	config.Windows = []WindowCondition{{DurationSeconds: 2 * 3600, Limit: 150}, {DurationSeconds: 3 * 86400, Limit: 200}}
-	updated, err := s.SaveScheme(ctx, scheme.ID, SchemeInput{Name: scheme.Name, GroupID: 2, Enabled: true, Config: config})
+	updated, err := s.SaveScheme(ctx, scheme.ID, conditioned(t, s, scheme.ID, SchemeInput{Name: scheme.Name, GroupID: 2, Enabled: true, Config: config}))
 	if err != nil || updated.Next == nil {
 		t.Fatal(err, updated)
 	}

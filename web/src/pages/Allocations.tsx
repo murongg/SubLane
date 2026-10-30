@@ -7,15 +7,18 @@ import {
   schemesOptions,
   availableAllocationPools,
   saveScheme,
+  previewInitial,
   setSchemeEnabled,
   modeLabels,
   allocationErrorKey,
   type Scheme,
+  type SchemeInput,
 } from '@/lib/allocations'
 import { groupOptions, poolMembersOptions } from '@/lib/groups'
 import { SchemeForm } from '@/components/SchemeForm'
 import { AllocationPriceWarning } from '@/components/AllocationPriceWarning'
 import { AllocationReport } from '@/components/AllocationReport'
+import { AllocationSchedule } from '@/components/AllocationSchedule'
 import { Button } from '@/components/ui/Button'
 import { Status } from '@/components/Status'
 import { formatInstanceDate, useTimeZone } from '@/lib/timezone'
@@ -29,6 +32,11 @@ export function Allocations() {
   const [editing, setEditing] = useState<Scheme | null | undefined>()
   const [viewing, setViewing] = useState<number | null>(null)
   const [formPoolID, setFormPoolID] = useState(0)
+  const [reviewGeneration, setReviewGeneration] = useState(0)
+  const [creationPreview, setCreationPreview] = useState<{
+    input: SchemeInput
+    at: number
+  } | null>(null)
   const saved = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['allocations'] }),
@@ -38,8 +46,16 @@ export function Allocations() {
       client.invalidateQueries({ queryKey: ['keys'] }),
     ])
     setEditing(undefined)
+    setCreationPreview(null)
   }
   const mutation = useMutation({ mutationFn: saveScheme, onSuccess: saved })
+  const preparing = useMutation({
+    mutationFn: async (input: SchemeInput) => ({
+      input,
+      at: (await previewInitial(input)).proposed_effective_at,
+    }),
+    onSuccess: setCreationPreview,
+  })
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
       setSchemeEnabled(id, enabled),
@@ -120,16 +136,70 @@ export function Allocations() {
             {t(editing ? 'allocationEdit' : 'allocationCreate')}
           </h2>
           <SchemeForm
-            key={editing?.id ?? 'new'}
+            key={`${editing?.id ?? 'new'}:${reviewGeneration}`}
             groups={editing ? pools.data.groups : freePools}
             groupID={formPoolID}
             onGroupChange={setFormPoolID}
             members={roster.data?.members ?? []}
             scheme={editingScheme}
-            onSubmit={(input) => mutation.mutate({ ...input, id: editing?.id })}
-            onCancel={() => setEditing(undefined)}
-            pending={mutation.isPending || roster.isPending || roster.isError}
+            onSubmit={(input) => {
+              if (!editing && input.start_next) {
+                preparing.mutate(input)
+              } else {
+                mutation.mutate({ ...input, id: editing?.id })
+              }
+            }}
+            onCancel={() => {
+              setEditing(undefined)
+              setCreationPreview(null)
+              preparing.reset()
+            }}
+            pending={
+              mutation.isPending ||
+              preparing.isPending ||
+              creationPreview !== null ||
+              roster.isPending ||
+              roster.isError
+            }
           />
+          {preparing.isError && (
+            <p role="alert" className="text-sm text-error">
+              {t(allocationErrorKey(preparing.error))}
+            </p>
+          )}
+          {creationPreview && (
+            <div className="space-y-3 border-t border-border pt-4">
+              <p role="status" className="text-sm">
+                {t('allocationStartEffectivePreview', {
+                  date: date(creationPreview.at),
+                })}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={mutation.isPending}
+                  onClick={() =>
+                    mutation.mutate({
+                      ...creationPreview.input,
+                      expected_effective_at: creationPreview.at,
+                    })
+                  }
+                >
+                  {t('allocationConfirmStart')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={mutation.isPending}
+                  onClick={() => {
+                    setCreationPreview(null)
+                    preparing.reset()
+                    mutation.reset()
+                  }}
+                >
+                  {t('cancel')}
+                </Button>
+              </div>
+            </div>
+          )}
           {roster.isError && (
             <div
               role="alert"
@@ -153,9 +223,29 @@ export function Allocations() {
               </p>
             )}
           {mutation.isError && (
-            <p role="alert" className="text-sm text-error">
-              {t(allocationErrorKey(mutation.error))}
-            </p>
+            <div className="space-y-3">
+              <p role="alert" className="text-sm text-error">
+                {t(allocationErrorKey(mutation.error))}
+              </p>
+              {editing && (
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    const latest = await query.refetch()
+                    const scheme = latest.data?.schemes.find(
+                      (s) => s.id === editing.id,
+                    )
+                    if (scheme) {
+                      setEditing(scheme)
+                      setReviewGeneration((n) => n + 1)
+                      mutation.reset()
+                    }
+                  }}
+                >
+                  {t('allocationReviewLatest')}
+                </Button>
+              )}
+            </div>
           )}
         </section>
       ) : viewing !== null ? (
@@ -292,6 +382,11 @@ export function Allocations() {
                   {t('allocationEdit')}
                 </Button>
               </div>
+              {s.next && s.write_conditions && (
+                <div className="pt-3">
+                  <AllocationSchedule scheme={s} onChanged={saved} />
+                </div>
+              )}
             </section>
           ))}
         </div>

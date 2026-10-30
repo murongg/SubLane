@@ -45,6 +45,7 @@ const priceCoverageSchema = z.object({
 })
 const revisionSchema = z.object({
   effective_at: integer,
+  accounting_anchor_at: integer.optional(),
   config: configSchema,
   price_coverage: priceCoverageSchema.optional(),
 })
@@ -57,6 +58,12 @@ export const schemeSchema = revisionSchema.extend({
   created_at: integer,
   edit_effective_at: integer.optional(),
   next: revisionSchema.nullable(),
+  write_conditions: z
+    .object({
+      expected_current_revision_id: integer.nullable(),
+      expected_next_revision_id: integer.nullable(),
+    })
+    .optional(),
 })
 const balanceSchema = z.object({
   user_id: integer,
@@ -74,6 +81,7 @@ const balanceSchema = z.object({
   reserved: integer,
   admission_room: integer,
   admission: z.enum(['active', 'risk_limited', 'exhausted', 'unlimited']),
+  shared_budget_blocked: z.boolean().optional(),
   reset_at: integer,
 })
 const pendingSchema = z.object({
@@ -103,6 +111,10 @@ export type SchemeInput = {
   enabled: boolean
   start_next: boolean
   apply_now?: boolean
+  confirm_replacement?: boolean
+  expected_current_revision_id?: number | null
+  expected_next_revision_id?: number | null
+  expected_effective_at?: number
   config: AllocationConfig
 }
 export const schemesOptions = queryOptions({
@@ -185,6 +197,23 @@ export function allocationValue(n: number, mode: AllocationMode) {
 }
 export function allocationErrorKey(error: Error) {
   if (error instanceof ApiError) {
+    if (
+      [
+        'allocation_version_required',
+        'allocation_version_conflict',
+        'allocation_effective_at_required',
+        'allocation_effective_at_conflict',
+        'allocation_state_conflict',
+      ].includes(error.code)
+    )
+      return 'allocationChanged'
+    if (error.code === 'allocation_member_conflict')
+      return 'allocationMemberConflict'
+    if (error.code === 'allocation_funding_gap') return 'allocationFundingGap'
+    if (error.code === 'allocation_replacement_required')
+      return 'allocationReplacementRequired'
+    if (error.code === 'allocation_initial_schedule_required')
+      return 'allocationInitialScheduleRequired'
     if (error.code === 'demo_read_only') return 'demoReadOnly'
     if (
       error.code === 'allocation_pool_conflict' ||
@@ -207,6 +236,59 @@ export function setSchemeEnabled(id: number, enabled: boolean) {
     method: 'POST',
     body: JSON.stringify({ enabled }),
   })
+}
+
+const previewSchema = z.object({
+  write_conditions: z.object({
+    expected_current_revision_id: integer.nullable(),
+    expected_next_revision_id: integer.nullable(),
+  }),
+  proposed_effective_at: integer,
+  proposed_accounting_anchor_at: integer,
+})
+
+export function previewInitial(input: SchemeInput) {
+  return request('/api/allocations/preview', previewSchema, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function previewScheme(
+  id: number,
+  action: 'schedule' | 'reschedule' | 'replace',
+) {
+  return request(`/api/allocations/${id}/preview`, previewSchema, {
+    method: 'POST',
+    body: JSON.stringify({ action }),
+  })
+}
+
+export function changeSchedule(
+  scheme: Scheme,
+  action: 'cancel' | 'reschedule',
+  effectiveAt?: number,
+) {
+  return request(`/api/allocations/${scheme.id}/${action}`, schemeSchema, {
+    method: 'POST',
+    body: JSON.stringify({
+      ...scheme.write_conditions,
+      ...(effectiveAt === undefined
+        ? {}
+        : { expected_effective_at: effectiveAt }),
+    }),
+  })
+}
+
+export function allocationStructure(config: AllocationConfig) {
+  return JSON.stringify([
+    config.mode,
+    config.mode === 'ratio' ? config.ratio_unit : config.mode,
+    config.period,
+    config.reset_time || '00:00',
+    config.period === 'month' ? config.reset_day || 1 : 0,
+    (config.windows ?? []).map((w) => w.duration_seconds).sort((a, b) => a - b),
+  ])
 }
 
 export function availableAllocationPools<

@@ -8,22 +8,23 @@ import (
 )
 
 type Balance struct {
-	UserID         int64  `json:"user_id"`
-	Username       string `json:"username"`
-	Removed        bool   `json:"removed"`
-	WindowKind     string `json:"window_kind"`
-	WindowSeconds  int64  `json:"window_seconds"`
-	Mode           string `json:"mode"`
-	Limit          int64  `json:"limit"`
-	Used           int64  `json:"used"`
-	Tokens         int64  `json:"tokens"`
-	Pending        int64  `json:"pending"`
-	PendingCurrent int64  `json:"pending_current"`
-	InFlight       int64  `json:"in_flight"`
-	Reserved       int64  `json:"reserved"`
-	AdmissionRoom  int64  `json:"admission_room"`
-	Admission      string `json:"admission"`
-	ResetAt        int64  `json:"reset_at"`
+	UserID              int64  `json:"user_id"`
+	Username            string `json:"username"`
+	Removed             bool   `json:"removed"`
+	WindowKind          string `json:"window_kind"`
+	WindowSeconds       int64  `json:"window_seconds"`
+	Mode                string `json:"mode"`
+	Limit               int64  `json:"limit"`
+	Used                int64  `json:"used"`
+	Tokens              int64  `json:"tokens"`
+	Pending             int64  `json:"pending"`
+	PendingCurrent      int64  `json:"pending_current"`
+	InFlight            int64  `json:"in_flight"`
+	Reserved            int64  `json:"reserved"`
+	AdmissionRoom       int64  `json:"admission_room"`
+	Admission           string `json:"admission"`
+	SharedBudgetBlocked bool   `json:"shared_budget_blocked,omitempty"`
+	ResetAt             int64  `json:"reset_at"`
 }
 
 type Pending struct {
@@ -108,6 +109,20 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 			} else if state.risk.limited {
 				admission = "risk_limited"
 			}
+			sharedBlocked := false
+			if scheme.Config.Mode == "ratio" {
+				used, _, room, err := groupRoom(ctx, q, id, scheme.Config, window)
+				if err != nil {
+					return out, err
+				}
+				if used >= window.total(scheme.Config) {
+					sharedBlocked = true
+					admission = "exhausted"
+				} else if admission == "active" && room < reservation(state.limit) {
+					sharedBlocked = true
+					admission = "risk_limited"
+				}
+			}
 			out.Balances = append(out.Balances, Balance{
 				UserID: m.UserID, Username: member.Username, WindowKind: window.kind, WindowSeconds: window.seconds, Mode: mode,
 				Removed: member.RemovedAt != nil,
@@ -115,6 +130,7 @@ func (s *Service) Detail(ctx context.Context, id, user int64) (Detail, error) {
 				PendingCurrent: state.pending, InFlight: state.active,
 				Reserved: state.risk.reserved, AdmissionRoom: state.risk.room,
 				Admission: admission, ResetAt: window.end,
+				SharedBudgetBlocked: sharedBlocked,
 			})
 		}
 	}

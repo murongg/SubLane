@@ -78,10 +78,11 @@ type AllocationEntry struct {
 }
 
 type AllocationRevision struct {
-	ID          int64
-	SchemeID    int64
-	EffectiveAt int64
-	Config      string
+	ID                 int64
+	SchemeID           int64
+	EffectiveAt        int64
+	AccountingAnchorAt int64
+	Config             string
 }
 
 type AuditEvent struct {

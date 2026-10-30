@@ -89,18 +89,6 @@ type riskBudget struct {
 	limited  bool
 }
 
-func currentRiskBudget(used, limit, active int64) riskBudget {
-	perRequest := max(int64(1), (limit+9)/10)
-	reserved := active * perRequest
-	// The buffer is shared headroom; admitting another request still needs one full reservation.
-	room := max(int64(0), limit+perRequest-used-reserved)
-	return riskBudget{
-		reserved: reserved,
-		room:     room,
-		limited:  active >= maxOutstandingRiskRequests || room < perRequest,
-	}
-}
-
 type memberWindowUsage struct {
 	window    allocationWindow
 	limit     int64
@@ -122,22 +110,18 @@ func readMemberWindow(ctx context.Context, q *db.Queries, scheme, user int64, me
 	if err != nil {
 		return memberWindowUsage{}, err
 	}
-	limit := member.Limit
-	if config.Mode == "ratio" {
-		limit = ratioLimit(config.Total, member.Limit)
-	} else if config.Mode == "windows" {
-		limit = window.limit
-		for _, override := range member.WindowOverrides {
-			if override.DurationSeconds == window.seconds {
-				limit = override.Limit
-				break
-			}
-		}
-	}
+	limit := memberLimit(config, member, window)
 	unlimited := config.Mode == "windows" && limit == 0
 	risk := riskBudget{}
 	if !unlimited {
-		risk = currentRiskBudget(usage.Used, limit, exposure.Active)
+		active, held, err := activeReservations(ctx, q, scheme, user, config, window)
+		if err != nil {
+			return memberWindowUsage{}, err
+		}
+		perRequest := reservation(limit)
+		// The buffer is shared headroom; another request still needs its full reservation.
+		room := max(0, limit+perRequest-usage.Used-held)
+		risk = riskBudget{reserved: held, room: room, limited: active >= maxOutstandingRiskRequests || room < perRequest}
 	}
 	return memberWindowUsage{
 		window: window, limit: limit, unlimited: unlimited, used: usage.Used, tokens: usage.Tokens,
@@ -168,6 +152,16 @@ func Check(ctx context.Context, q *db.Queries, scheme, user, group int64, accoun
 			}
 			if !state.unlimited && state.used >= state.limit {
 				return rev, ErrQuota
+			}
+			if rev.Config.Mode == "ratio" {
+				used, _, room, err := groupRoom(ctx, q, scheme, rev.Config, window)
+				if err != nil {
+					return rev, err
+				}
+				if used >= window.total(rev.Config) {
+					return rev, ErrQuota
+				}
+				riskLimited = riskLimited || room < reservation(state.limit)
 			}
 			riskLimited = riskLimited || state.risk.limited
 		}
@@ -233,7 +227,7 @@ func Finish(ctx context.Context, q *db.Queries, id string, c Completion, now int
 		if err != nil {
 			return err
 		}
-		rev, err := decodeRevision(row.ID, row.EffectiveAt, row.Config)
+		rev, err := storedRevision(row)
 		if err != nil {
 			return err
 		}

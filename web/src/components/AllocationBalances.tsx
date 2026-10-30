@@ -58,6 +58,11 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                   <h3 className="break-words text-sm font-medium">
                     {b.username}
                   </h3>
+                  {windows.some((w) => w.shared_budget_blocked) && (
+                    <p className="text-sm text-warning">
+                      {t('allocationSharedBudgetBlocked')}
+                    </p>
+                  )}
                   <Status
                     kind={
                       state === 'allocationUnavailableShort' ||
@@ -85,7 +90,7 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                       }
                     >
                       {(windows.length > 1 ||
-                        detail.config.mode === 'windows') && (
+                        detail.config.period === 'durations') && (
                         <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium">
                           <h4>
                             {t(
@@ -226,12 +231,12 @@ export function AllocationBalances({ detail }: { detail: AllocationDetail }) {
                     </div>
                   )
                 })}
-                {detail.config.mode === 'windows' && b.pending > 0 && (
+                {detail.config.period === 'durations' && b.pending > 0 && (
                   <p className="text-sm leading-6 text-muted-foreground">
                     {t('allocationWindowPendingHint', { pending: b.pending })}
                   </p>
                 )}
-                {detail.config.mode !== 'windows' &&
+                {detail.config.period !== 'durations' &&
                   b.pending > b.pending_current && (
                     <p className="text-sm leading-6 text-muted-foreground">
                       {t('allocationOlderPending', {

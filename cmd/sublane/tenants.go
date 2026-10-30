@@ -60,7 +60,7 @@ func (r *tenantRegistry) AllowanceAlerts(ctx context.Context, id int64) ([]alert
 	}
 	out := make([]alerts.Allowance, 0, len(values))
 	for _, value := range values {
-		out = append(out, alerts.Allowance{Subject: fmt.Sprintf("%d:%d:%d:%d", value.SchemeID, value.UserID, value.WindowSeconds, value.Threshold), Cycle: fmt.Sprintf("%d:%d", value.RevisionID, value.ResetAt)})
+		out = append(out, alerts.Allowance{Subject: fmt.Sprintf("%d:%d:%d:%d", value.SchemeID, value.UserID, value.WindowSeconds, value.Threshold), Cycle: value.Cycle})
 	}
 	return out, nil
 }

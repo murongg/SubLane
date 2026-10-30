@@ -35,7 +35,7 @@ func removalFixture(t *testing.T) (*Service, *sql.DB) {
 	INSERT INTO usage_daily(day,user_id,group_id,provider,model,requests,input_tokens) VALUES(1,2,1,'codex','synthetic-model',1,42);
 	INSERT INTO request_records(user_id,key_id,group_id,transport,operation,started_at,duration_ms,outcome) VALUES(2,1,1,'http','responses',1,1,'success');
 	INSERT INTO allocation_schemes(id,name,group_id,enabled,created_at) VALUES(1,'Synthetic allowance',1,1,1);
-	INSERT INTO allocation_revisions(id,scheme_id,effective_at,config) VALUES(1,1,1,'{}');
+	INSERT INTO allocation_revisions(id,scheme_id,effective_at,accounting_anchor_at,config) VALUES(1,1,1,1,'{}');
 	INSERT INTO allocation_entries(request_id,scheme_id,revision_id,user_id,account_id,model,mode,window_start,reset_at,started_at,state)
 	 VALUES('synthetic-pending',1,1,2,'synthetic-account','synthetic-model','tokens',1,100,1,'pending');`)
 	if err != nil {

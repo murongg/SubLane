@@ -5,7 +5,223 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { SchemeForm } from './SchemeForm'
 import { AllocationPriceWarning } from './AllocationPriceWarning'
-import { parseAllocationValue } from '@/lib/allocations'
+import {
+  parseAllocationValue,
+  schemeSchema,
+  allocationDetailSchema,
+} from '@/lib/allocations'
+
+it('identifies a single ratio window and explains the shared budget blocker', async () => {
+  const { AllocationBalances } = await import('./AllocationBalances')
+  const detail = allocationDetailSchema.parse({
+    id: 1,
+    name: 'Synthetic window',
+    group_id: 2,
+    group_name: 'Synthetic',
+    enabled: true,
+    effective_at: 1,
+    created_at: 1,
+    next: null,
+    config: {
+      mode: 'ratio',
+      ratio_unit: 'tokens',
+      period: 'durations',
+      members: [{ user_id: 101, limit: 10000 }],
+      rates: [],
+      windows: [{ duration_seconds: 18000, limit: 100 }],
+    },
+    available: true,
+    pending: [],
+    balances: [
+      {
+        user_id: 101,
+        username: 'synthetic-member',
+        window_kind: 'duration',
+        window_seconds: 18000,
+        mode: 'tokens',
+        limit: 100,
+        used: 0,
+        tokens: 0,
+        pending: 2,
+        pending_current: 1,
+        in_flight: 0,
+        reserved: 0,
+        admission_room: 110,
+        admission: 'exhausted',
+        reset_at: 1900018000,
+        shared_budget_blocked: true,
+      },
+    ],
+  })
+  render(<AllocationBalances detail={detail} />)
+  expect(screen.getByRole('heading', { name: '5 hours' })).toBeTruthy()
+  expect(
+    screen.getByText(/Pending records across this allowance: 2/),
+  ).toBeTruthy()
+  expect(
+    screen.getByText(/shared group budget is temporarily unavailable/),
+  ).toBeTruthy()
+})
+
+it('keeps reviewed version conditions when polling replaces the form props', async () => {
+  const user = userEvent.setup()
+  const submit = vi.fn()
+  const original = schemeSchema.parse({
+    id: 1,
+    name: 'Synthetic draft',
+    group_id: 2,
+    group_name: 'Synthetic pool',
+    enabled: true,
+    created_at: 1,
+    effective_at: 1,
+    edit_effective_at: 1900086400,
+    next: null,
+    write_conditions: {
+      expected_current_revision_id: 41,
+      expected_next_revision_id: null,
+    },
+    config: {
+      mode: 'tokens',
+      period: 'day',
+      members: [{ user_id: 7, limit: 1_000_000 }],
+      rates: [],
+    },
+  })
+  const props = {
+    groups: [{ id: 2, name: 'Synthetic pool', enabled: true }],
+    groupID: 2,
+    onGroupChange: () => {},
+    members: [{ id: 7, username: 'synthetic-member' }],
+    onSubmit: submit,
+    onCancel: () => {},
+    pending: false,
+  }
+  const view = render(<SchemeForm {...props} scheme={original} />)
+  await user.click(
+    screen.getByRole('checkbox', { name: 'Edit current members' }),
+  )
+  expect(
+    screen.queryByText(/changes saved now are expected to take effect/),
+  ).toBeNull()
+  view.rerender(
+    <SchemeForm
+      {...props}
+      scheme={{
+        ...original,
+        write_conditions: {
+          expected_current_revision_id: 42,
+          expected_next_revision_id: null,
+        },
+      }}
+    />,
+  )
+  await user.clear(screen.getByLabelText('Allowance for synthetic-member'))
+  await user.type(
+    screen.getByLabelText('Allowance for synthetic-member'),
+    '0.5',
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit.mock.calls[0]?.[0]).toMatchObject({
+    apply_now: true,
+    expected_current_revision_id: 41,
+  })
+})
+
+it('preserves the saved member section when budget editing omits a revoked member from the roster', async () => {
+  const submit = vi.fn()
+  const scheme = schemeSchema.parse({
+    id: 1,
+    name: 'Synthetic preserved members',
+    group_id: 2,
+    group_name: 'Synthetic pool',
+    enabled: true,
+    created_at: 1,
+    effective_at: 1,
+    edit_effective_at: 1900086400,
+    next: null,
+    write_conditions: {
+      expected_current_revision_id: 41,
+      expected_next_revision_id: null,
+    },
+    config: {
+      mode: 'ratio',
+      ratio_unit: 'tokens',
+      total: 100_000_000,
+      period: 'day',
+      members: [
+        { user_id: 7, limit: 5000 },
+        { user_id: 8, limit: 5000 },
+      ],
+      rates: [],
+    },
+  })
+  render(
+    <SchemeForm
+      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      groupID={2}
+      onGroupChange={() => {}}
+      members={[{ id: 7, username: 'synthetic-member' }]}
+      scheme={scheme}
+      onSubmit={submit}
+      onCancel={() => {}}
+      pending={false}
+    />,
+  )
+  expect(screen.getByText('Allocated 100% · Unallocated 0%')).toBeTruthy()
+  fireEvent.change(screen.getByLabelText('Total budget'), {
+    target: { value: '120' },
+  })
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit.mock.calls[0]?.[0].config.members).toEqual(
+    scheme.config.members,
+  )
+})
+
+it('creates token shares across independent duration windows', async () => {
+  const user = userEvent.setup()
+  const submit = vi.fn()
+  render(
+    <SchemeForm
+      groups={[{ id: 2, name: 'Synthetic pool', enabled: true }]}
+      groupID={2}
+      onGroupChange={() => {}}
+      members={[{ id: 7, username: 'synthetic-member' }]}
+      onSubmit={submit}
+      onCancel={() => {}}
+      pending={false}
+    />,
+  )
+  await user.type(
+    screen.getByLabelText('Resource allowance name'),
+    'Synthetic window shares',
+  )
+  await user.click(screen.getByRole('button', { name: 'Reset period' }))
+  await user.click(
+    screen.getByRole('menuitemradio', { name: 'By time window' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Add condition' }))
+  await user.type(screen.getByLabelText('Duration for condition 1'), '5')
+  await user.type(screen.getByLabelText('Shared limit for condition 1'), '1')
+  await user.type(
+    screen.getByLabelText('Allowance for synthetic-member'),
+    '100',
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Save resource allowance' }),
+  )
+  expect(submit.mock.calls[0]?.[0].config).toMatchObject({
+    mode: 'ratio',
+    period: 'durations',
+    ratio_unit: 'tokens',
+    windows: [{ duration_seconds: 18000, limit: 1_000_000 }],
+    members: [{ user_id: 7, limit: 10000 }],
+  })
+  expect(submit.mock.calls[0][0].config.total).toBeUndefined()
+})
 
 it('groups the allowance form and keeps activation outside optional pricing', () => {
   render(
@@ -282,6 +498,9 @@ it('adds custom hour and day windows with one personal override', async () => {
     '2',
   )
   await user.click(
+    screen.getByRole('checkbox', { name: /Confirm a new accounting period/ }),
+  )
+  await user.click(
     screen.getByRole('button', { name: 'Save resource allowance' }),
   )
   expect(submit.mock.calls[0][0].config).toEqual(
@@ -430,6 +649,9 @@ it('lets a selected member use an unlimited time-window condition', async () => 
   await user.type(screen.getByLabelText('Duration for condition 1'), '5')
   await user.click(screen.getByRole('checkbox', { name: 'Select all members' }))
   await user.click(
+    screen.getByRole('checkbox', { name: /Confirm a new accounting period/ }),
+  )
+  await user.click(
     screen.getByRole('button', { name: 'Save resource allowance' }),
   )
   expect(submit.mock.calls[0][0].config).toEqual(
@@ -456,6 +678,9 @@ it('removes a time-window condition without saving it', async () => {
   )
   await user.click(screen.getByRole('button', { name: 'Remove condition 1' }))
   await user.click(screen.getByRole('checkbox', { name: 'Select all members' }))
+  await user.click(
+    screen.getByRole('checkbox', { name: /Confirm a new accounting period/ }),
+  )
   await user.click(
     screen.getByRole('button', { name: 'Save resource allowance' }),
   )
@@ -550,6 +775,11 @@ it('splits amount shares exactly while editing', async () => {
           created_at: 1,
           effective_at: 1,
           next: null,
+          edit_effective_at: 1_900_000_000,
+          write_conditions: {
+            expected_current_revision_id: 41,
+            expected_next_revision_id: null,
+          },
           config: {
             mode: 'ratio',
             ratio_unit: 'amount',
@@ -566,6 +796,9 @@ it('splits amount shares exactly while editing', async () => {
     </QueryClientProvider>,
   )
   expect(screen.queryByRole('heading', { name: 'Model prices' })).toBeNull()
+  await user.click(
+    screen.getByRole('checkbox', { name: 'Edit current members' }),
+  )
   await user.click(screen.getByRole('button', { name: 'Split equally' }))
   await user.click(
     screen.getByRole('button', { name: 'Save resource allowance' }),
@@ -605,6 +838,11 @@ it.each([false, true])(
           created_at: 1,
           effective_at: 1,
           next: null,
+          edit_effective_at: 1_900_000_000,
+          write_conditions: {
+            expected_current_revision_id: 41,
+            expected_next_revision_id: null,
+          },
           config: {
             mode: 'ratio',
             period: 'month',
@@ -1241,6 +1479,11 @@ function mountModelPrices(
               created_at: 1,
               effective_at: 1,
               next: null,
+              edit_effective_at: 1_900_000_000,
+              write_conditions: {
+                expected_current_revision_id: 41,
+                expected_next_revision_id: null,
+              },
               config: {
                 mode: 'amount',
                 period: 'month',

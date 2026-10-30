@@ -33,15 +33,22 @@ INSERT INTO allocation_schemes(name,group_id,enabled,created_at) VALUES(?,?,?,?)
 -- name: UpdateAllocationScheme :exec
 UPDATE allocation_schemes SET name=?,enabled=? WHERE id=?;
 -- name: CurrentAllocationRevision :one
-SELECT * FROM allocation_revisions WHERE scheme_id=? AND effective_at<=? ORDER BY effective_at DESC LIMIT 1;
+SELECT * FROM allocation_revisions WHERE scheme_id=? AND effective_at<=? ORDER BY effective_at DESC,id DESC LIMIT 1;
 -- name: NextAllocationRevision :one
-SELECT * FROM allocation_revisions WHERE scheme_id=? AND effective_at>? ORDER BY effective_at LIMIT 1;
+SELECT * FROM allocation_revisions WHERE scheme_id=? AND effective_at>? ORDER BY effective_at,id DESC LIMIT 1;
 -- name: GetAllocationRevision :one
 SELECT * FROM allocation_revisions WHERE id=?;
+-- name: AllocationAnchorRevision :one
+SELECT id FROM allocation_revisions WHERE scheme_id=? AND accounting_anchor_at=? ORDER BY effective_at,id LIMIT 1;
 -- name: SaveAllocationRevision :execlastid
-INSERT INTO allocation_revisions(scheme_id,effective_at,config) VALUES(?,?,?);
--- name: DeleteNextAllocationRevisions :exec
-DELETE FROM allocation_revisions WHERE scheme_id=? AND effective_at>?;
+INSERT INTO allocation_revisions(scheme_id,effective_at,accounting_anchor_at,config) VALUES(?,?,?,?);
+
+-- name: DeleteAllocationPendingAt :exec
+DELETE FROM allocation_revisions
+WHERE allocation_revisions.scheme_id=sqlc.arg(scheme_id)
+AND allocation_revisions.effective_at=sqlc.arg(effective_at)
+AND allocation_revisions.effective_at>sqlc.arg(now)
+AND NOT EXISTS(SELECT 1 FROM allocation_entries e WHERE e.revision_id=allocation_revisions.id);
 -- name: AllocationPoolAccounts :many
 SELECT a.id,a.provider,a.models_revision,(SELECT count(*) FROM group_accounts other WHERE other.account_id=a.id AND other.group_id<>ga.group_id) AS shared
 FROM group_accounts ga JOIN accounts a ON a.id=ga.account_id WHERE ga.group_id=? ORDER BY a.id;
@@ -71,6 +78,18 @@ FROM allocation_entries WHERE scheme_id=sqlc.arg(scheme_id) AND user_id=sqlc.arg
 AND started_at>=sqlc.arg(started_from) AND started_at<sqlc.arg(started_to) AND mode=sqlc.arg(mode) AND state='settled';
 -- name: AllocationMemberPending :one
 SELECT count(*) FROM allocation_entries WHERE scheme_id=? AND user_id=? AND state='pending';
+
+-- name: AllocationGroupUsage :one
+SELECT CAST(COALESCE(sum(cost),0) AS INTEGER) FROM allocation_entries
+WHERE scheme_id=sqlc.arg(scheme_id) AND started_at>=sqlc.arg(started_from) AND started_at<sqlc.arg(started_to)
+AND mode=sqlc.arg(mode) AND state='settled';
+
+-- name: AllocationActiveEntries :many
+SELECT e.*,r.config AS revision_config FROM allocation_entries e JOIN allocation_revisions r ON r.id=e.revision_id
+WHERE e.scheme_id=sqlc.arg(scheme_id) AND (sqlc.arg(user_id)=0 OR e.user_id=sqlc.arg(user_id))
+AND e.started_at>=sqlc.arg(started_from) AND e.started_at<sqlc.arg(started_to) AND e.mode=sqlc.arg(mode) AND e.state='active'
+ORDER BY e.request_id LIMIT 4097;
+
 -- name: AllocationMemberExposure :one
 SELECT CAST(COALESCE(SUM(CASE WHEN state='active' THEN 1 ELSE 0 END),0) AS INTEGER) AS active,
 CAST(COALESCE(SUM(CASE WHEN state='pending' THEN 1 ELSE 0 END),0) AS INTEGER) AS pending

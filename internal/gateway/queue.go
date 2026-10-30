@@ -114,7 +114,9 @@ func (s *Service) leaseAccount(ctx context.Context, entry *observation, session,
 			return id, digest, beginErr
 		}
 		defer tx.Rollback()
-		if err := allocations.Begin(admissionCtx, s.queries.WithTx(tx), allocations.Request{ID: entry.record.RequestID, SchemeID: entry.schemeID, UserID: entry.record.UserID, GroupID: entry.record.GroupID, AccountID: id, Model: model, StartedAt: entry.started.Unix()}, s.now().Unix(), s.location()); err != nil {
+		// Queue time stays in diagnostics; allowance usage belongs to successful admission.
+		admittedAt := s.now().Unix()
+		if err := allocations.Begin(admissionCtx, s.queries.WithTx(tx), allocations.Request{ID: entry.record.RequestID, SchemeID: entry.schemeID, UserID: entry.record.UserID, GroupID: entry.record.GroupID, AccountID: id, Model: model, StartedAt: admittedAt}, admittedAt, s.location()); err != nil {
 			return id, digest, err
 		}
 		if err := tx.Commit(); err != nil {

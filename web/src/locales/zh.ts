@@ -1,6 +1,26 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  allocationSharedBudgetBlocked:
+    '资源组的共享预算暂不可用，请稍后或重置后重试。',
+  allocationChanged: '分配规则已变化或确认时间已过期。请刷新并核对后保存。',
+  allocationMemberConflict:
+    '排期有独立的成员方案或不兼容的上限，请明确修改或取消排期。',
+  allocationFundingGap:
+    '剩余共享预算不足以分配这些份额，请降低份额或在重置后重试。',
+  allocationReplacementRequired:
+    '更改计量单位或重置计划，需要确认开始新的计量周期。',
+  allocationInitialScheduleRequired:
+    '首次排期不能取消，请暂停分配或推迟生效时间。',
+  allocationConfirmReplacement:
+    '确认在所示时间开始新的计量周期，已发起请求仍按原规则结算。',
+  allocationReschedule: '顺延至下个边界',
+  allocationCancelSchedule: '取消排期变更',
+  allocationWindowSharesHint:
+    '每项条件都是资源组总预算，同一成员百分比分别应用于各窗口。',
+  allocationConfirmStart: '确认生效时间',
+  allocationReviewLatest: '刷新并核对',
+
   turnstileRetry: '重试',
   turnstileTitle: 'Turnstile',
   turnstileDescription:
@@ -400,7 +420,7 @@ export const zh: Record<keyof typeof en, string> = {
   allocationRemove: '移除',
   allocationEnabled: '启用此用量分配',
   allocationNextHint:
-    '额度、价格、计量方式或重置时间的修改在下周期生效。暂停或启用访问立即生效，当前用量与待结算记录保留。',
+    '预算和价格编辑保留排期与用量；成员请单独即时调整。更改单位或重置计划须确认新的计量周期，暂停请使用独立开关。',
   allocationEditEffectivePreview:
     '按当前周期计算，现在保存的修改预计于 {{date}} 生效；暂停或启用访问会立即生效。',
   allocationStartEffectivePreview: '若现在保存，此规则预计于 {{date}} 开始。',
@@ -418,9 +438,10 @@ export const zh: Record<keyof typeof en, string> = {
   allocationCurrentPricing: '当前版本的价格覆盖',
   allocationScheduledPricing: '待生效版本的价格覆盖',
   allocationStartNext: '从下个周期开始',
-  allocationApplyNow: '立即生效',
-  allocationApplyNowWarning: '修改将立即应用到新请求，正在进行的请求不受影响',
-  allocationScheduledHint: '修改将在下个周期开始时生效（更安全）',
+  allocationApplyNow: '调整当前成员',
+  allocationApplyNowWarning:
+    '成员调整保留已用量和已发起请求；独立的成员排期需先明确处理。',
+  allocationScheduledHint: '排期预算和价格变更保留窗口边界与已用量。',
   allocationImmediateHint:
     '立即生效：从生效时开始记录新请求的用量，不补记此前用量。',
   allocationScheduled: '{{mode}} 将于 {{date}} 生效',
