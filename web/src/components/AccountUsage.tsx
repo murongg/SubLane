@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw } from 'lucide-react'
+import { Info, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   refreshUsage,
   usageOptions,
+  usagePace,
   usageReasonKey,
+  type UsagePace,
   type UsageWindow,
 } from '@/lib/usage'
 import { cn } from '@/lib/cn'
@@ -143,6 +145,11 @@ export function AccountUsage({
                     window={window}
                     now={snapshotNow}
                     name={modelQuotas ? limit.name : undefined}
+                    pace={
+                      query.data && !failed
+                        ? usagePace(window, query.data, snapshotNow / 1000)
+                        : null
+                    }
                   />
                 ))}
               </div>
@@ -214,10 +221,12 @@ function QuotaWindow({
   window,
   now,
   name,
+  pace,
 }: {
   window: UsageWindow
   now: number
   name?: string
+  pace: UsagePace | null
 }) {
   const { t, i18n } = useTranslation()
   const timeZone = useTimeZone()
@@ -327,6 +336,29 @@ function QuotaWindow({
       >
         {resetText}
       </p>
+      {pace && (
+        <details className="min-w-0 text-muted-foreground">
+          <summary className="flex min-w-0 cursor-pointer items-center gap-1.5 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [@media(pointer:coarse)]:min-h-11">
+            <span className="min-w-0 break-words tabular-nums">
+              {t(
+                pace.direction === 'ahead'
+                  ? 'usagePaceAhead'
+                  : pace.direction === 'behind'
+                    ? 'usagePaceBehind'
+                    : 'usagePaceOnTrack',
+                {
+                  points: new Intl.NumberFormat(locale, {
+                    maximumFractionDigits: 1,
+                  }).format(pace.points),
+                },
+              )}
+            </span>
+            <Info aria-hidden="true" className="size-3.5 shrink-0" />
+            <span className="sr-only">{t('usagePaceDetails')}</span>
+          </summary>
+          <p className="mt-1.5 leading-5">{t('usagePaceExplanation')}</p>
+        </details>
+      )}
     </div>
   )
 }

@@ -211,13 +211,17 @@ func (s *Service) fetchCatalog(id string, e *catalogEntry, release func()) {
 	if err == nil {
 		ids := make([]string, 0, len(discovery.Models))
 		hidden := []string{}
+		capabilities := map[string]accounts.ModelCapabilities{}
 		for _, model := range discovery.Models {
 			ids = append(ids, model.ID)
+			if !model.ModelCapabilities.Empty() {
+				capabilities[model.ID] = model.ModelCapabilities
+			}
 			if model.Hidden {
 				hidden = append(hidden, model.ID)
 			}
 		}
-		err = s.accounts.SaveCatalog(ctx, id, e.revision, ids, observedAt, discovery.Source, hidden...)
+		err = s.accounts.SaveCatalogSnapshot(ctx, id, e.revision, accounts.Catalog{Models: ids, HiddenModels: hidden, Capabilities: capabilities, UpdatedAt: observedAt, Source: discovery.Source})
 	}
 	release()
 	<-c.slots
@@ -260,7 +264,8 @@ func (s *Service) waitCatalog(ctx context.Context, id string) (CatalogSnapshot, 
 }
 
 type GroupCatalog struct {
-	Models []upstream.Model `json:"models"`
+	Models       []upstream.Model                      `json:"models"`
+	Capabilities map[string]accounts.ModelCapabilities `json:"capabilities,omitempty"`
 	// Keep hidden capabilities separate from client discovery and model-picker choices.
 	HiddenModels    []string `json:"hidden_models,omitempty"`
 	KnownAccounts   int      `json:"known_accounts"`
@@ -357,6 +362,7 @@ func (s *Service) groupCatalog(ctx context.Context, userID, groupID int64, wait,
 		return result, err
 	}
 	seen := map[string]upstream.Model{}
+	capabilities := map[string]accounts.ModelCapabilities{}
 	for _, account := range rows {
 		if !s.accounts.ProviderEnabled(account.Provider) || !policyHasProvider(policy, account.Provider) {
 			continue
@@ -394,7 +400,13 @@ func (s *Service) groupCatalog(ctx context.Context, userID, groupID int64, wait,
 				continue
 			}
 			metadata := modelMetadata(account.Provider, id)
+			metadata.ModelCapabilities = saved.Capabilities[upstream.CatalogModelID(id)]
 			metadata.Hidden = catalogContains(saved.HiddenModels, id)
+			if previous, ok := capabilities[id]; ok {
+				capabilities[id] = mergeCapabilities(previous, metadata.ModelCapabilities)
+			} else {
+				capabilities[id] = metadata.ModelCapabilities
+			}
 			// Management metadata must not consume the public catalog's model budget.
 			if metadata.Hidden && !includeHidden {
 				continue
@@ -402,7 +414,8 @@ func (s *Service) groupCatalog(ctx context.Context, userID, groupID int64, wait,
 			if previous, ok := seen[id]; ok {
 				// Hidden routes must not change public visibility or owner metadata.
 				if metadata.Hidden {
-					metadata = previous
+					metadata.OwnedBy = previous.OwnedBy
+					metadata.Hidden = previous.Hidden
 				} else if !previous.Hidden && previous.OwnedBy != metadata.OwnedBy {
 					metadata.OwnedBy = "sublane"
 				}
@@ -412,7 +425,13 @@ func (s *Service) groupCatalog(ctx context.Context, userID, groupID int64, wait,
 			seen[id] = metadata
 		}
 	}
+	result.Capabilities = map[string]accounts.ModelCapabilities{}
 	for _, model := range seen {
+		// Hidden resources remain callable, so they participate in the capability intersection.
+		model.ModelCapabilities = capabilities[model.ID]
+		if !model.ModelCapabilities.Empty() {
+			result.Capabilities[model.ID] = model.ModelCapabilities
+		}
 		if model.Hidden {
 			result.HiddenModels = append(result.HiddenModels, model.ID)
 		} else {
@@ -485,7 +504,35 @@ func (s *Service) Check(ctx context.Context, id string) ([]upstream.Model, error
 	}
 	result := make([]upstream.Model, 0, len(snapshot.Models))
 	for _, id := range snapshot.Models {
-		result = append(result, modelMetadata(account.Provider, id))
+		model := modelMetadata(account.Provider, id)
+		model.ModelCapabilities = snapshot.Capabilities[id]
+		result = append(result, model)
 	}
 	return result, nil
+}
+
+// Report only limits and capabilities confirmed by every eligible route for a shared ID.
+// Unknown data stays unknown; limits take the minimum and reasoning levels intersect.
+func mergeCapabilities(a, b accounts.ModelCapabilities) accounts.ModelCapabilities {
+	minimum := func(a, b *int64) *int64 {
+		if a == nil || b == nil {
+			return nil
+		}
+		value := min(*a, *b)
+		return &value
+	}
+	shared := func(a, b *bool) *bool {
+		if a == nil || b == nil {
+			return nil
+		}
+		value := *a && *b
+		return &value
+	}
+	result := accounts.ModelCapabilities{ContextWindow: minimum(a.ContextWindow, b.ContextWindow), MaxOutputTokens: minimum(a.MaxOutputTokens, b.MaxOutputTokens), SupportsImages: shared(a.SupportsImages, b.SupportsImages), SupportsTools: shared(a.SupportsTools, b.SupportsTools)}
+	for _, level := range a.SupportedReasoningLevels {
+		if slices.Contains(b.SupportedReasoningLevels, level) {
+			result.SupportedReasoningLevels = append(result.SupportedReasoningLevels, level)
+		}
+	}
+	return result
 }

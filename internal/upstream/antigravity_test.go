@@ -99,7 +99,7 @@ func TestAntigravityDiscoverySeparatesInternalCapabilities(t *testing.T) {
 			}))
 			defer client.Close()
 			discovery, err := client.Discover(context.Background(), antigravityFixture())
-			if err != nil || len(discovery.Models) != test.visible+1 || discovery.Source != "antigravity:v2" {
+			if err != nil || len(discovery.Models) != test.visible+1 || discovery.Source != "antigravity:v3" {
 				t.Fatalf("capabilities or refresh source lost: %+v, %v", discovery, err)
 			}
 			for _, model := range discovery.Models {
