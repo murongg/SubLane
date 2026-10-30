@@ -166,7 +166,7 @@ func TestGrokDiscoverySeparatesHiddenSubscriptionCapabilities(t *testing.T) {
 			defer client.Close()
 			credential := accounts.Credential{Provider: "xai", AccountID: "synthetic-subject", AccessToken: "synthetic-access"}
 			discovery, err := client.Discover(context.Background(), credential)
-			if err != nil || len(discovery.Models) != test.visible+2 || discovery.Source != "xai:v2" {
+			if err != nil || len(discovery.Models) != test.visible+2 || discovery.Source != "xai:v3" {
 				t.Fatalf("hidden capabilities or source lost: %+v, %v", discovery, err)
 			}
 			for _, model := range discovery.Models {

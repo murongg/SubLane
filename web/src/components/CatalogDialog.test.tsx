@@ -482,3 +482,79 @@ it('ignores a late refresh failure after the active identity changes', async () 
   await waitFor(() => expect(client.isMutating()).toBe(0))
   expect(client.getQueryData<typeof authenticated>(authKey)?.user?.id).toBe(42)
 })
+
+it.each(['account', 'channel', 'group', 'key'] as const)(
+  'shows reported and unknown capabilities in the %s catalog',
+  async (kind) => {
+    const capabilities = {
+      context_window: 200000,
+      max_output_tokens: 16000,
+      supported_reasoning_levels: ['low', 'high'],
+      supports_images: true,
+      supports_tools: false,
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify(
+            kind === 'account' || kind === 'channel'
+              ? {
+                  ...snapshot,
+                  models: ['synthetic-basic', 'synthetic-unknown'],
+                  capabilities: { 'synthetic-basic': capabilities },
+                }
+              : {
+                  models: [
+                    {
+                      id: 'synthetic-basic',
+                      object: 'model',
+                      owned_by: 'synthetic',
+                      ...capabilities,
+                    },
+                    {
+                      id: 'synthetic-unknown',
+                      object: 'model',
+                      owned_by: 'synthetic',
+                    },
+                  ],
+                  known_accounts: 1,
+                  unknown_accounts: 0,
+                  stale_accounts: 0,
+                  refreshing: false,
+                  refresh_failed: false,
+                  server_time: 1900000010,
+                },
+          ),
+        ),
+      ),
+    )
+    const client = createQueryClient()
+    client.setQueryData(authKey, authenticated)
+    render(
+      <QueryClientProvider client={client}>
+        <CatalogDialog
+          target={
+            kind === 'account' || kind === 'channel'
+              ? { kind, id: 'synthetic-account' }
+              : { kind, id: 7 }
+          }
+          name="Synthetic catalog"
+        />
+      </QueryClientProvider>,
+    )
+    await userEvent
+      .setup()
+      .click(
+        screen.getByRole('button', { name: 'Models for Synthetic catalog' }),
+      )
+    const row = (await screen.findByText('synthetic-basic')).closest('li')!
+    expect(within(row).getByText('200,000')).toBeTruthy()
+    expect(within(row).getByText('16,000')).toBeTruthy()
+    expect(within(row).getByText('low, high')).toBeTruthy()
+    expect(within(row).getByText('Supported')).toBeTruthy()
+    expect(within(row).getByText('Not supported')).toBeTruthy()
+    const unknown = screen.getByText('synthetic-unknown').closest('li')!
+    expect(within(unknown).getAllByText('Unknown')).toHaveLength(5)
+  },
+)

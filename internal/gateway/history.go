@@ -90,6 +90,7 @@ func requestReasoningEffort(input map[string]json.RawMessage, kind Kind) string 
 }
 
 type observation struct {
+	route              *RouteExplanation
 	kind               Kind
 	service            *Service
 	ctx                context.Context
@@ -129,6 +130,8 @@ func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (
 	}
 	s.workers.Add(1)
 	operation, cancel := context.WithCancel(ctx)
+	route := &RouteExplanation{}
+	operation = context.WithValue(operation, routeKey{}, route)
 	identity, _ := ctx.Value(requestKey{}).(requestIdentity)
 	if identity.RequestID == "" {
 		identity.RequestID = "req_" + rand.Text()
@@ -147,7 +150,7 @@ func (s *Service) begin(ctx context.Context, userID, groupID int64, kind Kind) (
 		name = "gemini"
 	}
 	started := s.now()
-	return &observation{kind: kind, service: s, ctx: operation, cancel: cancel, stopParent: context.AfterFunc(s.runContext, cancel), started: started, record: db.RecordRequestParams{RequestID: identity.RequestID, UserID: userID, GroupID: groupID, KeyID: identity.KeyID, Transport: identity.Transport, Operation: name, StartedAt: started.Unix()}}, nil
+	return &observation{route: route, kind: kind, service: s, ctx: operation, cancel: cancel, stopParent: context.AfterFunc(s.runContext, cancel), started: started, record: db.RecordRequestParams{RequestID: identity.RequestID, UserID: userID, GroupID: groupID, KeyID: identity.KeyID, Transport: identity.Transport, Operation: name, StartedAt: started.Unix()}}, nil
 }
 func (e *observation) finish(outcome, code, penalty, retry string) {
 	e.once.Do(func() {
@@ -280,6 +283,7 @@ func (s *Service) persistObservation(ctx context.Context, e *observation) error 
 		return err
 	}
 	record := e.record
+	record.RouteExplanation = encodeRoute(e.route)
 	// Keep the execution model for allowance settlement, but never persist a matched model value.
 	if e.suppressModel {
 		record.Model = ""

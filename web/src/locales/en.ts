@@ -1801,4 +1801,42 @@ export const en = {
   resetResultAvailable: 'Skipped: quota is not confirmed exhausted',
   auditAccountResetSettings: 'Updated reset card settings',
   auditAccountResetUse: 'Used a reset card',
+  catalogContextWindow: 'Context window',
+  catalogMaxOutput: 'Maximum output',
+  catalogReasoningLevels: 'Reasoning levels',
+  catalogImages: 'Image input',
+  catalogTools: 'Tool calls',
+  catalogSupported: 'Supported',
+  catalogUnsupported: 'Not supported',
+  catalogCapabilitiesHint:
+    'Only upstream-reported capabilities are shown. Unreported details remain unknown.',
+  catalogCapabilitiesMerge:
+    'Shared models show the lowest reported limits and capabilities confirmed by every eligible resource.',
+  usagePaceAhead: '{{points}} percentage points ahead of even pace',
+  usagePaceBehind: '{{points}} percentage points behind even pace',
+  usagePaceOnTrack: 'On even pace',
+  usagePaceDetails: 'About usage pace',
+  usagePaceExplanation:
+    'Compares quota used with elapsed time at the last usage observation. An even pace spreads usage across the reported window. Provider windows may roll or reset; this is a reference, not an exhaustion forecast.',
+  requestRouting: 'Routing explanation',
+  requestRoutingHint: 'Recorded at the final routing attempt for this request.',
+  requestRoutingUnavailable:
+    'No historical routing explanation is available for this request.',
+  requestRouteAffinity: 'Kept the conversation’s bound resource.',
+  requestRouteParent: 'Preferred the parent conversation’s eligible resource.',
+  requestRouteRotation: 'Used rotation within the preferred eligible tier.',
+  requestRouteWeighted:
+    'Used quota-weighted rotation within the preferred eligible tier.',
+  requestRouteNone: 'No resource was selected.',
+  requestRouteRejected: 'Resource admission did not succeed.',
+  requestRouteParentFallback:
+    'The parent preference was unavailable; normal scheduling applied.',
+  requestRouteCandidates: 'Resources in the final selection tier',
+  requestRouteExclusions: 'Excluded resources',
+  requestRouteModel: 'Model support unknown or unsupported',
+  requestRoutePolicy: 'Model or resource policy',
+  requestRouteQuota: 'Upstream quota or member allowance',
+  requestRouteCooldown: 'Resource or model cooldown',
+  requestRouteConcurrency: 'Concurrency capacity',
+  requestRouteUnavailable: 'Disabled or unavailable resource',
 } satisfies Record<string, string>

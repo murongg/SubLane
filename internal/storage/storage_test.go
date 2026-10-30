@@ -622,3 +622,87 @@ func TestOpenExplainsUnsupportedPrereleaseDatabase(t *testing.T) {
 		t.Fatalf("legacy database was modified during rejection: count=%d err=%v", count, err)
 	}
 }
+
+func TestOpenExpandsCatalogSnapshotsPreservingAccountsAndRelations(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "synthetic-catalog-upgrade.db")
+	previous, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := previous.Exec(`CREATE TABLE schema_migrations(name TEXT PRIMARY KEY NOT NULL,applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := migrations.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.Name() >= "026_catalog_capabilities.sql" {
+			break
+		}
+		if err := apply(ctx, previous, entry.Name()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, statement := range []string{
+		`INSERT INTO users(id,username,password_hash,role,created_at) VALUES(1,'synthetic-owner','synthetic-hash','admin',1)`,
+		`INSERT INTO tenants(id,name,owner_user_id,created_at) VALUES(1,'Synthetic workspace',1,1)`,
+		`INSERT INTO accounts(id,name,account_id,status,credential,created_at,updated_at,max_concurrency,models_snapshot,models_revision,reset_config,reset_revision,reset_next_run_at,reset_time_zone,reset_check_at,usage_revision) VALUES('synthetic-account','Synthetic account','synthetic-subject','ready',X'1234',1,1,1000,CAST('{"models":["synthetic-model"],"updated_at":1}' AS BLOB),7,'{"enabled":true}',2,3,'UTC',4,5)`,
+		`INSERT INTO account_groups(id,name,enabled,created_at,updated_at) VALUES(1,'Synthetic group',1,1,1)`,
+		`INSERT INTO group_accounts(group_id,account_id) VALUES(1,'synthetic-account')`,
+		`INSERT INTO account_usage(account_id,snapshot,updated_at) VALUES('synthetic-account',CAST('{"updated_at":1,"limits":[]}' AS BLOB),1)`,
+		`INSERT INTO reset_runs(request_id,account_id,trigger_kind,outcome,reason,started_at,updated_at,credit_id) VALUES('synthetic-request','synthetic-account','manual','pending','',1,1,'synthetic-credit')`,
+	} {
+		if _, err := previous.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	previous.Close()
+	for range 2 {
+		upgraded, err := Open(ctx, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var snapshot []byte
+		var revision, concurrency, resetRevision, next, check, usage int
+		var reset, zone, credit string
+		err = upgraded.QueryRow(`SELECT models_snapshot,models_revision,max_concurrency,reset_config,reset_revision,reset_next_run_at,reset_time_zone,reset_check_at,usage_revision FROM accounts WHERE id='synthetic-account'`).Scan(&snapshot, &revision, &concurrency, &reset, &resetRevision, &next, &zone, &check, &usage)
+		if err != nil || string(snapshot) != `{"models":["synthetic-model"],"updated_at":1}` || revision != 7 || concurrency != 1000 || reset != `{"enabled":true}` || resetRevision != 2 || next != 3 || zone != "UTC" || check != 4 || usage != 5 {
+			upgraded.Close()
+			t.Fatal("catalog migration lost account data", string(snapshot), err)
+		}
+		if err := upgraded.QueryRow(`SELECT credit_id FROM reset_runs`).Scan(&credit); err != nil || credit != "synthetic-credit" {
+			upgraded.Close()
+			t.Fatal("reset relation changed", credit, err)
+		}
+		var count int
+		if err := upgraded.QueryRow(`SELECT count(*) FROM group_accounts`).Scan(&count); err != nil || count != 1 {
+			upgraded.Close()
+			t.Fatal("group relation lost", count, err)
+		}
+		upgraded.Close()
+	}
+	upgraded, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer upgraded.Close()
+	if _, err := upgraded.Exec(`UPDATE accounts SET models_snapshot=zeroblob(524288)`); err != nil {
+		t.Fatal("bounded capability snapshot cannot be stored", err)
+	}
+	for _, statement := range []string{`UPDATE accounts SET models_snapshot=zeroblob(524289)`, `UPDATE accounts SET max_concurrency=1001`, `UPDATE accounts SET tenant_id=2`, `UPDATE accounts SET reset_config='invalid'`, `INSERT INTO group_accounts(group_id,account_id) VALUES(1,'missing')`} {
+		if _, err := upgraded.Exec(statement); err == nil {
+			t.Fatal("migration lost constraint", statement)
+		}
+	}
+	if _, err := upgraded.Exec(`DELETE FROM accounts WHERE id='synthetic-account'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"group_accounts", "account_usage", "reset_runs"} {
+		var count int
+		if err := upgraded.QueryRow("SELECT count(*) FROM " + table).Scan(&count); err != nil || count != 0 {
+			t.Fatal("cascade lost", table, count, err)
+		}
+	}
+}

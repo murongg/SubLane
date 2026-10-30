@@ -226,6 +226,12 @@ Keep export and restore in two flat sections under System settings. State that a
 
 Keep account/result filters in the compact request toolbar. Additional model, request ID, caller and local-time filters expand inline and use the existing custom dropdowns. Show first-output latency as secondary text under total duration; null measurements remain an em dash. Show a compact, selectable request ID with a copy action below each start time; use an em dash when older records have no ID. The start-time button opens a focused request details dialog with a selectable/copyable correlation ID. On narrow screens, filters stack and the data table scrolls inside its own container. Quota exhaustion uses a warning status with a short explanation that existing conversations retain their account.
 
+Place routing explanations in a flat divided section inside request details. Show the recorded strategy, final candidate count and nonzero aggregate exclusion counts with wrapping labels. Older or unrouted records explicitly state that no recorded explanation is available. Personal views never add account identities.
+
+Model rows show upstream-reported capabilities in a compact definition list below the native ID. Numeric limits use localized tabular figures; unknown values remain explicitly unknown and reported false values read as unsupported. Keep existing search, hidden-model badges and model-test actions. Explain conservative resource-group merging beside the catalog, without suggesting that capability metadata grants access.
+
+Quota usage pace uses neutral wrapping text below the existing reset information. A keyboard- and touch-accessible disclosure explains its observation time and reference semantics. Preserve remaining-quota bar colors, and omit pace when the snapshot or window cannot support the comparison.
+
 
 ### First-call walkthrough
 

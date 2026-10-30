@@ -8,6 +8,7 @@ import type { RequestRecord } from '@/lib/requests'
 import { outcomeKeys, formatRequestCost } from '@/lib/requests'
 import { reasonKeys } from '@/lib/runtime'
 import { RequestID } from './RequestID'
+import { RouteDetails } from './RouteDetails'
 import { contentModeKeys } from '@/lib/content'
 import {
   Dialog,
@@ -127,6 +128,7 @@ export function RequestDetails({
             </div>
           ))}
         </dl>
+        <RouteDetails value={value.route} />
         {['error', 'rejected', 'incomplete'].includes(value.outcome) && (
           <section
             className="space-y-3 border-t border-border pt-4"

@@ -15,6 +15,7 @@ import (
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
 	"github.com/murongg/SubLane/internal/groups"
+	"github.com/murongg/SubLane/internal/upstream"
 )
 
 func TestHiddenCodexModelsForwardWithoutListingOrBypassingPolicy(t *testing.T) {
@@ -238,6 +239,86 @@ func assertHiddenCatalog(t *testing.T, response *httptest.ResponseRecorder, hidd
 	for _, id := range hidden {
 		if strings.Contains(string(view.Models), id) {
 			t.Fatal("hidden model entered visible model choices", string(view.Models))
+		}
+	}
+}
+
+func TestPublicCatalogCapabilitiesIncludeHiddenRoutesAndFollowPolicy(t *testing.T) {
+	ctx := context.Background()
+	f := newForwardFixture(t, func(http.ResponseWriter, *http.Request) { t.Error("fresh capability catalog contacted upstream") })
+	rows, err := f.accounts.List(ctx)
+	if err != nil || len(rows) != 1 {
+		t.Fatal(rows, err)
+	}
+	hidden, err := f.accounts.Authorize(ctx, "Synthetic hidden route", accounts.Credential{Provider: "claude", AccountID: "synthetic-hidden-subject", AccessToken: "synthetic-access", RefreshToken: "synthetic-refresh", ExpiresAt: time.Now().Add(time.Hour).Unix()}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	high, low := int64(200000), int64(100000)
+	yes, no := true, false
+	for _, value := range []struct {
+		id       string
+		limit    *int64
+		images   *bool
+		hidden   []string
+		provider string
+	}{
+		{rows[0].ID, &high, &yes, nil, "codex"},
+		{hidden.ID, &low, &no, []string{"synthetic-model", "synthetic-hidden-only"}, "claude"},
+	} {
+		catalog, err := f.accounts.Catalog(ctx, value.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		catalog.Models = []string{"synthetic-model"}
+		if value.hidden != nil {
+			catalog.Models = append(catalog.Models, "synthetic-hidden-only")
+		}
+		catalog.HiddenModels = value.hidden
+		catalog.UpdatedAt = time.Now().Unix()
+		catalog.Source = upstream.CatalogSource(value.provider)
+		catalog.Capabilities = map[string]accounts.ModelCapabilities{"synthetic-model": {ContextWindow: value.limit, SupportsImages: value.images}}
+		if err := f.accounts.SaveCatalogSnapshot(ctx, value.id, catalog.Revision, catalog); err != nil {
+			t.Fatal(err)
+		}
+	}
+	input := groups.Input{Name: "Synthetic catalog policy", Enabled: true, AccountIDs: []string{rows[0].ID, hidden.ID}}
+	if _, err := f.groups.Save(ctx, 1, input); err != nil {
+		t.Fatal(err)
+	}
+	for _, restricted := range []bool{false, true} {
+		if restricted {
+			input.ModelPolicy = &groups.ModelPolicy{Restricted: true, Models: []string{"codex/synthetic-model"}}
+			if _, err := f.groups.Save(ctx, 1, input); err != nil {
+				t.Fatal(err)
+			}
+		}
+		r := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+		r.Header.Set("Authorization", "Bearer "+f.secret)
+		w := httptest.NewRecorder()
+		f.server.Config.Handler.ServeHTTP(w, r)
+		var response struct {
+			Data []struct {
+				ID             string `json:"id"`
+				ContextWindow  int64  `json:"context_window"`
+				SupportsImages *bool  `json:"supports_images"`
+			} `json:"data"`
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &response) != nil || len(response.Data) != 1 {
+			t.Fatal("public catalog", w.Code, w.Body.String())
+		}
+		model := response.Data[0]
+		wantLimit, wantImages := low, false
+		if restricted {
+			wantLimit, wantImages = high, true
+		}
+		if model.ID != "synthetic-model" || model.ContextWindow != wantLimit || model.SupportsImages == nil || *model.SupportsImages != wantImages {
+			t.Fatal("public capability or policy mismatch", w.Body.String())
+		}
+		for _, private := range []string{hidden.ID, rows[0].ID, "synthetic-hidden-subject", "synthetic-hidden-only"} {
+			if strings.Contains(w.Body.String(), private) {
+				t.Fatal("private capability metadata leaked", private)
+			}
 		}
 	}
 }

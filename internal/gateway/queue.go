@@ -44,6 +44,11 @@ func (s *Service) leaseAccount(ctx context.Context, entry *observation, session,
 				delete(s.capacityChanged, entry.record.GroupID)
 			}
 		}
+		// Selection may succeed before the model lease or allowance reservation fails.
+		if err != nil && entry.route != nil && entry.route.Result == "selected" {
+			entry.route.Result = "rejected"
+			entry.route.Exclusions.reject(err)
+		}
 	}()
 	for {
 		if err := ctx.Err(); err != nil {
