@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import { AccountUsage } from './AccountUsage'
 import type { Provider } from '@/lib/accounts'
+import type { UsageWindow } from '@/lib/usage'
 
 const now = Math.floor(Date.now() / 1000)
 const metadata = {
@@ -55,6 +56,157 @@ function mount(provider: Provider = 'codex') {
   )
   return client
 }
+
+it('compares usage with even pace at the observation time and explains the reference', async () => {
+  const observed = now - 300
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...snapshot,
+          updated_at: observed,
+          limits: [
+            {
+              ...snapshot.limits[0],
+              windows: [
+                {
+                  kind: 'primary',
+                  used_percent: 70,
+                  window_seconds: 3600,
+                  reset_at: observed + 1800,
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    ),
+  )
+  mount()
+  const pace = await screen.findByText(
+    '20 percentage points ahead of even pace',
+  )
+  expect(screen.getByText('30% remaining').className).toContain('text-success')
+  const disclosure = pace.closest('details')
+  expect(disclosure?.open).toBe(false)
+  const summary = pace.closest('summary')
+  expect(summary).toBeTruthy()
+  await userEvent.setup().click(summary!)
+  expect(disclosure?.open).toBe(true)
+  expect(screen.getByText(/at the last usage observation/)).toBeTruthy()
+})
+
+it.each([
+  [30, '20 percentage points behind even pace'],
+  [50, 'On even pace'],
+])('shows the reference for %s percent usage', async (used, expected) => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...snapshot,
+          limits: [
+            {
+              ...snapshot.limits[0],
+              windows: [
+                {
+                  kind: 'primary',
+                  used_percent: used,
+                  window_seconds: 3600,
+                  reset_at: now + 1800,
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    ),
+  )
+  mount()
+  expect(await screen.findByText(expected)).toBeTruthy()
+})
+
+it.each([
+  ['stale data', { stale: true }, {}],
+  ['expired data', { expires_at: now }, {}],
+  ['future observation', { updated_at: now + 1 }, {}],
+  ['passed reset', {}, { reset_at: now }],
+  ['unknown duration', {}, { kind: 'model', window_seconds: null }],
+  ['unknown usage', {}, { used_percent: null }],
+  ['out-of-range usage', {}, { used_percent: 101 }],
+] satisfies [string, Partial<typeof snapshot>, Partial<UsageWindow>][])(
+  'keeps pace unavailable for %s',
+  async (_reason, invalidSnapshot, invalidWindow) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ...snapshot,
+            ...invalidSnapshot,
+            limits: [
+              {
+                ...snapshot.limits[0],
+                windows: [
+                  { ...snapshot.limits[0].windows[0], ...invalidWindow },
+                ],
+              },
+            ],
+          }),
+        ),
+      ),
+    )
+    mount()
+    await screen.findByText(/^Updated /)
+    expect(screen.queryByText(/even pace/)).toBeNull()
+  },
+)
+
+it.each(['expiry', 'reset'] as const)(
+  'removes the pace reference when the browser clock reaches %s',
+  async (boundary) => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(now * 1000)
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              ...snapshot,
+              expires_at: now + (boundary === 'expiry' ? 30 : 120),
+              limits: [
+                {
+                  ...snapshot.limits[0],
+                  windows: [
+                    {
+                      kind: 'primary',
+                      used_percent: 70,
+                      window_seconds: 3600,
+                      reset_at: now + (boundary === 'reset' ? 30 : 1800),
+                    },
+                  ],
+                },
+              ],
+            }),
+          ),
+        ),
+      )
+      mount()
+      await screen.findByText(/percentage points .* even pace/)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000)
+      })
+      expect(screen.queryByText(/even pace/)).toBeNull()
+      expect(screen.getByText('30% remaining')).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
+  },
+)
+
 it.each(['claude', 'antigravity'] as const)(
   'shows %s usage without Codex reset cards',
   async (provider) => {
@@ -155,6 +307,7 @@ it('loads actual quota windows and refreshes without confusing failure with exha
   vi.stubGlobal('fetch', fetch)
   mount()
   await screen.findByText('75% remaining')
+  expect(screen.getByText('35 percentage points behind even pace')).toBeTruthy()
   expect(screen.getByText('5-hour limit')).toBeTruthy()
   expect(screen.getByText('7-day limit')).toBeTruthy()
   expect(screen.getByText('0% remaining')).toBeTruthy()
@@ -171,6 +324,7 @@ it('loads actual quota windows and refreshes without confusing failure with exha
     'Refresh failed: upstream service is unavailable. Showing the last known usage.',
   )
   expect(screen.getByText('75% remaining')).toBeTruthy()
+  expect(screen.queryByText(/even pace/)).toBeNull()
   expect(fetch).toHaveBeenCalledTimes(2)
   expect(fetch.mock.calls[1][0]).toBe(
     '/api/accounts/synthetic-account/usage/refresh',

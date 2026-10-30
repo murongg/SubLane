@@ -4,12 +4,22 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	storedb "github.com/murongg/SubLane/internal/storage/db"
 )
 
 func TestAllocationRevisionMigrationPreservesLedgerAndSequence(t *testing.T) {
+	for _, lastMigration := range []string{"024_reset_card_selection.sql", "026_catalog_capabilities.sql"} {
+		t.Run(lastMigration, func(t *testing.T) {
+			testAllocationRevisionMigration(t, lastMigration)
+		})
+	}
+}
+
+func testAllocationRevisionMigration(t *testing.T, lastMigration string) {
+	t.Helper()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "synthetic-allowance-upgrade.db")
 	previous, err := sql.Open("sqlite", path)
@@ -24,8 +34,11 @@ func TestAllocationRevisionMigrationPreservesLedgerAndSequence(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, file := range files {
-		if file.Name() >= "025_allocation_anchors.sql" {
+		if file.Name() > lastMigration {
 			break
+		}
+		if strings.HasSuffix(file.Name(), "_allocation_anchors.sql") {
+			continue
 		}
 		if err := apply(ctx, previous, file.Name()); err != nil {
 			t.Fatal(err)
@@ -54,6 +67,10 @@ func TestAllocationRevisionMigrationPreservesLedgerAndSequence(t *testing.T) {
 		VALUES('synthetic-settled',1,11,1,'synthetic-account','synthetic-model','tokens',100,200,110,'settled',3),
 		('synthetic-pending',1,11,1,'synthetic-account','synthetic-model','tokens',100,200,120,'pending',0)`); err != nil {
 		t.Fatal(err)
+	}
+	// Published migration history must remain a valid backup prefix before upgrading.
+	if _, err := ValidateSnapshot(ctx, previous); err != nil {
+		t.Fatal("pre-upgrade snapshot rejected", err)
 	}
 	previous.Close()
 	for range 2 {

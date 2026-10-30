@@ -13,32 +13,33 @@ import (
 )
 
 type RequestRecord struct {
-	ID                    int64           `json:"id"`
-	UserID                int64           `json:"user_id"`
-	KeyID                 int64           `json:"key_id"`
-	GroupID               int64           `json:"group_id"`
-	AccountID             string          `json:"account_id"`
-	Provider              string          `json:"provider"`
-	Model                 string          `json:"model"`
-	Transport             string          `json:"transport"`
-	Operation             string          `json:"operation"`
-	StartedAt             int64           `json:"started_at"`
-	DurationMs            int64           `json:"duration_ms"`
-	Outcome               string          `json:"outcome"`
-	ErrorCode             string          `json:"error_code"`
-	UpstreamStatus        *int64          `json:"upstream_status"`
-	InputTokens           *int64          `json:"input_tokens"`
-	OutputTokens          *int64          `json:"output_tokens"`
-	CachedTokens          *int64          `json:"cached_tokens"`
-	RequestID             string          `json:"request_id"`
-	FirstTokenMs          *int64          `json:"first_token_ms"`
-	ReasoningEffort       string          `json:"reasoning_effort"`
-	Username              string          `json:"username"`
-	KeyName               string          `json:"key_name"`
-	GroupName             string          `json:"group_name"`
-	AccountName           string          `json:"account_name"`
-	EstimatedCostMicroUSD *int64          `json:"estimated_cost_micro_usd"`
-	Content               *content.Result `json:"content,omitempty"`
+	ID                    int64             `json:"id"`
+	UserID                int64             `json:"user_id"`
+	KeyID                 int64             `json:"key_id"`
+	GroupID               int64             `json:"group_id"`
+	AccountID             string            `json:"account_id"`
+	Provider              string            `json:"provider"`
+	Model                 string            `json:"model"`
+	Transport             string            `json:"transport"`
+	Operation             string            `json:"operation"`
+	StartedAt             int64             `json:"started_at"`
+	DurationMs            int64             `json:"duration_ms"`
+	Outcome               string            `json:"outcome"`
+	ErrorCode             string            `json:"error_code"`
+	UpstreamStatus        *int64            `json:"upstream_status"`
+	InputTokens           *int64            `json:"input_tokens"`
+	OutputTokens          *int64            `json:"output_tokens"`
+	CachedTokens          *int64            `json:"cached_tokens"`
+	RequestID             string            `json:"request_id"`
+	FirstTokenMs          *int64            `json:"first_token_ms"`
+	ReasoningEffort       string            `json:"reasoning_effort"`
+	Username              string            `json:"username"`
+	KeyName               string            `json:"key_name"`
+	GroupName             string            `json:"group_name"`
+	AccountName           string            `json:"account_name"`
+	EstimatedCostMicroUSD *int64            `json:"estimated_cost_micro_usd"`
+	Route                 *RouteExplanation `json:"route"`
+	Content               *content.Result   `json:"content,omitempty"`
 }
 type RequestPage struct {
 	pagination.Metadata
@@ -112,6 +113,7 @@ func (s *Service) requests(ctx context.Context, userID int64, f RequestFilter) (
 			RequestID: row.RequestID, FirstTokenMs: row.FirstTokenMs, ReasoningEffort: row.ReasoningEffort,
 			Username: row.Username, KeyName: row.KeyName, GroupName: row.GroupName, AccountName: row.AccountName,
 			EstimatedCostMicroUSD: s.estimatedCost(row),
+			Route:                 decodeRoute(row.RouteExplanation),
 		}
 		if userID != 0 {
 			record.AccountID, record.AccountName = "", ""

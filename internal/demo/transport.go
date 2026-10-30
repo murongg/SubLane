@@ -35,7 +35,10 @@ func (transport) RoundTrip(r *http.Request) (*http.Response, error) {
 		}}
 	case "/backend-api/codex/models":
 		value = map[string]any{"models": []map[string]any{
-			{"slug": "demo-codex", "visibility": "list", "supported_in_api": true},
+			{"slug": "demo-codex", "visibility": "list", "supported_in_api": true,
+				"context_window": 200000, "max_output_tokens": 32000,
+				"supported_reasoning_levels": []string{"low", "medium", "high"},
+				"supports_images":            true, "supports_tools": true},
 			{"slug": "demo-codex-mini", "visibility": "list", "supported_in_api": true},
 		}}
 	default:

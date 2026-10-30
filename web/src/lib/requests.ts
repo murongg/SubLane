@@ -45,6 +45,28 @@ export const outcomeKeys = {
   rejected: 'requestRejected',
 } as const
 const tokens = z.number().int().nonnegative().nullable()
+const routeCount = z.number().int().min(0).max(10000)
+const routeSchema = z.strictObject({
+  version: z.literal(1),
+  strategy: z.enum([
+    'none',
+    'affinity',
+    'parent',
+    'rotation',
+    'quota_weighted',
+  ]),
+  result: z.enum(['selected', 'rejected']),
+  candidates: routeCount,
+  parent_fallback: z.boolean(),
+  exclusions: z.strictObject({
+    model: routeCount,
+    policy: routeCount,
+    quota: routeCount,
+    cooldown: routeCount,
+    concurrency: routeCount,
+    unavailable: routeCount,
+  }),
+})
 const recordSchema = z.object({
   id: z.number().int().positive(),
   user_id: z.number().int(),
@@ -76,6 +98,7 @@ const recordSchema = z.object({
   key_name: z.string(),
   group_name: z.string(),
   account_name: z.string(),
+  route: routeSchema.nullish(),
   content: z
     .object({
       mode: z.enum(['', 'observe', 'block']),

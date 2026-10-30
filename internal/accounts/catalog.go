@@ -18,11 +18,12 @@ var catalogModelID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/()+-]{0,127}$
 
 // UpdatedAt zero means unknown; an observed empty list is a known catalog.
 type Catalog struct {
-	Models       []string `json:"models"`
-	HiddenModels []string `json:"hidden_models,omitempty"`
-	UpdatedAt    int64    `json:"updated_at"`
-	Source       string   `json:"source,omitempty"`
-	Revision     int64    `json:"-"`
+	Models       []string                     `json:"models"`
+	Capabilities map[string]ModelCapabilities `json:"capabilities,omitempty"`
+	HiddenModels []string                     `json:"hidden_models,omitempty"`
+	UpdatedAt    int64                        `json:"updated_at"`
+	Source       string                       `json:"source,omitempty"`
+	Revision     int64                        `json:"-"`
 }
 
 // Visibility controls discovery lists, never the persisted set of callable models.
@@ -49,8 +50,8 @@ func DecodeCatalog(raw []byte, revision int64) (Catalog, error) {
 	if len(raw) == 0 {
 		return value, nil
 	}
-	// Visibility metadata can repeat every capability ID in a maximum-size catalog.
-	if len(raw) > 256<<10 || json.Unmarshal(raw, &value) != nil || value.UpdatedAt <= 0 || value.Models == nil || len(value.Source) > 64 {
+	// The snapshot includes bounded optional metadata for up to 512 models.
+	if len(raw) > 512<<10 || json.Unmarshal(raw, &value) != nil || value.UpdatedAt <= 0 || value.Models == nil || len(value.Source) > 64 {
 		return Catalog{}, ErrInput
 	}
 	models, err := normalizedCatalog(value.Models)
@@ -59,6 +60,10 @@ func DecodeCatalog(raw []byte, revision int64) (Catalog, error) {
 	}
 	value.Models = models
 	value.HiddenModels, err = normalizedHiddenModels(models, value.HiddenModels)
+	if err != nil {
+		return Catalog{}, err
+	}
+	value.Capabilities, err = normalizedCapabilities(models, value.Capabilities)
 	return value, err
 }
 
@@ -95,26 +100,38 @@ func normalizedCatalog(models []string) ([]string, error) {
 }
 
 func (s *Service) SaveCatalog(ctx context.Context, id string, revision int64, models []string, observedAt int64, source string, hiddenModels ...string) error {
+	return s.SaveCatalogSnapshot(ctx, id, revision, Catalog{Models: models, HiddenModels: hiddenModels, UpdatedAt: observedAt, Source: source})
+}
+
+func (s *Service) SaveCatalogSnapshot(ctx context.Context, id string, revision int64, snapshot Catalog) error {
 	if _, err := s.get(ctx, id); err != nil {
 		return err
 	}
-	if observedAt <= 0 || len(source) > 64 {
+	if snapshot.UpdatedAt <= 0 || len(snapshot.Source) > 64 {
 		return ErrInput
 	}
-	models, err := normalizedCatalog(models)
+	models, err := normalizedCatalog(snapshot.Models)
 	if err != nil {
 		return err
 	}
-	hiddenModels, err = normalizedHiddenModels(models, hiddenModels)
+	snapshot.Models = models
+	snapshot.HiddenModels, err = normalizedHiddenModels(models, snapshot.HiddenModels)
 	if err != nil {
 		return err
 	}
-	raw, err := json.Marshal(Catalog{Models: models, HiddenModels: hiddenModels, UpdatedAt: observedAt, Source: source})
+	snapshot.Capabilities, err = normalizedCapabilities(models, snapshot.Capabilities)
 	if err != nil {
 		return err
+	}
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		return err
+	}
+	if len(raw) > 512<<10 {
+		return ErrInput
 	}
 	// The conditional write prevents a late refresh from reviving pre-authorization or disabled data.
-	changed, err := s.queries.SaveAccountCatalog(ctx, db.SaveAccountCatalogParams{ID: id, Revision: revision, Snapshot: raw, ObservedAt: observedAt})
+	changed, err := s.queries.SaveAccountCatalog(ctx, db.SaveAccountCatalogParams{ID: id, Revision: revision, Snapshot: raw, ObservedAt: snapshot.UpdatedAt})
 	if err != nil {
 		return err
 	}

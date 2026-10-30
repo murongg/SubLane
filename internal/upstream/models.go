@@ -25,18 +25,18 @@ func (c *Client) CatalogSource(provider string) string {
 
 func catalogSource(provider, version string) string {
 	if provider == "openai" {
-		return "openai:v2"
+		return "openai:v3"
 	}
 	if provider == "xai" {
-		return "xai:v2"
+		return "xai:v3"
 	}
-	source := provider + ":v1"
+	source := provider + ":v2"
 	if provider == "codex" {
-		// Older snapshots discarded hidden capabilities and must be rediscovered.
-		source = "codex:v2:" + version
+		// Older snapshots discarded optional capability metadata and must be rediscovered.
+		source = "codex:v3:" + version
 	}
 	if provider == "antigravity" {
-		source = "antigravity:v2"
+		source = "antigravity:v3"
 	}
 	return source
 }
@@ -102,9 +102,7 @@ func (c *Client) providerModels(ctx context.Context, credential accounts.Credent
 		return grokModels(raw)
 	}
 	var value struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
+		Data   []json.RawMessage          `json:"data"`
 		Models map[string]json.RawMessage `json:"models"`
 	}
 	if json.Unmarshal(raw, &value) != nil {
@@ -115,9 +113,15 @@ func (c *Client) providerModels(ctx context.Context, credential accounts.Credent
 		if value.Data == nil {
 			return nil, ErrResponse
 		}
-		for _, m := range value.Data {
+		for _, raw := range value.Data {
+			var m struct {
+				ID string `json:"id"`
+			}
+			if json.Unmarshal(raw, &m) != nil {
+				return nil, ErrResponse
+			}
 			if m.ID != "" && len(m.ID) <= 128 {
-				result = append(result, Model{ID: m.ID, Object: "model", OwnedBy: credential.Kind()})
+				result = append(result, Model{ModelCapabilities: discoveryCapabilities(raw, credential.Kind()), ID: m.ID, Object: "model", OwnedBy: credential.Kind()})
 			}
 		}
 	} else {
@@ -133,7 +137,7 @@ func (c *Client) providerModels(ctx context.Context, credential accounts.Credent
 					return nil, ErrResponse
 				}
 				// Internal entries remain account capabilities even when omitted from discovery lists.
-				result = append(result, Model{ID: id, Object: "model", OwnedBy: "antigravity", Hidden: model.Internal})
+				result = append(result, Model{ModelCapabilities: discoveryCapabilities(metadata, "antigravity"), ID: id, Object: "model", OwnedBy: "antigravity", Hidden: model.Internal})
 			}
 		}
 	}

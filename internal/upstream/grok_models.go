@@ -7,7 +7,15 @@ import (
 
 func grokModels(raw []byte) ([]Model, error) {
 	var catalog struct {
-		Data []struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	if json.Unmarshal(raw, &catalog) != nil || catalog.Data == nil || len(catalog.Data) > 512 {
+		return nil, ErrResponse
+	}
+	models := []Model{}
+	seen := map[string]int{}
+	for _, raw := range catalog.Data {
+		var entry struct {
 			ID      string `json:"id"`
 			Model   string `json:"model"`
 			ModelID string `json:"modelId"`
@@ -17,14 +25,10 @@ func grokModels(raw []byte) ([]Model, error) {
 				ModelID string `json:"modelId"`
 				Hidden  bool   `json:"hidden"`
 			} `json:"_meta"`
-		} `json:"data"`
-	}
-	if json.Unmarshal(raw, &catalog) != nil || catalog.Data == nil || len(catalog.Data) > 512 {
-		return nil, ErrResponse
-	}
-	models := []Model{}
-	seen := map[string]int{}
-	for _, entry := range catalog.Data {
+		}
+		if json.Unmarshal(raw, &entry) != nil {
+			return nil, ErrResponse
+		}
 		id := ""
 		// The optional picker ID can differ from the native model accepted by inference.
 		for _, candidate := range []string{entry.Model, entry.ModelID, entry.ID, entry.Meta.Model, entry.Meta.ModelID} {
@@ -46,7 +50,7 @@ func grokModels(raw []byte) ([]Model, error) {
 			continue
 		}
 		seen[id] = len(models)
-		models = append(models, Model{ID: id, Object: "model", OwnedBy: "xai", Hidden: hidden})
+		models = append(models, Model{ModelCapabilities: discoveryCapabilities(raw, "xai"), ID: id, Object: "model", OwnedBy: "xai", Hidden: hidden})
 	}
 	sort.Slice(models, func(i, j int) bool { return models[i].ID < models[j].ID })
 	return models, nil

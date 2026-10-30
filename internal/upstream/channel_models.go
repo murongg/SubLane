@@ -90,54 +90,70 @@ func (c *Client) channelModels(ctx context.Context, credential accounts.Credenti
 		var page struct {
 			Success *bool `json:"success"`
 			Output  *struct {
-				Total  int `json:"total"`
-				Models []struct {
-					ID string `json:"model"`
-				} `json:"models"`
+				Total  int               `json:"total"`
+				Models []json.RawMessage `json:"models"`
 			} `json:"output"`
-			Data []struct {
-				ID string `json:"id"`
-			} `json:"data"`
-			Models []struct {
-				Name    string   `json:"name"`
-				Methods []string `json:"supportedGenerationMethods"`
-			} `json:"models"`
-			HasMore  bool   `json:"has_more"`
-			LastID   string `json:"last_id"`
-			NextPage string `json:"nextPageToken"`
+			Data     []json.RawMessage `json:"data"`
+			Models   []json.RawMessage `json:"models"`
+			HasMore  bool              `json:"has_more"`
+			LastID   string            `json:"last_id"`
+			NextPage string            `json:"nextPageToken"`
 		}
 		if json.Unmarshal(raw, &page) != nil {
 			return nil, ErrResponse
 		}
-		ids := []string{}
+		entries := []Model{}
+		appendModel := func(id string, raw json.RawMessage, format string) {
+			entries = append(entries, Model{ID: id, Object: "model", OwnedBy: "openai", ModelCapabilities: discoveryCapabilities(raw, format)})
+		}
 		if dashscope && page.Output != nil {
 			if page.Success != nil && !*page.Success || page.Output.Total < 0 || page.Output.Total > 512 || len(page.Output.Models) > 512 {
 				return nil, ErrResponse
 			}
-			for _, model := range page.Output.Models {
-				ids = append(ids, model.ID)
+			for _, raw := range page.Output.Models {
+				var model struct {
+					ID string `json:"model"`
+				}
+				if json.Unmarshal(raw, &model) != nil {
+					return nil, ErrResponse
+				}
+				appendModel(model.ID, raw, "openai")
 			}
 		} else if protocol == "gemini" {
 			if page.Models == nil || len(page.Models) > 512 {
 				return nil, ErrResponse
 			}
-			for _, model := range page.Models {
+			for _, raw := range page.Models {
+				var model struct {
+					Name    string   `json:"name"`
+					Methods []string `json:"supportedGenerationMethods"`
+				}
+				if json.Unmarshal(raw, &model) != nil {
+					return nil, ErrResponse
+				}
 				if slices.Contains(model.Methods, "generateContent") {
-					ids = append(ids, strings.TrimPrefix(model.Name, "models/"))
+					appendModel(strings.TrimPrefix(model.Name, "models/"), raw, "gemini")
 				}
 			}
 		} else {
 			if page.Data == nil || len(page.Data) > 512 {
 				return nil, ErrResponse
 			}
-			for _, model := range page.Data {
-				ids = append(ids, model.ID)
+			for _, raw := range page.Data {
+				var model struct {
+					ID string `json:"id"`
+				}
+				if json.Unmarshal(raw, &model) != nil {
+					return nil, ErrResponse
+				}
+				appendModel(model.ID, raw, protocol)
 			}
 		}
-		for _, id := range ids {
+		for _, model := range entries {
+			id := model.ID
 			if id != "" && len(id) <= 128 && !seen[id] {
 				seen[id] = true
-				models = append(models, Model{ID: id, Object: "model", OwnedBy: "openai"})
+				models = append(models, model)
 			}
 		}
 		if len(models) > 512 {
@@ -145,7 +161,7 @@ func (c *Client) channelModels(ctx context.Context, credential accounts.Credenti
 		}
 		switch {
 		case dashscope && page.Output != nil && page.Output.Total > len(models):
-			if len(ids) == 0 {
+			if len(entries) == 0 {
 				return nil, ErrResponse
 			}
 		case protocol == "gemini" && page.NextPage != "":

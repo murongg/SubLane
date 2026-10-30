@@ -36,6 +36,60 @@ const usageSchema = z.object({
   retry_after_seconds: z.number().int().nonnegative(),
 })
 export type UsageWindow = z.infer<typeof windowSchema>
+export type UsagePace = {
+  direction: 'ahead' | 'behind' | 'even'
+  points: number
+}
+
+export function usagePace(
+  window: UsageWindow,
+  snapshot: Pick<
+    z.infer<typeof usageSchema>,
+    'updated_at' | 'server_time' | 'expires_at' | 'stale'
+  >,
+  now = snapshot.server_time,
+): UsagePace | null {
+  const {
+    used_percent: used,
+    window_seconds: seconds,
+    reset_at: reset,
+  } = window
+  const observed = snapshot.updated_at
+  if (
+    snapshot.stale !== false ||
+    used === null ||
+    seconds === null ||
+    reset === null ||
+    ![
+      used,
+      seconds,
+      reset,
+      observed,
+      snapshot.server_time,
+      snapshot.expires_at,
+      now,
+    ].every(Number.isFinite) ||
+    used < 0 ||
+    used > 100 ||
+    seconds <= 0 ||
+    observed <= 0 ||
+    observed > snapshot.server_time ||
+    now < snapshot.server_time ||
+    now >= snapshot.expires_at ||
+    reset <= now ||
+    reset - seconds < 0 ||
+    observed < reset - seconds
+  )
+    return null
+
+  // Compare both values at the observation; advancing time alone must not improve old usage's pace.
+  const elapsed = ((observed - (reset - seconds)) / seconds) * 100
+  const difference = Math.round((used - elapsed) * 10) / 10
+  return {
+    direction: difference > 0 ? 'ahead' : difference < 0 ? 'behind' : 'even',
+    points: Math.abs(difference),
+  }
+}
 
 export function usageReasonKey(error: unknown) {
   const code =

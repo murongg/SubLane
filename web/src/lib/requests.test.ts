@@ -106,3 +106,102 @@ it.each([
     expect(cacheHitRate(input, cached)).toBe(expected)
   },
 )
+
+it('validates and retains fixed routing codes and aggregate counts', async () => {
+  const client = new QueryClient()
+  client.setQueryData(authKey, memberAuthenticated)
+  const route = {
+    version: 1,
+    strategy: 'quota_weighted',
+    result: 'selected',
+    candidates: 2,
+    parent_fallback: false,
+    exclusions: {
+      model: 1,
+      policy: 0,
+      quota: 0,
+      cooldown: 0,
+      concurrency: 0,
+      unavailable: 0,
+    },
+  }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            requests: [{ ...record(1), route }],
+            next_cursor: 0,
+          }),
+        ),
+    ),
+  )
+  const records = await requestExport(
+    client,
+    memberAuthenticated.user.id,
+    'personal',
+    {},
+    new AbortController().signal,
+  )
+  expect(records[0]).toHaveProperty('route', route)
+})
+
+it.each([
+  { strategy: 'synthetic-private-strategy' },
+  { candidates: 10001 },
+  { account_id: 'synthetic-private-account' },
+  {
+    exclusions: {
+      model: -1,
+      policy: 0,
+      quota: 0,
+      cooldown: 0,
+      concurrency: 0,
+      unavailable: 0,
+    },
+  },
+])(
+  'rejects incompatible routing metadata at the API boundary: %j',
+  async (change) => {
+    const client = new QueryClient()
+    client.setQueryData(authKey, memberAuthenticated)
+    const route = {
+      version: 1,
+      strategy: 'rotation',
+      result: 'selected',
+      candidates: 1,
+      parent_fallback: false,
+      exclusions: {
+        model: 0,
+        policy: 0,
+        quota: 0,
+        cooldown: 0,
+        concurrency: 0,
+        unavailable: 0,
+      },
+      ...change,
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              requests: [{ ...record(1), route }],
+              next_cursor: 0,
+            }),
+          ),
+      ),
+    )
+    await expect(
+      requestExport(
+        client,
+        memberAuthenticated.user.id,
+        'personal',
+        {},
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('invalid_response')
+  },
+)

@@ -215,6 +215,7 @@ func (c *Client) tokens(ctx context.Context, form url.Values, old accounts.Crede
 }
 
 type Model struct {
+	accounts.ModelCapabilities
 	ID      string `json:"id"`
 	Object  string `json:"object"`
 	OwnedBy string `json:"owned_by"`
@@ -262,18 +263,22 @@ func (c *Client) models(ctx context.Context, credential accounts.Credential, ver
 		return nil, ErrResponse
 	}
 	var catalog struct {
-		Models []struct {
-			Slug       string `json:"slug"`
-			Visibility string `json:"visibility"`
-		} `json:"models"`
+		Models []json.RawMessage `json:"models"`
 	}
 	if json.Unmarshal(raw, &catalog) != nil || catalog.Models == nil || len(catalog.Models) > 512 {
 		return nil, ErrResponse
 	}
 	models := make([]Model, 0, len(catalog.Models))
-	for _, model := range catalog.Models {
+	for _, raw := range catalog.Models {
+		var model struct {
+			Slug       string `json:"slug"`
+			Visibility string `json:"visibility"`
+		}
+		if json.Unmarshal(raw, &model) != nil {
+			return nil, ErrResponse
+		}
 		if model.Slug != "" && len(model.Slug) <= 128 {
-			models = append(models, Model{ID: model.Slug, Object: "model", OwnedBy: "openai", Hidden: model.Visibility == "hide" || model.Visibility == "hidden"})
+			models = append(models, Model{ModelCapabilities: discoveryCapabilities(raw, "codex"), ID: model.Slug, Object: "model", OwnedBy: "openai", Hidden: model.Visibility == "hide" || model.Visibility == "hidden"})
 		}
 	}
 	return models, nil

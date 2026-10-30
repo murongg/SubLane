@@ -154,7 +154,57 @@ func TestCatalogDecodesMaximumHiddenCapabilities(t *testing.T) {
 	if err != nil || len(value.Models) != len(models) || len(value.VisibleModels()) != 0 {
 		t.Fatal("valid maximum-size hidden catalog cannot be read", err)
 	}
-	if _, err := DecodeCatalog(append(raw, []byte(strings.Repeat(" ", 256<<10))...), 0); !errors.Is(err, ErrInput) {
+	if _, err := DecodeCatalog(append(raw, []byte(strings.Repeat(" ", 512<<10))...), 0); !errors.Is(err, ErrInput) {
 		t.Fatal("oversized snapshot accepted", err)
+	}
+}
+
+func TestCatalogRoundTripsCapabilitiesAndReadsLegacySnapshots(t *testing.T) {
+	raw := []byte(`{"models":["synthetic-model"],"updated_at":1,"capabilities":{"synthetic-model":{"context_window":200000,"max_output_tokens":16000,"supported_reasoning_levels":["low","high"],"supports_images":false,"supports_tools":true}}}`)
+	value, err := DecodeCatalog(raw, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(value)
+	var got map[string]any
+	json.Unmarshal(encoded, &got)
+	if got["capabilities"] == nil {
+		t.Fatalf("capabilities discarded: %s", encoded)
+	}
+	for _, invalid := range []string{
+		`{"models":["synthetic-model"],"updated_at":1,"capabilities":{"synthetic-other":{"supports_tools":true}}}`,
+		`{"models":["synthetic-model"],"updated_at":1,"capabilities":{"synthetic-model":{"context_window":-1}}}`,
+		`{"models":["synthetic-model"],"updated_at":1,"capabilities":{"synthetic-model":{"max_output_tokens":1000000001}}}`,
+		`{"models":["synthetic-model"],"updated_at":1,"capabilities":{"synthetic-model":{"supported_reasoning_levels":["bad\nlevel"]}}}`,
+	} {
+		if _, err := DecodeCatalog([]byte(invalid), 0); !errors.Is(err, ErrInput) {
+			t.Fatalf("invalid capabilities accepted: %s: %v", invalid, err)
+		}
+	}
+	legacy, err := DecodeCatalog([]byte(`{"models":["synthetic-model"],"updated_at":1}`), 0)
+	if err != nil || len(legacy.Models) != 1 {
+		t.Fatal(legacy, err)
+	}
+}
+
+func TestCatalogMaximumCapabilitiesFitSnapshotBound(t *testing.T) {
+	value := Catalog{Models: []string{}, Capabilities: map[string]ModelCapabilities{}, UpdatedAt: 1, Source: strings.Repeat("x", 64)}
+	limit := int64(MaxModelTokens)
+	supported := true
+	levels := []string{"synthetic-lvl-a", "synthetic-lvl-b", "synthetic-lvl-c", "synthetic-lvl-d", "synthetic-lvl-e", "synthetic-lvl-f", "synthetic-lvl-g", "synthetic-lvl-h"}
+	for i := range 512 {
+		prefix := fmt.Sprintf("synthetic-%03d-", i)
+		id := prefix + strings.Repeat("x", 128-len(prefix))
+		value.Models = append(value.Models, id)
+		value.HiddenModels = append(value.HiddenModels, id)
+		value.Capabilities[id] = ModelCapabilities{ContextWindow: &limit, MaxOutputTokens: &limit, SupportedReasoningLevels: levels, SupportsImages: &supported, SupportsTools: &supported}
+	}
+	raw, err := json.Marshal(value)
+	if err != nil || len(raw) > 512<<10 {
+		t.Fatal("maximum bounded metadata exceeds snapshot limit", len(raw), err)
+	}
+	decoded, err := DecodeCatalog(raw, 0)
+	if err != nil || len(decoded.Capabilities) != 512 {
+		t.Fatal("complete catalog cannot be decoded", err)
 	}
 }

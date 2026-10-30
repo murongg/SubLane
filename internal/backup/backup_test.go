@@ -218,6 +218,7 @@ ALTER TABLE request_records DROP COLUMN content_mode;
 ALTER TABLE request_records DROP COLUMN content_revision;
 ALTER TABLE request_records DROP COLUMN content_rule_ids;
 ALTER TABLE request_records DROP COLUMN content_check_failed;
+ALTER TABLE request_records DROP COLUMN route_explanation;
 ALTER TABLE tenants DROP COLUMN alert_config;
 ALTER TABLE memberships DROP COLUMN removed_at;
 ALTER TABLE memberships DROP COLUMN first_request_at;

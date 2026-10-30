@@ -17,8 +17,21 @@ import (
 func (s *Service) selectAccount(ctx context.Context, userID, groupID int64, session, provider, model string, kind Kind) (string, [32]byte, error) {
 	return s.selectAllocationAccount(ctx, userID, groupID, session, provider, model, kind, 0, pinnedAffinity, "")
 }
-func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID int64, session, provider, model string, kind Kind, scheme int64, affinity affinityMode, parentThread string) (string, [32]byte, error) {
-	digest := sessionDigest(userID, groupID, session)
+func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID int64, session, provider, model string, kind Kind, scheme int64, affinity affinityMode, parentThread string) (selected string, digest [32]byte, failure error) {
+	digest = sessionDigest(userID, groupID, session)
+	route, _ := ctx.Value(routeKey{}).(*RouteExplanation)
+	if route == nil {
+		route = &RouteExplanation{}
+	}
+	// Queued attempts replace the previous snapshot; counts describe one actual selection.
+	*route = RouteExplanation{Version: 1, Strategy: "none", Result: "rejected"}
+	defer func() {
+		if failure == nil {
+			route.Result = "selected"
+		} else if route.Strategy == "affinity" {
+			route.Exclusions.reject(failure)
+		}
+	}()
 	if userID <= 0 || groupID <= 0 {
 		return "", digest, upstream.ErrInput
 	}
@@ -80,6 +93,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 		requested = provider + "/" + model
 	}
 	if model != "" && !policy.Allows(requested) {
+		route.Exclusions.Policy = min(maxRouteCount, len(available))
 		return "", digest, ErrModelNotAllowed
 	}
 	scope := provider
@@ -97,6 +111,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 			return "", digest, err
 		}
 		if existing != nil {
+			route.Strategy = "affinity"
 			id := existing.AccountID
 			if !allowed[id] {
 				return id, digest, ErrAffinityUnavailable
@@ -177,10 +192,14 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 				if err := tx.Commit(); err != nil {
 					return "", digest, err
 				}
+				route.Candidates = 1
 				return id, digest, nil
 			}
 		}
 	}
+	// A portable model change resumes scheduling rather than retaining the previous binding.
+	route.Strategy = "none"
+	route.ParentFallback = parentThread != "" && affinity != continuationAffinity
 	parentAccount := ""
 	if parentThread != "" && affinity != continuationAffinity {
 		// Resolve only in the authenticated user's pool; parent hints never contain trusted account IDs.
@@ -202,9 +221,15 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 	var allocationErr error
 	for _, account := range available {
 		if !s.accounts.ProviderEnabled(account.Provider) || !policy.AllowsProvider(account.Provider) || !allowed[account.ID] || !account.Enabled || account.Status == "reauth_required" || (provider != "" && account.Provider != provider) || (kind == Compact && account.Provider != "codex") {
+			if !s.accounts.ProviderEnabled(account.Provider) || !account.Enabled || account.Status == "reauth_required" {
+				route.Exclusions.Unavailable = min(maxRouteCount, route.Exclusions.Unavailable+1)
+			} else {
+				route.Exclusions.Policy = min(maxRouteCount, route.Exclusions.Policy+1)
+			}
 			continue
 		}
 		if model != "" && !policy.AllowsResource(account.Provider, model) {
+			route.Exclusions.Policy = min(maxRouteCount, route.Exclusions.Policy+1)
 			continue
 		}
 		eligible = true
@@ -214,14 +239,17 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 				return "", digest, err
 			}
 			if !known {
+				route.Exclusions.Model = min(maxRouteCount, route.Exclusions.Model+1)
 				unknown = true
 				continue
 			}
 			if !supported {
+				route.Exclusions.Model = min(maxRouteCount, route.Exclusions.Model+1)
 				continue
 			}
 		}
 		if err := s.accountAdmission(account); err != nil {
+			route.Exclusions.reject(err)
 			if errors.Is(err, ErrAccountBusy) {
 				busy = true
 			}
@@ -233,6 +261,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 			continue
 		}
 		if err := quotaAdmission(account, model); err != nil {
+			route.Exclusions.reject(err)
 			var quota *QuotaError
 			if !errors.As(err, &quota) {
 				return "", digest, err
@@ -243,6 +272,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 			continue
 		}
 		if err := s.modelAdmission(ctx, q, account.ID, model); err != nil {
+			route.Exclusions.reject(err)
 			if errors.Is(err, ErrAccountBusy) {
 				busy = true
 				continue
@@ -262,6 +292,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 				if !errors.Is(err, allocations.ErrQuota) && !errors.Is(err, allocations.ErrPending) && !errors.Is(err, allocations.ErrRisk) && !errors.Is(err, allocations.ErrUnpriced) && !errors.Is(err, allocations.ErrUnavailable) {
 					return "", digest, err
 				}
+				route.Exclusions.reject(err)
 				allocationErr = err
 				continue
 			}
@@ -302,6 +333,8 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 		}
 		return "", digest, ErrNoAccount
 	}
+	route.Strategy = "rotation"
+	route.Candidates = min(maxRouteCount, len(candidates))
 	// Isolate rotation across preference tiers so traffic using another protocol cannot starve this pool.
 	cursor := fmt.Sprintf("%d:%s:%s:%s:%d", groupID, scope, policy.Routing.Preference, preferred, bestRank)
 	id := candidates[s.next[cursor]%len(candidates)]
@@ -321,6 +354,7 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 			total += decision.Weight
 		}
 		if total > 0 {
+			route.Strategy = "quota_weighted"
 			period = total
 			ticket := s.next[cursor] % total
 			for i, weight := range weights {
@@ -331,6 +365,10 @@ func (s *Service) selectAllocationAccount(ctx context.Context, userID, groupID i
 				ticket -= weight
 			}
 		}
+	}
+	if id == parentAccount {
+		route.Strategy = "parent"
+		route.ParentFallback = false
 	}
 	s.next[cursor] = (s.next[cursor] + 1) % period
 	if session != "" {

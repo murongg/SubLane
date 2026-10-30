@@ -6,7 +6,22 @@ import { request } from './request'
 export type CatalogTarget =
   | { kind: 'account' | 'channel'; id: string }
   | { kind: 'group' | 'key'; id: number }
+const capabilitiesSchema = z.object({
+  context_window: z.number().int().positive().max(1_000_000_000).optional(),
+  max_output_tokens: z.number().int().positive().max(1_000_000_000).optional(),
+  supported_reasoning_levels: z
+    .array(z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,15}$/))
+    .max(8)
+    .optional(),
+  supports_images: z.boolean().optional(),
+  supports_tools: z.boolean().optional(),
+})
+const capabilitiesMapSchema = z
+  .record(z.string().min(1).max(160), capabilitiesSchema)
+  .default({})
+export type ModelCapabilities = z.infer<typeof capabilitiesSchema>
 const snapshotSchema = z.object({
+  capabilities: capabilitiesMapSchema,
   models: z.array(z.string().min(1).max(128)).max(512),
   hidden_models: z.array(z.string().min(1).max(128)).max(512).default([]),
   updated_at: z.number().int().nonnegative(),
@@ -19,10 +34,12 @@ const snapshotSchema = z.object({
   retry_after_seconds: z.number().nonnegative(),
 })
 const groupSchema = z.object({
+  capabilities: capabilitiesMapSchema,
   hidden_models: z.array(z.string().min(1).max(160)).max(4096).default([]),
   models: z
     .array(
       z.object({
+        ...capabilitiesSchema.shape,
         id: z.string().min(1).max(160),
         object: z.literal('model'),
         owned_by: z.string(),
@@ -76,6 +93,10 @@ async function readCatalog(
   const value = await request(catalogPath(target), groupSchema, { signal })
   return {
     models: value.models.map((model) => model.id),
+    capabilities: {
+      ...value.capabilities,
+      ...Object.fromEntries(value.models.map((model) => [model.id, model])),
+    },
     hidden_models: value.hidden_models,
     updated_at: 0,
     server_time: value.server_time,

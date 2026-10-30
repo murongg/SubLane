@@ -8,6 +8,7 @@ import {
   refreshCatalog,
   type CatalogTarget,
   type ModelCheck,
+  type ModelCapabilities,
 } from '@/lib/catalog'
 import { authKey, type AuthState } from '@/lib/auth'
 import { availabilityReasons } from '@/lib/availability'
@@ -209,6 +210,10 @@ function CatalogContent({
                   {t('modelTestHint')}
                 </p>
               )}
+              <p className="text-xs leading-5 text-muted-foreground">
+                {t('catalogCapabilitiesHint')}
+                {!individual && <> {t('catalogCapabilitiesMerge')}</>}
+              </p>
               <Input
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
@@ -300,6 +305,9 @@ function CatalogContent({
                           {label}
                         </button>
                       )}
+                      <CapabilityDetails
+                        capabilities={data?.capabilities[model]}
+                      />
                     </li>
                   )
                 })}
@@ -338,5 +346,44 @@ function CatalogContent({
         />
       )}
     </DialogContent>
+  )
+}
+
+function CapabilityDetails({
+  capabilities,
+}: {
+  capabilities?: ModelCapabilities
+}) {
+  const { t, i18n } = useTranslation()
+  const unknown = t('catalogUnknown')
+  const tokens = (value?: number) =>
+    value === undefined
+      ? unknown
+      : new Intl.NumberFormat(i18n.resolvedLanguage ?? 'en').format(value)
+  const support = (value?: boolean) =>
+    value === undefined
+      ? unknown
+      : t(value ? 'catalogSupported' : 'catalogUnsupported')
+  const details = [
+    [t('catalogContextWindow'), tokens(capabilities?.context_window)],
+    [t('catalogMaxOutput'), tokens(capabilities?.max_output_tokens)],
+    [
+      t('catalogReasoningLevels'),
+      capabilities?.supported_reasoning_levels?.length
+        ? capabilities.supported_reasoning_levels.join(', ')
+        : unknown,
+    ],
+    [t('catalogImages'), support(capabilities?.supports_images)],
+    [t('catalogTools'), support(capabilities?.supports_tools)],
+  ]
+  return (
+    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-sans text-xs sm:grid-cols-3">
+      {details.map(([label, value]) => (
+        <div key={label} className="min-w-0">
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd className="break-words text-foreground">{value}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }

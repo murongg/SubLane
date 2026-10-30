@@ -1,4 +1,5 @@
 -- Rebuild without timestamp uniqueness; captured revision IDs remain immutable.
+-- Published migrations must remain an unchanged prefix for backup validation.
 PRAGMA legacy_alter_table=ON;
 CREATE TABLE allocation_revisions_next (
  id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -35,7 +35,14 @@ func seed(ctx context.Context, connection *sql.DB, identity *auth.Service, accou
 		if err != nil {
 			return err
 		}
-		if err := accountService.SaveCatalog(ctx, account.ID, 0, []string{"demo-codex", "demo-codex-mini"}, now.Unix(), upstream.CatalogSource("codex")); err != nil {
+		contextWindow, outputLimit := int64(200000), int64(32000)
+		images, tools := true, true
+		if err := accountService.SaveCatalogSnapshot(ctx, account.ID, 0, accounts.Catalog{
+			Models: []string{"demo-codex", "demo-codex-mini"}, UpdatedAt: now.Unix(), Source: upstream.CatalogSource("codex"),
+			Capabilities: map[string]accounts.ModelCapabilities{
+				"demo-codex": {ContextWindow: &contextWindow, MaxOutputTokens: &outputLimit, SupportedReasoningLevels: []string{"low", "medium", "high"}, SupportsImages: &images, SupportsTools: &tools},
+			},
+		}); err != nil {
 			return err
 		}
 		accountIDs = append(accountIDs, account.ID)
@@ -93,6 +100,7 @@ func seed(ctx context.Context, connection *sql.DB, identity *auth.Service, accou
 				Transport: "http", Operation: "responses", StartedAt: at.Unix(), DurationMs: 1600 + int64(index)*91,
 				Outcome: "success", InputTokens: &input, OutputTokens: &output, CachedTokens: &cached, FirstTokenMs: &first,
 				RequestID: fmt.Sprintf("req_demo_%02d_%02d", day, index), ReasoningEffort: "medium",
+				RouteExplanation: `{"version":1,"strategy":"rotation","result":"selected","candidates":2,"parent_fallback":false,"exclusions":{"model":0,"policy":0,"quota":0,"cooldown":0,"concurrency":0,"unavailable":0}}`,
 			}
 			metrics := db.RecordStatisticsParams{Day: at.Truncate(24 * time.Hour).Unix(), UserID: record.UserID, KeyID: record.KeyID, GroupID: groupID, Provider: "codex", Model: model,
 				Requests: 1, Completed: 1, DurationMs: record.DurationMs, InputTokens: input, OutputTokens: output, CachedTokens: cached, InputReported: 1, OutputReported: 1, CachedReported: 1}

@@ -487,7 +487,100 @@ func TestVersionChangeDiscardsAnInFlightCatalog(t *testing.T) {
 		t.Fatal("old backoff blocked new version discovery", err)
 	}
 	current, err := s.accounts.Catalog(ctx, ids["codex"])
-	if err != nil || current.Source != "codex:v2:0.300.0" {
+	if err != nil || current.Source != "codex:v3:0.300.0" {
 		t.Fatal(current, err)
+	}
+}
+
+func TestCatalogPersistsAndConservativelyMergesCapabilities(t *testing.T) {
+	ctx := context.Background()
+	s, ids := discoveryGateway(t, transportFunc(func(r *http.Request) (*http.Response, error) {
+		body := `{"models":[{"slug":"synthetic-shared","context_window":200000,"max_output_tokens":16000,"supported_reasoning_levels":[{"effort":"low"},{"effort":"high"}],"supports_images":true,"supports_tools":true},{"slug":"synthetic-hidden","visibility":"hide","context_window":10000}]}`
+		if r.URL.Host == "api.anthropic.com" {
+			body = `{"data":[{"id":"synthetic-shared","context_window":100000,"max_output_tokens":8000,"supported_reasoning_levels":["high"],"supports_images":true,"supports_tools":false}]}`
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+	}))
+	for _, provider := range []string{"codex", "claude"} {
+		snapshot, err := s.AccountCatalog(ctx, ids[provider], true)
+		if err != nil || !snapshot.Known {
+			t.Fatal(snapshot, err)
+		}
+		raw, _ := json.Marshal(snapshot)
+		if !strings.Contains(string(raw), `"capabilities"`) {
+			t.Fatalf("account snapshot discarded metadata: %s", raw)
+		}
+	}
+	if _, err := groups.New(s.db).Save(ctx, 1, groups.Input{Name: "Synthetic capabilities", Enabled: true, AccountIDs: []string{ids["codex"], ids["claude"]}}); err != nil {
+		t.Fatal(err)
+	}
+	models, err := s.Models(ctx, 1, 1)
+	if err != nil || len(models) != 1 {
+		t.Fatal(models, err)
+	}
+	raw, _ := json.Marshal(models[0])
+	var got map[string]any
+	json.Unmarshal(raw, &got)
+	if got["context_window"] != float64(100000) || got["max_output_tokens"] != float64(8000) || got["supports_images"] != true || got["supports_tools"] != false || !slices.Equal(got["supported_reasoning_levels"].([]any), []any{"high"}) {
+		t.Fatalf("model overstates shared capabilities: %s", raw)
+	}
+	reopened := New(ctx, s.db, s.accounts, s.provider)
+	defer reopened.Close()
+	catalog, err := reopened.GroupCatalog(ctx, 1, 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = json.Marshal(catalog)
+	if !strings.Contains(string(raw), `"synthetic-hidden":{"context_window":10000}`) {
+		t.Fatalf("hidden browser capability missing after restart: %s", raw)
+	}
+	// An eligible resource without optional metadata must make the shared detail unknown.
+	if err := s.accounts.SaveCatalog(ctx, ids["claude"], 0, []string{"synthetic-shared"}, s.now().Unix(), s.provider.CatalogSource("claude")); err != nil {
+		t.Fatal(err)
+	}
+	models, err = reopened.Models(ctx, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = json.Marshal(models[0])
+	if strings.Contains(string(raw), "context_window") || strings.Contains(string(raw), "supports_tools") {
+		t.Fatalf("unknown metadata became a capability promise: %s", raw)
+	}
+}
+
+func TestPublicCatalogIncludesHiddenRoutesInCapabilityMerge(t *testing.T) {
+	ctx := context.Background()
+	s, ids := discoveryGateway(t, transportFunc(func(r *http.Request) (*http.Response, error) {
+		body := `{"models":[{"slug":"synthetic-shared","context_window":200000,"supports_images":true}]}`
+		if r.URL.Host == "api.anthropic.com" {
+			body = `{"data":[{"id":"synthetic-shared","context_window":100000,"supports_images":false}]}`
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+	}))
+	for _, provider := range []string{"codex", "claude"} {
+		if _, err := s.AccountCatalog(ctx, ids[provider], true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	saved, err := s.accounts.Catalog(ctx, ids["claude"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved.HiddenModels = []string{"synthetic-shared"}
+	if err := s.accounts.SaveCatalogSnapshot(ctx, ids["claude"], 0, saved); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := groups.New(s.db).Save(ctx, 1, groups.Input{Name: "Synthetic hidden route", Enabled: true, AccountIDs: []string{ids["codex"], ids["claude"]}}); err != nil {
+		t.Fatal(err)
+	}
+	models, err := s.Models(ctx, 1, 1)
+	if err != nil || len(models) != 1 {
+		t.Fatal(models, err)
+	}
+	raw, _ := json.Marshal(models[0])
+	var got map[string]any
+	json.Unmarshal(raw, &got)
+	if got["context_window"] != float64(100000) || got["supports_images"] != false || models[0].OwnedBy != "openai" {
+		t.Fatalf("hidden eligible route overstated client capabilities: %s", raw)
 	}
 }
