@@ -1408,5 +1408,20 @@
   "resetCardDefaultTitle": "إعادة تعيين الحصة",
   "resetCardsUnavailable": "تم التخطي: تفاصيل البطاقات غير متاحة",
   "resetCardsNoEligible": "تم التخطي: لا توجد بطاقات مؤهلة",
-  "resetCardsDisabled": "فعّل الحساب أو أعد تفويضه لعرض بطاقاته."
+  "resetCardsDisabled": "فعّل الحساب أو أعد تفويضه لعرض بطاقاته.",
+  "turnstileTitle": "Turnstile",
+  "turnstileDescription": "طلب تحقق Cloudflare عند تسجيل الدخول بكلمة المرور أو مفتاح المرور في هذا المثيل.",
+  "turnstileEnabled": "طلب التحقق عند تسجيل الدخول",
+  "turnstileSiteKey": "Site Key",
+  "turnstileSecretKey": "Secret Key",
+  "turnstileSecretSaved": "تم إعداد Secret Key. اترك الحقل فارغًا للاحتفاظ به.",
+  "turnstileSecretHint": "أضف اسم مضيف تسجيل الدخول إلى أداة Cloudflare. يُشفّر السر ولا يُعرض مجددًا.",
+  "turnstileSave": "حفظ Turnstile",
+  "turnstileSaved": "تم حفظ إعدادات Turnstile.",
+  "turnstileSettingsFailed": "تعذّر تحميل إعدادات Turnstile أو حفظها. أعد المحاولة.",
+  "turnstileSettingsInvalid": "أدخل Site Key وSecret Key صالحين قبل تفعيل التحقق.",
+  "turnstileFailed": "فشل التحقق أو انتهت صلاحيته. أكمل التحدي مجددًا.",
+  "turnstileUnavailable": "التحقق غير متاح. أعد المحاولة.",
+  "turnstileVerification": "التحقق البشري",
+  "turnstileRetry": "إعادة المحاولة"
 }

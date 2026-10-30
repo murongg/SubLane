@@ -1393,5 +1393,20 @@
   "resetCardDefaultTitle": "Redefinição de cota",
   "resetCardsUnavailable": "Ignorado: detalhes dos cartões indisponíveis",
   "resetCardsNoEligible": "Ignorado: nenhum cartão elegível",
-  "resetCardsDisabled": "Ative ou autorize novamente a conta para ver os cartões."
+  "resetCardsDisabled": "Ative ou autorize novamente a conta para ver os cartões.",
+  "turnstileTitle": "Turnstile",
+  "turnstileDescription": "Exige verificação da Cloudflare no acesso com palavra-passe e chave de acesso nesta instância.",
+  "turnstileEnabled": "Exigir verificação ao iniciar sessão",
+  "turnstileSiteKey": "Site Key",
+  "turnstileSecretKey": "Secret Key",
+  "turnstileSecretSaved": "Secret Key configurada. Deixe em branco para a manter.",
+  "turnstileSecretHint": "Adicione o nome do servidor de acesso ao widget da Cloudflare. O segredo é encriptado e não volta a ser mostrado.",
+  "turnstileSave": "Guardar Turnstile",
+  "turnstileSaved": "Definições do Turnstile guardadas.",
+  "turnstileSettingsFailed": "Não foi possível carregar ou guardar o Turnstile. Tente novamente.",
+  "turnstileSettingsInvalid": "Introduza Site Key e Secret Key válidas antes de ativar a verificação.",
+  "turnstileFailed": "A verificação falhou ou expirou. Complete o desafio novamente.",
+  "turnstileUnavailable": "A verificação está indisponível. Tente novamente.",
+  "turnstileVerification": "Verificação humana",
+  "turnstileRetry": "Tentar novamente"
 }

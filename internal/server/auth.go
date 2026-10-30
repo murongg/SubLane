@@ -17,6 +17,7 @@ import (
 	"github.com/murongg/SubLane/internal/auth"
 	"github.com/murongg/SubLane/internal/tenants"
 	"github.com/murongg/SubLane/internal/timezone"
+	"github.com/murongg/SubLane/internal/turnstile"
 )
 
 const sessionCookie = "sublane_session"
@@ -33,6 +34,7 @@ type authHTTP struct {
 	service           *auth.Service
 	tenants           *tenants.Service
 	timeZone          *timezone.Service
+	turnstile         *turnstile.Service
 	tenantID          int64
 	publicURL         string
 	limiter           *LoginLimiter
@@ -41,9 +43,10 @@ type authHTTP struct {
 }
 
 type credentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Code     string `json:"code,omitempty"`
+	Username       string `json:"username"`
+	Password       string `json:"password"`
+	Code           string `json:"code,omitempty"`
+	TurnstileToken string `json:"turnstile_token,omitempty"`
 }
 
 type setupCredentials struct {
@@ -176,14 +179,19 @@ func (h *authHTTP) state(w http.ResponseWriter, r *http.Request) {
 
 func (h *authHTTP) writeState(w http.ResponseWriter, status int, state auth.State) {
 	name := "UTC"
+	siteKey := ""
+	if h.turnstile != nil {
+		siteKey = h.turnstile.SiteKey()
+	}
 	if h.timeZone != nil {
 		name = h.timeZone.Name()
 	}
 	writeJSON(w, status, struct {
 		auth.State
-		TimeZone string           `json:"time_zone"`
-		Demo     *DemoCredentials `json:"demo,omitempty"`
-	}{State: state, TimeZone: name, Demo: h.demo})
+		TimeZone         string           `json:"time_zone"`
+		Demo             *DemoCredentials `json:"demo,omitempty"`
+		TurnstileSiteKey string           `json:"turnstile_site_key,omitempty"`
+	}{State: state, TimeZone: name, Demo: h.demo, TurnstileSiteKey: siteKey})
 }
 
 func (h *authHTTP) stateForTenant(ctx context.Context, sessionToken string) (auth.State, error) {
@@ -231,6 +239,9 @@ func (h *authHTTP) authenticate(w http.ResponseWriter, r *http.Request, setup bo
 		input = credentials{Username: initial.Username, Password: initial.Password}
 		workspaceName = initial.WorkspaceName
 	} else if !decodeJSON(w, r, &input) {
+		return
+	}
+	if !setup && !h.verifyTurnstile(w, r, input.TurnstileToken) {
 		return
 	}
 	var session auth.Session

@@ -34,6 +34,10 @@ func openVault(ctx context.Context, connection *sql.DB, directory, configured st
 	if err != nil {
 		return nil, err
 	}
-	// Content rules may hold complete secrets even when no subscription account exists.
-	return vault.Open(path, accounts == 0 && keys == 0 && webhooks == 0 && rules == 0 && factors == 0)
+	turnstileSettings, err := q.CountTurnstileSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Settings and content rules can hold secrets before any subscription account exists.
+	return vault.Open(path, accounts == 0 && keys == 0 && webhooks == 0 && rules == 0 && factors == 0 && turnstileSettings == 0)
 }

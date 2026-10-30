@@ -3,6 +3,7 @@ import { Outlet, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { ClientVersion } from '@/components/ClientVersion'
 import { TimeZoneSettings } from '@/components/TimeZoneSettings'
+import { TurnstileSettings } from '@/components/TurnstileSettings'
 import { WorkspaceAlerts } from '@/components/WorkspaceAlerts'
 import { authOptions } from '@/lib/auth'
 
@@ -56,5 +57,12 @@ export function TimeZonePage() {
   const { data } = useQuery(authOptions())
   return data?.user?.role === 'admin' && data.user.id === 1 ? (
     <TimeZoneSettings key={data.user.id} userID={data.user.id} />
+  ) : null
+}
+
+export function TurnstilePage() {
+  const { data } = useQuery(authOptions())
+  return data?.user?.role === 'admin' && data.user.id === 1 ? (
+    <TurnstileSettings key={data.user.id} userID={data.user.id} />
   ) : null
 }

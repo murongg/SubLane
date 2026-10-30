@@ -81,6 +81,7 @@ const navigation = [
         children: [
           { to: '/admin/settings/alerts', label: 'alertsTitle' },
           { to: '/admin/settings/timezone', label: 'timeZoneTitle' },
+          { to: '/admin/settings/turnstile', label: 'turnstileTitle' },
           { to: '/admin/settings/clients', label: 'clientVersionsTitle' },
           { to: '/admin/settings/backup', label: 'backupTitle' },
         ],

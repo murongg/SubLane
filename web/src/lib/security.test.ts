@@ -85,6 +85,23 @@ it('does not complete passkey login when the device prompt is cancelled', async 
     'passkeyCancelled',
   )
 })
+it('verifies Turnstile before requesting the passkey assertion', async () => {
+  const { get } = browser()
+  const fetch = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(
+        JSON.stringify({ publicKey: { challenge: 'synthetic-challenge' } }),
+      ),
+    )
+  vi.stubGlobal('fetch', fetch)
+  await passkeyAssertion('synthetic-turnstile-token')
+  expect(fetch.mock.calls[0][0]).toBe('/api/auth/passkey/begin')
+  expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({
+    turnstile_token: 'synthetic-turnstile-token',
+  })
+  expect(get).toHaveBeenCalledOnce()
+})
 it('rejects a missing browser credential without submitting completion', async () => {
   const { create } = browser()
   create.mockResolvedValue(null)

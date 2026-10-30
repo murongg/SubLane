@@ -1,6 +1,24 @@
 import type { en } from './en'
 
 export const zh: Record<keyof typeof en, string> = {
+  turnstileRetry: '重试',
+  turnstileTitle: 'Turnstile',
+  turnstileDescription:
+    '为此实例的密码和 Passkey 登录启用 Cloudflare 人机验证。',
+  turnstileEnabled: '登录时需要人机验证',
+  turnstileSiteKey: 'Site Key',
+  turnstileSecretKey: 'Secret Key',
+  turnstileSecretSaved: '已配置 Secret Key，留空可保留现有密钥。',
+  turnstileSecretHint:
+    '请在 Cloudflare 验证组件中添加登录域名。密钥加密保存，保存后不再显示。',
+  turnstileSave: '保存 Turnstile',
+  turnstileSaved: 'Turnstile 设置已保存。',
+  turnstileSettingsFailed: '无法加载或保存 Turnstile 设置，请重试。',
+  turnstileSettingsInvalid: '启用验证前，请填写有效的 Site Key 和 Secret Key。',
+  turnstileFailed: '验证失败或已过期，请重新完成人机验证。',
+  turnstileUnavailable: '人机验证暂时不可用，请重试。',
+  turnstileVerification: '人机验证',
+
   memberRemovedStatus: '已移出',
   memberRemove: '移出工作区',
   memberRemoveTitle: '移出工作区成员',

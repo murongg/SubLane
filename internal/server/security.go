@@ -155,8 +155,13 @@ func (h *authHTTP) deletePasskey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 func (h *authHTTP) beginPasskeyLogin(w http.ResponseWriter, r *http.Request) {
-	var input struct{}
+	var input struct {
+		TurnstileToken string `json:"turnstile_token,omitempty"`
+	}
 	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if !h.verifyTurnstile(w, r, input.TurnstileToken) {
 		return
 	}
 	options, challenge, err := h.service.BeginPasskeyLogin(r.Context(), h.origin(r))

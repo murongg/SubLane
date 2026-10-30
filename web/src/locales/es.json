@@ -1393,5 +1393,20 @@
   "resetCardDefaultTitle": "Reinicio de cuota",
   "resetCardsUnavailable": "Omitido: detalles de tarjetas no disponibles",
   "resetCardsNoEligible": "Omitido: no hay tarjetas aptas",
-  "resetCardsDisabled": "Activa la cuenta o vuelve a autorizarla para ver sus tarjetas."
+  "resetCardsDisabled": "Activa la cuenta o vuelve a autorizarla para ver sus tarjetas.",
+  "turnstileTitle": "Turnstile",
+  "turnstileDescription": "Exige verificación de Cloudflare al iniciar sesión con contraseña o clave de acceso en esta instancia.",
+  "turnstileEnabled": "Exigir verificación al iniciar sesión",
+  "turnstileSiteKey": "Site Key",
+  "turnstileSecretKey": "Secret Key",
+  "turnstileSecretSaved": "Secret Key configurada. Déjala en blanco para conservarla.",
+  "turnstileSecretHint": "Añade el nombre de host de inicio de sesión al widget de Cloudflare. El secreto se cifra y no se vuelve a mostrar.",
+  "turnstileSave": "Guardar Turnstile",
+  "turnstileSaved": "Configuración de Turnstile guardada.",
+  "turnstileSettingsFailed": "No se pudo cargar o guardar Turnstile. Vuelve a intentarlo.",
+  "turnstileSettingsInvalid": "Introduce Site Key y Secret Key válidas antes de activar la verificación.",
+  "turnstileFailed": "La verificación falló o caducó. Completa el desafío de nuevo.",
+  "turnstileUnavailable": "La verificación no está disponible. Vuelve a intentarlo.",
+  "turnstileVerification": "Verificación humana",
+  "turnstileRetry": "Reintentar"
 }

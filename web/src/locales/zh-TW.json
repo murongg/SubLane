@@ -1388,5 +1388,20 @@
   "resetCardDefaultTitle": "額度重設卡",
   "resetCardsUnavailable": "已略過：無法取得重設卡明細",
   "resetCardsNoEligible": "已略過：沒有符合條件的重設卡",
-  "resetCardsDisabled": "請啟用或重新授權此帳號後查看重設卡。"
+  "resetCardsDisabled": "請啟用或重新授權此帳號後查看重設卡。",
+  "turnstileTitle": "Turnstile",
+  "turnstileDescription": "為此實例的密碼和 Passkey 登入啟用 Cloudflare 人機驗證。",
+  "turnstileEnabled": "登入時需要人機驗證",
+  "turnstileSiteKey": "Site Key",
+  "turnstileSecretKey": "Secret Key",
+  "turnstileSecretSaved": "已設定 Secret Key，留空可保留現有金鑰。",
+  "turnstileSecretHint": "請在 Cloudflare 驗證元件中新增登入網域。金鑰加密儲存，儲存後不再顯示。",
+  "turnstileSave": "儲存 Turnstile",
+  "turnstileSaved": "Turnstile 設定已儲存。",
+  "turnstileSettingsFailed": "無法載入或儲存 Turnstile 設定，請重試。",
+  "turnstileSettingsInvalid": "啟用驗證前，請填寫有效的 Site Key 和 Secret Key。",
+  "turnstileFailed": "驗證失敗或已過期，請重新完成人機驗證。",
+  "turnstileUnavailable": "人機驗證暫時無法使用，請重試。",
+  "turnstileVerification": "人機驗證",
+  "turnstileRetry": "重試"
 }
