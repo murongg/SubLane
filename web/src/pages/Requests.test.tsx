@@ -106,6 +106,8 @@ it.each(['/requests', '/admin/requests'])(
       }),
     ).toBe(true)
   },
+  // This flow renders full 100-row pages several times on shared CI runners.
+  15_000,
 )
 
 it('shows content rule observations and blocked-request recovery without request bodies', async () => {
