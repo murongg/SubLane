@@ -2,6 +2,17 @@
 
 All notable changes are documented here in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
+## [0.17.0] - 2026-10-30
+
+### Added
+
+- Add platform presets and searchable setup (#142)
+- Add model capabilities and usage insights (#143)
+
+### Changed
+
+- **BREAKING:** Add shared budgets across duration windows (#141) — Existing allocation configuration writes require both expected revision fields; future writes also require confirmed expected_effective_at. Legacy reads, first creation, pause/enable and captured request settlement remain supported.
+
 ## [0.16.0] - 2026-10-30
 
 ### Added
@@ -315,6 +326,7 @@ All notable changes are documented here in [Keep a Changelog](https://keepachang
 - Distinguish remaining quota with status colors
 - Restore version-gated model discovery
 
+[0.17.0]: https://github.com/murongg/SubLane/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/murongg/SubLane/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/murongg/SubLane/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/murongg/SubLane/compare/v0.13.0...v0.14.0
