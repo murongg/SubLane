@@ -153,20 +153,7 @@ func (c *Client) Usage(ctx context.Context, credential accounts.Credential) (Usa
 }
 
 func (c *Client) resetCredits(ctx context.Context, credential accounts.Credential) *int64 {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", nil)
-	if err != nil {
-		return nil
-	}
-	upstreamHeaders(request, credential, nil, false, c.codexVersion())
-	response, err := c.http.Do(request)
-	if err != nil {
-		return nil
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil
-	}
-	raw, err := readBounded(response.Body, 128<<10)
+	raw, err := c.resetCardPayload(ctx, credential)
 	if err != nil {
 		return nil
 	}

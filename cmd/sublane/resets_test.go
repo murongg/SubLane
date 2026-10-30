@@ -48,6 +48,9 @@ func TestRegistrySchedulesOptedInAccountWithoutBrowserActivity(t *testing.T) {
 	var redeemed atomic.Bool
 	client := upstream.NewWithTransport(subscriptionTransport(func(r *http.Request) (*http.Response, error) {
 		body := `{"available_count":2}`
+		if r.URL.Path == "/backend-api/wham/rate-limit-reset-credits" {
+			body = `{"available_count":2,"credits":[{"id":"synthetic-card","status":"available","reset_type":"codex_rate_limits","granted_at":"2026-01-01T00:00:00Z","expires_at":null}]}`
+		}
 		switch r.URL.Path {
 		case "/backend-api/wham/usage":
 			if redeemed.Load() {

@@ -142,4 +142,5 @@ type ResetRun struct {
 	Reason      string
 	StartedAt   int64
 	UpdatedAt   int64
+	CreditID    string
 }

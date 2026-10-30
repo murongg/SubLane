@@ -76,8 +76,8 @@ func (q *Queries) CountResetUsage(ctx context.Context, arg CountResetUsageParams
 }
 
 const createResetRun = `-- name: CreateResetRun :execrows
-INSERT OR IGNORE INTO reset_runs(request_id,account_id,trigger_kind,occurrence,outcome,reason,started_at,updated_at)
-VALUES(?1,?2,?3,?4,?5,?6,?7,?7)
+INSERT OR IGNORE INTO reset_runs(request_id,account_id,trigger_kind,occurrence,outcome,reason,started_at,updated_at,credit_id)
+VALUES(?1,?2,?3,?4,?5,?6,?7,?7,?8)
 `
 
 type CreateResetRunParams struct {
@@ -88,6 +88,7 @@ type CreateResetRunParams struct {
 	Outcome     string
 	Reason      string
 	Now         int64
+	CreditID    string
 }
 
 func (q *Queries) CreateResetRun(ctx context.Context, arg CreateResetRunParams) (int64, error) {
@@ -99,6 +100,7 @@ func (q *Queries) CreateResetRun(ctx context.Context, arg CreateResetRunParams) 
 		arg.Outcome,
 		arg.Reason,
 		arg.Now,
+		arg.CreditID,
 	)
 	if err != nil {
 		return 0, err
@@ -107,7 +109,8 @@ func (q *Queries) CreateResetRun(ctx context.Context, arg CreateResetRunParams) 
 }
 
 const finishResetRun = `-- name: FinishResetRun :execrows
-UPDATE reset_runs SET outcome=?1,reason=?2,updated_at=?3
+UPDATE reset_runs SET outcome=?1,reason=?2,updated_at=?3,
+credit_id=CASE WHEN ?1='pending' THEN credit_id ELSE '' END
 WHERE request_id=?4 AND outcome='pending'
 `
 
@@ -182,7 +185,7 @@ func (q *Queries) InvalidateAccountUsage(ctx context.Context, id string) error {
 }
 
 const listResetRuns = `-- name: ListResetRuns :many
-SELECT id, request_id, account_id, trigger_kind, occurrence, outcome, reason, started_at, updated_at FROM reset_runs WHERE account_id=?1 ORDER BY id DESC LIMIT 20
+SELECT id, request_id, account_id, trigger_kind, occurrence, outcome, reason, started_at, updated_at, credit_id FROM reset_runs WHERE account_id=?1 ORDER BY id DESC LIMIT 20
 `
 
 func (q *Queries) ListResetRuns(ctx context.Context, accountID string) ([]ResetRun, error) {
@@ -204,6 +207,7 @@ func (q *Queries) ListResetRuns(ctx context.Context, accountID string) ([]ResetR
 			&i.Reason,
 			&i.StartedAt,
 			&i.UpdatedAt,
+			&i.CreditID,
 		); err != nil {
 			return nil, err
 		}
@@ -240,7 +244,7 @@ func (q *Queries) NextResetCheck(ctx context.Context, now int64) (NextResetCheck
 }
 
 const pendingResetRun = `-- name: PendingResetRun :one
-SELECT id, request_id, account_id, trigger_kind, occurrence, outcome, reason, started_at, updated_at FROM reset_runs WHERE account_id=?1 AND outcome='pending' LIMIT 1
+SELECT id, request_id, account_id, trigger_kind, occurrence, outcome, reason, started_at, updated_at, credit_id FROM reset_runs WHERE account_id=?1 AND outcome='pending' LIMIT 1
 `
 
 func (q *Queries) PendingResetRun(ctx context.Context, accountID string) (ResetRun, error) {
@@ -256,6 +260,7 @@ func (q *Queries) PendingResetRun(ctx context.Context, accountID string) (ResetR
 		&i.Reason,
 		&i.StartedAt,
 		&i.UpdatedAt,
+		&i.CreditID,
 	)
 	return i, err
 }

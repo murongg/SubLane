@@ -20,6 +20,8 @@ func TestResetObservationUsesExplicitDenialAndRedemptionInvalidatesQuota(t *test
 	client := upstream.NewWithTransport(transportFunc(func(r *http.Request) (*http.Response, error) {
 		body := `{"available_count":2}`
 		switch r.URL.Path {
+		case "/backend-api/wham/rate-limit-reset-credits":
+			body = `{"available_count":2,"credits":[{"id":"synthetic-card","status":"available","reset_type":"codex_rate_limits","granted_at":"2026-01-01T00:00:00Z","expires_at":null}]}`
 		case "/backend-api/wham/usage":
 			allowed := "true"
 			if blocked {
@@ -37,7 +39,7 @@ func TestResetObservationUsesExplicitDenialAndRedemptionInvalidatesQuota(t *test
 	t.Cleanup(client.Close)
 	f.service.provider = client
 	observation, err := f.service.ResetObservation(ctx, f.id)
-	if err != nil || !observation.Fresh || observation.Blocked {
+	if err != nil || !observation.Fresh || observation.Blocked || len(observation.Cards) != 1 {
 		t.Fatal("display percentage caused redemption", observation, err)
 	}
 	blocked = true
@@ -48,7 +50,7 @@ func TestResetObservationUsesExplicitDenialAndRedemptionInvalidatesQuota(t *test
 	if err != nil || !observation.Blocked {
 		t.Fatal(observation, err)
 	}
-	result, err := f.service.RedeemResetCredit(ctx, f.id, "synthetic-attempt")
+	result, err := f.service.RedeemResetCredit(ctx, f.id, "synthetic-attempt", "synthetic-card")
 	if err != nil || result != "reset" || !consumed {
 		t.Fatal(result, err)
 	}
@@ -60,7 +62,7 @@ func TestResetObservationUsesExplicitDenialAndRedemptionInvalidatesQuota(t *test
 		t.Fatal(err)
 	}
 	consumed = false
-	if _, err := f.service.RedeemResetCredit(ctx, f.id, "synthetic-next"); err == nil || consumed {
+	if _, err := f.service.RedeemResetCredit(ctx, f.id, "synthetic-next", "synthetic-card"); err == nil || consumed {
 		t.Fatal("disabled account redeemed", err)
 	}
 }

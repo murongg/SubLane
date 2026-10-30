@@ -26,6 +26,19 @@ func (h *accountHTTP) resetState(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, state)
 }
+
+func (h *accountHTTP) resetCards(w http.ResponseWriter, r *http.Request) {
+	if h.gateway == nil {
+		writeJSON(w, 503, map[string]string{"error": "unavailable"})
+		return
+	}
+	cards, err := h.gateway.ResetCards(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		accountError(w, err)
+		return
+	}
+	writeJSON(w, 200, cards)
+}
 func (h *accountHTTP) resetSettings(w http.ResponseWriter, r *http.Request) {
 	if !h.resetAvailable(w) {
 		return

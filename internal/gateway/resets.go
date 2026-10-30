@@ -6,6 +6,7 @@ import (
 
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/resets"
+	"github.com/murongg/SubLane/internal/storage/db"
 )
 
 func (s *Service) ResetObservation(ctx context.Context, id string) (resets.Observation, error) {
@@ -32,10 +33,53 @@ func (s *Service) ResetObservation(ctx context.Context, id string) (resets.Obser
 			value.Blocked = limit.LimitReached != nil && *limit.LimitReached
 		}
 	}
+	if value.Fresh && value.Credits != nil && *value.Credits > 0 {
+		cards, err := s.ResetCards(ctx, id)
+		if err == nil {
+			value.Cards = cards.Cards
+		}
+	}
 	return value, nil
 }
 
-func (s *Service) RedeemResetCredit(ctx context.Context, id, requestID string) (string, error) {
+func (s *Service) ResetCards(ctx context.Context, id string) (resets.CardList, error) {
+	account, err := s.accounts.Get(ctx, id)
+	if err != nil {
+		return resets.CardList{}, err
+	}
+	if account.Provider != "codex" {
+		return resets.CardList{}, resets.ErrUnsupported
+	}
+	if err := s.usageAccount(ctx, id); err != nil {
+		return resets.CardList{}, err
+	}
+	before, err := s.queries.GetResetAccount(ctx, db.GetResetAccountParams{ID: id, TenantID: s.tenantID})
+	if err != nil {
+		return resets.CardList{}, err
+	}
+	release, err := s.acquireUsage()
+	if err != nil {
+		return resets.CardList{}, err
+	}
+	defer release()
+	value, err := readAccount(ctx, s, id, s.provider.ResetCards)
+	if err != nil {
+		return resets.CardList{}, err
+	}
+	if err := s.usageAccount(ctx, id); err != nil {
+		return resets.CardList{}, err
+	}
+	after, err := s.queries.GetResetAccount(ctx, db.GetResetAccountParams{ID: id, TenantID: s.tenantID})
+	if err != nil {
+		return resets.CardList{}, err
+	}
+	if before.ModelsRevision != after.ModelsRevision {
+		return resets.CardList{}, errUsageChanged
+	}
+	return resets.PrepareCards(value, s.now()), nil
+}
+
+func (s *Service) RedeemResetCredit(ctx context.Context, id, requestID, creditID string) (string, error) {
 	account, err := s.accounts.Get(ctx, id)
 	if err != nil {
 		return "", err
@@ -51,7 +95,7 @@ func (s *Service) RedeemResetCredit(ctx context.Context, id, requestID string) (
 		return "", err
 	}
 	result, err := readAccount(ctx, s, id, func(ctx context.Context, c accounts.Credential) (string, error) {
-		return s.provider.ConsumeResetCredit(ctx, c, requestID)
+		return s.provider.ConsumeResetCredit(ctx, c, requestID, creditID)
 	})
 	release()
 	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)

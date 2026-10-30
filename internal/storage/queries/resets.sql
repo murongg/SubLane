@@ -13,14 +13,15 @@ WHERE id=sqlc.arg(id) AND tenant_id=sqlc.arg(tenant_id) AND reset_revision=sqlc.
 AND reset_next_run_at=sqlc.arg(previous_at);
 
 -- name: CreateResetRun :execrows
-INSERT OR IGNORE INTO reset_runs(request_id,account_id,trigger_kind,occurrence,outcome,reason,started_at,updated_at)
-VALUES(sqlc.arg(request_id),sqlc.arg(account_id),sqlc.arg(trigger_kind),sqlc.narg(occurrence),sqlc.arg(outcome),sqlc.arg(reason),sqlc.arg(now),sqlc.arg(now));
+INSERT OR IGNORE INTO reset_runs(request_id,account_id,trigger_kind,occurrence,outcome,reason,started_at,updated_at,credit_id)
+VALUES(sqlc.arg(request_id),sqlc.arg(account_id),sqlc.arg(trigger_kind),sqlc.narg(occurrence),sqlc.arg(outcome),sqlc.arg(reason),sqlc.arg(now),sqlc.arg(now),sqlc.arg(credit_id));
 
 -- name: PendingResetRun :one
 SELECT * FROM reset_runs WHERE account_id=sqlc.arg(account_id) AND outcome='pending' LIMIT 1;
 
 -- name: FinishResetRun :execrows
-UPDATE reset_runs SET outcome=sqlc.arg(outcome),reason=sqlc.arg(reason),updated_at=sqlc.arg(now)
+UPDATE reset_runs SET outcome=sqlc.arg(outcome),reason=sqlc.arg(reason),updated_at=sqlc.arg(now),
+credit_id=CASE WHEN sqlc.arg(outcome)='pending' THEN credit_id ELSE '' END
 WHERE request_id=sqlc.arg(request_id) AND outcome='pending';
 
 -- name: CountResetUsage :one
