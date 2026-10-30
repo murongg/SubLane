@@ -266,6 +266,10 @@ func sdkError(err error) error {
 }
 func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, body []byte, headers http.Header, opts exec.Options) (*http.Response, error) {
 	ctx = credentialContext(ctx, credential)
+	// Check before protocol dispatch so a Responses channel cannot turn compaction into generation.
+	if opts.Alt == "responses/compact" && credential.Kind() != "codex" {
+		return nil, ErrInput
+	}
 	provider := credential.Kind()
 	if provider == "openai" {
 		provider = channelExecutor(credential)
@@ -334,9 +338,6 @@ func (c *Client) runSDK(ctx context.Context, credential accounts.Credential, bod
 	opts.Headers, opts.OriginalRequest = clean, body
 	req := exec.Request{Model: request.Model, Payload: body}
 	if !opts.Stream {
-		if opts.Alt == "responses/compact" && credential.Kind() != "codex" {
-			return nil, ErrInput
-		}
 		result, err := executor.Execute(ctx, auth, req, opts)
 		if err != nil {
 			logSDKFailure(ctx, "execute", err, transport)

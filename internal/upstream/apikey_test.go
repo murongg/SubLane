@@ -467,3 +467,19 @@ func TestAPIChannelTransportRejectsCredentialEscape(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIChannelResponsesRejectsCompaction(t *testing.T) {
+	calls := 0
+	client := NewWithTransport(usageTransport(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"id":"resp_synthetic","status":"completed","output":[]}`))}, nil
+	}))
+	defer client.Close()
+	stream, err := client.Responses(t.Context(), channelCredential(t, "custom", "responses", "https://channel.example.test/v1"), []byte(`{"model":"synthetic-model","input":"Synthetic input"}`), nil, true)
+	if stream != nil {
+		stream.Body.Close()
+	}
+	if !errors.Is(err, ErrInput) || calls != 0 {
+		t.Fatal("API compaction reached upstream", calls, err)
+	}
+}
