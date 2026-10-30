@@ -33,6 +33,8 @@ var (
 
 type Account struct {
 	BaseURL        string `json:"base_url,omitempty"`
+	APIPlatform    string `json:"api_platform,omitempty"`
+	APIProtocol    string `json:"api_protocol,omitempty"`
 	GroupCount     *int64 `json:"group_count,omitempty"`
 	ProxyID        string `json:"proxy_id,omitempty"`
 	ID             string `json:"id"`
@@ -95,7 +97,7 @@ func (s *Service) List(ctx context.Context) ([]Account, error) {
 			if err != nil {
 				return nil, err
 			}
-			account.BaseURL = credential.BaseURL
+			account = apiMetadata(account, credential)
 		}
 		result = append(result, account)
 	}
@@ -182,6 +184,12 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 			if previous.BaseURL != credential.BaseURL {
 				return Account{}, ErrIdentity
 			}
+			if credential.APIPlatform == "" && credential.APIProtocol == "" {
+				credential.APIPlatform, credential.APIProtocol = previous.APIPlatform, previous.APIProtocol
+			}
+			if previous.APIConfig() != credential.APIConfig() {
+				return Account{}, ErrIdentity
+			}
 			credential.AccountID = previous.AccountID
 		}
 		// Existing continuations must never be rebound to a different upstream identity.
@@ -222,7 +230,9 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 		delete(s.refreshes, replaceID)
 		row.Email, row.Plan, row.Status, row.ExpiresAt, row.UpdatedAt = credential.Email, credential.Plan, status, credential.ExpiresAt, now
 		result := metadata(row)
-		result.BaseURL = credential.BaseURL
+		if credential.Kind() == "openai" {
+			result = apiMetadata(result, credential)
+		}
 		return result, nil
 	}
 	credential, _, err = prepareClaudeIdentity(credential, "")
@@ -275,7 +285,11 @@ func (s *Service) save(ctx context.Context, name string, credential Credential, 
 	if err := tx.Commit(); err != nil {
 		return Account{}, err
 	}
-	return Account{ID: id, BaseURL: credential.BaseURL, Provider: credential.Kind(), Name: name, Email: credential.Email, Plan: credential.Plan, Enabled: true, Status: status, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now, MaxConcurrency: 30, ProxyID: proxyID}, nil
+	result := Account{ID: id, Provider: credential.Kind(), Name: name, Email: credential.Email, Plan: credential.Plan, Enabled: true, Status: status, ExpiresAt: credential.ExpiresAt, CreatedAt: now, UpdatedAt: now, MaxConcurrency: 30, ProxyID: proxyID}
+	if credential.Kind() == "openai" {
+		result = apiMetadata(result, credential)
+	}
+	return result, nil
 }
 
 func (s *Service) SetEnabled(ctx context.Context, id string, enabled bool) (Account, error) {
@@ -381,7 +395,7 @@ func (s *Service) accountMetadata(row db.Account) (Account, error) {
 		if err != nil {
 			return Account{}, err
 		}
-		result.BaseURL = credential.BaseURL
+		result = apiMetadata(result, credential)
 	}
 	return result, nil
 }

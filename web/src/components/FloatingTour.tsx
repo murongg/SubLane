@@ -74,7 +74,7 @@ export function FloatingTour() {
     document.addEventListener('keydown', dismiss)
     return () => document.removeEventListener('keydown', dismiss)
   }, [tour.stage, stop, spotlight.paused])
-  if (!tour.stage || spotlight.paused) return null
+  if (!tour.stage || spotlight.paused || path === '/channels/new') return null
   const target = spotlight.target
   return createPortal(
     <>

@@ -50,7 +50,7 @@ The Radix dropdown menu is pinned to 2.1.16 alongside Dialog 1.1.15 so they shar
 - Revision: `a94750e3f5f8fc33757b839d85030e742284e43a`.
 - Copyright: (c) 2023 LobeHub.
 - License: MIT; full text in `licenses/lobe-icons.txt`.
-- Adapted files: `packages/static-svg/icons/codex-color.svg`, `claude-color.svg`, and `antigravity-color.svg`. They are bundled under `web/src/assets/providers/` and displayed by `ProviderLogo.tsx` with decorative accessibility semantics, retaining their original brand colors. No icon package or remote asset request is required at runtime.
+- Adapted files: `packages/static-svg/icons/codex-color.svg`, `claude-color.svg`, and `antigravity-color.svg`. They are bundled under `web/src/assets/providers/` and displayed by `ProviderLogo.tsx` with decorative accessibility semantics, retaining their original brand colors. API platform icons from the same revision are bundled under `web/src/assets/channels/` and displayed by `ChannelLogo.tsx`. No icon package or remote asset request is required at runtime.
 - Provider names and marks remain the property of their respective owners.
 
 ## git-cliff

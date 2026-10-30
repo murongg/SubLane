@@ -2,9 +2,12 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/murongg/SubLane/internal/groups"
 )
 
 func TestChannelManagementSeparatesSubscriptionsAndSecrets(t *testing.T) {
@@ -65,5 +68,87 @@ func TestChannelManagementSeparatesSubscriptionsAndSecrets(t *testing.T) {
 	}
 	if result := request(h, "POST", "/api/channels", "https://other.example.test", input, owner); result.Code != 403 {
 		t.Fatal("cross-origin channel creation", result.Code)
+	}
+}
+
+func TestChannelPlatformsPersistAcrossKeyRotation(t *testing.T) {
+	f := newForwardFixture(t, func(http.ResponseWriter, *http.Request) { t.Error("unexpected provider IO") })
+	h := New(Options{Auth: f.identity, Accounts: f.accounts})
+	origin := "http://example.test"
+	login := request(h, "POST", "/api/auth/login", origin, map[string]string{"username": "owner-test", "password": "owner pass 42"}, nil)
+	owner := login.Result().Cookies()[0]
+	for _, tc := range []struct{ platform, protocol string }{{"anthropic", "anthropic"}, {"gemini", "gemini"}, {"custom", "responses"}} {
+		t.Run(tc.platform, func(t *testing.T) {
+			input := map[string]string{"name": "Synthetic " + tc.platform, "api_key": "synthetic-" + tc.platform + "-key", "base_url": "https://channel.example.test/v1", "platform": tc.platform, "protocol": tc.protocol}
+			created := request(h, "POST", "/api/channels", origin, input, owner)
+			var channel struct{ ID, Platform, Protocol string }
+			if created.Code != 201 || json.Unmarshal(created.Body.Bytes(), &channel) != nil || channel.Platform != tc.platform || channel.Protocol != tc.protocol {
+				t.Fatal("platform metadata", created.Code, created.Body.String())
+			}
+			delete(input, "platform")
+			delete(input, "protocol")
+			input["api_key"] += "-rotated"
+			rotated := request(h, "PUT", "/api/channels/"+channel.ID+"/key", origin, input, owner)
+			if rotated.Code != 200 || json.Unmarshal(rotated.Body.Bytes(), &channel) != nil || channel.Platform != tc.platform || channel.Protocol != tc.protocol {
+				t.Fatal("rotation lost configuration", rotated.Code, rotated.Body.String())
+			}
+			stored, err := f.accounts.Prepare(t.Context(), channel.ID, nil)
+			if err != nil || stored.APIConfig().Platform != tc.platform || stored.APIConfig().Protocol != tc.protocol {
+				t.Fatal("persisted configuration", err)
+			}
+			input["platform"], input["protocol"] = "custom", "openai"
+			if changed := request(h, "PUT", "/api/channels/"+channel.ID+"/key", origin, input, owner); changed.Code != 409 {
+				t.Fatal("rotation rebound channel protocol", changed.Code, changed.Body.String())
+			}
+		})
+	}
+}
+
+func TestOpenCodeChannelModelChecksAndConversationSessions(t *testing.T) {
+	var sessions []string
+	f := newForwardFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/inference/go/v1/models" {
+			io.WriteString(w, `{"data":[{"id":"synthetic-channel-model"}]}`)
+			return
+		}
+		if r.URL.Path != "/inference/go/openai/v1/chat/completions" || r.Header.Get("X-Opencode-Session") == "" {
+			t.Error("OpenCode compatibility missing", r.URL.Path)
+			w.WriteHeader(400)
+			return
+		}
+		sessions = append(sessions, r.Header.Get("X-Opencode-Session"))
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"id\":\"synthetic-chat\",\"object\":\"chat.completion.chunk\",\"model\":\"synthetic-channel-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Synthetic output\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+	})
+	channel, err := f.accounts.ImportProvider(t.Context(), "openai", "Synthetic OpenCode", []byte(`{"api_key":"synthetic-opencode-key","base_url":"https://channel.example.test/inference/go/openai/v1","platform":"opencode-go"}`), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.forwarding.Check(t.Context(), channel.ID); err != nil {
+		t.Fatal(err)
+	}
+	if check, err := f.forwarding.CheckModel(t.Context(), channel.ID, "synthetic-channel-model"); err != nil || !check.Available {
+		t.Fatal("OpenCode model test", check, err)
+	}
+	if _, err := f.groups.Save(t.Context(), 1, groups.Input{Name: "Synthetic API group", Enabled: true, AccountIDs: []string{channel.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, session := range []string{"synthetic-session-a", "synthetic-session-a", "synthetic-session-b"} {
+		req, _ := http.NewRequest(http.MethodPost, f.server.URL+"/v1/responses", strings.NewReader(`{"model":"synthetic-channel-model","input":"Synthetic input"}`))
+		req.Header.Set("Authorization", "Bearer "+f.secret)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Opencode-Session", session)
+		response, err := f.server.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(response.Body)
+		response.Body.Close()
+		if err != nil || response.StatusCode != 200 || !strings.Contains(string(body), "Synthetic output") {
+			t.Fatal("OpenCode gateway request", response.StatusCode, string(body), err)
+		}
+	}
+	if len(sessions) != 4 || sessions[0] == sessions[1] || sessions[1] != sessions[2] || sessions[1] == sessions[3] || sessions[1] == "synthetic-session-a" {
+		t.Fatal("OpenCode conversations were not scoped and stable", sessions)
 	}
 }

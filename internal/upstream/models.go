@@ -24,6 +24,9 @@ func (c *Client) CatalogSource(provider string) string {
 }
 
 func catalogSource(provider, version string) string {
+	if provider == "openai" {
+		return "openai:v2"
+	}
 	if provider == "xai" {
 		return "xai:v2"
 	}
@@ -50,15 +53,15 @@ func CatalogModelID(model string) string {
 func (c *Client) providerModels(ctx context.Context, credential accounts.Credential) ([]Model, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
+	if credential.Kind() == "openai" {
+		return c.channelModels(ctx, credential)
+	}
 	endpoint, method := "https://api.anthropic.com/v1/models?limit=1000", "GET"
 	if credential.Kind() == "antigravity" {
 		endpoint, method = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels", "POST"
 	}
 	if credential.Kind() == "xai" {
 		endpoint = "https://cli-chat-proxy.grok.com/v1/models"
-	}
-	if credential.Kind() == "openai" {
-		endpoint = credential.BaseURL + "/models"
 	}
 	var body io.Reader
 	if method == http.MethodPost {

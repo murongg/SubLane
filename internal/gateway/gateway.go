@@ -169,6 +169,9 @@ func (s *Service) Open(ctx context.Context, userID, groupID int64, raw []byte, h
 		return nil, upstream.ErrInput
 	}
 	session := headers.Get("Session_id")
+	if session == "" {
+		session = headers.Get("X-Opencode-Session")
+	}
 	if session == "" && len(input["prompt_cache_key"]) > 0 {
 		if json.Unmarshal(input["prompt_cache_key"], &session) != nil {
 			return nil, upstream.ErrInput
