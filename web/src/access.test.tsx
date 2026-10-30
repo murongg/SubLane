@@ -117,6 +117,7 @@ it('groups common and administrator navigation separately for administrators', a
 
 it.each([
   '/channels',
+  '/channels/new',
   '/accounts',
   '/members',
   '/groups',
@@ -138,13 +139,15 @@ it.each([
     await user.click(screen.getByRole('link', { name: 'Back to overview' }))
     await screen.findByRole('heading', { name: 'Your workspace' })
     expect(
-      fetchMock.mock.calls.every(
-        ([url]) =>
-          url === '/api/auth/state' ||
-          url === '/api/workspaces' ||
-          url === '/api/connection',
-      ),
-    ).toBe(true)
+      fetchMock.mock.calls
+        .map(([url]) => url)
+        .filter(
+          (url) =>
+            !['/api/auth/state', '/api/workspaces', '/api/connection'].includes(
+              url,
+            ),
+        ),
+    ).toEqual([])
   },
 )
 

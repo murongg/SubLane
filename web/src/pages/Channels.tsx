@@ -6,7 +6,6 @@ import {
   LoaderCircle,
   MoreHorizontal,
   Plus,
-  Plug,
   Power,
   RefreshCw,
   Route,
@@ -26,8 +25,11 @@ import {
   setChannelConcurrency,
   resumeChannel,
   type Channel,
+  channelPlatforms,
+  channelProtocols,
 } from '@/lib/channels'
 import { reasonKeys } from '@/lib/runtime'
+import { ChannelLogo } from '@/components/ChannelLogo'
 import { ChannelEditor } from '@/components/ChannelEditor'
 import { CatalogDialog } from '@/components/CatalogDialog'
 import { AccountLimits } from '@/components/AccountLimits'
@@ -49,7 +51,7 @@ export function Channels() {
   const query = useQuery(channelOptions)
   const runtime = useQuery(channelRuntimeOptions)
   const heading = useRef<HTMLHeadingElement>(null)
-  const [editing, setEditing] = useState<Channel | 'new' | null>(null)
+  const [editing, setEditing] = useState<Channel | null>(null)
   const [removing, setRemoving] = useState<Channel | null>(null)
   const [limits, setLimits] = useState<Channel | null>(null)
   const [proxy, setProxy] = useState<Channel | null>(null)
@@ -91,15 +93,11 @@ export function Channels() {
         <h1 ref={heading} tabIndex={-1} className="page-title">
           {t('channelsTitle')}
         </h1>
-        <Button
-          data-tour="account"
-          onClick={() => {
-            setVerified(null)
-            setEditing('new')
-          }}
-        >
-          <Plus aria-hidden="true" />
-          {t('addChannel')}
+        <Button asChild data-tour="account">
+          <Link to="/channels/new">
+            <Plus aria-hidden="true" />
+            {t('addChannel')}
+          </Link>
         </Button>
       </div>
       <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -164,9 +162,9 @@ export function Channels() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
                     <div className="flex min-w-0 items-start gap-3">
-                      <Plug
-                        aria-hidden="true"
-                        className="mt-0.5 size-6 shrink-0"
+                      <ChannelLogo
+                        platform={channel.platform}
+                        className="mt-0.5 size-7"
                       />
                       <div className="min-w-0 space-y-1">
                         <h2
@@ -179,7 +177,8 @@ export function Channels() {
                           {channel.base_url}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {t('channelProtocolOpenAI')}
+                          {t(channelPlatforms[channel.platform].label)} ·{' '}
+                          {t(channelProtocols[channel.protocol])}
                         </p>
                       </div>
                     </div>
@@ -350,7 +349,7 @@ export function Channels() {
       </p>
       {editing && (
         <ChannelEditor
-          channel={editing === 'new' ? undefined : editing}
+          channel={editing}
           onClose={() => setEditing(null)}
           onSaved={invalidate}
           restoreFocus={restoreFocus}

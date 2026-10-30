@@ -15,6 +15,7 @@ type Channel struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
 	Protocol       string `json:"protocol"`
+	Platform       string `json:"platform"`
 	BaseURL        string `json:"base_url"`
 	Enabled        bool   `json:"enabled"`
 	Status         string `json:"status"`
@@ -26,10 +27,12 @@ type Channel struct {
 }
 
 type Input struct {
-	Name    string `json:"name"`
-	APIKey  string `json:"api_key"`
-	BaseURL string `json:"base_url"`
-	ProxyID string `json:"proxy_id,omitempty"`
+	Name     string `json:"name"`
+	APIKey   string `json:"api_key"`
+	BaseURL  string `json:"base_url"`
+	ProxyID  string `json:"proxy_id,omitempty"`
+	Platform string `json:"platform,omitempty"`
+	Protocol string `json:"protocol,omitempty"`
 }
 
 type Service struct{ resources *accounts.Service }
@@ -41,7 +44,7 @@ func metadata(a accounts.Account) Channel {
 	if status == "reauth_required" {
 		status = "key_required"
 	}
-	return Channel{ID: a.ID, Name: a.Name, Protocol: "openai", BaseURL: a.BaseURL, Enabled: a.Enabled, Status: status, ProxyID: a.ProxyID, MaxConcurrency: a.MaxConcurrency, GroupCount: a.GroupCount, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
+	return Channel{ID: a.ID, Name: a.Name, Protocol: a.APIProtocol, Platform: a.APIPlatform, BaseURL: a.BaseURL, Enabled: a.Enabled, Status: status, ProxyID: a.ProxyID, MaxConcurrency: a.MaxConcurrency, GroupCount: a.GroupCount, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
 }
 
 func (s *Service) List(ctx context.Context) ([]Channel, error) {
@@ -72,7 +75,7 @@ func (s *Service) Save(ctx context.Context, id string, input Input) (Channel, er
 			return Channel{}, err
 		}
 	}
-	raw, err := json.Marshal(map[string]string{"api_key": input.APIKey, "base_url": input.BaseURL})
+	raw, err := json.Marshal(map[string]string{"api_key": input.APIKey, "base_url": input.BaseURL, "platform": input.Platform, "protocol": input.Protocol})
 	if err != nil {
 		return Channel{}, accounts.ErrInput
 	}

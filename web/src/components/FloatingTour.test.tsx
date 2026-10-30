@@ -17,6 +17,18 @@ import { selectWorkspace } from '@/lib/workspace'
 vi.mock('@/pages/Usage', () => ({ Usage: () => null, TeamUsage: () => null }))
 afterEach(() => sessionStorage.clear())
 
+it('pauses the guide while the API channel creation page is open', async () => {
+  const { router } = scenario('account')
+  const user = userEvent.setup()
+  await user.click(
+    await screen.findByRole('button', { name: 'Start guided setup' }),
+  )
+  await screen.findByRole('region', { name: 'Guided setup' })
+  await router.navigate({ to: '/channels/new' })
+  await screen.findByRole('heading', { name: 'Add API channel' })
+  expect(screen.queryByRole('region', { name: 'Guided setup' })).toBeNull()
+})
+
 const account = {
   id: 'synthetic-account',
   name: 'Synthetic account',

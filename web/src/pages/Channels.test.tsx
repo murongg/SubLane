@@ -1,4 +1,10 @@
-import { render, screen, within, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+  waitFor,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryHistory } from '@tanstack/react-router'
 import { expect, it, vi } from 'vitest'
@@ -97,6 +103,8 @@ it('creates a channel independently and removes the key from mutation state', as
           name: 'Synthetic API',
           api_key: 'synthetic-key',
           base_url: 'https://relay.example.test/v1',
+          platform: 'openai',
+          protocol: 'openai',
         })
         saved = true
         return Promise.resolve(response(channel))
@@ -119,8 +127,20 @@ it('creates a channel independently and removes the key from mutation state', as
   )
   const user = userEvent.setup()
   await screen.findByRole('heading', { name: 'API channels' })
-  await user.click(screen.getByRole('button', { name: 'Add API channel' }))
-  const dialog = await screen.findByRole('dialog')
+  await user.click(screen.getByRole('link', { name: 'Add API channel' }))
+  await screen.findByRole('heading', { name: 'Add API channel' })
+  expect(
+    screen
+      .getByRole('link', { name: 'API channels' })
+      .getAttribute('aria-current'),
+  ).toBe('page')
+  expect(
+    screen
+      .getByRole('link', { name: 'API channels' })
+      .getAttribute('data-active'),
+  ).toBe('true')
+  expect(screen.queryByRole('dialog')).toBeNull()
+  const dialog = screen.getByRole('main')
   await user.type(
     within(dialog).getByLabelText('Channel name'),
     'Synthetic API',
@@ -159,6 +179,8 @@ it('replaces a channel key without exposing the stored key or changing its endpo
           name: channel.name,
           base_url: channel.base_url,
           api_key: 'synthetic-rotated-key',
+          platform: 'custom',
+          protocol: 'openai',
         })
         return Promise.resolve(response(channel))
       }
@@ -194,4 +216,151 @@ it('replaces a channel key without exposing the stored key or changing its endpo
     within(dialog).getByRole('button', { name: 'Replace API key' }),
   )
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+})
+
+it('selects platform presets and accepts a custom endpoint and protocol', async () => {
+  let submitted: Record<string, string> | undefined
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/proxies')
+        return Promise.resolve(response({ proxies: [] }))
+      if (url === '/api/channels/runtime')
+        return Promise.resolve(response({ channels: [], server_time: 1 }))
+      if (url === '/api/channels' && init?.method === 'POST') {
+        submitted = JSON.parse(String(init.body))
+        return Promise.resolve(response({ ...channel, ...submitted }))
+      }
+      if (url === '/api/channels')
+        return Promise.resolve(response({ channels: [] }))
+      return Promise.resolve(response({}))
+    }),
+  )
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/channels'] }),
+      )}
+    />,
+  )
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('link', { name: 'Add API channel' }))
+  await screen.findByRole('heading', { name: 'Add API channel' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  const dialog = screen.getByRole('main')
+  await user.click(within(dialog).getByLabelText('Platform'))
+  await user.click(await screen.findByRole('menuitemradio', { name: 'Gemini' }))
+  expect(
+    (within(dialog).getByLabelText('Base URL') as HTMLInputElement).value,
+  ).toBe('https://generativelanguage.googleapis.com/v1beta')
+  expect(
+    within(dialog).getByLabelText('Upstream protocol').textContent,
+  ).toContain('Gemini')
+  await user.click(within(dialog).getByLabelText('Platform'))
+  await user.click(await screen.findByRole('menuitemradio', { name: 'Custom' }))
+  await user.click(within(dialog).getByLabelText('Upstream protocol'))
+  await user.click(
+    await screen.findByRole('menuitemradio', { name: 'OpenAI Responses' }),
+  )
+  await user.type(
+    within(dialog).getByLabelText('Channel name'),
+    'Synthetic custom',
+  )
+  await user.clear(within(dialog).getByLabelText('Base URL'))
+  await user.type(
+    within(dialog).getByLabelText('Base URL'),
+    'https://custom.example.test/v1',
+  )
+  await user.type(
+    within(dialog).getByLabelText('Upstream API key'),
+    'synthetic-key',
+  )
+  await user.click(within(dialog).getByRole('button', { name: 'Connect API' }))
+  await waitFor(() =>
+    expect(submitted).toEqual({
+      name: 'Synthetic custom',
+      api_key: 'synthetic-key',
+      base_url: 'https://custom.example.test/v1',
+      platform: 'custom',
+      protocol: 'responses',
+    }),
+  )
+})
+
+it('searches platform and protocol choices without submitting the channel form', async () => {
+  const fetch = vi
+    .fn()
+    .mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST')
+        return Promise.reject(new Error('Unexpected mutation'))
+      if (url === '/api/auth/state')
+        return Promise.resolve(response(authenticated))
+      if (url === '/api/proxies')
+        return Promise.resolve(response({ proxies: [] }))
+      return Promise.resolve(response({}))
+    })
+  vi.stubGlobal('fetch', fetch)
+  render(
+    <App
+      router={createAppRouter(
+        createMemoryHistory({ initialEntries: ['/channels/new'] }),
+      )}
+    />,
+  )
+  const user = userEvent.setup()
+  const platform = await screen.findByRole('button', {
+    name: 'Platform: OpenAI',
+  })
+  await user.click(platform)
+  let search = await screen.findByRole('searchbox', {
+    name: 'Search platforms',
+  })
+  expect(document.activeElement).toBe(search)
+  await user.type(search, '  gEmI ')
+  expect(screen.getAllByRole('menuitemradio')).toHaveLength(1)
+  fireEvent.keyDown(search, { key: 'Enter', isComposing: true })
+  expect(screen.getByRole('menu')).toBeTruthy()
+  await user.keyboard('{ArrowDown}{Enter}')
+  await waitFor(() => expect(platform.textContent).toContain('Gemini'))
+  expect((screen.getByLabelText('Base URL') as HTMLInputElement).value).toBe(
+    'https://generativelanguage.googleapis.com/v1beta',
+  )
+  await user.click(platform)
+  search = await screen.findByRole('searchbox', { name: 'Search platforms' })
+  expect((search as HTMLInputElement).value).toBe('')
+  await user.type(search, 'generativelanguage.googleapis.com')
+  expect(screen.getAllByRole('menuitemradio')).toHaveLength(1)
+  await user.clear(search)
+  await user.type(search, 'synthetic-no-such-platform')
+  expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0)
+  await screen.findByText('No matching platforms.')
+  await user.keyboard('{Enter}')
+  expect(screen.getByRole('menu')).toBeTruthy()
+  await user.keyboard('{Escape}')
+  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+  expect(document.activeElement).toBe(platform)
+  await user.click(platform)
+  search = await screen.findByRole('searchbox', { name: 'Search platforms' })
+  await user.type(search, 'custom')
+  await user.keyboard('{Enter}')
+  await user.click(
+    await screen.findByRole('button', { name: 'Upstream protocol: Gemini' }),
+  )
+  await user.type(
+    await screen.findByRole('searchbox', { name: 'Search protocols' }),
+    'responses',
+  )
+  expect(screen.getAllByRole('menuitemradio')).toHaveLength(1)
+  await user.keyboard('{ArrowUp}{Enter}')
+  await screen.findByRole('button', {
+    name: 'Upstream protocol: OpenAI Responses',
+  })
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(
+    fetch.mock.calls.some(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+    ),
+  ).toBe(false)
 })
