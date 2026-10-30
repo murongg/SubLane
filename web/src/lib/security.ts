@@ -110,11 +110,13 @@ export async function addPasskey(name: string, proof: Proof) {
     body: JSON.stringify({ name, credential: credential.toJSON() }),
   })
 }
-export async function passkeyAssertion() {
+export async function passkeyAssertion(turnstileToken?: string) {
   if (!passkeySupported()) throw new ApiError('passkey_unavailable', 400)
   const options = await request('/api/auth/passkey/begin', assertionSchema, {
     method: 'POST',
-    body: '{}',
+    body: JSON.stringify(
+      turnstileToken ? { turnstile_token: turnstileToken } : {},
+    ),
   })
   const credential = await navigator.credentials.get({
     publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(
@@ -137,6 +139,8 @@ export const securityErrors = {
   rate_limited: 'authRateLimited',
   auth_busy: 'authBusy',
   origin_rejected: 'authOriginError',
+  turnstile_failed: 'turnstileFailed',
+  turnstile_unavailable: 'turnstileUnavailable',
 } as const
 export function securityError(error: Error | null) {
   if (

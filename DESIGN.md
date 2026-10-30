@@ -159,6 +159,8 @@ Reuse `SidebarProvider`, `Sidebar`, `SidebarMenuButton`, and `SidebarTrigger`. A
 
 ### Authentication
 
+Optional Turnstile verification appears before the sign-in button and uses the active theme, flexible desktop width and compact mobile layout. Password and passkey controls wait for a valid challenge token; failed submissions refresh it, and widget loading failures offer an inline retry. The platform-owner Turnstile page under System settings uses the existing flat form layout, a verification checkbox, Site Key and masked Secret Key fields, persistent save feedback, and an empty secret field after saving. Explain that leaving the secret blank preserves it and that the login hostname must be configured in Cloudflare.
+
 First-time setup starts with a centered welcome surface, the approved mark, a brief introduction, and a two-step outline of administrator creation and workspace entry. **Start setup** opens the administrator form on its own route; the form offers a return action until submission is in progress. Move focus to the page heading when moving between setup screens, and sign in automatically after successful creation. Initialized instances skip the welcome flow.
 
 Setup and login share the workspace's compact icon controls, custom dropdown menus, typography, and neutral palette. Keep the header transparent and borderless, and the centered content surface focused on the current step. Forms retain visible field labels and localized inline errors. Dark inputs use the canvas background to retain contrast against the input-border token. The private navigation is rendered only after authentication; the sidebar shows the current user and a sign-out action.

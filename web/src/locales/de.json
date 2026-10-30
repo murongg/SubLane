@@ -1388,5 +1388,20 @@
   "resetCardDefaultTitle": "Kontingent zurücksetzen",
   "resetCardsUnavailable": "Übersprungen: Kartendetails nicht verfügbar",
   "resetCardsNoEligible": "Übersprungen: keine geeigneten Reset-Karten",
-  "resetCardsDisabled": "Account aktivieren oder erneut autorisieren, um Karten anzuzeigen."
+  "resetCardsDisabled": "Account aktivieren oder erneut autorisieren, um Karten anzuzeigen.",
+  "turnstileTitle": "Turnstile",
+  "turnstileDescription": "Verlangt Cloudflare-Verifizierung bei Passwort- und Passkey-Anmeldungen auf dieser Instanz.",
+  "turnstileEnabled": "Verifizierung bei der Anmeldung verlangen",
+  "turnstileSiteKey": "Site Key",
+  "turnstileSecretKey": "Secret Key",
+  "turnstileSecretSaved": "Secret Key ist konfiguriert. Leer lassen, um sie beizubehalten.",
+  "turnstileSecretHint": "Fügen Sie den Anmelde-Hostnamen zum Cloudflare-Widget hinzu. Der geheime Schlüssel wird verschlüsselt und nicht erneut angezeigt.",
+  "turnstileSave": "Turnstile speichern",
+  "turnstileSaved": "Turnstile-Einstellungen gespeichert.",
+  "turnstileSettingsFailed": "Turnstile konnte nicht geladen oder gespeichert werden. Bitte erneut versuchen.",
+  "turnstileSettingsInvalid": "Geben Sie gültige Site Key und Secret Key ein, bevor Sie die Verifizierung aktivieren.",
+  "turnstileFailed": "Verifizierung fehlgeschlagen oder abgelaufen. Bitte erneut durchführen.",
+  "turnstileUnavailable": "Verifizierung nicht verfügbar. Bitte erneut versuchen.",
+  "turnstileVerification": "Menschliche Verifizierung",
+  "turnstileRetry": "Erneut versuchen"
 }

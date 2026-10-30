@@ -1388,5 +1388,20 @@
   "resetCardDefaultTitle": "할당량 초기화",
   "resetCardsUnavailable": "건너뜀: 카드 상세 정보를 가져올 수 없습니다",
   "resetCardsNoEligible": "건너뜀: 조건에 맞는 초기화 카드가 없습니다",
-  "resetCardsDisabled": "카드를 보려면 계정을 활성화하거나 다시 인증하세요."
+  "resetCardsDisabled": "카드를 보려면 계정을 활성화하거나 다시 인증하세요.",
+  "turnstileTitle": "Turnstile",
+  "turnstileDescription": "이 인스턴스의 비밀번호 및 패스키 로그인에 Cloudflare 인증을 요구합니다.",
+  "turnstileEnabled": "로그인 시 인증 필요",
+  "turnstileSiteKey": "Site Key",
+  "turnstileSecretKey": "Secret Key",
+  "turnstileSecretSaved": "Secret Key가 설정되어 있습니다. 비워 두면 기존 키가 유지됩니다.",
+  "turnstileSecretHint": "Cloudflare 위젯에 로그인 호스트 이름을 추가하세요. 비밀 키는 암호화되어 저장되며 다시 표시되지 않습니다.",
+  "turnstileSave": "Turnstile 저장",
+  "turnstileSaved": "Turnstile 설정을 저장했습니다.",
+  "turnstileSettingsFailed": "Turnstile 설정을 불러오거나 저장할 수 없습니다. 다시 시도하세요.",
+  "turnstileSettingsInvalid": "인증을 활성화하기 전에 유효한 Site Key와 Secret Key를 입력하세요.",
+  "turnstileFailed": "인증에 실패했거나 만료되었습니다. 다시 인증하세요.",
+  "turnstileUnavailable": "인증을 사용할 수 없습니다. 다시 시도하세요.",
+  "turnstileVerification": "사람 확인",
+  "turnstileRetry": "다시 시도"
 }

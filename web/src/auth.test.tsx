@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryHistory } from '@tanstack/react-router'
 import { expect, it, vi } from 'vitest'
@@ -61,6 +61,84 @@ function open(path = '/') {
     />,
   )
 }
+
+it('requires Turnstile and refreshes its single-use token after password and factor failures', async () => {
+  const widgets: Array<Record<string, unknown>> = []
+  const remove = vi.fn()
+  vi.stubGlobal('turnstile', {
+    render: vi.fn((_element: HTMLElement, options: Record<string, unknown>) => {
+      widgets.push(options)
+      return String(widgets.length)
+    }),
+    remove,
+  })
+  const attempts: unknown[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/auth/state')
+        return Promise.resolve(
+          response({ ...anonymous, turnstile_site_key: 'synthetic-site' }),
+        )
+      if (url === '/api/auth/login') {
+        attempts.push(JSON.parse(String(init?.body)))
+        return Promise.resolve(
+          response(
+            {
+              error:
+                attempts.length === 1
+                  ? 'two_factor_required'
+                  : 'invalid_factor',
+            },
+            401,
+          ),
+        )
+      }
+      return Promise.resolve(response({}))
+    }),
+  )
+  open('/login')
+  const button = await screen.findByRole('button', {
+    name: 'Sign in',
+  })
+  expect((button as HTMLButtonElement).disabled).toBe(true)
+  await waitFor(() => expect(widgets).toHaveLength(1))
+  expect(widgets[0].sitekey).toBe('synthetic-site')
+  expect(widgets[0].action).toBe('login')
+  const user = userEvent.setup()
+  await user.type(screen.getByLabelText('Username'), 'synthetic-admin')
+  await user.type(screen.getByLabelText('Password'), 'synthetic-password')
+  act(() => (widgets[0].callback as (token: string) => void)('synthetic-first'))
+  await user.click(button)
+  await screen.findByLabelText('Verification code or recovery code')
+  expect(attempts[0]).toEqual({
+    username: 'synthetic-admin',
+    password: 'synthetic-password',
+    turnstile_token: 'synthetic-first',
+  })
+  await waitFor(() => expect(widgets).toHaveLength(2))
+  expect((button as HTMLButtonElement).disabled).toBe(true)
+  await user.type(
+    screen.getByLabelText('Verification code or recovery code'),
+    '123456',
+  )
+  act(() =>
+    (widgets[1].callback as (token: string) => void)('synthetic-second'),
+  )
+  await user.click(button)
+  await waitFor(() => expect(widgets).toHaveLength(3))
+  expect(attempts[1]).toEqual({
+    username: 'synthetic-admin',
+    password: 'synthetic-password',
+    code: '123456',
+    turnstile_token: 'synthetic-second',
+  })
+  act(() => (widgets[2].callback as (token: string) => void)('synthetic-third'))
+  expect((button as HTMLButtonElement).disabled).toBe(false)
+  act(() => (widgets[2]['expired-callback'] as () => void)())
+  expect((button as HTMLButtonElement).disabled).toBe(true)
+  expect(remove).toHaveBeenCalled()
+})
 
 it('registers a member through an invitation link', async () => {
   const calls: Array<{

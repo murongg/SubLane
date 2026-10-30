@@ -26,6 +26,7 @@ import (
 	"github.com/murongg/SubLane/internal/server"
 	"github.com/murongg/SubLane/internal/tenants"
 	"github.com/murongg/SubLane/internal/timezone"
+	"github.com/murongg/SubLane/internal/turnstile"
 	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/vault"
 	"github.com/murongg/SubLane/internal/versions"
@@ -83,6 +84,7 @@ type tenantRegistry struct {
 	grokVersions      *versions.Service
 	claudeVersions    *versions.Service
 	timeZone          *timezone.Service
+	turnstile         *turnstile.Service
 	assets            fs.FS
 	dataDir           string
 	keyFile           string
@@ -160,6 +162,7 @@ func (r *tenantRegistry) acquire(id int64) *tenantRuntime {
 		Groups: groups.NewForTenant(r.db, id), Tenants: r.tenants, TenantID: id,
 		PublicURL: r.publicURL, TrustedProxies: r.trustedProxies, LoginLimiter: r.loginLimiter, EnrollmentLimiter: r.enrollmentLimiter,
 		CodexVersions: codexVersions, GrokVersions: grokVersions, ClaudeVersions: claudeVersions, TimeZone: r.timeZone,
+		Turnstile: r.turnstile,
 	})
 	if r.runtimes == nil {
 		r.runtimes = make(map[int64]*tenantRuntime)

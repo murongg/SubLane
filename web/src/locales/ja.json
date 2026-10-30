@@ -1388,5 +1388,20 @@
   "resetCardDefaultTitle": "利用枠のリセット",
   "resetCardsUnavailable": "スキップ：カードの詳細を取得できません",
   "resetCardsNoEligible": "スキップ：対象のリセットカードがありません",
-  "resetCardsDisabled": "カードを表示するにはアカウントを有効化するか再認証してください。"
+  "resetCardsDisabled": "カードを表示するにはアカウントを有効化するか再認証してください。",
+  "turnstileTitle": "Turnstile",
+  "turnstileDescription": "このインスタンスのパスワードとパスキーによるログインに Cloudflare 認証を要求します。",
+  "turnstileEnabled": "ログイン時に認証を要求",
+  "turnstileSiteKey": "Site Key",
+  "turnstileSecretKey": "Secret Key",
+  "turnstileSecretSaved": "Secret Key は設定済みです。空欄で現在のキーを保持します。",
+  "turnstileSecretHint": "Cloudflare のウィジェットにログイン用ホスト名を追加してください。秘密鍵は暗号化され、再表示されません。",
+  "turnstileSave": "Turnstile を保存",
+  "turnstileSaved": "Turnstile 設定を保存しました。",
+  "turnstileSettingsFailed": "Turnstile 設定を読み込み、または保存できません。再試行してください。",
+  "turnstileSettingsInvalid": "認証を有効にする前に、有効な Site Key と Secret Key を入力してください。",
+  "turnstileFailed": "認証に失敗したか、有効期限が切れました。もう一度認証してください。",
+  "turnstileUnavailable": "認証を利用できません。再試行してください。",
+  "turnstileVerification": "人間であることの確認",
+  "turnstileRetry": "再試行"
 }

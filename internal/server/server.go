@@ -27,6 +27,7 @@ import (
 	"github.com/murongg/SubLane/internal/resets"
 	"github.com/murongg/SubLane/internal/tenants"
 	"github.com/murongg/SubLane/internal/timezone"
+	"github.com/murongg/SubLane/internal/turnstile"
 	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/versions"
 )
@@ -60,6 +61,7 @@ type Options struct {
 	GrokVersions       *versions.Service
 	ClaudeVersions     *versions.Service
 	TimeZone           *timezone.Service
+	Turnstile          *turnstile.Service
 	ProxyCheck         func(context.Context, string) (upstream.ProxyCheck, error)
 }
 
@@ -84,6 +86,7 @@ func New(o Options) http.Handler {
 		enrollmentLimiter = NewLoginLimiter()
 	}
 	login := &authHTTP{demo: o.Demo, audit: o.Audit, service: o.Auth, tenants: o.Tenants, timeZone: o.TimeZone, tenantID: tenantID, publicURL: o.PublicURL, limiter: loginLimiter, enrollmentLimiter: enrollmentLimiter, trustedProxies: o.TrustedProxies}
+	login.turnstile = o.Turnstile
 	keys := &keyHTTP{groups: o.Groups, service: o.Keys, gateway: o.Gateway, publicURL: o.PublicURL, sockets: make(chan struct{}, 8)}
 	accountManagement := &accountHTTP{service: o.Accounts, oauth: o.OAuth, gateway: o.Gateway, resets: o.ResetCredits, tenantID: tenantID}
 	memberManagement := &memberHTTP{gateway: o.Gateway}
@@ -239,6 +242,10 @@ func New(o Options) http.Handler {
 		management.Route("/settings/claude", func(settings chi.Router) {
 			settings.Use(requirePlatformAdmin(tenantID))
 			(&versionHTTP{service: o.ClaudeVersions, provider: versions.Claude}).register(settings)
+		})
+		management.Route("/settings/turnstile", func(settings chi.Router) {
+			settings.Use(requirePlatformAdmin(tenantID))
+			(&turnstileHTTP{service: o.Turnstile}).register(settings)
 		})
 		management.Route("/settings/timezone", func(settings chi.Router) {
 			settings.Use(requirePlatformAdmin(tenantID))

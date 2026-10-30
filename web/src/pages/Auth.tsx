@@ -19,6 +19,7 @@ import { ApiError } from '@/lib/request'
 import { replaceAuthState } from '@/lib/query'
 import { validateCredentials, type CredentialError } from '@/lib/credentials'
 import { AuthShell } from '@/components/AuthShell'
+import { Turnstile } from '@/components/Turnstile'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
@@ -30,6 +31,8 @@ const messages = {
   origin_rejected: 'authOriginError',
   invalid_input: 'authInvalidInput',
   already_initialized: 'setupClosed',
+  turnstile_failed: 'turnstileFailed',
+  turnstile_unavailable: 'turnstileUnavailable',
 } as const
 
 export function Auth({ mode }: { mode: 'setup' | 'login' }) {
@@ -41,6 +44,15 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
   const client = useQueryClient()
   const { data: state } = useQuery(authOptions())
   const demo = !creating ? state?.demo : undefined
+  const siteKey = !creating ? state?.turnstile_site_key : undefined
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const [challenge, setChallenge] = useState(0)
+  const verificationPending = !!siteKey && !turnstileToken
+  const refreshChallenge = () => {
+    // Cloudflare consumes a token even when the password or second factor is rejected.
+    setTurnstileToken('')
+    setChallenge((value) => value + 1)
+  }
   const navigate = useNavigate()
   const heading = useRef<HTMLHeadingElement>(null)
   const [fieldError, setFieldError] = useState<CredentialError | null>(null)
@@ -52,8 +64,10 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
   }, [secondFactor])
   const passkey = useMutation({
     gcTime: 0,
-    mutationFn: async () => signInWithPasskey(await passkeyAssertion()),
+    mutationFn: async () =>
+      signInWithPasskey(await passkeyAssertion(turnstileToken || undefined)),
     onSuccess: (state) => replaceAuthState(client, state),
+    onSettled: refreshChallenge,
   })
   const mutation = useMutation({
     meta: { demoAllowed: !creating },
@@ -64,6 +78,7 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
       password: string
       workspace_name?: string
       code?: string
+      turnstile_token?: string
     }) =>
       creating
         ? setup({
@@ -73,6 +88,7 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
           })
         : signIn(input),
     onSuccess: (state) => replaceAuthState(client, state),
+    onSettled: refreshChallenge,
     onError: (error) => {
       if (error instanceof ApiError && error.code === 'two_factor_required')
         setSecondFactor(true)
@@ -82,12 +98,13 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
   })
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (mutation.isPending || passkey.isPending) return
+    if (mutation.isPending || passkey.isPending || verificationPending) return
     const form = event.currentTarget
     const data = new FormData(form)
     const input = {
       username: String(data.get('username') ?? '').trim(),
       password: String(data.get('password') ?? ''),
+      ...(siteKey ? { turnstile_token: turnstileToken } : {}),
       ...(!creating && secondFactor
         ? { code: String(data.get('code') ?? '').trim() }
         : {}),
@@ -330,10 +347,19 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
             })}
           </p>
         )}
+        {siteKey && (
+          <Turnstile
+            key={`${siteKey}-${challenge}`}
+            siteKey={siteKey}
+            onToken={setTurnstileToken}
+          />
+        )}
         <Button
           type="submit"
           className="w-full"
-          disabled={mutation.isPending || passkey.isPending}
+          disabled={
+            mutation.isPending || passkey.isPending || verificationPending
+          }
         >
           {(mutation.isPending || passkey.isPending) && (
             <LoaderCircle
@@ -361,7 +387,10 @@ export function Auth({ mode }: { mode: 'setup' | 'login' }) {
             variant="outline"
             className="w-full"
             disabled={
-              !passkeySupported() || mutation.isPending || passkey.isPending
+              !passkeySupported() ||
+              mutation.isPending ||
+              passkey.isPending ||
+              verificationPending
             }
             onClick={() => passkey.mutate()}
           >

@@ -1393,5 +1393,20 @@
   "resetCardDefaultTitle": "Réinitialisation du quota",
   "resetCardsUnavailable": "Ignorée : détails des cartes indisponibles",
   "resetCardsNoEligible": "Ignorée : aucune carte admissible",
-  "resetCardsDisabled": "Activez ou autorisez à nouveau ce compte pour voir ses cartes."
+  "resetCardsDisabled": "Activez ou autorisez à nouveau ce compte pour voir ses cartes.",
+  "turnstileTitle": "Turnstile",
+  "turnstileDescription": "Exige une vérification Cloudflare pour les connexions par mot de passe et clé d’accès sur cette instance.",
+  "turnstileEnabled": "Exiger une vérification à la connexion",
+  "turnstileSiteKey": "Site Key",
+  "turnstileSecretKey": "Secret Key",
+  "turnstileSecretSaved": "Secret Key configurée. Laissez le champ vide pour la conserver.",
+  "turnstileSecretHint": "Ajoutez le nom d’hôte de connexion au widget Cloudflare. Le secret est chiffré et ne sera plus affiché.",
+  "turnstileSave": "Enregistrer Turnstile",
+  "turnstileSaved": "Paramètres Turnstile enregistrés.",
+  "turnstileSettingsFailed": "Impossible de charger ou d’enregistrer Turnstile. Réessayez.",
+  "turnstileSettingsInvalid": "Saisissez des Site Key et Secret Key valides avant d’activer la vérification.",
+  "turnstileFailed": "La vérification a échoué ou a expiré. Recommencez le défi.",
+  "turnstileUnavailable": "La vérification est indisponible. Réessayez.",
+  "turnstileVerification": "Vérification humaine",
+  "turnstileRetry": "Réessayer"
 }

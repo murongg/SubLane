@@ -1,4 +1,25 @@
 export const en = {
+  turnstileRetry: 'Retry',
+  turnstileTitle: 'Turnstile',
+  turnstileDescription:
+    'Require Cloudflare verification for password and passkey sign-in across this instance.',
+  turnstileEnabled: 'Require verification at sign-in',
+  turnstileSiteKey: 'Site Key',
+  turnstileSecretKey: 'Secret Key',
+  turnstileSecretSaved: 'Secret Key is configured. Leave blank to keep it.',
+  turnstileSecretHint:
+    'Add your login hostname to the widget in Cloudflare. The secret is encrypted and never displayed.',
+  turnstileSave: 'Save Turnstile',
+  turnstileSaved: 'Turnstile settings saved.',
+  turnstileSettingsFailed:
+    'Could not load or save Turnstile settings. Please retry.',
+  turnstileSettingsInvalid:
+    'Enter both a valid Site Key and Secret Key before enabling verification.',
+  turnstileFailed:
+    'Verification failed or expired. Please complete the challenge again.',
+  turnstileUnavailable: 'Verification is unavailable. Please retry.',
+  turnstileVerification: 'Human verification',
+
   memberRemovedStatus: 'Removed',
   memberRemove: 'Remove from workspace',
   memberRemoveTitle: 'Remove member from workspace',

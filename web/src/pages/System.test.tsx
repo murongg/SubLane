@@ -196,6 +196,7 @@ it.each([
   '/admin/settings/grok',
   '/admin/settings/claude',
   '/admin/settings/timezone',
+  '/admin/settings/turnstile',
   '/admin/settings/backup',
 ])(
   'keeps platform settings protected from workspace administrators at %s',

@@ -24,6 +24,8 @@ SELECT count(*) FROM (
     UNION ALL
     SELECT 1 FROM users WHERE octet_length(totp_secret)>512
     UNION ALL
+    SELECT 1 FROM settings WHERE key='instance.turnstile' AND octet_length(value)>4096
+    UNION ALL
     SELECT 1 FROM passkeys WHERE octet_length(credential)>32768 OR octet_length(credential_id)>1024 OR octet_length(name)>256
     LIMIT 1
 )

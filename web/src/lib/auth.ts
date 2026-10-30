@@ -7,6 +7,7 @@ const authSchema = z
     initialized: z.boolean(),
     demo: z.object({ username: z.string(), password: z.string() }).optional(),
     time_zone: z.string().default('UTC'),
+    turnstile_site_key: z.string().optional(),
     workspace_count: z.number().int().nonnegative().optional(),
     needs_workspace: z.boolean().optional(),
     user: z
@@ -65,6 +66,7 @@ export function signIn(input: {
   username: string
   password: string
   code?: string
+  turnstile_token?: string
 }) {
   return request('/api/auth/login', authSchema, {
     method: 'POST',

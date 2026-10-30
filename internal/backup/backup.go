@@ -17,6 +17,7 @@ import (
 	"github.com/murongg/SubLane/internal/content"
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/storage/db"
+	"github.com/murongg/SubLane/internal/turnstile"
 	"github.com/murongg/SubLane/internal/vault"
 )
 
@@ -246,6 +247,9 @@ func verifyCredentials(ctx context.Context, connection *sql.DB, keyFile string) 
 	}
 	if err := auth.VerifyFactors(ctx, connection, cipher); err != nil {
 		return errors.New("backup authentication factors cannot be decrypted")
+	}
+	if _, err := turnstile.New(ctx, connection, cipher, nil); err != nil {
+		return errors.New("backup login verification settings cannot be decrypted")
 	}
 	return nil
 }

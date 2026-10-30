@@ -27,6 +27,7 @@ import (
 	"github.com/murongg/SubLane/internal/storage"
 	"github.com/murongg/SubLane/internal/tenants"
 	"github.com/murongg/SubLane/internal/timezone"
+	"github.com/murongg/SubLane/internal/turnstile"
 	"github.com/murongg/SubLane/internal/upstream"
 	"github.com/murongg/SubLane/internal/versions"
 	"github.com/murongg/SubLane/web"
@@ -149,6 +150,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("load instance time zone: %w", err)
 	}
+	loginVerification, err := turnstile.New(ctx, db, cipher, nil)
+	if err != nil {
+		return fmt.Errorf("load login verification: %w", err)
+	}
 	codexVersions.Start()
 	grokVersions.Start()
 	claudeVersions.Start()
@@ -172,8 +177,9 @@ func run() error {
 		telemetry = &metrics.Collector{}
 	}
 	registry := &tenantRegistry{metrics: telemetry, ctx: ctx, db: db, vault: cipher, auth: authentication,
-		alerts:  notifications,
-		tenants: tenancy, provider: provider, pricing: priceCatalog, versions: codexVersions, grokVersions: grokVersions, claudeVersions: claudeVersions, timeZone: timeZone,
+		turnstile: loginVerification,
+		alerts:    notifications,
+		tenants:   tenancy, provider: provider, pricing: priceCatalog, versions: codexVersions, grokVersions: grokVersions, claudeVersions: claudeVersions, timeZone: timeZone,
 		assets: web.Assets(), dataDir: cfg.DataDir, keyFile: cfg.CredentialsKeyFile, publicURL: cfg.PublicURL, trustedProxies: cfg.TrustedProxies,
 		version: version, started: time.Now(), gatewayPolicy: cfg.Gateway}
 	defer registry.Close()
