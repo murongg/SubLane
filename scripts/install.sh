@@ -741,10 +741,12 @@ UNIT
     systemctl --user restart "$install_unit" || fail 'Could not restart SubLane with the update mailbox.'
     binary_ready || fail 'SubLane did not become ready with the update mailbox.'
   fi
-  systemctl --user link "$private/$unit" \
-    && systemctl --user daemon-reload \
-    && systemctl --user enable "$unit" \
-    && systemctl --user restart "$unit" || fail 'Could not enable the host updater. Inspect its systemd user unit.'
+  if ! systemctl --user link "$private/$unit" \
+    || ! systemctl --user daemon-reload \
+    || ! systemctl --user enable "$unit" \
+    || ! systemctl --user restart "$unit"; then
+    fail 'Could not enable the host updater. Inspect its systemd user unit.'
+  fi
   printf '\nWeb updates enabled. Host diagnostics: %s/last.log\n' "$private"
 }
 
