@@ -32,6 +32,10 @@ func MaintainHistory(ctx context.Context, connection *sql.DB) {
 	}
 }
 
+func dailyStatisticsStart(now time.Time) int64 {
+	return now.UTC().Truncate(24*time.Hour).AddDate(0, 0, -89).Unix()
+}
+
 func pruneHistory(ctx context.Context, connection *sql.DB, now time.Time) error {
 	q := db.New(connection)
 	today := now.UTC().Truncate(24 * time.Hour).Unix()
@@ -39,7 +43,7 @@ func pruneHistory(ctx context.Context, connection *sql.DB, now time.Time) error 
 		func(ctx context.Context) (int64, error) {
 			return allocations.Prune(ctx, q, now.Add(-90*24*time.Hour).Unix())
 		},
-		func(ctx context.Context) (int64, error) { return q.PruneStatistics(ctx, today-89*86400) },
+		func(ctx context.Context) (int64, error) { return q.PruneStatistics(ctx, dailyStatisticsStart(now)) },
 		func(ctx context.Context) (int64, error) { return q.PruneHourlyUsage(ctx, today-90*86400) },
 		// Local 90-day reports can begin on the preceding UTC date.
 		func(ctx context.Context) (int64, error) { return q.PruneMinuteStatistics(ctx, today-90*86400) },

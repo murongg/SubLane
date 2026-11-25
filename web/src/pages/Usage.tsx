@@ -3,13 +3,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { authOptions } from '@/lib/auth'
+import { ApiError } from '@/lib/request'
 import { useTimeZone } from '@/lib/timezone'
 import type { APIKey } from '@/lib/keys'
 import {
   statisticsOptions,
+  readStatistics,
   trackedDays,
   ownLimitOptions,
   type UsageScope,
+  type StatisticsPeriod,
 } from '@/lib/statistics'
 import { Button } from '@/components/ui/Button'
 import { ExportCSV } from '@/components/ExportCSV'
@@ -18,6 +21,7 @@ import { UsageChart } from '@/components/UsageChart'
 import { PersonalAllocations } from '@/components/PersonalAllocations'
 import { ActivityMap } from '@/components/ActivityMap'
 import { UsageKey } from '@/components/UsageKey'
+import { UsagePeriod } from '@/components/UsagePeriod'
 import {
   metricLabels,
   type UsageMetric,
@@ -54,7 +58,7 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
   const { t, i18n } = useTranslation()
   const configuredTimeZone = useTimeZone()
   const client = useQueryClient()
-  const [days, setDays] = useState(7)
+  const [period, setPeriod] = useState<StatisticsPeriod>(7)
   // Retain the selected label when its key is on another result page.
   const [selectedKey, setSelectedKey] = useState<APIKey | null>(null)
   const [metric, setMetric] = useState<UsageMetric>('requests')
@@ -63,7 +67,7 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
     'days',
   )
   const query = useQuery(
-    statisticsOptions(client, userID, scope, days, selectedKey?.id),
+    statisticsOptions(client, userID, scope, period, selectedKey?.id),
   )
   const timeZone = query.data?.time_zone ?? configuredTimeZone
   const limits = useQuery(ownLimitOptions(client, userID, scope))
@@ -83,9 +87,7 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
     timeStyle: 'short',
     timeZone,
   })
-  const periods = [1, 7, 30, 90]
-  const period = (value: number) =>
-    value === 1 ? t('usageToday') : t('usageLastDays', { days: value })
+  const reportKey = JSON.stringify([period, selectedKey?.id, timeZone])
   const labels = {
     days: 'usageDaily',
     models: 'usageModels',
@@ -137,10 +139,38 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
         </div>
         <div className="flex flex-wrap items-start gap-2">
           <ExportCSV
+            key={reportKey}
             userID={userID}
             filename="sublane-usage.csv"
             disabled={!query.data || query.isFetching}
-            load={async () => statisticsRows(query.data!)}
+            failureKey={(error) =>
+              error instanceof ApiError &&
+              error.code === 'usage_export_key_limit'
+                ? 'usageExportKeyLimit'
+                : undefined
+            }
+            load={async (signal) => {
+              const shown = query.data!
+              if (scope === 'all') return statisticsRows(shown)
+              // Reuse the displayed calendar bounds so a preset cannot roll over during export.
+              const dates =
+                typeof period === 'number'
+                  ? {
+                      startDate: shown.days[0].name,
+                      endDate: shown.days.at(-1)!.name,
+                    }
+                  : period
+              const report = await readStatistics(
+                scope,
+                dates,
+                selectedKey?.id,
+                signal,
+                true,
+              )
+              if (report.time_zone !== shown.time_zone)
+                throw new Error('usage_time_zone_changed')
+              return statisticsRows(report)
+            }}
           />
           <Button
             variant="outline"
@@ -166,26 +196,12 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" aria-label={t('usagePeriod')}>
-              {period(days)}
-              <ChevronDown aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuRadioGroup
-              value={String(days)}
-              onValueChange={(value) => setDays(Number(value))}
-            >
-              {periods.map((value) => (
-                <DropdownMenuRadioItem key={value} value={String(value)}>
-                  {period(value)}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <UsagePeriod
+          value={period}
+          onChange={setPeriod}
+          timeZone={timeZone}
+          custom={scope === 'personal'}
+        />
         {scope === 'personal' && (
           <UsageKey
             userID={userID}
@@ -342,7 +358,7 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
                   </p>
                 </div>
                 <ActivityMap
-                  key={days + ':' + selectedKey?.id}
+                  key={reportKey}
                   activity={query.data.activity}
                   metric={metric}
                 />
@@ -354,7 +370,7 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
                   className="rounded-xl border border-border bg-card p-4 sm:p-6"
                 >
                   <UsageChart
-                    key={view + days + metric + selectedKey?.id}
+                    key={reportKey + view + metric}
                     rows={rows.map((row) => ({ ...row, name: rowName(row) }))}
                     metric={metric}
                     daily={view === 'days'}
@@ -363,7 +379,7 @@ function UsageReport({ scope, userID }: { scope: UsageScope; userID: number }) {
                   />
                 </section>
                 <ActivityMap
-                  key={days + ':' + selectedKey?.id}
+                  key={reportKey}
                   activity={query.data.activity}
                   metric={metric}
                 />

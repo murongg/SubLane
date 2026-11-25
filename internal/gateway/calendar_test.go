@@ -237,3 +237,45 @@ SELECT 1,stamp,1,0,1,0,0,0,0 FROM hours`, start.Unix(), end.Unix()); err != nil 
 		t.Fatalf("legacy hours lost at a local/DST boundary: from=%d requests=%d samples=%d want=%d", page.FromDay, requests, samples, want)
 	}
 }
+
+func TestCustomStatisticsRetainAlignedLocalEdge(t *testing.T) {
+	ctx := context.Background()
+	s, _ := codexGateway(t, transportFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("unexpected upstream")
+		return nil, nil
+	}))
+	if err := s.queries.SaveTimeZone(ctx, "Atlantic/Azores"); err != nil {
+		t.Fatal(err)
+	}
+	zones, err := timezone.New(ctx, s.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetTimeZone(zones)
+	now := time.Date(2030, time.November, 4, 0, 30, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+	// The local date is still Nov 3. Its oldest selectable day was at UTC+0.
+	start := time.Date(2030, time.August, 6, 0, 0, 0, 0, time.UTC)
+	next := start.AddDate(0, 0, 1)
+	for _, day := range []time.Time{start, next} {
+		if err := recordStatistics(ctx, s.queries, db.RecordRequestParams{UserID: 1, GroupID: 1, Model: "synthetic-model", StartedAt: day.Unix(), Outcome: "success"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := pruneHistory(ctx, s.db, now); err != nil {
+		t.Fatal(err)
+	}
+	period := StatisticsPeriod{StartDate: start, EndDate: next}
+	page, err := s.PersonalStatistics(ctx, 1, 0, period, false)
+	if err != nil || page.FromDay != start.Unix() || page.Totals.Requests != 2 || len(page.Days) != 2 || page.Days[0].Requests != 1 {
+		t.Fatalf("custom dates lost the retained minute edge: totals=%+v, dates=%+v, err=%v", page.Totals, page.Days, err)
+	}
+
+	if _, err := s.db.Exec("UPDATE settings SET value=? WHERE key='usage.minutes.started_at'", next.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	page, err = s.PersonalStatistics(ctx, 1, 0, period, false)
+	if err != nil || page.TrackingSince != next.Unix() || page.Totals.Requests != 1 || page.Days[1].Requests != 1 {
+		t.Fatalf("missing edge coverage should preserve retained UTC totals: totals=%+v, dates=%+v, err=%v", page.Totals, page.Days, err)
+	}
+}

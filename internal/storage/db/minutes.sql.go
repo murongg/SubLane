@@ -311,8 +311,8 @@ func (q *Queries) ListMinuteStatistics(ctx context.Context, arg ListMinuteStatis
 }
 
 const listUserMinuteStatistics = `-- name: ListUserMinuteStatistics :many
-SELECT CAST(CASE ?1 WHEN 'day' THEN json_extract(w.value,'$[0]') WHEN 'member' THEN s.user_id WHEN 'group' THEN s.group_id ELSE s.model END AS TEXT) AS bucket,
-CAST(COALESCE(CASE ?1 WHEN 'day' THEN '' WHEN 'member' THEN u.username WHEN 'group' THEN g.name ELSE s.model END,'') AS TEXT) AS name,
+SELECT CAST(CASE ?1 WHEN 'day' THEN json_extract(w.value,'$[0]') WHEN 'member' THEN s.user_id WHEN 'group' THEN s.group_id WHEN 'key' THEN COALESCE(k.id,0) ELSE s.model END AS TEXT) AS bucket,
+CAST(COALESCE(CASE ?1 WHEN 'day' THEN '' WHEN 'member' THEN u.username WHEN 'group' THEN g.name WHEN 'key' THEN k.name ELSE s.model END,'') AS TEXT) AS name,
 CAST(COALESCE(SUM(s.requests),0) AS INTEGER) AS requests,
 CAST(COALESCE(SUM(s.completed),0) AS INTEGER) AS completed,
 CAST(COALESCE(SUM(s.incomplete),0) AS INTEGER) AS incomplete,
@@ -327,6 +327,8 @@ CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
 FROM json_each(CAST(?2 AS TEXT)) w CROSS JOIN usage_minutes s LEFT JOIN users u ON u.id=s.user_id JOIN account_groups g ON g.id=s.group_id
+LEFT JOIN api_keys k ON ?1='key' AND k.id=s.key_id AND k.user_id=s.user_id
+AND EXISTS(SELECT 1 FROM account_groups key_group WHERE key_group.id=k.group_id AND key_group.tenant_id=g.tenant_id)
 WHERE s.tenant_id=?3 AND g.tenant_id=s.tenant_id AND s.minute>=MAX(CAST(json_extract(w.value,'$[0]') AS INTEGER),CAST(?4 AS INTEGER)) AND s.minute<MIN(CAST(json_extract(w.value,'$[1]') AS INTEGER),CAST(?5 AS INTEGER)) AND s.user_id=?6 AND (s.key_id=?7 OR ?7=0)
 GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT ?8
 `

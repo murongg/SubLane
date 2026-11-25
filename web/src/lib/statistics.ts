@@ -63,6 +63,7 @@ const statisticsSchema = z.object({
   members: z.array(statisticSchema).max(20),
   models: z.array(statisticSchema).max(20),
   groups: z.array(statisticSchema).max(20),
+  keys: z.array(statisticSchema).max(5000).optional(),
   activity: activitySchema,
 })
 export type Activity = z.infer<typeof activitySchema>
@@ -77,11 +78,35 @@ export const metricLabels = {
   output_tokens: 'usageOutputTokens',
 } as const
 export type UsageScope = 'personal' | 'all'
+export type DateRange = { startDate: string; endDate: string }
+export type StatisticsPeriod = number | DateRange
+
+export function readStatistics(
+  scope: UsageScope,
+  period: StatisticsPeriod,
+  keyID: number | undefined,
+  signal: AbortSignal,
+  includeKeys = false,
+) {
+  const search = new URLSearchParams(
+    typeof period === 'number'
+      ? { days: String(period) }
+      : { start_date: period.startDate, end_date: period.endDate },
+  )
+  if (scope === 'personal' && keyID !== undefined)
+    search.set('key_id', String(keyID))
+  if (includeKeys) search.set('include_keys', '1')
+  return request(
+    `${scope === 'personal' ? '/api/me/usage' : '/api/usage'}?${search}`,
+    statisticsSchema,
+    { signal },
+  )
+}
 export function statisticsOptions(
   client: QueryClient,
   userID: number,
   scope: UsageScope,
-  days: number,
+  period: StatisticsPeriod,
   keyID?: number,
 ) {
   const selectedKey = scope === 'personal' ? keyID : undefined
@@ -91,7 +116,7 @@ export function statisticsOptions(
       'statistics',
       userID,
       scope,
-      days,
+      period,
       selectedKey ?? null,
       timeZone,
     ],
@@ -101,12 +126,7 @@ export function statisticsOptions(
         user?.id === userID && (scope === 'personal' || user.role === 'admin')
       )
     },
-    queryFn: ({ signal }) =>
-      request(
-        `${scope === 'personal' ? '/api/me/usage' : '/api/usage'}?days=${days}${selectedKey === undefined ? '' : `&key_id=${selectedKey}`}`,
-        statisticsSchema,
-        { signal },
-      ),
+    queryFn: ({ signal }) => readStatistics(scope, period, selectedKey, signal),
   })
 }
 

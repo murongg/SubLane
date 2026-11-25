@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/murongg/SubLane/internal/accounts"
 	"github.com/murongg/SubLane/internal/apikey"
@@ -84,14 +85,40 @@ func (h *memberHTTP) statistics(w http.ResponseWriter, r *http.Request, personal
 		accountError(w, accounts.ErrInput)
 		return
 	}
-	days := int64(7)
-	if value := values.Get("days"); value != "" {
-		n, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
+	period := gateway.StatisticsPeriod{Days: 7}
+	start, hasStart := values["start_date"]
+	end, hasEnd := values["end_date"]
+	dayValues, hasDays := values["days"]
+	switch {
+	case hasStart || hasEnd:
+		if !personal || hasDays || len(start) != 1 || len(end) != 1 {
 			accountError(w, accounts.ErrInput)
 			return
 		}
-		days = n
+		from, fromErr := time.Parse(time.DateOnly, start[0])
+		to, toErr := time.Parse(time.DateOnly, end[0])
+		if fromErr != nil || toErr != nil || from.Format(time.DateOnly) != start[0] || to.Format(time.DateOnly) != end[0] {
+			accountError(w, accounts.ErrInput)
+			return
+		}
+		period = gateway.StatisticsPeriod{StartDate: from, EndDate: to}
+	case hasDays:
+		if len(dayValues) != 1 {
+			accountError(w, accounts.ErrInput)
+			return
+		}
+		if dayValues[0] != "" {
+			period.Days, err = strconv.ParseInt(dayValues[0], 10, 64)
+			if err != nil {
+				accountError(w, accounts.ErrInput)
+				return
+			}
+		}
+	}
+	include, includeKeys := values["include_keys"]
+	if includeKeys && (!personal || len(include) != 1 || include[0] != "1") {
+		accountError(w, accounts.ErrInput)
+		return
 	}
 	var result gateway.Statistics
 	var keyID int64
@@ -106,14 +133,16 @@ func (h *memberHTTP) statistics(w http.ResponseWriter, r *http.Request, personal
 			return
 		}
 	}
-	if keyID != 0 {
-		result, err = h.gateway.UserKeyStatistics(r.Context(), sessionUser(r).ID, keyID, days)
-	} else if personal {
-		result, err = h.gateway.UserStatistics(r.Context(), sessionUser(r).ID, days)
+	if personal {
+		result, err = h.gateway.PersonalStatistics(r.Context(), sessionUser(r).ID, keyID, period, includeKeys)
 	} else {
-		result, err = h.gateway.Statistics(r.Context(), days)
+		result, err = h.gateway.Statistics(r.Context(), period.Days)
 	}
 	if err != nil {
+		if errors.Is(err, gateway.ErrUsageExportLimit) {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			return
+		}
 		if errors.Is(err, apikey.ErrNotFound) {
 			keyError(w, err)
 			return

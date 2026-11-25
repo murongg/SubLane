@@ -1,4 +1,11 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryHistory } from '@tanstack/react-router'
 import { expect, it, vi } from 'vitest'
@@ -642,4 +649,65 @@ it('redirects the former personal usage URL to the combined home page', async ()
   expect(
     await screen.findByRole('heading', { name: 'Your usage' }),
   ).toBeTruthy()
+})
+
+it('applies a civil date range and exports that range with the selected key', async () => {
+  const exportURL = vi.fn().mockReturnValue('blob:synthetic')
+  const download = vi
+    .spyOn(HTMLAnchorElement.prototype, 'click')
+    .mockImplementation(() => {})
+  vi.stubGlobal(
+    'URL',
+    class extends URL {
+      static createObjectURL = exportURL
+      static revokeObjectURL = vi.fn()
+    },
+  )
+  const fetch = renderKeyUsage(() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          keys: [revokedUsageKey],
+          server_time: 1900008000,
+          total: 1,
+          page: 1,
+          page_size: 50,
+          next_cursor: 0,
+        }),
+      ),
+    ),
+  )
+  const user = userEvent.setup()
+  const period = await screen.findByRole('button', { name: 'Usage period' })
+  await user.click(period)
+  await user.click(screen.getByRole('menuitem', { name: 'Custom dates' }))
+  const dates = await screen.findByRole('dialog', { name: 'Custom dates' })
+  const start = within(dates).getByLabelText('Start date') as HTMLInputElement
+  const end = within(dates).getByLabelText('End date') as HTMLInputElement
+  const day = start.max
+  expect(day).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  fireEvent.change(start, { target: { value: day } })
+  fireEvent.change(end, { target: { value: day } })
+  await user.click(within(dates).getByRole('button', { name: 'Apply filters' }))
+  await waitFor(() => expect(document.activeElement).toBe(period))
+  await user.click(screen.getByRole('button', { name: /^Usage key:/ }))
+  await user.click(
+    await screen.findByRole('menuitemradio', {
+      name: /Synthetic archived key/,
+    }),
+  )
+  const query =
+    '/api/me/usage?start_date=' + day + '&end_date=' + day + '&key_id=21'
+  await waitFor(() =>
+    expect(fetch.mock.calls.some(([url]) => url === query)).toBe(true),
+  )
+  const exportButton = screen.getByRole('button', { name: 'Export CSV' })
+  await waitFor(() => expect(exportButton.hasAttribute('disabled')).toBe(false))
+  await user.click(exportButton)
+  await waitFor(() =>
+    expect(
+      fetch.mock.calls.some(([url]) => url === query + '&include_keys=1'),
+    ).toBe(true),
+  )
+  await waitFor(() => expect(download).toHaveBeenCalledOnce())
 })

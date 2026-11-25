@@ -35,6 +35,16 @@ type Statistic struct {
 	Name string `json:"name"`
 	Metrics
 }
+
+var ErrUsageExportLimit = errors.New("usage_export_key_limit")
+
+const usageExportKeyLimit = 5000
+
+type StatisticsPeriod struct {
+	Days               int64
+	StartDate, EndDate time.Time
+}
+
 type Statistics struct {
 	TimeZone      string      `json:"time_zone"`
 	FromDay       int64       `json:"from_day"`
@@ -45,31 +55,35 @@ type Statistics struct {
 	Members       []Statistic `json:"members"`
 	Models        []Statistic `json:"models"`
 	Groups        []Statistic `json:"groups"`
+	Keys          []Statistic `json:"keys,omitempty"`
 	Activity      Activity    `json:"activity"`
 }
 
 func (s *Service) Statistics(ctx context.Context, days int64) (Statistics, error) {
-	return s.statistics(ctx, 0, days, 0)
+	return s.statistics(ctx, 0, 0, StatisticsPeriod{Days: days}, false)
 }
 func (s *Service) UserStatistics(ctx context.Context, userID, days int64) (Statistics, error) {
-	if userID <= 0 {
-		return Statistics{}, accounts.ErrInput
-	}
-	return s.statistics(ctx, userID, days, 0)
+	return s.PersonalStatistics(ctx, userID, 0, StatisticsPeriod{Days: days}, false)
 }
 func (s *Service) UserKeyStatistics(ctx context.Context, userID, keyID, days int64) (Statistics, error) {
-	if userID <= 0 || keyID <= 0 {
+	if keyID <= 0 {
 		return Statistics{}, accounts.ErrInput
 	}
-	return s.statistics(ctx, userID, days, keyID)
+	return s.PersonalStatistics(ctx, userID, keyID, StatisticsPeriod{Days: days}, false)
 }
-func (s *Service) statistics(ctx context.Context, userID, days, keyID int64) (Statistics, error) {
-	if days != 1 && days != 7 && days != 30 && days != 90 {
+func (s *Service) PersonalStatistics(ctx context.Context, userID, keyID int64, period StatisticsPeriod, includeKeys bool) (Statistics, error) {
+	if userID <= 0 || keyID < 0 {
 		return Statistics{}, accounts.ErrInput
 	}
+	return s.statistics(ctx, userID, keyID, period, includeKeys)
+}
+func (s *Service) statistics(ctx context.Context, userID, keyID int64, period StatisticsPeriod, includeKeys bool) (Statistics, error) {
 	location := s.location()
 	now := s.now()
-	windows := calendarWindows(now, days, location)
+	windows := period.windows(now, location)
+	if len(windows) == 0 {
+		return Statistics{}, accounts.ErrInput
+	}
 	// Legacy daily counters are exact only when every requested civil day matches a UTC day.
 	legacy := true
 	for _, window := range windows {
@@ -82,9 +96,25 @@ func (s *Service) statistics(ctx context.Context, userID, days, keyID int64) (St
 	}
 	defer tx.Rollback()
 	q := s.queries.WithTx(tx)
+	dailyStart := dailyStatisticsStart(now)
+	if legacy && page.FromDay < dailyStart {
+		// An old UTC-aligned local day can outlive the daily counters. Use minutes
+		// if they cover that whole day, otherwise keep the remaining daily history.
+		coverage, err := q.GetMinuteCoverage(ctx)
+		if err != nil {
+			return page, err
+		}
+		minuteStart, err := strconv.ParseInt(coverage, 10, 64)
+		if err != nil {
+			return page, err
+		}
+		legacy = minuteStart > page.FromDay
+	}
+	var key db.GetKeyRow
 	if keyID != 0 {
 		// Revoked keys keep their usage, but ownership and workspace still gate every read.
-		if _, err := q.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID, TenantID: s.tenantID}); err != nil {
+		key, err = q.GetKey(ctx, db.GetKeyParams{ID: keyID, UserID: userID, TenantID: s.tenantID})
+		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return page, apikey.ErrNotFound
 			}
@@ -126,7 +156,10 @@ func (s *Service) statistics(ctx context.Context, userID, days, keyID int64) (St
 		}
 	}
 	from := page.FromDay
-	if !legacy {
+	if legacy && from < dailyStart {
+		from = dailyStart
+		page.TrackingSince = max(page.TrackingSince, dailyStart)
+	} else if !legacy {
 		// The first collected minute may be partial; its counters contain only new observations.
 		from = max(from, page.TrackingSince-page.TrackingSince%60)
 	}
@@ -138,9 +171,9 @@ func (s *Service) statistics(ctx context.Context, userID, days, keyID int64) (St
 		minuteTotals, readErr := q.GetUserMinuteStatisticsTotals(ctx, db.GetUserMinuteStatisticsTotalsParams{TenantID: s.tenantID, FromDay: from, ToDay: page.ToDay, UserID: userID, KeyID: keyID})
 		totals, err = db.GetStatisticsTotalsRow(minuteTotals), readErr
 	} else if userID == 0 {
-		totals, err = q.GetStatisticsTotals(ctx, db.GetStatisticsTotalsParams{TenantID: s.tenantID, FromDay: page.FromDay, ToDay: page.ToDay})
+		totals, err = q.GetStatisticsTotals(ctx, db.GetStatisticsTotalsParams{TenantID: s.tenantID, FromDay: from, ToDay: page.ToDay})
 	} else {
-		personal, readErr := q.GetUserStatisticsTotals(ctx, db.GetUserStatisticsTotalsParams{TenantID: s.tenantID, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID, KeyID: keyID})
+		personal, readErr := q.GetUserStatisticsTotals(ctx, db.GetUserStatisticsTotalsParams{TenantID: s.tenantID, FromDay: from, ToDay: page.ToDay, UserID: userID, KeyID: keyID})
 		totals, err = db.GetStatisticsTotalsRow(personal), readErr
 	}
 	if err != nil {
@@ -174,9 +207,9 @@ func (s *Service) statistics(ctx context.Context, userID, days, keyID int64) (St
 				}
 			}
 		} else if userID == 0 {
-			rows, err = q.ListStatistics(ctx, db.ListStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: page.FromDay, ToDay: page.ToDay, MaxRows: maxRows})
+			rows, err = q.ListStatistics(ctx, db.ListStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: from, ToDay: page.ToDay, MaxRows: maxRows})
 		} else {
-			personal, readErr := q.ListUserStatistics(ctx, db.ListUserStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: page.FromDay, ToDay: page.ToDay, UserID: userID, KeyID: keyID, MaxRows: maxRows})
+			personal, readErr := q.ListUserStatistics(ctx, db.ListUserStatisticsParams{TenantID: s.tenantID, Dimension: dimension, FromDay: from, ToDay: page.ToDay, UserID: userID, KeyID: keyID, MaxRows: maxRows})
 			err = readErr
 			for _, row := range personal {
 				rows = append(rows, db.ListStatisticsRow(row))
@@ -216,6 +249,20 @@ func (s *Service) statistics(ctx context.Context, userID, days, keyID int64) (St
 	if userID == 0 {
 		if page.Members, err = list("member", 20); err != nil {
 			return page, err
+		}
+	}
+	if includeKeys {
+		if keyID != 0 {
+			page.Keys = []Statistic{{ID: strconv.FormatInt(key.ID, 10), Name: key.Name, Metrics: page.Totals}}
+		} else {
+			page.Keys, err = list("key", usageExportKeyLimit+1)
+			if err != nil {
+				return page, err
+			}
+			// An explicit failure keeps a partial export from looking like a complete key breakdown.
+			if len(page.Keys) > usageExportKeyLimit {
+				return page, ErrUsageExportLimit
+			}
 		}
 	}
 	return page, tx.Commit()
@@ -282,9 +329,25 @@ func recordStatistics(ctx context.Context, q *db.Queries, r db.RecordRequestPara
 	return q.RecordHourlyUsage(ctx, db.RecordHourlyUsageParams{GroupID: r.GroupID, Hour: r.StartedAt - r.StartedAt%3600, UserID: r.UserID, KeyID: r.KeyID, Requests: entry.Requests, InputTokens: entry.InputTokens, OutputTokens: entry.OutputTokens, InputReported: entry.InputReported, OutputReported: entry.OutputReported})
 }
 
-func calendarWindows(now time.Time, days int64, location *time.Location) [][2]int64 {
+func (p StatisticsPeriod) windows(now time.Time, location *time.Location) [][2]int64 {
 	local := now.In(location)
-	date := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, 1-int(days))
+	// UTC here carries the civil date through calendar arithmetic. DayStart supplies the actual instant.
+	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.UTC)
+	days := p.Days
+	var date time.Time
+	if p.StartDate.IsZero() && p.EndDate.IsZero() {
+		if days != 1 && days != 7 && days != 30 && days != 90 {
+			return nil
+		}
+		date = today.AddDate(0, 0, 1-int(days))
+	} else {
+		if days != 0 || p.StartDate.Before(today.AddDate(0, 0, -89)) ||
+			p.EndDate.Before(p.StartDate) || p.EndDate.After(today) {
+			return nil
+		}
+		date = p.StartDate
+		days = int64(p.EndDate.Sub(date)/(24*time.Hour)) + 1
+	}
 	windows := make([][2]int64, 0, days)
 	for i := int64(0); i < days; i++ {
 		next := date.AddDate(0, 0, 1)
