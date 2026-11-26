@@ -65,3 +65,45 @@ it('exports usage coverage without converting unreported tokens to zero', () => 
   expect(exported.filter((row) => row[0] === 'days')).toHaveLength(2)
   expect(exported[1][exported[0].indexOf('time_zone')]).toBe('America/New_York')
 })
+
+it('exports key names and IDs alongside a separate unattributed row', () => {
+  const usage = {
+    requests: 2,
+    input_tokens: 5,
+    input_reported: 1,
+    output_tokens: 0,
+    output_reported: 0,
+    cached_tokens: 0,
+    cached_reported: 0,
+  }
+  const rows = statisticsRows({
+    totals: usage,
+    days: [],
+    models: [],
+    members: [],
+    groups: [],
+    keys: [
+      { id: '21', name: 'Synthetic client', ...usage },
+      { id: '22', name: 'Synthetic client', ...usage },
+      { id: '0', name: '', ...usage },
+    ],
+    time_zone: 'Asia/Kathmandu',
+    from_day: 1899924900,
+    to_day: 1900011300,
+    tracking_since: 1899924900,
+  } as unknown as Statistics)
+  expect(
+    rows
+      .filter(([dimension]) => dimension === 'keys')
+      .map((row) => row.slice(1, 3)),
+  ).toEqual([
+    ['21', 'Synthetic client'],
+    ['22', 'Synthetic client'],
+  ])
+  const unattributed = rows.find(
+    ([dimension]) => dimension === 'unattributed_keys',
+  )
+  expect(unattributed?.slice(1, 3)).toEqual(['', ''])
+  expect(unattributed?.[rows[0].indexOf('input_tokens')]).toBe('5')
+  expect(unattributed?.[rows[0].indexOf('output_tokens')]).toBe('')
+})

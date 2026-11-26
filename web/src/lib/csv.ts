@@ -86,12 +86,14 @@ export function statisticsRows(data: Statistics) {
     models: data.models,
     groups: data.groups,
     members: data.members,
+    keys: data.keys ?? [],
   }
   for (const [dimension, entries] of Object.entries(groups)) {
-    for (const row of entries)
+    for (const row of entries) {
+      const unattributed = dimension === 'keys' && row.id === '0'
       rows.push([
-        dimension,
-        row.id,
+        unattributed ? 'unattributed_keys' : dimension,
+        unattributed ? '' : row.id,
         row.name,
         String(data.from_day),
         String(data.to_day),
@@ -107,6 +109,7 @@ export function statisticsRows(data: Statistics) {
         }),
         data.time_zone,
       ])
+    }
   }
   return rows
 }

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { authKey, type AuthState } from '@/lib/auth'
 import { encodeCSV } from '@/lib/csv'
 import { selectedWorkspace } from '@/lib/workspace'
+import type { en } from '@/locales/en'
 import { Button } from '@/components/ui/Button'
 
 export function ExportCSV({
@@ -12,17 +13,19 @@ export function ExportCSV({
   filename,
   disabled,
   userID,
+  failureKey,
 }: {
   load: (signal: AbortSignal) => Promise<string[][]>
   filename: string
   disabled: boolean
   userID: number
+  failureKey?: (error: unknown) => keyof typeof en | undefined
 }) {
   const { t } = useTranslation()
   const client = useQueryClient()
   const pending = useRef<AbortController | null>(null)
   const [busy, setBusy] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const [failure, setFailure] = useState<keyof typeof en | null>(null)
   useEffect(() => () => pending.current?.abort(), [])
   const download = async () => {
     if (pending.current) return
@@ -30,7 +33,7 @@ export function ExportCSV({
     pending.current = controller
     const workspace = selectedWorkspace()
     setBusy(true)
-    setFailed(false)
+    setFailure(null)
     try {
       const rows = await load(controller.signal)
       if (
@@ -49,8 +52,9 @@ export function ExportCSV({
       link.click()
       link.remove()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-    } catch {
-      if (!controller.signal.aborted) setFailed(true)
+    } catch (error) {
+      if (!controller.signal.aborted)
+        setFailure(failureKey?.(error) ?? 'exportCSVFailed')
     } finally {
       pending.current = null
       if (!controller.signal.aborted) setBusy(false)
@@ -69,9 +73,9 @@ export function ExportCSV({
         )}
         {t(busy ? 'exportCSVLoading' : 'exportCSV')}
       </Button>
-      {failed && (
+      {failure && (
         <p role="alert" className="text-sm text-destructive">
-          {t('exportCSVFailed')}
+          {t(failure)}
         </p>
       )}
     </div>

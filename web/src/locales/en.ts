@@ -1003,6 +1003,12 @@ export const en = {
   usageKey: 'Usage key',
   usageAllKeys: 'All keys',
   usagePeriod: 'Usage period',
+  usageCustomDates: 'Custom dates',
+  usageStartDate: 'Start date',
+  usageEndDate: 'End date',
+  usageDateZone: 'Dates use {{zone}}.',
+  usageExportKeyLimit:
+    'Too many API keys to export. Choose a shorter period or select one key.',
   usageToday: 'Today',
   usageLastDays: 'Last {{days}} days',
   usageBreakdown: 'Breakdown',

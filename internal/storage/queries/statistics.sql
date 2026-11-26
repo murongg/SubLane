@@ -92,8 +92,8 @@ WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sq
 
 
 -- name: ListUserStatistics :many
-SELECT CAST(CASE sqlc.arg(dimension) WHEN 'day' THEN s.day WHEN 'member' THEN s.user_id WHEN 'group' THEN s.group_id ELSE s.model END AS TEXT) AS bucket,
-CAST(COALESCE(CASE sqlc.arg(dimension) WHEN 'day' THEN '' WHEN 'member' THEN u.username WHEN 'group' THEN g.name ELSE s.model END,'') AS TEXT) AS name,
+SELECT CAST(CASE sqlc.arg(dimension) WHEN 'day' THEN s.day WHEN 'member' THEN s.user_id WHEN 'group' THEN s.group_id WHEN 'key' THEN COALESCE(k.id,0) ELSE s.model END AS TEXT) AS bucket,
+CAST(COALESCE(CASE sqlc.arg(dimension) WHEN 'day' THEN '' WHEN 'member' THEN u.username WHEN 'group' THEN g.name WHEN 'key' THEN k.name ELSE s.model END,'') AS TEXT) AS name,
 CAST(COALESCE(SUM(s.requests),0) AS INTEGER) AS requests,
 CAST(COALESCE(SUM(s.completed),0) AS INTEGER) AS completed,
 CAST(COALESCE(SUM(s.incomplete),0) AS INTEGER) AS incomplete,
@@ -108,5 +108,7 @@ CAST(COALESCE(SUM(s.input_reported),0) AS INTEGER) AS input_reported,
 CAST(COALESCE(SUM(s.output_reported),0) AS INTEGER) AS output_reported,
 CAST(COALESCE(SUM(s.cached_reported),0) AS INTEGER) AS cached_reported
 FROM usage_daily s LEFT JOIN users u ON u.id=s.user_id JOIN account_groups g ON g.id=s.group_id
+LEFT JOIN api_keys k ON sqlc.arg(dimension)='key' AND k.id=s.key_id AND k.user_id=s.user_id
+AND EXISTS(SELECT 1 FROM account_groups key_group WHERE key_group.id=k.group_id AND key_group.tenant_id=g.tenant_id)
 WHERE g.tenant_id=sqlc.arg(tenant_id) AND s.day>=sqlc.arg(from_day) AND s.day<sqlc.arg(to_day) AND s.user_id=sqlc.arg(user_id) AND (s.key_id=sqlc.arg(key_id) OR sqlc.arg(key_id)=0)
 GROUP BY 1,2 ORDER BY requests DESC,bucket ASC LIMIT sqlc.arg(max_rows);
